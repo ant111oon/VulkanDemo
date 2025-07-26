@@ -1,14 +1,23 @@
-#include <vulkan/vulkan.h>
-
 #include "platform/window.h"
+
+#include "core/utils/assert.h"
+
 
 int main(int argc, char* argv[])
 {
-    VkInstanceCreateInfo instCreateInfo = {};
+    std::unique_ptr<WindowBase> pWnd = std::make_unique<Win32Window>();
+    
+    WindowInitInfo wndInitInfo = {};
+    wndInitInfo.title = "Vulkan Demo";
+    wndInitInfo.width = 980;
+    wndInitInfo.height = 640;
 
-    fprintf_s(stdout, "Hello %s!\n", "World");
-    fprintf_s(stdout, "Hello %s!\n", "World");
-    fprintf_s(stdout, "Hello %s!\n", "World");
+    pWnd->Init(wndInitInfo);
+    ENG_ASSERT(pWnd->IsInitialized());
+
+    while(!pWnd->IsClosed()) {
+        pWnd->PollEvents();
+    }
 
     return 0;
 }

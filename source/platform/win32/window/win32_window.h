@@ -4,26 +4,42 @@
 
 #if defined(ENG_OS_WINDOWS)
 
-#include "platform/win32/win32_headers.h"
+#include "platform/win32/win32_includes.h"
 
 
 class Win32Window final : public WindowBase
 {
 public:
-    bool Init(const WindowCreateInfo& createInfo) override;
+    ~Win32Window() override;
+
+    bool Init(const WindowInitInfo& initInfo) override;
     void Destroy() override;
 
-    uint32_t GetWidth() const override { return m_width; }; 
-    uint32_t GetHeight() const override { return m_height; };
+    void PollEvents() const override;
     
-    void* GetNativeHandle() override { return m_hwnd; };
-    const void* GetNativeHandle() const override { return m_hwnd; };
+    void* GetNativeHandle() override { return m_HWND; }
+    const void* GetNativeHandle() const override { return m_HWND; }
+
+    void SetVisible(bool visible) override;
+
+    HINSTANCE GetHINST() const { return m_HINST; }
 
 private:
-    HWND m_hwnd = nullptr;
+    static LRESULT WndProcSetup(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    static LRESULT WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-    uint32_t m_width = 0;
-    uint32_t m_height = 0;
+    static bool RegisterWndClass(HINSTANCE hInst);
+
+private:
+    LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+private:
+    static inline constexpr const char* P_WND_CLASS_NAME = "WindowClass";
+    static inline bool s_isWindowClassRegistered = false;
+
+private:
+    HWND m_HWND = nullptr;
+    HINSTANCE m_HINST = nullptr;   
 };
 
 #endif
