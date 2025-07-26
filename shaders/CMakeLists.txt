@@ -1,0 +1,44 @@
+cmake_minimum_required (VERSION 3.8)
+
+project (SHADERS)
+
+set(SHADERS_TARGET_NAME ${PROJECT_NAME})
+set(SHADERS_TARGET_NAME ${SHADERS_TARGET_NAME} PARENT_SCOPE)
+
+
+if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
+    set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/glslc.exe)
+else()
+    set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin32/glslc.exe)
+endif()
+
+set(SHADERS_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/source)
+set(SHADERS_BIN_DIR ${CMAKE_CURRENT_LIST_DIR}/bin)
+
+if (NOT EXISTS ${SHADERS_BIN_DIR})
+    message(STATUS "${SHADERS_TARGET_NAME}: Creating ${SHADERS_BIN_DIR}...")
+
+    make_directory(${SHADERS_BIN_DIR})
+endif()
+
+file(GLOB_RECURSE SHADER_SRC_FILES
+    ${SHADERS_SRC_DIR}/*.frag  
+    ${SHADERS_SRC_DIR}/*.vert
+    ${SHADERS_SRC_DIR}/*.comp
+)
+
+foreach(SHADER_SRC_FILE ${SHADER_SRC_FILES})
+    get_filename_component(FILE_NAME ${SHADER_SRC_FILE} NAME)
+    
+    set(SHADER_SPIRV_FILE ${SHADERS_BIN_DIR}/${FILE_NAME}.spv)
+    
+    message(STATUS "${SHADERS_TARGET_NAME}: ${SHADER_SRC_FILE} will be compiled to ${SHADER_SPIRV_FILE}")
+    
+    add_custom_command(
+        OUTPUT ${SHADER_SPIRV_FILE}
+        COMMAND ${SHADER_COMPILER} ${SHADER_SRC_FILE} -o ${SHADER_SPIRV_FILE}
+        DEPENDS ${SHADER_SRC_FILE})
+    list(APPEND SPIRV_BINARY_FILES ${SHADER_SPIRV_FILE})
+endforeach(SHADER_SRC_FILE)
+
+add_custom_target(${SHADERS_TARGET_NAME} DEPENDS ${SPIRV_BINARY_FILES})

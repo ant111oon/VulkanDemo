@@ -59,61 +59,27 @@ file(GLOB_RECURSE CPP_SOURCE_FILES
 
 add_executable(engine ${CPP_SOURCE_FILES})
 
-target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-
 target_include_directories(engine 
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
-    PUBLIC ${ENGINE_CXX_SOURCE_DIR}
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    PRIVATE ${ENGINE_CXX_SOURCE_DIR}
 )
 
-target_link_libraries(engine 
-    PUBLIC vma 
-    PUBLIC glm 
-    PUBLIC imgui 
-    PUBLIC Vulkan::Vulkan
-)
+target_link_libraries(engine PRIVATE Vulkan::Vulkan vma glm imgui)
+if(WIN32)
+    target_link_libraries(engine PRIVATE 
+        user32.lib gdi32.lib kernel32.lib
+    )
+endif()
 
-target_precompile_headers(engine PUBLIC ${ENGINE_CXX_SOURCE_DIR}/pch.h)
+target_precompile_headers(engine PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h)
 
 target_compile_options(engine PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic>
-    $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>)
-
-# add_custom_command(TARGET engine POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
-#     COMMAND_EXPAND_LISTS
-# )
-
-if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
-    set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/glslc.exe)
-else()
-    set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin32/glslc.exe)
-endif()
-
-set(ENGINE_SHADERS_DIR ${PROJECT_SOURCE_DIR}/shaders)
-set(ENGINE_SHADERS_SRC_DIR ${ENGINE_SHADERS_DIR}/source)
-set(ENGINE_SHADERS_BIN_DIR ${ENGINE_SHADERS_DIR}/bin)
-
-file(GLOB_RECURSE SHADER_SRC_FILES
-    ${ENGINE_SHADERS_SRC_DIR}/*.frag  
-    ${ENGINE_SHADERS_SRC_DIR}/*.vert
-    ${ENGINE_SHADERS_SRC_DIR}/*.comp
+    $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
 )
 
-foreach(SHADER_SRC_FILE ${SHADER_SRC_FILES})
-    get_filename_component(FILE_NAME ${SHADER_SRC_FILE} NAME)
-    
-    set(SHADER_SPIRV_FILE ${ENGINE_SHADERS_BIN_DIR}/${FILE_NAME}.spv)
-    
-    message(STATUS "${SHADER_SRC_FILE} will be compiled to ${SHADER_SPIRV_FILE}")
-    
-    add_custom_command(
-        OUTPUT ${SHADER_SPIRV_FILE}
-        COMMAND ${SHADER_COMPILER} ${SHADER_SRC_FILE} -o ${SHADER_SPIRV_FILE}
-        DEPENDS ${SHADER_SRC_FILE})
-    list(APPEND SPIRV_BINARY_FILES ${SHADER_SPIRV_FILE})
-endforeach(SHADER_SRC_FILE)
+target_compile_definitions(engine PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
-add_custom_target(shaders DEPENDS ${SPIRV_BINARY_FILES})
 
-add_dependencies(engine shaders)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shaders)
+add_dependencies(engine ${SHADERS_TARGET_NAME})
