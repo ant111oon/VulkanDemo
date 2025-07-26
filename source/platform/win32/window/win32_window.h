@@ -7,7 +7,7 @@
 #include "platform/win32/win32_includes.h"
 
 
-class Win32Window final : public WindowBase
+class Win32Window final : public BaseWindow
 {
 public:
     ~Win32Window() override;
@@ -15,7 +15,7 @@ public:
     bool Init(const WindowInitInfo& initInfo) override;
     void Destroy() override;
 
-    void PollEvents() const override;
+    void ProcessEvents() const override;
     
     void* GetNativeHandle() override { return m_HWND; }
     const void* GetNativeHandle() const override { return m_HWND; }

@@ -1,7 +1,10 @@
 #pragma once
 
-#include <cstdint>
+#include "window_events.h"
+
+#include <queue>
 #include <string_view>
+#include <cstdint>
 #include <bitset>
 
 
@@ -13,11 +16,11 @@ struct WindowInitInfo
 };
 
 
-class WindowBase
+class BaseWindow
 {
 public:
-    WindowBase() = default;
-    virtual ~WindowBase()
+    BaseWindow() = default;
+    virtual ~BaseWindow()
     { 
         Destroy();
     };
@@ -30,24 +33,54 @@ public:
         m_state = 0;
     }
 
-    virtual void PollEvents() const = 0;
+    virtual void ProcessEvents() const = 0;
     
     virtual void* GetNativeHandle() = 0;
     virtual const void* GetNativeHandle() const = 0;
 
     virtual void SetVisible(bool visible) = 0;
 
-    bool IsInitialized() const noexcept { return m_state.test(WND_STATE_INITIALIZED); }; 
-    bool IsVisible() const noexcept { return m_state.test(WND_STATE_IS_VISIBLE); }; 
-    bool IsClosed() const noexcept { return m_state.test(WND_STATE_IS_CLOSED); }; 
+    bool PopEvent(WndEvent& event)
+    {
+        if (m_eventQueue.empty()) {
+            return false;
+        }
 
-    uint32_t GetWidth() const noexcept { return m_width; }; 
-    uint32_t GetHeight() const noexcept { return m_height; };
+        event = m_eventQueue.front();
+        m_eventQueue.pop();
+
+        return true;
+    }
+
+    bool IsInitialized() const noexcept { return m_state.test(WND_STATE_INITIALIZED); }
+    bool IsVisible() const noexcept { return m_state.test(WND_STATE_IS_VISIBLE); }
+    bool IsClosed() const noexcept { return m_state.test(WND_STATE_IS_CLOSED); }
+
+    uint32_t GetWidth() const noexcept { return m_width; }
+    uint32_t GetHeight() const noexcept { return m_height; }
 
 protected:
+    template <typename EventType>
+    void PushEvent()
+    {
+        m_eventQueue.emplace<EventType>({});
+    }
+
+    template <typename EventType>
+    void PushEvent(EventType&& event)
+    {
+        m_eventQueue.emplace<EventType>(std::forward<EventType>(event));
+    }
+
+    template <typename EventType, typename... Args>
+    void PushEvent(Args&&... args)
+    {
+        m_eventQueue.emplace<EventType>(std::forward<Args>(args)...);
+    }
+
     void SetInitializedState(bool initialized) noexcept { m_state.set(WND_STATE_INITIALIZED, initialized); }
     void SetVisibleState(bool visible) noexcept { m_state.set(WND_STATE_IS_VISIBLE, visible); }
-    void SetClosedState(bool closed = true) noexcept { m_state.set(WND_STATE_IS_CLOSED, closed); }
+    void SetClosedState(bool closed) noexcept { m_state.set(WND_STATE_IS_CLOSED, closed); }
 
     void SetWidth(uint32_t width) noexcept { m_width = width; }
     void SetHeight(uint32_t height) noexcept { m_height = height; }
@@ -61,6 +94,8 @@ private:
     };
 
 private:
+    std::queue<WndEvent> m_eventQueue;
+
     uint32_t m_width = 0;
     uint32_t m_height = 0;
 

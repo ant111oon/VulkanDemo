@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-    std::unique_ptr<WindowBase> pWnd = std::make_unique<Win32Window>();
+    std::unique_ptr<BaseWindow> pWnd = std::make_unique<Win32Window>();
     
     WindowInitInfo wndInitInfo = {};
     wndInitInfo.title = "Vulkan Demo";
@@ -16,7 +16,12 @@ int main(int argc, char* argv[])
     ENG_ASSERT(pWnd->IsInitialized());
 
     while(!pWnd->IsClosed()) {
-        pWnd->PollEvents();
+        pWnd->ProcessEvents();
+        
+        WndEvent event;
+        while(pWnd->PopEvent(event)) {
+
+        }
     }
 
     return 0;

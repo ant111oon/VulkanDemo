@@ -67,13 +67,32 @@ bool Win32Window::RegisterWndClass(HINSTANCE hInst)
 LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg) {
-        case WM_CLOSE:
-            SetClosedState();
-            return 0;
-
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
+
+        case WM_CLOSE:
+            SetClosedState(true);
+            PushEvent<WndCloseEvent>();
+            return 0;
+
+        // case WM_ACTIVATE:
+        //     SetActiveState(LOWORD(wParam) != WA_INACTIVE);            
+        //     return 0;
+        // case WM_SIZE:
+        // case WM_SETFOCUS:
+        // case WM_MOUSEMOVE:
+        // case WM_LBUTTONDOWN:
+        // case WM_LBUTTONUP:
+        // case WM_LBUTTONDBLCLK:
+        // case WM_RBUTTONDOWN:
+        // case WM_RBUTTONUP:
+        // case WM_RBUTTONDBLCLK:
+        // case WM_MOUSEWHEEL:
+        // case WM_KEYDOWN:
+        // case WM_KEYUP:
+        // case WM_SETFOCUS:
+        // case WM_KILLFOCUS:
 
         default:
             return DefWindowProc(m_HWND, uMsg, wParam, lParam);
@@ -137,11 +156,11 @@ void Win32Window::Destroy()
     m_HWND = nullptr;
     m_HINST = nullptr;
 
-    WindowBase::Destroy();
+    BaseWindow::Destroy();
 }
 
 
-void Win32Window::PollEvents() const
+void Win32Window::ProcessEvents() const
 {
     WIN32_ASSERT(IsInitialized());
 
