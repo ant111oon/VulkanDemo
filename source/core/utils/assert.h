@@ -1,13 +1,9 @@
 #pragma once
 
-#include "platform/platform.h"
+#include "core/platform/platform.h"
 
 #include <cstdint>
 #include <string_view>
-
-#if defined(ENG_OS_WINDOWS)
-    #include "platform/native/win32/win32_includes.h"
-#endif
 
 
 #if defined(ENG_BUILD_DEBUG)
@@ -33,10 +29,6 @@
             " (%*s:%u)\n", file.size(), file.data(), line);
         
         fprintf_s(stderr, msgBuffer);
-
-    #if defined(ENG_OS_WINDOWS)
-        OutputDebugStringA(msgBuffer);
-    #endif
 
         ENG_DEBUG_BREAK();
     }

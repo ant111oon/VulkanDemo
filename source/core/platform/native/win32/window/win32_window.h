@@ -1,10 +1,10 @@
 #pragma once
 
-#include "platform/window/window.h"
+#include "core/platform/window/window.h"
 
 #if defined(ENG_OS_WINDOWS)
 
-#include "platform/native/win32/win32_includes.h"
+#include "core/platform/native/win32/win32_includes.h"
 
 
 class Win32Window final : public BaseWindow
