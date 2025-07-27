@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(ENGINE_PROJ_NAME ${PROJECT_NAME})
+
+
 find_package(Vulkan REQUIRED)
 
 include(FetchContent)
@@ -51,35 +54,35 @@ target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
 
 set(ENGINE_CXX_SOURCE_DIR ${PROJECT_SOURCE_DIR}/source)
 
-file(GLOB_RECURSE CPP_SOURCE_FILES
+file(GLOB_RECURSE ENGINE_CXX_SOURCE_FILES
     ${ENGINE_CXX_SOURCE_DIR}/*.h
     ${ENGINE_CXX_SOURCE_DIR}/*.hpp
     ${ENGINE_CXX_SOURCE_DIR}/*.cpp
 )
 
-add_executable(engine ${CPP_SOURCE_FILES})
+add_executable(${ENGINE_PROJ_NAME} ${ENGINE_CXX_SOURCE_FILES})
 
-target_include_directories(engine 
+target_include_directories(${ENGINE_PROJ_NAME} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
 )
 
-target_link_libraries(engine PRIVATE Vulkan::Vulkan vma glm imgui)
+target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan vma glm imgui)
 if(WIN32)
-    target_link_libraries(engine PRIVATE 
+    target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE 
         user32.lib gdi32.lib kernel32.lib
     )
 endif()
 
-target_precompile_headers(engine PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h)
+target_precompile_headers(${ENGINE_PROJ_NAME} PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h)
 
-target_compile_options(engine PRIVATE
+target_compile_options(${ENGINE_PROJ_NAME} PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic -Wno-gnu-anonymous-struct>
     $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
 )
 
-target_compile_definitions(engine PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_compile_definitions(${ENGINE_PROJ_NAME} PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shaders)
-add_dependencies(engine ${SHADERS_TARGET_NAME})
+add_dependencies(${ENGINE_PROJ_NAME} ${SHADERS_PROJ_NAME})
