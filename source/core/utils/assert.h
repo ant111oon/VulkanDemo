@@ -2,6 +2,8 @@
 
 #include "core/platform/platform.h"
 
+#include "log.h" 
+
 #include <cstdint>
 #include <string_view>
 
@@ -10,26 +12,7 @@
     template <typename... Args>
     inline void AssertImpl(std::string_view file, uint32_t line, std::string_view prefix, std::string_view fmt, Args&&... args) noexcept
     {
-        char msgBuffer[4096] = {0};
-        
-        const size_t msgBufferSize = sizeof(msgBuffer);
-        size_t actualMsgBufferSize = 0;
-
-        if (!prefix.empty()) {
-            actualMsgBufferSize += sprintf_s(msgBuffer + actualMsgBufferSize, msgBufferSize - actualMsgBufferSize, 
-                "[" "\x1b[33m" "%*s" "\x1b[0m" "]: ", prefix.size(), prefix.data());
-        }
-
-        char format[2048] = {0};
-        sprintf_s(format, "\x1b[31m" "%*s" "\x1b[0m", fmt.size(), fmt.data());
-
-        actualMsgBufferSize += sprintf_s(msgBuffer + actualMsgBufferSize, msgBufferSize - actualMsgBufferSize, 
-            format, std::forward<Args>(args)...);
-        actualMsgBufferSize += sprintf_s(msgBuffer + actualMsgBufferSize, msgBufferSize - actualMsgBufferSize, 
-            " (%*s:%u)\n", file.size(), file.data(), line);
-        
-        fprintf_s(stderr, msgBuffer);
-
+        Log(stderr, LogLevel::ERROR, file, line, prefix, fmt, std::forward<Args>(args)...);
         ENG_DEBUG_BREAK();
     }
 

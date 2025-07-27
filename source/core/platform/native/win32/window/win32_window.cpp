@@ -4,12 +4,11 @@
 #include "core/utils/assert.h"
 
 
+#if defined(ENG_OS_WINDOWS)
+
 #define WIN32_ASSERT_MSG(COND, FMT, ...) ENG_ASSERT_MSG(COND, "WIN32", FMT, __VA_ARGS__)
 #define WIN32_ASSERT(COND)               WIN32_ASSERT_MSG(COND, #COND)
 #define WIN32_ASSERT_FAIL(FMT, ...)      WIN32_ASSERT_MSG(false, FMT, __VA_ARGS__)
-
-
-#if defined(ENG_OS_WINDOWS)
 
 
 static WORD win32ResolveActualVK(WPARAM wParam, LPARAM lParam)
@@ -372,10 +371,10 @@ bool Win32Window::Init(const WindowInitInfo& initInfo)
         return true;
     }
 
-    m_HINST = GetModuleHandle(nullptr);
-    WIN32_ASSERT(m_HINST);
+    const HINSTANCE hInst = GetModuleHandle(nullptr);
+    WIN32_ASSERT(hInst);
 
-    RegisterWndClass(m_HINST);
+    RegisterWndClass(hInst);
 
     SetWidth(initInfo.width);
     SetHeight(initInfo.height);
@@ -391,7 +390,7 @@ bool Win32Window::Init(const WindowInitInfo& initInfo)
         static_cast<int>(GetHeight()), 
         nullptr, 
         nullptr, 
-        m_HINST, 
+        hInst, 
         this
     );
 
@@ -411,10 +410,9 @@ void Win32Window::Destroy()
     }
 
     DestroyWindow(m_HWND);
-    UnregisterClass(P_WND_CLASS_NAME, m_HINST);
+    UnregisterClass(P_WND_CLASS_NAME, GetModuleHandle(nullptr));
 
     m_HWND = nullptr;
-    m_HINST = nullptr;
 
     BaseWindow::Destroy();
 }

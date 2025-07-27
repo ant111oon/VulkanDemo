@@ -4,7 +4,12 @@
 
 #if defined(ENG_OS_WINDOWS)
 
-#include "core/platform/native/win32/win32_includes.h"
+using HINSTANCE = struct HINSTANCE__*;
+using HWND = struct HWND__*;
+using LRESULT = long long;
+using WPARAM = unsigned long long;
+using LPARAM = long long;
+using UINT = unsigned int;
 
 
 class Win32Window final : public BaseWindow
@@ -21,8 +26,6 @@ public:
     const void* GetNativeHandle() const override { return m_HWND; }
 
     void SetVisible(bool visible) override;
-
-    HINSTANCE GetHINST() const { return m_HINST; }
 
 private:
     static LRESULT WndProcSetup(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -61,7 +64,6 @@ private:
 
 private:
     HWND m_HWND = nullptr;
-    HINSTANCE m_HINST = nullptr;   
 };
 
 #endif

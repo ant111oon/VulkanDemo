@@ -1,8 +1,13 @@
 #pragma once
 
-#if defined(ENG_OS_WINDOWS)
-    #define WIN32_LEAN_AND_MEAN
-    #define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 
-    #include <Windows.h>
-#endif
+#include <Windows.h>
+
+#undef ERROR
+#undef DELETE
+#undef IN
+#undef OUT
+#undef near
+#undef far
