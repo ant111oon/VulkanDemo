@@ -20,9 +20,10 @@ int main(int argc, char* argv[])
         
         WndEvent event;
         while(pWnd->PopEvent(event)) {
-
         }
     }
+
+    pWnd->Destroy();
 
     return 0;
 }

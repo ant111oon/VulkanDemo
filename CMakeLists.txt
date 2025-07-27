@@ -74,7 +74,7 @@ endif()
 target_precompile_headers(engine PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h)
 
 target_compile_options(engine PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic>
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic -Wno-gnu-anonymous-struct>
     $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
 )
 

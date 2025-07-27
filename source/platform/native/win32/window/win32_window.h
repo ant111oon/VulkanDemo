@@ -30,8 +30,30 @@ private:
 
     static bool RegisterWndClass(HINSTANCE hInst);
 
+    static void FetchMouseEventCommonInfo(WPARAM wParam, LPARAM lParam, int16_t& x, int16_t& y, bool& isCtrlDown, bool& isShiftDown, bool& isLButtonDown, bool& isMButtonDown, bool& isRButtonDown) noexcept;
+
 private:
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+    LRESULT OnCloseEvent();
+    LRESULT OnActiveEvent(WPARAM wParam);
+    LRESULT OnSizeEvent(WPARAM wParam, LPARAM lParam);
+
+    template <typename OnMouseEventType>
+    LRESULT OnMouseEvent(WPARAM wParam, LPARAM lParam)
+    {
+        int16_t x = 0, y = 0;
+        bool isCtrlDown = false, isShiftDown = false, isLButtonDown = false, isMButtonDown = false, isRButtonDown = false;
+
+        FetchMouseEventCommonInfo(wParam, lParam, x, y, isCtrlDown, isShiftDown, isLButtonDown, isMButtonDown, isRButtonDown);
+
+        PushEvent<OnMouseEventType>(x, y, isCtrlDown, isShiftDown, isLButtonDown, isMButtonDown, isRButtonDown);
+
+        return 0;
+    }
+
+    LRESULT OnMouseWheelEvent(WPARAM wParam, LPARAM lParam);
+    LRESULT OnKeyEvent(WPARAM wParam, LPARAM lParam, bool isKeyDown);
 
 private:
     static inline constexpr const char* P_WND_CLASS_NAME = "WindowClass";

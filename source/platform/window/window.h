@@ -5,6 +5,7 @@
 #include <string_view>
 #include <cstdint>
 #include <bitset>
+#include <array>
 
 
 struct WindowInitInfo
@@ -25,8 +26,10 @@ public:
     };
 
     virtual bool Init(const WindowInitInfo& initInfo) = 0;
+    
     virtual void Destroy()
     {
+        m_eventQueue.Clear();
         m_width = 0;
         m_height = 0;
         m_state = 0;
@@ -44,6 +47,9 @@ public:
     bool IsInitialized() const noexcept { return m_state.test(WND_STATE_INITIALIZED); }
     bool IsVisible() const noexcept { return m_state.test(WND_STATE_IS_VISIBLE); }
     bool IsClosed() const noexcept { return m_state.test(WND_STATE_IS_CLOSED); }
+    bool IsActive() const noexcept { return m_state.test(WND_STATE_IS_ACTIVE); }
+    bool IsMaximized() const noexcept { return m_state.test(WND_STATE_IS_MAXIMIZED); }
+    bool IsMinimized() const noexcept { return m_state.test(WND_STATE_IS_MINIMIZED); }
 
     uint32_t GetWidth() const noexcept { return m_width; }
     uint32_t GetHeight() const noexcept { return m_height; }
@@ -56,8 +62,27 @@ protected:
     }
 
     void SetInitializedState(bool initialized) noexcept { m_state.set(WND_STATE_INITIALIZED, initialized); }
-    void SetVisibleState(bool visible) noexcept { m_state.set(WND_STATE_IS_VISIBLE, visible); }
     void SetClosedState(bool closed) noexcept { m_state.set(WND_STATE_IS_CLOSED, closed); }
+    void SetVisibleState(bool visible) noexcept { m_state.set(WND_STATE_IS_VISIBLE, visible); }
+    void SetActiveState(bool active) noexcept { m_state.set(WND_STATE_IS_ACTIVE, active); }
+    
+    void ResetSizeState() noexcept
+    { 
+        m_state.set(WND_STATE_IS_MAXIMIZED, false);
+        m_state.set(WND_STATE_IS_MINIMIZED, false);
+    }
+
+    void SetMinimizedState(bool minimized) noexcept
+    {
+        ResetSizeState();
+        m_state.set(WND_STATE_IS_MINIMIZED, minimized);
+    }
+
+    void SetMaximizedState(bool maximized) noexcept
+    { 
+        ResetSizeState();
+        m_state.set(WND_STATE_IS_MAXIMIZED, maximized);
+    }
 
     void SetWidth(uint32_t width) noexcept { m_width = width; }
     void SetHeight(uint32_t height) noexcept { m_height = height; }
@@ -66,8 +91,11 @@ private:
     enum WndStateFlags : uint32_t
     {
         WND_STATE_INITIALIZED,
-        WND_STATE_IS_VISIBLE,
         WND_STATE_IS_CLOSED,
+        WND_STATE_IS_VISIBLE,
+        WND_STATE_IS_ACTIVE,
+        WND_STATE_IS_MINIMIZED,
+        WND_STATE_IS_MAXIMIZED,
     };
 
 private:
