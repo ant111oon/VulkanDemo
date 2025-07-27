@@ -25,5 +25,5 @@
 #include "platform/platform.h"
 
 #if defined(ENG_OS_WINDOWS)
-    #include "platform/win32/win32_includes.h"
+    #include "platform/native/win32/win32_includes.h"
 #endif

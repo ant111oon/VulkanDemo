@@ -1,4 +1,4 @@
-#include "platform/window.h"
+#include "platform/window/window.h"
 
 #include "core/utils/assert.h"
 

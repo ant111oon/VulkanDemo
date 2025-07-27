@@ -1,8 +1,7 @@
 #pragma once
 
-#include "window_events.h"
+#include "event_queue.h"
 
-#include <queue>
 #include <string_view>
 #include <cstdint>
 #include <bitset>
@@ -40,17 +39,7 @@ public:
 
     virtual void SetVisible(bool visible) = 0;
 
-    bool PopEvent(WndEvent& event)
-    {
-        if (m_eventQueue.empty()) {
-            return false;
-        }
-
-        event = m_eventQueue.front();
-        m_eventQueue.pop();
-
-        return true;
-    }
+    bool PopEvent(WndEvent& event) { return m_eventQueue.Pop(event); }
 
     bool IsInitialized() const noexcept { return m_state.test(WND_STATE_INITIALIZED); }
     bool IsVisible() const noexcept { return m_state.test(WND_STATE_IS_VISIBLE); }
@@ -60,22 +49,10 @@ public:
     uint32_t GetHeight() const noexcept { return m_height; }
 
 protected:
-    template <typename EventType>
-    void PushEvent()
-    {
-        m_eventQueue.emplace<EventType>({});
-    }
-
-    template <typename EventType>
-    void PushEvent(EventType&& event)
-    {
-        m_eventQueue.emplace<EventType>(std::forward<EventType>(event));
-    }
-
     template <typename EventType, typename... Args>
     void PushEvent(Args&&... args)
     {
-        m_eventQueue.emplace<EventType>(std::forward<Args>(args)...);
+        m_eventQueue.Push<EventType>(std::forward<Args>(args)...);
     }
 
     void SetInitializedState(bool initialized) noexcept { m_state.set(WND_STATE_INITIALIZED, initialized); }
@@ -94,7 +71,7 @@ private:
     };
 
 private:
-    std::queue<WndEvent> m_eventQueue;
+    WndEventQueue m_eventQueue;
 
     uint32_t m_width = 0;
     uint32_t m_height = 0;
@@ -103,8 +80,8 @@ private:
 };
 
 
-#include "platform.h"
+#include "platform/platform.h"
 
 #if defined(ENG_OS_WINDOWS)
-    #include "win32/window/win32_window.h" 
+    #include "platform/native/win32/window/win32_window.h" 
 #endif

@@ -71,6 +71,14 @@ LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
             PostQuitMessage(0);
             return 0;
 
+        case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            BeginPaint(m_HWND, &ps);
+            EndPaint(m_HWND, &ps);
+            return 0;
+        }
+
         case WM_CLOSE:
             SetClosedState(true);
             PushEvent<WndCloseEvent>();
