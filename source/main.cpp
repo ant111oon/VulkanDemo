@@ -1,12 +1,11 @@
-#include "core/platform/window/window.h"
-
-#include "core/utils/assert.h"
+#include "core/wnd_system/wnd_system.h"
 
 
 int main(int argc, char* argv[])
 {
-    std::unique_ptr<BaseWindow> pWnd = std::make_unique<Win32Window>();
-    
+    wndSysInit();
+    BaseWindow* pWnd = wndSysGetMainWindow();
+
     WindowInitInfo wndInitInfo = {};
     wndInitInfo.title = "Vulkan Demo";
     wndInitInfo.width = 980;
@@ -24,6 +23,7 @@ int main(int argc, char* argv[])
     }
 
     pWnd->Destroy();
+    wndSysTerminate();
 
     return 0;
 }
