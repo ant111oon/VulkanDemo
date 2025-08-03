@@ -38,3 +38,6 @@
 
 #define ENG_PRAGMA_OPTIMIZE_OFF _Pragma("optimize(\"\", off)")
 #define ENG_PRAGMA_OPTIMIZE_ON  _Pragma("optimize(\"\", on)")
+
+
+#define ENG_GFX_API_VULKAN
