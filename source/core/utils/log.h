@@ -26,7 +26,7 @@ inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t l
     static auto LogLevelToColor = [=](LogLevel level) -> const char*
     {
         switch (level) {
-            case LogLevel::TRACE: return WHITE_COLOR;
+            case LogLevel::TRACE: return RESET_COLOR;
             case LogLevel::INFO: return GREEN_COLOR;
             case LogLevel::WARN: return YELLOW_COLOR;
             case LogLevel::ERROR: return RED_COLOR;
