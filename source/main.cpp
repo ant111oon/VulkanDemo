@@ -124,22 +124,11 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-int main(int argc, char* argv[])
+VkInstance InitVkInstance(const char* pAppName)
 {
-    wndSysInit();
-    BaseWindow* pWnd = wndSysGetMainWindow();
-
-    WindowInitInfo wndInitInfo = {};
-    wndInitInfo.title = "Vulkan Demo";
-    wndInitInfo.width = 980;
-    wndInitInfo.height = 640;
-
-    pWnd->Init(wndInitInfo);
-    ENG_ASSERT(pWnd->IsInitialized());
-
     VkApplicationInfo vkApplicationInfo = {};
     vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    vkApplicationInfo.pApplicationName = wndInitInfo.title.data();
+    vkApplicationInfo.pApplicationName = pAppName;
     vkApplicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     vkApplicationInfo.pEngineName = "VkEngine";
     vkApplicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -202,16 +191,93 @@ int main(int argc, char* argv[])
     VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &vkInstance));
     VK_ASSERT(vkInstance != VK_NULL_HANDLE);
 
+    return vkInstance;
+}
+
+
+VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
+{
     VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
+
 #ifdef ENG_OS_WINDOWS
     VkWin32SurfaceCreateInfoKHR vkWin32SurfCreateInfo = {};
     vkWin32SurfCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     vkWin32SurfCreateInfo.hinstance = GetModuleHandle(nullptr);
-    vkWin32SurfCreateInfo.hwnd = (HWND)pWnd->GetNativeHandle();
+    vkWin32SurfCreateInfo.hwnd = (HWND)wnd.GetNativeHandle();
 
     VK_CHECK(vkCreateWin32SurfaceKHR(vkInstance, &vkWin32SurfCreateInfo, nullptr, &vkSurface));
 #endif
+
     VK_ASSERT(vkSurface != VK_NULL_HANDLE);
+
+    return vkSurface;
+}
+
+
+VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
+{
+    uint32_t physDeviceCount = 0;
+    VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, nullptr));
+    VK_ASSERT(physDeviceCount > 0);
+    
+    std::vector<VkPhysicalDevice> physDevices(physDeviceCount);
+    VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, physDevices.data()));
+
+    VkPhysicalDevice pickedPhysDevice = VK_NULL_HANDLE;
+
+    for (VkPhysicalDevice device : physDevices) {
+        bool isDeviceSuitable = true;
+
+        VkPhysicalDeviceFeatures features = {};
+        vkGetPhysicalDeviceFeatures(device, &features);
+
+        isDeviceSuitable = isDeviceSuitable && features.independentBlend;
+
+        VkPhysicalDeviceProperties props = {};
+        vkGetPhysicalDeviceProperties(device, &props);
+
+        isDeviceSuitable = isDeviceSuitable && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+
+        if (isDeviceSuitable) {
+            pickedPhysDevice = device;
+            break;
+        }
+    }
+
+    VK_ASSERT(pickedPhysDevice != VK_NULL_HANDLE);
+
+    return pickedPhysDevice;
+}
+
+
+VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice)
+{
+    VkDeviceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+    VkDevice device = VK_NULL_HANDLE;
+
+    return device;
+}
+
+
+int main(int argc, char* argv[])
+{
+    wndSysInit();
+    BaseWindow* pWnd = wndSysGetMainWindow();
+
+    WindowInitInfo wndInitInfo = {};
+    wndInitInfo.title = "Vulkan Demo";
+    wndInitInfo.width = 980;
+    wndInitInfo.height = 640;
+
+    pWnd->Init(wndInitInfo);
+    ENG_ASSERT(pWnd->IsInitialized());
+
+    VkInstance vkInstance = InitVkInstance(wndInitInfo.title.data());
+    VkSurfaceKHR vkSurface = InitVkSurface(vkInstance, *pWnd);
+    VkPhysicalDevice vkPhysDevice = InitVkPhysDevice(vkInstance);
+    VkDevice vkDevice = InitVkDevice(vkPhysDevice);
 
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
