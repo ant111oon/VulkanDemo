@@ -273,7 +273,7 @@ VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 }
 
 
-VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice)
+VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface)
 {
     uint32_t queueFamilyPropsCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, nullptr);
@@ -289,6 +289,12 @@ VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice)
 
     for (uint32_t i = 0; i < queueFamilyProps.size(); ++i) {
         const VkQueueFamilyProperties& props = queueFamilyProps[i];
+
+        VkBool32 isPresentSupported = VK_FALSE;
+        VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysDevice, i, vkSurface, &isPresentSupported));
+        if (!isPresentSupported) {
+            continue;
+        }
 
         if (!IsQueueFamilyIndexValid(graphicsQueueFamilyIndex) && (props.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
             graphicsQueueFamilyIndex = i;
@@ -373,7 +379,7 @@ int main(int argc, char* argv[])
     VkInstance vkInstance = InitVkInstance(wndInitInfo.title.data());
     VkSurfaceKHR vkSurface = InitVkSurface(vkInstance, *pWnd);
     VkPhysicalDevice vkPhysDevice = InitVkPhysDevice(vkInstance);
-    VkDevice vkDevice = InitVkDevice(vkPhysDevice);
+    VkDevice vkDevice = InitVkDevice(vkPhysDevice, vkSurface);
 
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
@@ -382,6 +388,8 @@ int main(int argc, char* argv[])
         while(pWnd->PopEvent(event)) {
         }
     }
+
+    VK_CHECK(vkDeviceWaitIdle(vkDevice));
 
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
