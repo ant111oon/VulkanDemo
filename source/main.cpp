@@ -149,7 +149,43 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-VkInstance InitVkInstance(const char* pAppName)
+VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
+{
+#ifdef ENG_BUILD_DEBUG
+    VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
+
+    auto CreateDebugUtilsMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkCreateDebugUtilsMessengerEXT");
+    VK_ASSERT(CreateDebugUtilsMessenger);
+
+    VK_CHECK(CreateDebugUtilsMessenger(vkInstance, &vkDbgMessengerCreateInfo, nullptr, &vkDbgUtilsMessenger));
+    VK_ASSERT(vkDbgUtilsMessenger != VK_NULL_HANDLE);
+
+    CreateDebugUtilsMessenger = nullptr;
+
+    return vkDbgUtilsMessenger;
+#else
+    return VK_NULL_HANDLE;
+#endif
+}
+
+
+void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
+{
+#ifdef ENG_BUILD_DEBUG
+    auto DestroyDebugUtilsMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkDestroyDebugUtilsMessengerEXT");
+    VK_ASSERT(DestroyDebugUtilsMessenger);
+
+    DestroyDebugUtilsMessenger(vkInstance, vkDbgUtilsMessenger, nullptr);
+    vkDbgUtilsMessenger = VK_NULL_HANDLE;
+
+    DestroyDebugUtilsMessenger = nullptr;
+#else
+    vkDbgUtilsMessenger = VK_NULL_HANDLE;
+#endif
+}
+
+
+VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
     VkApplicationInfo vkApplicationInfo = {};
     vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -214,6 +250,8 @@ VkInstance InitVkInstance(const char* pAppName)
     VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &vkInstance));
     VK_ASSERT(vkInstance != VK_NULL_HANDLE);
 
+    vkDbgUtilsMessenger = InitVkDebugMessenger(vkInstance, vkDbgMessengerCreateInfo);
+
     return vkInstance;
 }
 
@@ -273,7 +311,7 @@ VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 }
 
 
-VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface)
+VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
     uint32_t queueFamilyPropsCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, nullptr);
@@ -323,9 +361,11 @@ VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface)
     VK_ASSERT_MSG(graphicsQueueFamilyIndex == computeQueueFamilyIndex && computeQueueFamilyIndex == transferQueueFamilyIndex,
         "Queue family indices for graphics, compute and transfer must be equal, for now. TODO: process the case when they are different");
 
+    queueFamilyIndex = graphicsQueueFamilyIndex;
+
     VkDeviceQueueCreateInfo queueCreateInfo = {};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
+    queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
     queueCreateInfo.queueCount = 1;
     
     const float queuePriority = 1.f;
@@ -338,7 +378,6 @@ VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface)
 
     constexpr std::array deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
     };
 
     VK_ASSERT(CheckVkDeviceExtensionsSupport(vkPhysDevice, deviceExtensions));
@@ -346,20 +385,85 @@ VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface)
     deviceCreateInfo.enabledExtensionCount = deviceExtensions.size();
     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    VkPhysicalDeviceDynamicRenderingFeatures dynRenderingFeature = {};
-    dynRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-    dynRenderingFeature.dynamicRendering = VK_TRUE;
+    VkPhysicalDeviceVulkan13Features features13 = {};
+    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features13.dynamicRendering = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features2.pNext = &dynRenderingFeature;
+    features2.pNext = &features13;
 
     deviceCreateInfo.pNext = &features2;
 
     VkDevice device = VK_NULL_HANDLE;
     VK_CHECK(vkCreateDevice(vkPhysDevice, &deviceCreateInfo, nullptr, &device));
+    VK_ASSERT(device);
+    
+    vkGetDeviceQueue(device, queueFamilyIndex, 0, &vkQueue);
+    VK_ASSERT(vkQueue);
 
     return device;
+}
+
+
+VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain)
+{
+    if (width == 0 || height == 0) {
+        return VK_NULL_HANDLE;
+    }
+
+    VkSurfaceCapabilitiesKHR surfCapabilities = {};
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysDevice, vkSurface, &surfCapabilities));
+
+    VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
+    swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainCreateInfo.oldSwapchain = oldSwapchain;
+    swapchainCreateInfo.surface = vkSurface;
+    swapchainCreateInfo.imageArrayLayers = 1u;
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // Since we have one queue for graphics, compute and transfer
+    
+    // TODO: check if that format and color space are available with vkGetPhysicalDeviceSurfaceFormatsKHR 
+    swapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+    if (surfCapabilities.currentExtent.width != UINT32_MAX && surfCapabilities.currentExtent.height != UINT32_MAX) {
+        swapchainCreateInfo.imageExtent = surfCapabilities.currentExtent;
+    } else {
+        swapchainCreateInfo.imageExtent.width = std::clamp(width, surfCapabilities.minImageExtent.width, surfCapabilities.maxImageExtent.width);
+        swapchainCreateInfo.imageExtent.height = std::clamp(height, surfCapabilities.minImageExtent.height, surfCapabilities.maxImageExtent.height);
+    }
+
+    swapchainCreateInfo.minImageCount = surfCapabilities.minImageCount + 1;
+    if (surfCapabilities.maxImageCount != 0) {
+        swapchainCreateInfo.minImageCount = std::min(swapchainCreateInfo.minImageCount, surfCapabilities.maxImageCount);
+    }
+
+    swapchainCreateInfo.preTransform = (surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) 
+        ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfCapabilities.currentTransform;
+
+    // TODO: check if that present mode is available with vkGetPhysicalDeviceSurfacePresentModesKHR 
+    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    swapchainCreateInfo.clipped = VK_TRUE;
+
+    VK_ASSERT(swapchainCreateInfo.minImageCount >= surfCapabilities.minImageCount);
+    if (surfCapabilities.maxImageCount != 0) {
+        VK_ASSERT(swapchainCreateInfo.minImageCount <= surfCapabilities.maxImageCount);
+    }
+    VK_ASSERT((swapchainCreateInfo.compositeAlpha & surfCapabilities.supportedCompositeAlpha) == swapchainCreateInfo.compositeAlpha);
+    VK_ASSERT((swapchainCreateInfo.preTransform & surfCapabilities.supportedTransforms) == swapchainCreateInfo.preTransform);
+    VK_ASSERT((swapchainCreateInfo.imageUsage & surfCapabilities.supportedUsageFlags) == swapchainCreateInfo.imageUsage);
+
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateSwapchainKHR(vkDevice, &swapchainCreateInfo, nullptr, &swapchain));
+    VK_ASSERT(swapchain);
+
+    if (oldSwapchain) {
+        vkDestroySwapchainKHR(vkDevice, oldSwapchain, nullptr);
+    }
+
+    return swapchain;
 }
 
 
@@ -376,25 +480,43 @@ int main(int argc, char* argv[])
     pWnd->Init(wndInitInfo);
     ENG_ASSERT(pWnd->IsInitialized());
 
-    VkInstance vkInstance = InitVkInstance(wndInitInfo.title.data());
+    VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
+
+    VkInstance vkInstance = InitVkInstance(wndInitInfo.title.data(), vkDbgUtilsMessenger);
     VkSurfaceKHR vkSurface = InitVkSurface(vkInstance, *pWnd);
     VkPhysicalDevice vkPhysDevice = InitVkPhysDevice(vkInstance);
-    VkDevice vkDevice = InitVkDevice(vkPhysDevice, vkSurface);
+
+    uint32_t queueFamilyIndex = UINT32_MAX;
+    VkQueue vkQueue = VK_NULL_HANDLE;
+    VkDevice vkDevice = InitVkDevice(vkPhysDevice, vkSurface, queueFamilyIndex, vkQueue);
+
+    VkSwapchainKHR vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, pWnd->GetWidth(), pWnd->GetHeight(), VK_NULL_HANDLE);
 
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
         
         WndEvent event;
         while(pWnd->PopEvent(event)) {
+            if (event.Is<WndResizeEvent>()) {
+                const WndResizeEvent& e = event.Get<WndResizeEvent>();
+
+                if (e.width == 0 || e.height == 0) {
+                    continue;
+                }
+
+                vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, pWnd->GetWidth(), pWnd->GetHeight(), vkSwapchain);
+            }
         }
     }
 
     VK_CHECK(vkDeviceWaitIdle(vkDevice));
 
+    vkDestroySwapchainKHR(vkDevice, vkSwapchain, nullptr);
+
     vkDestroyDevice(vkDevice, nullptr);
     vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
     
-    // NOTE: Debug messenger is automatically created and destroyed by the Vulkan loader via pNext.
+    DestroyVkDebugMessenger(vkInstance, vkDbgUtilsMessenger);
     vkDestroyInstance(vkInstance, nullptr);
 
     pWnd->Destroy();
