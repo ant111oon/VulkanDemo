@@ -11,14 +11,13 @@ enum class LogLevel { TRACE, INFO, WARN, ERROR };
 
 
 template <typename... Args>
-inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view prefix, std::string_view fmt, Args&&... args) noexcept
+inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, Args&&... args) noexcept
 {
     if (!pStream) {
         return;
     }
 
     static constexpr const char* RESET_COLOR = "\x1b[0m";
-    static constexpr const char* WHITE_COLOR = "\x1b[37m";
     static constexpr const char* RED_COLOR = "\x1b[31m";
     static constexpr const char* GREEN_COLOR = "\x1b[32m";
     static constexpr const char* YELLOW_COLOR = "\x1b[33m";
@@ -56,8 +55,8 @@ inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t l
     size_t actualMsgBufferSize = sprintf_s(msgBuffer.data(), msgBuffer.size(), "[%s%s%s] ", pLogColor, pMarker, RESET_COLOR);
     size_t remainMsgBufferSize = msgBuffer.size() - actualMsgBufferSize;
 
-    if (!prefix.empty()) {
-        actualMsgBufferSize += sprintf_s(msgBuffer.data() + actualMsgBufferSize, remainMsgBufferSize, "[%*s]: ", prefix.size(), prefix.data());
+    if (!system.empty()) {
+        actualMsgBufferSize += sprintf_s(msgBuffer.data() + actualMsgBufferSize, remainMsgBufferSize, "[%*s]: ", system.size(), system.data());
         remainMsgBufferSize = msgBuffer.size() - actualMsgBufferSize;
     }
 
@@ -74,7 +73,7 @@ inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t l
 }
 
 
-#define ENG_LOG_TRACE(PREFIX, FMT, ...) Log(stdout, LogLevel::TRACE, __FILE__, __LINE__, PREFIX, FMT, __VA_ARGS__)
-#define ENG_LOG_INFO(PREFIX, FMT, ...)  Log(stdout, LogLevel::INFO, __FILE__, __LINE__, PREFIX, FMT, __VA_ARGS__)
-#define ENG_LOG_WARN(PREFIX, FMT, ...)  Log(stdout, LogLevel::WARN, __FILE__, __LINE__, PREFIX, FMT, __VA_ARGS__)
-#define ENG_LOG_ERROR(PREFIX, FMT, ...) Log(stderr, LogLevel::ERROR, __FILE__, __LINE__, PREFIX, FMT, __VA_ARGS__)
+#define ENG_LOG_TRACE(SYSTEM, FMT, ...) Log(stdout, LogLevel::TRACE, __FILE__, __LINE__, SYSTEM, FMT, __VA_ARGS__)
+#define ENG_LOG_INFO(SYSTEM, FMT, ...)  Log(stdout, LogLevel::INFO, __FILE__, __LINE__, SYSTEM, FMT, __VA_ARGS__)
+#define ENG_LOG_WARN(SYSTEM, FMT, ...)  Log(stdout, LogLevel::WARN, __FILE__, __LINE__, SYSTEM, FMT, __VA_ARGS__)
+#define ENG_LOG_ERROR(SYSTEM, FMT, ...) Log(stderr, LogLevel::ERROR, __FILE__, __LINE__, SYSTEM, FMT, __VA_ARGS__)

@@ -20,9 +20,8 @@
     } while(0)
 
 
-bool CheckVkInstExtensionsSupport(const std::span<const char* const> requiredExtensions)
+static bool CheckVkInstExtensionsSupport(const std::span<const char* const> requiredExtensions)
 {
-#ifdef ENG_BUILD_DEBUG
     uint32_t vkInstExtensionPropsCount = 0;
     VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &vkInstExtensionPropsCount, nullptr));
     std::vector<VkExtensionProperties> vkInstExtensionProps(vkInstExtensionPropsCount);
@@ -39,15 +38,11 @@ bool CheckVkInstExtensionsSupport(const std::span<const char* const> requiredExt
     }
 
     return true;
-#else
-    return true;
-#endif
 }
 
 
-bool CheckVkInstLayersSupport(const std::span<const char* const> requiredLayers)
+static bool CheckVkInstLayersSupport(const std::span<const char* const> requiredLayers)
 {
-#ifdef ENG_BUILD_DEBUG
     uint32_t vkInstLayersPropsCount = 0;
     VK_CHECK(vkEnumerateInstanceLayerProperties(&vkInstLayersPropsCount, nullptr));
     std::vector<VkLayerProperties> vkInstLayerProps(vkInstLayersPropsCount);
@@ -64,15 +59,11 @@ bool CheckVkInstLayersSupport(const std::span<const char* const> requiredLayers)
     }
 
     return true;
-#else
-    return true;
-#endif
 }
 
 
-bool CheckVkDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::span<const char* const> requiredExtensions)
+static bool CheckVkDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::span<const char* const> requiredExtensions)
 {
-#ifdef ENG_BUILD_DEBUG
     uint32_t vkDeviceExtensionsCount = 0;
     VK_CHECK(vkEnumerateDeviceExtensionProperties(vkPhysDevice, nullptr, &vkDeviceExtensionsCount, nullptr));
     std::vector<VkExtensionProperties> vkDeviceExtensionProps(vkDeviceExtensionsCount);
@@ -89,9 +80,6 @@ bool CheckVkDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::sp
     }
 
     return true;
-#else
-    return true;
-#endif
 }
 
 
@@ -149,7 +137,7 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
+static VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
 {
 #ifdef ENG_BUILD_DEBUG
     VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
@@ -169,7 +157,7 @@ VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDeb
 }
 
 
-void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
+static void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
 #ifdef ENG_BUILD_DEBUG
     auto DestroyDebugUtilsMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkDestroyDebugUtilsMessengerEXT");
@@ -185,7 +173,7 @@ void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessengerEXT& vk
 }
 
 
-VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
+static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
     VkApplicationInfo vkApplicationInfo = {};
     vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -256,7 +244,7 @@ VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgU
 }
 
 
-VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
+static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 {
     VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
 
@@ -275,7 +263,7 @@ VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 }
 
 
-VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
+static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 {
     uint32_t physDeviceCount = 0;
     VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, nullptr));
@@ -311,7 +299,7 @@ VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 }
 
 
-VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
+static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
     uint32_t queueFamilyPropsCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, nullptr);
@@ -406,7 +394,41 @@ VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uin
 }
 
 
-VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain)
+static bool CheckVkSurfaceFormatSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR format)
+{
+    uint32_t surfaceFormatsCount = 0;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysDevice, vkSurface, &surfaceFormatsCount, nullptr));
+    std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysDevice, vkSurface, &surfaceFormatsCount, surfaceFormats.data()));
+
+    for (VkSurfaceFormatKHR fmt : surfaceFormats) {
+        if (fmt.format == format.format && fmt.colorSpace == format.colorSpace) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+static bool CheckVkPresentModeSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, VkPresentModeKHR presentMode)
+{
+    uint32_t presentModesCount = 0;
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysDevice, vkSurface, &presentModesCount, nullptr));
+    std::vector<VkPresentModeKHR> presentModes(presentModesCount);
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vkPhysDevice, vkSurface, &presentModesCount, presentModes.data()));
+
+    for (VkPresentModeKHR mode : presentModes) {
+        if (mode == presentMode) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain)
 {
     if (width == 0 || height == 0) {
         return VK_NULL_HANDLE;
@@ -423,10 +445,14 @@ VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice,
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // Since we have one queue for graphics, compute and transfer
-    
-    // TODO: check if that format and color space are available with vkGetPhysicalDeviceSurfaceFormatsKHR 
-    swapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-    swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+    VkSurfaceFormatKHR swapchainSurfFormat = {};
+    swapchainSurfFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+    swapchainSurfFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    VK_ASSERT_MSG(CheckVkSurfaceFormatSupport(vkPhysDevice, vkSurface, swapchainSurfFormat), "Unsupported swapchain surface format");
+
+    swapchainCreateInfo.imageFormat = swapchainSurfFormat.format;
+    swapchainCreateInfo.imageColorSpace = swapchainSurfFormat.colorSpace;
 
     if (surfCapabilities.currentExtent.width != UINT32_MAX && surfCapabilities.currentExtent.height != UINT32_MAX) {
         swapchainCreateInfo.imageExtent = surfCapabilities.currentExtent;
@@ -443,8 +469,10 @@ VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice,
     swapchainCreateInfo.preTransform = (surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) 
         ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfCapabilities.currentTransform;
 
-    // TODO: check if that present mode is available with vkGetPhysicalDeviceSurfacePresentModesKHR 
-    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    swapchainCreateInfo.presentMode = CheckVkPresentModeSupport(vkPhysDevice, vkSurface, VK_PRESENT_MODE_MAILBOX_KHR) 
+        ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
+    VK_ASSERT_MSG(CheckVkPresentModeSupport(vkPhysDevice, vkSurface, swapchainCreateInfo.presentMode), "Unsupported swapchain present mode");
+
     swapchainCreateInfo.clipped = VK_TRUE;
 
     VK_ASSERT(swapchainCreateInfo.minImageCount >= surfCapabilities.minImageCount);
@@ -500,11 +528,7 @@ int main(int argc, char* argv[])
             if (event.Is<WndResizeEvent>()) {
                 const WndResizeEvent& e = event.Get<WndResizeEvent>();
 
-                if (e.width == 0 || e.height == 0) {
-                    continue;
-                }
-
-                vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, pWnd->GetWidth(), pWnd->GetHeight(), vkSwapchain);
+                vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, e.width, e.height, vkSwapchain);
             }
         }
     }

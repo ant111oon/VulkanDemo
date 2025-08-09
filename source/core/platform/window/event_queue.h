@@ -279,8 +279,8 @@ public:
     template<typename EventType>
     const EventType& Get() const
     {
-        ENG_ASSERT_PREFIX(Is<EventType>(), "CORE");
-        ENG_ASSERT_PREFIX(IsValid(), "CORE");
+        ENG_ASSERT_SYSTEM(Is<EventType>(), "CORE");
+        ENG_ASSERT_SYSTEM(IsValid(), "CORE");
 
         return std::get<EventType>(m_event);
     }

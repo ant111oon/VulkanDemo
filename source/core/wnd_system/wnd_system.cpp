@@ -5,7 +5,7 @@
 #include "core/utils/assert.h"
 
 
-#define ENG_WND_ASSERT(COND) ENG_ASSERT_PREFIX(COND, "WINDOW")
+#define WND_ASSERT(COND) ENG_ASSERT_SYSTEM(COND, "WINDOW")
 
 
 static std::unique_ptr<BaseWindow> pWndSysInst = nullptr;
@@ -21,7 +21,7 @@ void wndSysInit()
     pWndSysInst = std::make_unique<Win32Window>();
 #endif
 
-    ENG_WND_ASSERT(pWndSysInst != nullptr);
+    WND_ASSERT(pWndSysInst != nullptr);
 }
 
 
@@ -34,6 +34,6 @@ void wndSysTerminate()
 
 BaseWindow* wndSysGetMainWindow()
 {
-    ENG_WND_ASSERT(pWndSysInst != nullptr);
+    WND_ASSERT(pWndSysInst != nullptr);
     return pWndSysInst.get();
 }

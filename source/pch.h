@@ -19,6 +19,8 @@
 #include <fstream>
 #include <filesystem>
 
+#include <cstdarg>
+
 #include <chrono>
 #include <thread>
 
