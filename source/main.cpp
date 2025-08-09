@@ -468,6 +468,10 @@ static bool CheckVkSurfaceFormatSupport(VkPhysicalDevice vkPhysDevice, VkSurface
     std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
     VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysDevice, vkSurface, &surfaceFormatsCount, surfaceFormats.data()));
 
+    if (surfaceFormatsCount == 1 && surfaceFormats[0].format = VK_FORMAT_UNDEFINED) {
+        return true;
+    }
+
     for (VkSurfaceFormatKHR fmt : surfaceFormats) {
         if (fmt.format == format.format && fmt.colorSpace == format.colorSpace) {
             return true;
@@ -673,6 +677,8 @@ int main(int argc, char* argv[])
         WndEvent event;
         while(pWnd->PopEvent(event)) {
             if (event.Is<WndResizeEvent>()) {
+                // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
+
                 const WndResizeEvent& e = event.Get<WndResizeEvent>();
                 
                 VkSwapchainKHR oldSwapchain = vkSwapchain;
