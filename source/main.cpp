@@ -657,6 +657,46 @@ static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevic
 }
 
 
+VkCommandPool InitVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
+{
+    VK_LOG_INFO("VkCommandPool initialization...");
+    Timer timer;
+
+    VkCommandPoolCreateInfo cmdPoolCreateInfo = {};
+    cmdPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+
+    VkCommandPool cmdPool = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &cmdPool));
+    VK_ASSERT(cmdPool != VK_NULL_HANDLE);
+
+    VK_LOG_INFO("VkCommandPool initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return cmdPool;
+}
+
+
+static VkCommandBuffer AllocateVkCmdBuffer(VkDevice vkDevice, VkCommandPool vkCmdPool)
+{
+    VK_LOG_INFO("VkCommandBuffer allocating...");
+    Timer timer;
+
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
+    cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdBufferAllocInfo.commandPool = vkCmdPool;
+    cmdBufferAllocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &cmdBuffer));
+    VK_ASSERT(cmdBuffer != VK_NULL_HANDLE);
+
+    VK_LOG_INFO("VkCommandBuffer allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return cmdBuffer;
+}
+
+
 int main(int argc, char* argv[])
 {
     Timer timer;
@@ -684,9 +724,11 @@ int main(int argc, char* argv[])
     VkDevice vkDevice = InitVkDevice(vkPhysDevice, vkSurface, queueFamilyIndex, vkQueue);
 
     VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
-    
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+
+    VkCommandPool vkCmdPool = InitVkCmdPool(vkDevice, queueFamilyIndex);
+    VkCommandBuffer vkCmdBuffer = AllocateVkCmdBuffer(vkDevice, vkCmdPool);
 
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
@@ -701,9 +743,15 @@ int main(int argc, char* argv[])
                 vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, e.width, e.height, oldSwapchain, swapchainImages, swapchainImageViews);
             }
         }
+
+        if (vkSwapchain == VK_NULL_HANDLE) {
+            continue;
+        }
     }
 
     VK_CHECK(vkDeviceWaitIdle(vkDevice));
+
+    vkDestroyCommandPool(vkDevice, vkCmdPool, nullptr);
 
     DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
 
