@@ -8,6 +8,49 @@
 #endif
 
 
+class Timer
+{
+public:
+    Timer()
+    {
+        Start();
+    }
+
+    Timer& Reset()
+    { 
+        m_start = m_end = std::chrono::high_resolution_clock::now();
+        return *this;
+    }
+
+    Timer& Start()
+    {
+        m_start = std::chrono::high_resolution_clock::now();
+        return *this;
+    }
+
+    Timer& End()
+    {
+        m_end = std::chrono::high_resolution_clock::now();
+        return *this;
+    }
+
+
+    template<typename DURATION_T, typename PERIOD_T>
+    DURATION_T GetDuration() const
+    {
+        ENG_ASSERT_MSG(m_end > m_start, "CORE", "Need to call End() before GetDuration()");
+        return std::chrono::duration<DURATION_T, PERIOD_T>(m_end - m_start).count();
+    }
+
+private:
+    using TimePoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
+
+    TimePoint m_start;
+    TimePoint m_end;
+};
+
+
+#define VK_LOG_INFO(FMT, ...)         ENG_LOG_INFO("VULKAN", FMT, __VA_ARGS__)
 #define VK_ASSERT_MSG(COND, FMT, ...) ENG_ASSERT_MSG(COND, "VULKAN", FMT, __VA_ARGS__)
 #define VK_ASSERT(COND)               VK_ASSERT_MSG(COND, #COND)
 #define VK_ASSERT_FAIL(FMT, ...)      VK_ASSERT_MSG(false, FMT, __VA_ARGS__)
@@ -16,6 +59,7 @@
 #define VK_CHECK(VkCall)                                                                  \
     do {                                                                                  \
         const VkResult _vkCallResult = VkCall;                                            \
+        (void)_vkCallResult;                                                              \
         VK_ASSERT_MSG(_vkCallResult == VK_SUCCESS, "%s", string_VkResult(_vkCallResult)); \
     } while(0)
 
@@ -139,7 +183,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 
 static VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
 {
-#ifdef ENG_BUILD_DEBUG
     VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
 
     auto CreateDebugUtilsMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkCreateDebugUtilsMessengerEXT");
@@ -151,15 +194,15 @@ static VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, cons
     CreateDebugUtilsMessenger = nullptr;
 
     return vkDbgUtilsMessenger;
-#else
-    return VK_NULL_HANDLE;
-#endif
 }
 
 
 static void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
-#ifdef ENG_BUILD_DEBUG
+    if (vkDbgUtilsMessenger == VK_NULL_HANDLE) {
+        return;
+    }
+    
     auto DestroyDebugUtilsMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkDestroyDebugUtilsMessengerEXT");
     VK_ASSERT(DestroyDebugUtilsMessenger);
 
@@ -167,14 +210,14 @@ static void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessenger
     vkDbgUtilsMessenger = VK_NULL_HANDLE;
 
     DestroyDebugUtilsMessenger = nullptr;
-#else
-    vkDbgUtilsMessenger = VK_NULL_HANDLE;
-#endif
 }
 
 
 static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
+    VK_LOG_INFO("VkInstance initialization...");
+    Timer timer;
+
     VkApplicationInfo vkApplicationInfo = {};
     vkApplicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     vkApplicationInfo.pApplicationName = pAppName;
@@ -238,7 +281,13 @@ static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT&
     VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &vkInstance));
     VK_ASSERT(vkInstance != VK_NULL_HANDLE);
 
+#ifdef ENG_BUILD_DEBUG
     vkDbgUtilsMessenger = InitVkDebugMessenger(vkInstance, vkDbgMessengerCreateInfo);
+#else
+    vkDbgUtilsMessenger = VK_NULL_HANDLE;
+#endif
+
+    VK_LOG_INFO("VkInstance initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkInstance;
 }
@@ -246,6 +295,9 @@ static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT&
 
 static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 {
+    VK_LOG_INFO("VkSurface initialization...");
+    Timer timer;
+
     VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
 
 #ifdef ENG_OS_WINDOWS
@@ -259,12 +311,17 @@ static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 
     VK_ASSERT(vkSurface != VK_NULL_HANDLE);
 
+    VK_LOG_INFO("VkSurface initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
     return vkSurface;
 }
 
 
 static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 {
+    VK_LOG_INFO("VkPhysicalDevice initialization...");
+    Timer timer;
+
     uint32_t physDeviceCount = 0;
     VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, nullptr));
     VK_ASSERT(physDeviceCount > 0);
@@ -295,12 +352,17 @@ static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 
     VK_ASSERT(pickedPhysDevice != VK_NULL_HANDLE);
 
+    VK_LOG_INFO("VkPhysicalDevice initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
     return pickedPhysDevice;
 }
 
 
 static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
+    VK_LOG_INFO("VkDevice initialization...");
+    Timer timer;
+
     uint32_t queueFamilyPropsCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, nullptr);
     
@@ -390,6 +452,8 @@ static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurfa
     vkGetDeviceQueue(device, queueFamilyIndex, 0, &vkQueue);
     VK_ASSERT(vkQueue);
 
+    VK_LOG_INFO("VkDevice initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
     return device;
 }
 
@@ -430,6 +494,9 @@ static bool CheckVkPresentModeSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKH
 
 static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain)
 {
+    VK_LOG_INFO("VkSwapchain initialization...");
+    Timer timer;
+
     if (width == 0 || height == 0) {
         return VK_NULL_HANDLE;
     }
@@ -491,12 +558,17 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
         vkDestroySwapchainKHR(vkDevice, oldSwapchain, nullptr);
     }
 
+    VK_LOG_INFO("VkSwapchain initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
     return swapchain;
 }
 
 
 int main(int argc, char* argv[])
 {
+    Timer timer;
+    timer.Start();
+
     wndSysInit();
     BaseWindow* pWnd = wndSysGetMainWindow();
 
