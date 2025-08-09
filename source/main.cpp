@@ -468,7 +468,7 @@ static bool CheckVkSurfaceFormatSupport(VkPhysicalDevice vkPhysDevice, VkSurface
     std::vector<VkSurfaceFormatKHR> surfaceFormats(surfaceFormatsCount);
     VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkPhysDevice, vkSurface, &surfaceFormatsCount, surfaceFormats.data()));
 
-    if (surfaceFormatsCount == 1 && surfaceFormats[0].format = VK_FORMAT_UNDEFINED) {
+    if (surfaceFormatsCount == 1 && surfaceFormats[0].format == VK_FORMAT_UNDEFINED) {
         return true;
     }
 
@@ -640,6 +640,23 @@ static void DestroyVkSwapchainImageViews(VkDevice vkDevice, std::vector<VkImageV
 }
 
 
+static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain, std::vector<VkImage>& swapchainImages, std::vector<VkImageView>& swapchainImageViews)
+{
+    VK_CHECK(vkDeviceWaitIdle(vkDevice));
+
+    VkSwapchainKHR vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, width, height, oldSwapchain);
+                
+    if (vkSwapchain != VK_NULL_HANDLE && vkSwapchain != oldSwapchain) {
+        DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
+
+        GetVkSwapchainImages(vkDevice, vkSwapchain, swapchainImages);
+        InitVkSwapchainImageView(vkDevice, swapchainImages, swapchainImageViews);
+    }
+
+    return vkSwapchain;
+}
+
+
 int main(int argc, char* argv[])
 {
     Timer timer;
@@ -677,19 +694,11 @@ int main(int argc, char* argv[])
         WndEvent event;
         while(pWnd->PopEvent(event)) {
             if (event.Is<WndResizeEvent>()) {
-                // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
-
                 const WndResizeEvent& e = event.Get<WndResizeEvent>();
-                
-                VkSwapchainKHR oldSwapchain = vkSwapchain;
-                vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, e.width, e.height, oldSwapchain);
-                
-                if (vkSwapchain != VK_NULL_HANDLE && vkSwapchain != oldSwapchain) {
-                    DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
 
-                    GetVkSwapchainImages(vkDevice, vkSwapchain, swapchainImages);
-                    InitVkSwapchainImageView(vkDevice, swapchainImages, swapchainImageViews);
-                }
+                // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
+                VkSwapchainKHR oldSwapchain = vkSwapchain;
+                vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, e.width, e.height, oldSwapchain, swapchainImages, swapchainImageViews);
             }
         }
     }
