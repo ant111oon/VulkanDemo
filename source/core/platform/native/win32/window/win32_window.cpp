@@ -11,6 +11,20 @@
 #define WIN32_ASSERT_FAIL(FMT, ...)      WIN32_ASSERT_MSG(false, FMT, __VA_ARGS__)
 
 
+static std::wstring Utf8ToUtf16(std::string_view strUTF8)
+{
+    if (strUTF8.empty()) {
+        return {};
+    }
+
+    const size_t size = MultiByteToWideChar(CP_UTF8, 0, strUTF8.data(), strUTF8.size(), nullptr, 0);
+    std::wstring string(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, strUTF8.data(), strUTF8.size(), string.data(), size);
+    
+    return string;
+}
+
+
 static WORD win32ResolveActualVK(WPARAM wParam, LPARAM lParam)
 {
     const WORD vk = LOWORD(wParam);
@@ -198,13 +212,13 @@ bool Win32Window::RegisterWndClass(HINSTANCE hInst)
         return true;
     }
 
-    WNDCLASSEX wc = {};
-    wc.cbSize = sizeof(WNDCLASSEX);
+    WNDCLASSEXW wc = {};
+    wc.cbSize = sizeof(wc);
     wc.hInstance = hInst;
     wc.lpszClassName = P_WND_CLASS_NAME;
     wc.lpfnWndProc = Win32Window::WndProcSetup;
     
-    s_isWindowClassRegistered = RegisterClassEx(&wc) != 0;
+    s_isWindowClassRegistered = RegisterClassExW(&wc) != 0;
     WIN32_ASSERT_MSG(s_isWindowClassRegistered, "Win32 window class registeration failed");
 
     return s_isWindowClassRegistered;
@@ -230,13 +244,6 @@ LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
-        case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            BeginPaint(m_HWND, &ps);
-            EndPaint(m_HWND, &ps);
-            return 0;
-        }
         case WM_CLOSE:
             return OnCloseEvent();
         case WM_ACTIVATE:
@@ -305,6 +312,9 @@ LRESULT Win32Window::OnSizeEvent(WPARAM wParam, LPARAM lParam)
 {
     const uint16_t width  = static_cast<uint16_t>(LOWORD(lParam));
     const uint16_t height = static_cast<uint16_t>(HIWORD(lParam));
+
+    SetWidth(width);
+    SetHeight(height);
 
     WndResizeEventType type = WndResizeEventType::RESTORED;
 
@@ -376,13 +386,20 @@ bool Win32Window::Init(const WindowInitInfo& initInfo)
 
     RegisterWndClass(hInst);
 
-    SetWidth(initInfo.width);
-    SetHeight(initInfo.height);
+    RECT clientRect = {};
+    clientRect.right = static_cast<LONG>(initInfo.width);
+    clientRect.bottom = static_cast<LONG>(initInfo.height);
+    AdjustWindowRectEx(&clientRect, WS_OVERLAPPEDWINDOW, FALSE, 0);
 
-    m_HWND = CreateWindowEx(
+    SetWidth(clientRect.right - clientRect.left);
+    SetHeight(clientRect.bottom - clientRect.top);
+
+    const std::wstring appNameWStr = Utf8ToUtf16(initInfo.title.data());
+
+    m_HWND = CreateWindowExW(
         0, 
         P_WND_CLASS_NAME,
-        initInfo.title.data(), 
+        appNameWStr.c_str(),
         WS_OVERLAPPEDWINDOW, 
         CW_USEDEFAULT, 
         CW_USEDEFAULT, 
@@ -410,7 +427,8 @@ void Win32Window::Destroy()
     }
 
     DestroyWindow(m_HWND);
-    UnregisterClass(P_WND_CLASS_NAME, GetModuleHandle(nullptr));
+    UnregisterClassW(P_WND_CLASS_NAME, GetModuleHandle(nullptr));
+    s_isWindowClassRegistered = false;
 
     m_HWND = nullptr;
 
@@ -418,15 +436,20 @@ void Win32Window::Destroy()
 }
 
 
-void Win32Window::ProcessEvents() const
+void Win32Window::ProcessEvents()
 {
     WIN32_ASSERT(IsInitialized());
 
     MSG msg = {};
 
-    while(PeekMessage(&msg, m_HWND, 0, 0, PM_REMOVE)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    while(PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        if (msg.message != WM_QUIT) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg); 
+        } else {
+            SetClosedState(true);
+            break;
+        }
     }
 }
 

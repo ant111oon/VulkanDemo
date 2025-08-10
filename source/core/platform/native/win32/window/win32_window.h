@@ -20,7 +20,7 @@ public:
     bool Init(const WindowInitInfo& initInfo) override;
     void Destroy() override;
 
-    void ProcessEvents() const override;
+    void ProcessEvents() override;
     
     void* GetNativeHandle() override { return m_HWND; }
     const void* GetNativeHandle() const override { return m_HWND; }
@@ -59,7 +59,7 @@ private:
     LRESULT OnKeyEvent(WPARAM wParam, LPARAM lParam, bool isKeyDown);
 
 private:
-    static inline constexpr const char* P_WND_CLASS_NAME = "WindowClass";
+    static inline constexpr const wchar_t* P_WND_CLASS_NAME = L"WindowClass";
     static inline bool s_isWindowClassRegistered = false;
 
 private:

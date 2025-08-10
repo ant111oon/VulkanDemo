@@ -35,7 +35,7 @@ public:
         m_state = 0;
     }
 
-    virtual void ProcessEvents() const = 0;
+    virtual void ProcessEvents() = 0;
     
     virtual void* GetNativeHandle() = 0;
     virtual const void* GetNativeHandle() const = 0;
@@ -51,7 +51,9 @@ public:
     bool IsMaximized() const noexcept { return m_state.test(WND_STATE_IS_MAXIMIZED); }
     bool IsMinimized() const noexcept { return m_state.test(WND_STATE_IS_MINIMIZED); }
 
+    // Returns client area width
     uint32_t GetWidth() const noexcept { return m_width; }
+    // Returns client area height
     uint32_t GetHeight() const noexcept { return m_height; }
 
 protected:

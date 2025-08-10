@@ -499,19 +499,29 @@ static bool CheckVkPresentModeSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKH
 }
 
 
-static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain)
+static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, 
+    VkExtent2D requiredExtent, VkSwapchainKHR oldSwapchain, VkExtent2D& swapchainExtent)
 {
-    if (width == 0 || height == 0) {
+    VkSurfaceCapabilitiesKHR surfCapabilities = {};
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysDevice, vkSurface, &surfCapabilities));
+
+    VkExtent2D extent = {};
+    if (surfCapabilities.currentExtent.width != UINT32_MAX || surfCapabilities.currentExtent.height != UINT32_MAX) {
+        extent = surfCapabilities.currentExtent;
+    } else {
+        extent.width = std::clamp(requiredExtent.width, surfCapabilities.minImageExtent.width, surfCapabilities.maxImageExtent.width);
+        extent.height = std::clamp(requiredExtent.height, surfCapabilities.minImageExtent.height, surfCapabilities.maxImageExtent.height);
+    }
+
+    if (extent.width == 0 || extent.height == 0) {
         return oldSwapchain;
     }
 
     VK_LOG_INFO("VkSwapchain initialization...");
     Timer timer;
 
-    VkSurfaceCapabilitiesKHR surfCapabilities = {};
-    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysDevice, vkSurface, &surfCapabilities));
-
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
+
     swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchainCreateInfo.oldSwapchain = oldSwapchain;
     swapchainCreateInfo.surface = vkSurface;
@@ -519,6 +529,7 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // Since we have one queue for graphics, compute and transfer
+    swapchainCreateInfo.imageExtent = extent;
 
     s_swapchainSurfFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
     s_swapchainSurfFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -526,13 +537,6 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
 
     swapchainCreateInfo.imageFormat = s_swapchainSurfFormat.format;
     swapchainCreateInfo.imageColorSpace = s_swapchainSurfFormat.colorSpace;
-
-    if (surfCapabilities.currentExtent.width != UINT32_MAX && surfCapabilities.currentExtent.height != UINT32_MAX) {
-        swapchainCreateInfo.imageExtent = surfCapabilities.currentExtent;
-    } else {
-        swapchainCreateInfo.imageExtent.width = std::clamp(width, surfCapabilities.minImageExtent.width, surfCapabilities.maxImageExtent.width);
-        swapchainCreateInfo.imageExtent.height = std::clamp(height, surfCapabilities.minImageExtent.height, surfCapabilities.maxImageExtent.height);
-    }
 
     swapchainCreateInfo.minImageCount = surfCapabilities.minImageCount + 1;
     if (surfCapabilities.maxImageCount != 0) {
@@ -563,6 +567,8 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
     if (oldSwapchain) {
         vkDestroySwapchainKHR(vkDevice, oldSwapchain, nullptr);
     }
+
+    swapchainExtent = swapchainCreateInfo.imageExtent;
 
     VK_LOG_INFO("VkSwapchain initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
@@ -640,11 +646,12 @@ static void DestroyVkSwapchainImageViews(VkDevice vkDevice, std::vector<VkImageV
 }
 
 
-static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, uint32_t width, uint32_t height, VkSwapchainKHR oldSwapchain, std::vector<VkImage>& swapchainImages, std::vector<VkImageView>& swapchainImageViews)
+static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, VkExtent2D requiredExtent, 
+    VkSwapchainKHR oldSwapchain, std::vector<VkImage>& swapchainImages, std::vector<VkImageView>& swapchainImageViews, VkExtent2D& swapchainExtent)
 {
     VK_CHECK(vkDeviceWaitIdle(vkDevice));
 
-    VkSwapchainKHR vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, width, height, oldSwapchain);
+    VkSwapchainKHR vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, swapchainExtent);
                 
     if (vkSwapchain != VK_NULL_HANDLE && vkSwapchain != oldSwapchain) {
         DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
@@ -726,6 +733,7 @@ int main(int argc, char* argv[])
     VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    VkExtent2D swapchainExtent;
 
     VkCommandPool vkCmdPool = InitVkCmdPool(vkDevice, queueFamilyIndex);
     VkCommandBuffer vkCmdBuffer = AllocateVkCmdBuffer(vkDevice, vkCmdPool);
@@ -740,7 +748,10 @@ int main(int argc, char* argv[])
 
                 // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
                 VkSwapchainKHR oldSwapchain = vkSwapchain;
-                vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, e.width, e.height, oldSwapchain, swapchainImages, swapchainImageViews);
+                VkExtent2D requiredExtent = { .width = e.width, .height = e.height };
+                
+                vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, 
+                    swapchainImages, swapchainImageViews, swapchainExtent);
             }
         }
 
