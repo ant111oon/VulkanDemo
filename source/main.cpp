@@ -1,11 +1,16 @@
 #include "core/wnd_system/wnd_system.h"
 
+#include "core/platform/file/file.h"
+
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
 #ifdef ENG_OS_WINDOWS
     #include <vulkan/vulkan_win32.h>
 #endif
+
+
+namespace fs = std::filesystem;
 
 
 #define VK_LOG_INFO(FMT, ...)         ENG_LOG_INFO("VULKAN", FMT, __VA_ARGS__)
@@ -218,7 +223,6 @@ static void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessenger
 
 static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
-    VK_LOG_INFO("VkInstance initialization...");
     Timer timer;
 
     VkApplicationInfo vkApplicationInfo = {};
@@ -298,7 +302,6 @@ static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT&
 
 static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 {
-    VK_LOG_INFO("VkSurface initialization...");
     Timer timer;
 
     VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
@@ -322,7 +325,6 @@ static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 
 static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 {
-    VK_LOG_INFO("VkPhysicalDevice initialization...");
     Timer timer;
 
     uint32_t physDeviceCount = 0;
@@ -363,7 +365,6 @@ static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 
 static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
-    VK_LOG_INFO("VkDevice initialization...");
     Timer timer;
 
     uint32_t queueFamilyPropsCount = 0;
@@ -502,6 +503,8 @@ static bool CheckVkPresentModeSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKH
 static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, 
     VkExtent2D requiredExtent, VkSwapchainKHR oldSwapchain, VkExtent2D& swapchainExtent)
 {
+    Timer timer;
+
     VkSurfaceCapabilitiesKHR surfCapabilities = {};
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysDevice, vkSurface, &surfCapabilities));
 
@@ -516,9 +519,6 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
     if (extent.width == 0 || extent.height == 0) {
         return oldSwapchain;
     }
-
-    VK_LOG_INFO("VkSwapchain initialization...");
-    Timer timer;
 
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
 
@@ -578,7 +578,6 @@ static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vk
 
 static void GetVkSwapchainImages(VkDevice vkDevice, VkSwapchainKHR vkSwapchain, std::vector<VkImage>& swapchainImages)
 {
-    VK_LOG_INFO("Getting VkSwapchain Images...");
     Timer timer;
 
     uint32_t swapchainImagesCount = 0;
@@ -596,7 +595,6 @@ static void InitVkSwapchainImageView(VkDevice vkDevice, const std::vector<VkImag
         return;
     }
 
-    VK_LOG_INFO("VkSwapchain Image Views initializing...");
     Timer timer;
 
     swapchainImageViews.resize(swapchainImages.size());
@@ -628,12 +626,11 @@ static void InitVkSwapchainImageView(VkDevice vkDevice, const std::vector<VkImag
 
 static void DestroyVkSwapchainImageViews(VkDevice vkDevice, std::vector<VkImageView>& swapchainImageViews)
 {
+    Timer timer;
+
     if (swapchainImageViews.empty()) {
         return;
     }
-
-    VK_LOG_INFO("VkSwapchain Image Views destroying...");
-    Timer timer;
 
     for (VkImageView& view : swapchainImageViews) {
         vkDestroyImageView(vkDevice, view, nullptr);
@@ -666,7 +663,6 @@ static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevic
 
 VkCommandPool InitVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
 {
-    VK_LOG_INFO("VkCommandPool initialization...");
     Timer timer;
 
     VkCommandPoolCreateInfo cmdPoolCreateInfo = {};
@@ -686,7 +682,6 @@ VkCommandPool InitVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
 
 static VkCommandBuffer AllocateVkCmdBuffer(VkDevice vkDevice, VkCommandPool vkCmdPool)
 {
-    VK_LOG_INFO("VkCommandBuffer allocating...");
     Timer timer;
 
     VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
@@ -701,6 +696,163 @@ static VkCommandBuffer AllocateVkCmdBuffer(VkDevice vkDevice, VkCommandPool vkCm
     VK_LOG_INFO("VkCommandBuffer allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return cmdBuffer;
+}
+
+
+static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
+{
+    Timer timer;
+
+    std::vector<uint8_t>* pShaderData = nullptr;
+    std::vector<uint8_t> localBuffer;
+    
+    pShaderData = pExternalBuffer ? pExternalBuffer : &localBuffer;
+
+    if (!ReadFile(*pShaderData, shaderSpirVPath)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", shaderSpirVPath.string().c_str());
+    }
+    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", 
+        shaderSpirVPath.string().c_str(), sizeof(uint32_t));
+
+    VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+    shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderModuleCreateInfo.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
+    shaderModuleCreateInfo.codeSize = pShaderData->size();
+
+    VkShaderModule vkShaderModule = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCreateInfo, nullptr, &vkShaderModule));
+    VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
+
+    VK_LOG_INFO("Shader module \"%s\" creating finished: %f ms", shaderSpirVPath.string().c_str(), timer.End().GetDuration<float, std::milli>());
+
+    return vkShaderModule;
+}
+
+
+static VkPipelineLayout InitVkPipelineLayout(VkDevice vkDevice)
+{
+    Timer timer;
+
+    VkPipelineLayoutCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VK_CHECK(vkCreatePipelineLayout(vkDevice, &createInfo, nullptr, &layout));
+    VK_ASSERT(layout != VK_NULL_HANDLE);
+
+    VK_LOG_INFO("VkPipelineLayout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return layout;
+}
+
+
+static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, const fs::path& vsPath, const fs::path& psPath, VkPipelineLayout& layout)
+{
+    Timer timer;
+
+    static constexpr size_t SHADER_STAGES_COUNT = 2;
+
+    std::vector<uint8_t> shaderCodeBuffer;
+    std::array<VkShaderModule, SHADER_STAGES_COUNT> vkShaderModules = {
+        CreateVkShaderModule(vkDevice, vsPath, &shaderCodeBuffer),
+        CreateVkShaderModule(vkDevice, psPath, &shaderCodeBuffer),
+    };
+
+    constexpr std::array<VkShaderStageFlagBits, SHADER_STAGES_COUNT> vkShaderStageBits = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
+
+    std::array<VkPipelineShaderStageCreateInfo, SHADER_STAGES_COUNT> shaderStageCreateInfos = {};
+    for (size_t i = 0; i < shaderStageCreateInfos.size(); ++i) {
+        VkPipelineShaderStageCreateInfo& info = shaderStageCreateInfos[i];
+
+        info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        info.stage = vkShaderStageBits[i];
+        info.module = vkShaderModules[i];
+        info.pName = "main";
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    
+    pipelineCreateInfo.pStages = shaderStageCreateInfos.data();
+    pipelineCreateInfo.stageCount = shaderStageCreateInfos.size();
+
+    VkPipelineVertexInputStateCreateInfo vertexInputState = {};
+    vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    pipelineCreateInfo.pVertexInputState = &vertexInputState;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = {};
+    inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
+
+    VkPipelineRasterizationStateCreateInfo rasterizationState = {};
+    rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizationState.lineWidth = 1.f;
+    pipelineCreateInfo.pRasterizationState = &rasterizationState;
+
+    VkPipelineMultisampleStateCreateInfo multisampleState = {};
+    multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampleState.sampleShadingEnable = VK_FALSE;
+    multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampleState.minSampleShading = 1.f;
+    multisampleState.pSampleMask = nullptr;
+    multisampleState.alphaToCoverageEnable = VK_FALSE;
+    multisampleState.alphaToOneEnable = VK_FALSE;
+    pipelineCreateInfo.pMultisampleState = &multisampleState;
+    
+    VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
+    depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencilState.depthTestEnable = VK_FALSE;
+    depthStencilState.depthWriteEnable = VK_FALSE;
+    depthStencilState.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    depthStencilState.depthBoundsTestEnable = VK_FALSE;
+    depthStencilState.stencilTestEnable = VK_FALSE;
+    depthStencilState.front = {};
+    depthStencilState.back = {};
+    depthStencilState.minDepthBounds = 0.f;
+    depthStencilState.maxDepthBounds = 1.f;
+    pipelineCreateInfo.pDepthStencilState = &depthStencilState;
+
+    VkPipelineViewportStateCreateInfo viewportState = {};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
+    pipelineCreateInfo.pViewportState = &viewportState;
+
+    constexpr std::array dynStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    
+    VkPipelineDynamicStateCreateInfo dynamicState = {};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = dynStates.size();
+    dynamicState.pDynamicStates = dynStates.data();
+    pipelineCreateInfo.pDynamicState = &dynamicState;
+
+    // constexpr VkFormat colorAttachmentFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    
+    VkPipelineRenderingCreateInfo dynRenderingCreateInfo = {};
+    dynRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    // dynRenderingCreateInfo.colorAttachmentCount = 1;
+    // dynRenderingCreateInfo.pColorAttachmentFormats = &colorAttachmentFormat;
+    pipelineCreateInfo.pNext = &dynRenderingCreateInfo;
+
+    layout = InitVkPipelineLayout(vkDevice);
+    pipelineCreateInfo.layout = layout;
+
+    VkPipeline vkPipeline = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkPipeline));
+    VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
+
+    for (VkShaderModule& shader : vkShaderModules) {
+        vkDestroyShaderModule(vkDevice, shader, nullptr);
+        shader = VK_NULL_HANDLE;
+    }
+
+    VK_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return vkPipeline;
 }
 
 
@@ -738,17 +890,18 @@ int main(int argc, char* argv[])
     VkCommandPool vkCmdPool = InitVkCmdPool(vkDevice, queueFamilyIndex);
     VkCommandBuffer vkCmdBuffer = AllocateVkCmdBuffer(vkDevice, vkCmdPool);
 
+    VkPipelineLayout vkPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline vkPipeline = InitVkGraphicsPipeline(vkDevice, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv", vkPipelineLayout);
+
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
         
         WndEvent event;
         while(pWnd->PopEvent(event)) {
             if (event.Is<WndResizeEvent>()) {
-                const WndResizeEvent& e = event.Get<WndResizeEvent>();
-
                 // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
-                VkSwapchainKHR oldSwapchain = vkSwapchain;
-                VkExtent2D requiredExtent = { .width = e.width, .height = e.height };
+                const VkSwapchainKHR oldSwapchain = vkSwapchain;
+                const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
                 
                 vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, 
                     swapchainImages, swapchainImageViews, swapchainExtent);
@@ -761,6 +914,9 @@ int main(int argc, char* argv[])
     }
 
     VK_CHECK(vkDeviceWaitIdle(vkDevice));
+
+    vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
+    vkDestroyPipeline(vkDevice, vkPipeline, nullptr);
 
     vkDestroyCommandPool(vkDevice, vkCmdPool, nullptr);
 
