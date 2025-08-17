@@ -36,6 +36,29 @@ namespace fs = std::filesystem;
 
 static VkSurfaceFormatKHR s_swapchainSurfFormat = {};
 
+static VkDebugUtilsMessengerEXT s_vkDbgUtilsMessenger = VK_NULL_HANDLE;
+
+static VkInstance s_vkInstance = VK_NULL_HANDLE;
+static VkSurfaceKHR s_vkSurface = VK_NULL_HANDLE;
+static VkPhysicalDevice s_vkPhysDevice = VK_NULL_HANDLE;
+
+static uint32_t s_queueFamilyIndex = UINT32_MAX;
+static VkQueue s_vkQueue = VK_NULL_HANDLE;
+static VkDevice s_vkDevice = VK_NULL_HANDLE;
+
+static VkSwapchainKHR s_vkSwapchain = VK_NULL_HANDLE;
+static std::vector<VkImage> s_swapchainImages;
+static std::vector<VkImageView> s_swapchainImageViews;
+static VkExtent2D s_swapchainExtent = {};
+
+static VkCommandPool s_vkCmdPool = VK_NULL_HANDLE;
+static VkCommandBuffer s_vkCmdBuffer = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
+
+static bool s_swapchainRecreateRequired = false;
+
 
 class Timer
 {
@@ -97,19 +120,18 @@ public:
 
     GraphicsPipelineBuilder& Reset()
     {
-        for (VkPipelineShaderStageCreateInfo& shaderStage : m_shaderStages) {
-            shaderStage = {};
-            shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        }
-
         m_vertexInputState = {};
         m_vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
         m_inputAssemblyState = {};
         m_inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
         m_rasterizationState = {};
         m_rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        m_rasterizationState.lineWidth = 1.f;
+        m_rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        m_rasterizationState.cullMode = VK_CULL_MODE_NONE;
 
         m_multisampleState = {};
         m_multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -128,6 +150,15 @@ public:
 
         m_flags = {};
 
+        for (VkPipelineShaderStageCreateInfo& shaderStage : m_shaderStages) {
+            shaderStage = {};
+            shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        }
+
+        for (auto& name : m_shaderEntryNames) {
+            name.fill('\0');
+        }
+
         std::fill(m_dynamicStateValues.begin(), m_dynamicStateValues.end(), VK_DYNAMIC_STATE_MAX_ENUM);
         m_dynamicStatesCount = 0;
 
@@ -135,6 +166,12 @@ public:
         m_colorAttachmentFormatsCount = 0;
         m_colorBlendAttachmentStatesCount = 0;
 
+        return *this;
+    }
+
+    GraphicsPipelineBuilder& SetFlags(VkPipelineCreateFlags flags)
+    {
+        m_flags = flags;
         return *this;
     }
 
@@ -358,10 +395,19 @@ public:
     }
 
     VkPipeline Build(VkDevice vkDevice)
-    {
+    {   
+    #if defined(ENG_BUILD_DEBUG)
+        for (size_t i = 0; i < m_shaderStages.size(); ++i) {
+            CORE_ASSERT_MSG(m_shaderStages[i].module != VK_NULL_HANDLE, "Shader stage (index: %zu) module is VK_NULL_HANDLE", i);
+        }
+    #endif
+
+        CORE_ASSERT(m_colorBlendAttachmentStatesCount == m_colorAttachmentFormatsCount);
+        CORE_ASSERT(m_layout != VK_NULL_HANDLE);
+
         VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        
+
         m_renderingCreateInfo.colorAttachmentCount = m_colorAttachmentFormatsCount;
         m_renderingCreateInfo.pColorAttachmentFormats = m_colorAttachmentFormats.data();
         pipelineCreateInfo.pNext = &m_renderingCreateInfo;
@@ -430,24 +476,28 @@ private:
 
 private:
     GraphicsPipelineBuilder& SetShaderInfo(ShaderStageIndex index, VkShaderModule shader, const char* pEntryName)
-    {
+    {   
+        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
+        auto& entryName = m_shaderEntryNames[index];
+        strcpy_s(entryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
+
         VkPipelineShaderStageCreateInfo& shaderStageCreateInfo = m_shaderStages[index];
-        
+
         shaderStageCreateInfo.module = shader;
-        shaderStageCreateInfo.pName = pEntryName;
+        shaderStageCreateInfo.pName = entryName.data();
         shaderStageCreateInfo.stage = ShaderStageIndexToFlagBits(index);
 
         return *this;
     }
 
 private:
+    static inline constexpr size_t MAX_SHADER_ENTRY_NAME_LENGTH = 64;
     static inline constexpr size_t MAX_VERTEX_ATTRIBUTES_COUNT = 16;
     static inline constexpr size_t MAX_DYNAMIC_STATES_COUNT = 16;
     static inline constexpr size_t MAX_COLOR_ATTACHMENTS_COUNT = 8;
     static inline constexpr size_t MAX_VIEWPORT_AND_SCISSOR_COUNT = 1;
 
 private:
-    std::array<VkPipelineShaderStageCreateInfo, SHADER_STAGE_COUNT> m_shaderStages = {};
     VkPipelineVertexInputStateCreateInfo m_vertexInputState = {};
     VkPipelineInputAssemblyStateCreateInfo m_inputAssemblyState = {};
     VkPipelineRasterizationStateCreateInfo m_rasterizationState = {};
@@ -461,6 +511,9 @@ private:
     // std::array<VkVertexInputBindingDescription, MAX_VERTEX_ATTRIBUTES_COUNT> m_vertexInputBindingDescs = {};
     // std::array<VkVertexInputAttributeDescription, MAX_VERTEX_ATTRIBUTES_COUNT> m_vertexInputAttributesDescs = {};
     // size_t m_vertexInputAttribsCount = 0;
+
+    std::array<VkPipelineShaderStageCreateInfo, SHADER_STAGE_COUNT> m_shaderStages = {};
+    std::array<std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1>, SHADER_STAGE_COUNT> m_shaderEntryNames = {};
 
     std::array<VkDynamicState, MAX_DYNAMIC_STATES_COUNT> m_dynamicStateValues = {};
     size_t m_dynamicStatesCount = 0;
@@ -1165,7 +1218,8 @@ static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkL
 
     GraphicsPipelineBuilder builder;
     
-    VkPipeline vkPipeline = builder.SetVertexShader(vkShaderModules[0], "main")
+    VkPipeline vkPipeline = builder
+        .SetVertexShader(vkShaderModules[0], "main")
         .SetPixelShader(vkShaderModules[1], "main")
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
@@ -1192,11 +1246,23 @@ static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkL
 }
 
 
+void ProcessWndEvents(const WndEvent& event)
+{
+    if (event.Is<WndResizeEvent>()) {
+        // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
+        s_swapchainRecreateRequired = true;
+    }
+}
+
+
+void RenderScene()
+{
+    
+}
+
+
 int main(int argc, char* argv[])
 {
-    Timer timer;
-    timer.Start();
-
     wndSysInit();
     BaseWindow* pWnd = wndSysGetMainWindow();
 
@@ -1208,63 +1274,66 @@ int main(int argc, char* argv[])
     pWnd->Init(wndInitInfo);
     ENG_ASSERT(pWnd->IsInitialized());
 
-    VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
+    s_vkInstance = InitVkInstance(wndInitInfo.title.data(), s_vkDbgUtilsMessenger);
+    s_vkSurface = InitVkSurface(s_vkInstance, *pWnd);
+    s_vkPhysDevice = InitVkPhysDevice(s_vkInstance);
 
-    VkInstance vkInstance = InitVkInstance(wndInitInfo.title.data(), vkDbgUtilsMessenger);
-    VkSurfaceKHR vkSurface = InitVkSurface(vkInstance, *pWnd);
-    VkPhysicalDevice vkPhysDevice = InitVkPhysDevice(vkInstance);
+    s_vkDevice = InitVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
 
-    uint32_t queueFamilyIndex = UINT32_MAX;
-    VkQueue vkQueue = VK_NULL_HANDLE;
-    VkDevice vkDevice = InitVkDevice(vkPhysDevice, vkSurface, queueFamilyIndex, vkQueue);
+    s_vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
 
-    VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
-    std::vector<VkImage> swapchainImages;
-    std::vector<VkImageView> swapchainImageViews;
-    VkExtent2D swapchainExtent;
+    s_vkCmdPool = InitVkCmdPool(s_vkDevice, s_queueFamilyIndex);
+    s_vkCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
 
-    VkCommandPool vkCmdPool = InitVkCmdPool(vkDevice, queueFamilyIndex);
-    VkCommandBuffer vkCmdBuffer = AllocateVkCmdBuffer(vkDevice, vkCmdPool);
+    s_vkPipelineLayout = InitVkPipelineLayout(s_vkDevice);
+    s_vkPipeline = InitVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
 
-    VkPipelineLayout vkPipelineLayout = InitVkPipelineLayout(vkDevice);
-    VkPipeline vkPipeline = InitVkGraphicsPipeline(vkDevice, vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
+    s_swapchainRecreateRequired = true;
+
+    static auto CheckAndResizeSwapchain = [pWnd]() -> void {
+        if (s_swapchainRecreateRequired) {
+            const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
+            const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
+            
+            s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
+                s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
+
+            s_swapchainRecreateRequired = false;
+        }
+    };
 
     while(!pWnd->IsClosed()) {
         pWnd->ProcessEvents();
         
         WndEvent event;
         while(pWnd->PopEvent(event)) {
-            if (event.Is<WndResizeEvent>()) {
-                // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
-                const VkSwapchainKHR oldSwapchain = vkSwapchain;
-                const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
-                
-                vkSwapchain = RecreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, 
-                    swapchainImages, swapchainImageViews, swapchainExtent);
-            }
+            ProcessWndEvents(event);
+            CheckAndResizeSwapchain();
+
+            RenderScene();
         }
 
-        if (vkSwapchain == VK_NULL_HANDLE) {
+        if (s_vkSwapchain == VK_NULL_HANDLE) {
             continue;
         }
     }
 
-    VK_CHECK(vkDeviceWaitIdle(vkDevice));
+    VK_CHECK(vkDeviceWaitIdle(s_vkDevice));
 
-    vkDestroyPipeline(vkDevice, vkPipeline, nullptr);
-    vkDestroyPipelineLayout(vkDevice, vkPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice, s_vkPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice, s_vkPipelineLayout, nullptr);
 
-    vkDestroyCommandPool(vkDevice, vkCmdPool, nullptr);
+    vkDestroyCommandPool(s_vkDevice, s_vkCmdPool, nullptr);
 
-    DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
+    DestroyVkSwapchainImageViews(s_vkDevice, s_swapchainImageViews);
 
-    vkDestroySwapchainKHR(vkDevice, vkSwapchain, nullptr);
+    vkDestroySwapchainKHR(s_vkDevice, s_vkSwapchain, nullptr);
 
-    vkDestroyDevice(vkDevice, nullptr);
-    vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
+    vkDestroyDevice(s_vkDevice, nullptr);
+    vkDestroySurfaceKHR(s_vkInstance, s_vkSurface, nullptr);
     
-    DestroyVkDebugMessenger(vkInstance, vkDbgUtilsMessenger);
-    vkDestroyInstance(vkInstance, nullptr);
+    DestroyVkDebugMessenger(s_vkInstance, s_vkDbgUtilsMessenger);
+    vkDestroyInstance(s_vkInstance, nullptr);
 
     pWnd->Destroy();
     wndSysTerminate();
