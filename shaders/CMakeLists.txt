@@ -23,10 +23,19 @@ else()
     set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin32/glslc.exe)
 endif()
 
-set(SHADER_COMPILER_FLAGS "-c" "-I${SHADERS_INCLUDE_DIR}")
-set(SHADER_COMPILER_FLAGS ${SHADER_COMPILER_FLAGS}
+
+set(SHADER_COMMON_COMPILER_FLAGS
+    "-c"
+    "-I${SHADERS_INCLUDE_DIR}"
+)
+
+set(SHADER_COMPILER_FLAGS
+    ${SHADER_COMMON_COMPILER_FLAGS}
+
     $<$<CONFIG:Debug>:-O0>
-    $<$<CONFIG:Release>:-O>
+    $<$<CONFIG:Debug>:-DDEBUG>
+
+    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-O>
 )
 
 message(STATUS "${SHADERS_PROJ_NAME}: Compiler flags: ${SHADER_COMPILER_FLAGS}")

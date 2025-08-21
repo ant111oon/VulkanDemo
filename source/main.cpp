@@ -57,6 +57,10 @@ static VkCommandBuffer s_vkCmdBuffer = VK_NULL_HANDLE;
 static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
 
+static VkSemaphore s_vkPresentFinishedSemaphore = VK_NULL_HANDLE;
+static VkSemaphore s_vkRenderingFinishedSemaphore = VK_NULL_HANDLE;
+static VkFence s_vkRenderingFinishedFence = VK_NULL_HANDLE;
+
 static bool s_swapchainRecreateRequired = false;
 
 
@@ -530,6 +534,70 @@ private:
 };
 
 
+class ComputePipelineBuilder
+{
+public:
+    ComputePipelineBuilder()
+    {
+        Reset();
+    }
+
+    ComputePipelineBuilder& Reset()
+    {
+        m_createInfo = {};
+        m_createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        m_createInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+
+        m_shaderEntryName.fill('\0');
+
+        return *this;
+    }
+
+    ComputePipelineBuilder& SetFlags(VkPipelineCreateFlags flags)
+    {
+        m_createInfo.flags = flags;
+        return *this;
+    }
+
+    ComputePipelineBuilder& SetLayout(VkPipelineLayout layout)
+    {
+        m_createInfo.layout = layout;
+        return *this;
+    }
+
+    ComputePipelineBuilder& SetShader(VkShaderModule shader, const char* pEntryName = "main")
+    {
+        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
+        strcpy_s(m_shaderEntryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
+
+        m_createInfo.stage.module = shader;
+        m_createInfo.stage.pName = m_shaderEntryName.data();
+        m_createInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        return *this;
+    }
+
+    VkPipeline Build(VkDevice vkDevice)
+    {
+        CORE_ASSERT(m_createInfo.layout);
+        CORE_ASSERT(m_createInfo.stage.module);
+
+        VkPipeline vkPipeline = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateComputePipelines(vkDevice, VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &vkPipeline));
+        VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
+
+        return vkPipeline;
+    }
+
+private:
+    static inline constexpr size_t MAX_SHADER_ENTRY_NAME_LENGTH = 64;
+
+private:
+    VkComputePipelineCreateInfo m_createInfo = {};
+    std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1> m_shaderEntryName = {};
+};
+
+
 static bool CheckVkInstExtensionsSupport(const std::span<const char* const> requiredExtensions)
 {
     uint32_t vkInstExtensionPropsCount = 0;
@@ -900,6 +968,7 @@ static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurfa
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features13.dynamicRendering = VK_TRUE;
+    features13.synchronization2 = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -1246,10 +1315,73 @@ static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkL
 }
 
 
+VkSemaphore InitVkSemaphore()
+{
+    VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkSemaphore vkSemaphore = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateSemaphore(s_vkDevice, &semaphoreCreateInfo, nullptr, &vkSemaphore));
+    VK_ASSERT(vkSemaphore != VK_NULL_HANDLE);
+
+    return vkSemaphore;
+}
+
+
+VkFence InitVkFence()
+{
+    VkFenceCreateInfo fenceCreateInfo = {};
+    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    VkFence vkFence = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateFence(s_vkDevice, &fenceCreateInfo, nullptr, &vkFence));
+    VK_ASSERT(vkFence != VK_NULL_HANDLE);
+
+    return vkFence;
+}
+
+
+void CmdPipelineImageBarrier(
+    VkCommandBuffer cmdBuffer, 
+    VkImageLayout oldLayout, 
+    VkImageLayout newLayout,
+    VkPipelineStageFlags srcStageMask, 
+    VkPipelineStageFlags dstStageMask,
+    VkAccessFlags srcAccessMask, 
+    VkAccessFlags dstAccessMask,
+    VkImage image,
+    VkImageAspectFlags aspectMask
+) {
+    VkImageMemoryBarrier2 imageBarrier2 = {};
+    imageBarrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    imageBarrier2.srcStageMask = srcStageMask;
+    imageBarrier2.srcAccessMask = srcAccessMask;
+    imageBarrier2.dstStageMask = dstStageMask;
+    imageBarrier2.dstAccessMask = dstAccessMask;
+    imageBarrier2.oldLayout = oldLayout;
+    imageBarrier2.newLayout = newLayout;
+    imageBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier2.image = image;
+    imageBarrier2.subresourceRange.aspectMask = aspectMask;
+    imageBarrier2.subresourceRange.baseMipLevel = 0;
+    imageBarrier2.subresourceRange.baseArrayLayer = 0;
+    imageBarrier2.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    imageBarrier2.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    VkDependencyInfo vkDependencyInfo = {};
+    vkDependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    vkDependencyInfo.imageMemoryBarrierCount = 1;
+    vkDependencyInfo.pImageMemoryBarriers = &imageBarrier2;
+
+    vkCmdPipelineBarrier2(cmdBuffer, &vkDependencyInfo);
+}
+
+
 void ProcessWndEvents(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
-        // Also when VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR
         s_swapchainRecreateRequired = true;
     }
 }
@@ -1257,7 +1389,120 @@ void ProcessWndEvents(const WndEvent& event)
 
 void RenderScene()
 {
+    VK_CHECK(vkWaitForFences(s_vkDevice, 1, &s_vkRenderingFinishedFence, VK_TRUE, UINT64_MAX));
+
+    uint32_t nextImageIdx;
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice, s_vkSwapchain, UINT64_MAX, s_vkPresentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
     
+    if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
+        VK_CHECK(acquireResult);
+    } else {
+        s_swapchainRecreateRequired = true;
+        return;
+    }
+
+    VK_CHECK(vkResetFences(s_vkDevice, 1, &s_vkRenderingFinishedFence));
+    VK_CHECK(vkResetCommandBuffer(s_vkCmdBuffer, 0));
+
+    VkCommandBufferBeginInfo cmdBeginInfo = {};
+    cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VkImage& rndImage = s_swapchainImages[nextImageIdx];
+
+    VK_CHECK(vkBeginCommandBuffer(s_vkCmdBuffer, &cmdBeginInfo));
+        CmdPipelineImageBarrier(
+            s_vkCmdBuffer, 
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0, 
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            rndImage,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+
+        VkRenderingInfo renderingInfo = {};
+        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        renderingInfo.renderArea.extent = s_swapchainExtent;
+        renderingInfo.renderArea.offset = {0, 0};
+        renderingInfo.layerCount = 1;
+        renderingInfo.colorAttachmentCount = 1;
+
+        VkRenderingAttachmentInfo colorAttachment = {};
+        colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        colorAttachment.imageView = s_swapchainImageViews[nextImageIdx];
+        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.clearValue.color = { { 1.f, 0.f, 0.f, 1.f } };
+        renderingInfo.pColorAttachments = &colorAttachment;
+
+        vkCmdBeginRendering(s_vkCmdBuffer, &renderingInfo);
+            
+        vkCmdEndRendering(s_vkCmdBuffer);
+
+        CmdPipelineImageBarrier(
+            s_vkCmdBuffer,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+            0,
+            rndImage,
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    VK_CHECK(vkEndCommandBuffer(s_vkCmdBuffer));
+
+    VkSemaphoreSubmitInfo waitSemaphoreInfo = {};
+    waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    waitSemaphoreInfo.semaphore = s_vkPresentFinishedSemaphore;
+    waitSemaphoreInfo.value = 0;
+    waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
+    waitSemaphoreInfo.deviceIndex = 0;
+
+    VkSemaphoreSubmitInfo signalSemaphoreInfo = {};
+    signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    signalSemaphoreInfo.semaphore = s_vkRenderingFinishedSemaphore;
+    signalSemaphoreInfo.value = 0;
+    signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    signalSemaphoreInfo.deviceIndex = 0;
+    
+    VkCommandBufferSubmitInfo commandBufferInfo = {};
+    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    commandBufferInfo.commandBuffer = s_vkCmdBuffer;
+    commandBufferInfo.deviceMask = 0;
+
+    VkSubmitInfo2 submitInfo2 = {};
+    submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+    submitInfo2.waitSemaphoreInfoCount = 1;
+    submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+    submitInfo2.commandBufferInfoCount = 1;
+    submitInfo2.pCommandBufferInfos = &commandBufferInfo;
+    submitInfo2.signalSemaphoreInfoCount = 1;
+    submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
+
+    VK_CHECK(vkQueueSubmit2(s_vkQueue, 1, &submitInfo2, s_vkRenderingFinishedFence));
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = NULL;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &s_vkRenderingFinishedSemaphore;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &s_vkSwapchain;
+    presentInfo.pImageIndices = &nextImageIdx;
+    presentInfo.pResults = NULL;
+    const VkResult presentResult = vkQueuePresentKHR(s_vkQueue, &presentInfo);
+
+    if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
+        VK_CHECK(presentResult);
+    } else {
+        s_swapchainRecreateRequired = true;
+        return;
+    }
 }
 
 
@@ -1288,37 +1533,59 @@ int main(int argc, char* argv[])
     s_vkPipelineLayout = InitVkPipelineLayout(s_vkDevice);
     s_vkPipeline = InitVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
 
+    s_vkPresentFinishedSemaphore = InitVkSemaphore();
+    s_vkRenderingFinishedSemaphore = InitVkSemaphore();
+    s_vkRenderingFinishedFence = InitVkFence();
+
     s_swapchainRecreateRequired = true;
 
-    static auto CheckAndResizeSwapchain = [pWnd]() -> void {
-        if (s_swapchainRecreateRequired) {
-            const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
-            const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
-            
-            s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
-                s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
-
-            s_swapchainRecreateRequired = false;
+    static auto CheckAndResizeSwapchain = [pWnd]() -> bool {
+        if (!s_swapchainRecreateRequired) {
+            return false;
         }
+        
+        const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
+        const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
+        
+        s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
+            s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
+
+        s_swapchainRecreateRequired = false;
+
+        return true;
     };
 
+    Timer timer;
+
     while(!pWnd->IsClosed()) {
+        timer.Reset();
+
         pWnd->ProcessEvents();
         
         WndEvent event;
         while(pWnd->PopEvent(event)) {
             ProcessWndEvents(event);
-            CheckAndResizeSwapchain();
+        }
 
-            RenderScene();
+        if (CheckAndResizeSwapchain()) {
+            continue;
         }
 
         if (s_vkSwapchain == VK_NULL_HANDLE) {
             continue;
         }
+
+        RenderScene();
+
+        const float frameTime = timer.End().GetDuration<float, std::milli>();
+        ENG_LOG_TRACE("CORE", "Frame time: %.3f ms (%.1f FPS)", frameTime, 1000.f / frameTime);
     }
 
     VK_CHECK(vkDeviceWaitIdle(s_vkDevice));
+
+    vkDestroyFence(s_vkDevice, s_vkRenderingFinishedFence, nullptr);
+    vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphore, nullptr);
+    vkDestroySemaphore(s_vkDevice, s_vkPresentFinishedSemaphore, nullptr);
 
     vkDestroyPipeline(s_vkDevice, s_vkPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice, s_vkPipelineLayout, nullptr);
