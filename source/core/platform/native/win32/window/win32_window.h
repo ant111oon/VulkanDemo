@@ -27,6 +27,9 @@ public:
 
     void SetVisible(bool visible) override;
 
+protected:
+    void UpdateTitleInternal() override;
+
 private:
     static LRESULT WndProcSetup(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     static LRESULT WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -59,7 +62,7 @@ private:
     LRESULT OnKeyEvent(WPARAM wParam, LPARAM lParam, bool isKeyDown);
 
 private:
-    static inline constexpr const wchar_t* P_WND_CLASS_NAME = L"WindowClass";
+    static inline constexpr const char* P_WND_CLASS_NAME = "WindowClass";
     static inline bool s_isWindowClassRegistered = false;
 
 private:

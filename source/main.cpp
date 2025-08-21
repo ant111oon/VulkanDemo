@@ -1415,7 +1415,7 @@ void RenderScene()
             s_vkCmdBuffer, 
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+            0, 
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             0, 
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -1436,11 +1436,26 @@ void RenderScene()
         colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachment.clearValue.color = { { 1.f, 0.f, 0.f, 1.f } };
+        colorAttachment.clearValue.color.float32[0] = 245.f / 255.f;
+        colorAttachment.clearValue.color.float32[1] = 245.f / 255.f;
+        colorAttachment.clearValue.color.float32[2] = 220.f / 255.f;
+        colorAttachment.clearValue.color.float32[3] = 255.f / 255.f;
         renderingInfo.pColorAttachments = &colorAttachment;
 
         vkCmdBeginRendering(s_vkCmdBuffer, &renderingInfo);
-            
+            VkViewport viewport = {};
+            viewport.width = s_swapchainExtent.width;
+            viewport.height = s_swapchainExtent.height;
+            viewport.minDepth = 0.f;
+            viewport.maxDepth = 1.f;
+            vkCmdSetViewport(s_vkCmdBuffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {};
+            scissor.extent = s_swapchainExtent;
+            vkCmdSetScissor(s_vkCmdBuffer, 0, 1, &scissor);
+
+            vkCmdBindPipeline(s_vkCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
+            vkCmdDraw(s_vkCmdBuffer, 3, 1, 0, 0);
         vkCmdEndRendering(s_vkCmdBuffer);
 
         CmdPipelineImageBarrier(
@@ -1512,14 +1527,14 @@ int main(int argc, char* argv[])
     BaseWindow* pWnd = wndSysGetMainWindow();
 
     WindowInitInfo wndInitInfo = {};
-    wndInitInfo.title = "Vulkan Demo";
+    wndInitInfo.pTitle = "Vulkan Demo";
     wndInitInfo.width = 980;
     wndInitInfo.height = 640;
 
     pWnd->Init(wndInitInfo);
     ENG_ASSERT(pWnd->IsInitialized());
 
-    s_vkInstance = InitVkInstance(wndInitInfo.title.data(), s_vkDbgUtilsMessenger);
+    s_vkInstance = InitVkInstance(wndInitInfo.pTitle, s_vkDbgUtilsMessenger);
     s_vkSurface = InitVkSurface(s_vkInstance, *pWnd);
     s_vkPhysDevice = InitVkPhysDevice(s_vkInstance);
 
@@ -1567,18 +1582,18 @@ int main(int argc, char* argv[])
             ProcessWndEvents(event);
         }
 
-        if (CheckAndResizeSwapchain()) {
+        if (pWnd->IsMinimized()) {
             continue;
         }
 
-        if (s_vkSwapchain == VK_NULL_HANDLE) {
+        if (CheckAndResizeSwapchain() || s_vkSwapchain == VK_NULL_HANDLE) {
             continue;
         }
 
         RenderScene();
 
         const float frameTime = timer.End().GetDuration<float, std::milli>();
-        ENG_LOG_TRACE("CORE", "Frame time: %.3f ms (%.1f FPS)", frameTime, 1000.f / frameTime);
+        pWnd->SetTitle("%s: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, frameTime, 1000.f / frameTime);
     }
 
     VK_CHECK(vkDeviceWaitIdle(s_vkDevice));

@@ -11,20 +11,6 @@
 #define WIN32_ASSERT_FAIL(FMT, ...)      WIN32_ASSERT_MSG(false, FMT, __VA_ARGS__)
 
 
-static std::wstring Utf8ToUtf16(std::string_view strUTF8)
-{
-    if (strUTF8.empty()) {
-        return {};
-    }
-
-    const size_t size = MultiByteToWideChar(CP_UTF8, 0, strUTF8.data(), strUTF8.size(), nullptr, 0);
-    std::wstring string(size, 0);
-    MultiByteToWideChar(CP_UTF8, 0, strUTF8.data(), strUTF8.size(), string.data(), size);
-    
-    return string;
-}
-
-
 static WORD win32ResolveActualVK(WPARAM wParam, LPARAM lParam)
 {
     const WORD vk = LOWORD(wParam);
@@ -183,7 +169,7 @@ static Win32Window* win32GetWndInst(HWND hWnd) noexcept
 LRESULT Win32Window::WndProcSetup(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg == WM_NCCREATE) {
-        const CREATESTRUCTW* pCreateStruct = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        const CREATESTRUCTA* pCreateStruct = reinterpret_cast<CREATESTRUCTA*>(lParam);
         Win32Window* pWnd = reinterpret_cast<Win32Window*>(pCreateStruct->lpCreateParams);
         pWnd->m_HWND = hWnd;
 
@@ -212,13 +198,13 @@ bool Win32Window::RegisterWndClass(HINSTANCE hInst)
         return true;
     }
 
-    WNDCLASSEXW wc = {};
+    WNDCLASSEXA wc = {};
     wc.cbSize = sizeof(wc);
     wc.hInstance = hInst;
     wc.lpszClassName = P_WND_CLASS_NAME;
     wc.lpfnWndProc = Win32Window::WndProcSetup;
     
-    s_isWindowClassRegistered = RegisterClassExW(&wc) != 0;
+    s_isWindowClassRegistered = RegisterClassExA(&wc) != 0;
     WIN32_ASSERT_MSG(s_isWindowClassRegistered, "Win32 window class registeration failed");
 
     return s_isWindowClassRegistered;
@@ -277,11 +263,9 @@ LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_KEYUP:
             return OnKeyEvent(wParam, lParam, false);
         case WM_SYSKEYDOWN:
-            OnKeyEvent(wParam, lParam, true);
-            return DefWindowProc(m_HWND, uMsg, wParam, lParam);
+            return OnKeyEvent(wParam, lParam, true);
         case WM_SYSKEYUP:
-            OnKeyEvent(wParam, lParam, false);
-            return DefWindowProc(m_HWND, uMsg, wParam, lParam);
+            return OnKeyEvent(wParam, lParam, false);
         default:
             return DefWindowProc(m_HWND, uMsg, wParam, lParam);
     }
@@ -381,30 +365,31 @@ bool Win32Window::Init(const WindowInitInfo& initInfo)
         return true;
     }
 
+    WIN32_ASSERT(initInfo.pTitle != nullptr);
+
     const HINSTANCE hInst = GetModuleHandle(nullptr);
     WIN32_ASSERT(hInst);
 
     RegisterWndClass(hInst);
+
+    SetWidth(initInfo.width);
+    SetHeight(initInfo.height);
+    SetTitleData(initInfo.pTitle);
 
     RECT clientRect = {};
     clientRect.right = static_cast<LONG>(initInfo.width);
     clientRect.bottom = static_cast<LONG>(initInfo.height);
     AdjustWindowRectEx(&clientRect, WS_OVERLAPPEDWINDOW, FALSE, 0);
 
-    SetWidth(clientRect.right - clientRect.left);
-    SetHeight(clientRect.bottom - clientRect.top);
-
-    const std::wstring appNameWStr = Utf8ToUtf16(initInfo.title.data());
-
-    m_HWND = CreateWindowExW(
+    m_HWND = CreateWindowExA(
         0, 
         P_WND_CLASS_NAME,
-        appNameWStr.c_str(),
+        initInfo.pTitle,
         WS_OVERLAPPEDWINDOW, 
         CW_USEDEFAULT, 
         CW_USEDEFAULT, 
-        static_cast<int>(GetWidth()), 
-        static_cast<int>(GetHeight()), 
+        static_cast<int>(clientRect.right - clientRect.left), 
+        static_cast<int>(clientRect.bottom - clientRect.top), 
         nullptr, 
         nullptr, 
         hInst, 
@@ -427,7 +412,7 @@ void Win32Window::Destroy()
     }
 
     DestroyWindow(m_HWND);
-    UnregisterClassW(P_WND_CLASS_NAME, GetModuleHandle(nullptr));
+    UnregisterClassA(P_WND_CLASS_NAME, GetModuleHandle(nullptr));
     s_isWindowClassRegistered = false;
 
     m_HWND = nullptr;
@@ -464,6 +449,13 @@ void Win32Window::SetVisible(bool visible)
 
     ShowWindow(m_HWND, visible ? SW_SHOW : SW_HIDE);
     SetVisibleState(visible);
+}
+
+
+void Win32Window::UpdateTitleInternal()
+{
+    WIN32_ASSERT(IsInitialized());
+    SetWindowTextA(m_HWND, GetTitle().data());
 }
 
 #endif

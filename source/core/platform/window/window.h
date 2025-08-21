@@ -10,7 +10,7 @@
 
 struct WindowInitInfo
 {
-    std::string_view title;
+    const char* pTitle;
     uint32_t width;
     uint32_t height;
 };
@@ -20,19 +20,17 @@ class BaseWindow
 {
 public:
     BaseWindow() = default;
-    virtual ~BaseWindow()
-    { 
-        Destroy();
-    };
+    virtual ~BaseWindow() = default;
 
     virtual bool Init(const WindowInitInfo& initInfo) = 0;
     
     virtual void Destroy()
     {
         m_eventQueue.Clear();
+        m_title.fill('\0');
         m_width = 0;
         m_height = 0;
-        m_state = 0;
+        m_state.reset();
     }
 
     virtual void ProcessEvents() = 0;
@@ -41,6 +39,13 @@ public:
     virtual const void* GetNativeHandle() const = 0;
 
     virtual void SetVisible(bool visible) = 0;
+
+    template <typename... Args>
+    void SetTitle(const char* fmt, Args&&... args)
+    {
+        SetTitleData(fmt, std::forward<Args>(args)...);
+        UpdateTitleInternal();
+    }
 
     bool PopEvent(WndEvent& event) { return m_eventQueue.Pop(event); }
 
@@ -55,6 +60,11 @@ public:
     uint32_t GetWidth() const noexcept { return m_width; }
     // Returns client area height
     uint32_t GetHeight() const noexcept { return m_height; }
+
+    std::string_view GetTitle() const noexcept { return std::string_view(m_title.data(), strlen(m_title.data())); }
+
+protected:
+    virtual void UpdateTitleInternal() = 0;
 
 protected:
     template <typename EventType, typename... Args>
@@ -89,6 +99,17 @@ protected:
     void SetWidth(uint32_t width) noexcept { m_width = width; }
     void SetHeight(uint32_t height) noexcept { m_height = height; }
 
+    void SetTitleData(const char* title)
+    {
+        strncpy_s(m_title.data(), m_title.size(), title ? title : "", _TRUNCATE);
+    }
+
+    template <typename... Args>
+    void SetTitleData(const char* fmt, Args&&... args)
+    {
+        sprintf_s(m_title.data(), m_title.size(), fmt, std::forward<Args>(args)...);
+    }
+
 private:
     enum WndStateFlags : uint32_t
     {
@@ -100,8 +121,12 @@ private:
         WND_STATE_IS_MAXIMIZED,
     };
 
+    static inline constexpr size_t MAX_WND_NAME_LENGTH = 96; 
+
 private:
     WndEventQueue m_eventQueue;
+
+    std::array<char, MAX_WND_NAME_LENGTH> m_title = {};
 
     uint32_t m_width = 0;
     uint32_t m_height = 0;
