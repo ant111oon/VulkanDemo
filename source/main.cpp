@@ -1554,9 +1554,9 @@ int main(int argc, char* argv[])
 
     s_swapchainRecreateRequired = true;
 
-    static auto CheckAndResizeSwapchain = [pWnd]() -> bool {
+    static auto ResizeSwapchain = [pWnd]() -> void {
         if (!s_swapchainRecreateRequired) {
-            return false;
+            return;
         }
         
         const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
@@ -1566,8 +1566,6 @@ int main(int argc, char* argv[])
             s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
 
         s_swapchainRecreateRequired = false;
-
-        return true;
     };
 
     Timer timer;
@@ -1586,7 +1584,11 @@ int main(int argc, char* argv[])
             continue;
         }
 
-        if (CheckAndResizeSwapchain() || s_vkSwapchain == VK_NULL_HANDLE) {
+        if (s_swapchainRecreateRequired) {
+            ResizeSwapchain();
+        }
+
+        if (s_vkSwapchain == VK_NULL_HANDLE) {
             continue;
         }
 
