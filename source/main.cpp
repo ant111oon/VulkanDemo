@@ -9,6 +9,8 @@
     #include <vulkan/vulkan_win32.h>
 #endif
 
+#include <glm/glm.hpp>
+
 
 namespace fs = std::filesystem;
 
@@ -34,13 +36,24 @@ namespace fs = std::filesystem;
     } while(0)
 
 
-static VkSurfaceFormatKHR s_swapchainSurfFormat = {};
+struct Buffer
+{
+    VkBuffer        vkBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory  vkMemory = VK_NULL_HANDLE;
+    VkDeviceAddress deviceAddress = 0;
+    VkDeviceSize    size = 0;
+};
+
+
+static VkSurfaceFormatKHR s_swapchainSurfFormat = {}; 
 
 static VkDebugUtilsMessengerEXT s_vkDbgUtilsMessenger = VK_NULL_HANDLE;
 
 static VkInstance s_vkInstance = VK_NULL_HANDLE;
 static VkSurfaceKHR s_vkSurface = VK_NULL_HANDLE;
+
 static VkPhysicalDevice s_vkPhysDevice = VK_NULL_HANDLE;
+static VkPhysicalDeviceMemoryProperties s_vkPhysDeviceMemProps = {};
 
 static uint32_t s_queueFamilyIndex = UINT32_MAX;
 static VkQueue s_vkQueue = VK_NULL_HANDLE;
@@ -61,7 +74,27 @@ static VkSemaphore s_vkPresentFinishedSemaphore = VK_NULL_HANDLE;
 static VkSemaphore s_vkRenderingFinishedSemaphore = VK_NULL_HANDLE;
 static VkFence s_vkRenderingFinishedFence = VK_NULL_HANDLE;
 
+static Buffer s_vertexBuffer = {};
+
 static bool s_swapchainRecreateRequired = false;
+
+
+static constexpr size_t VERTEX_BUFFER_SIZE_F4 = 4096;
+static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = VERTEX_BUFFER_SIZE_F4 * sizeof(glm::vec4);
+
+
+struct TestVertex
+{
+    glm::vec2 ndc;
+    glm::vec2 uv;
+    glm::vec4 color;
+};
+
+static constexpr std::array<TestVertex, 3> TEST_VERTECIES = {
+    TestVertex { glm::vec2(-0.5f, 0.5f), glm::vec2(0.f,  0.f), glm::vec4(1.f, 0.f, 0.f, 1.f) },
+    TestVertex { glm::vec2( 0.5f, 0.5f), glm::vec2(1.f,  0.f), glm::vec4(0.f, 1.f, 0.f, 1.f) },
+    TestVertex { glm::vec2( 0.f, -0.5f), glm::vec2(0.5f, 1.f), glm::vec4(0.f, 0.f, 1.f, 1.f) },
+};
 
 
 class Timer
@@ -715,7 +748,7 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-static VkDebugUtilsMessengerEXT InitVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
+static VkDebugUtilsMessengerEXT CreateVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
 {
     VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
 
@@ -747,7 +780,7 @@ static void DestroyVkDebugMessenger(VkInstance vkInstance, VkDebugUtilsMessenger
 }
 
 
-static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
+static VkInstance CreateVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT& vkDbgUtilsMessenger)
 {
     Timer timer;
 
@@ -815,7 +848,7 @@ static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT&
     VK_ASSERT(vkInstance != VK_NULL_HANDLE);
 
 #ifdef ENG_BUILD_DEBUG
-    vkDbgUtilsMessenger = InitVkDebugMessenger(vkInstance, vkDbgMessengerCreateInfo);
+    vkDbgUtilsMessenger = CreateVkDebugMessenger(vkInstance, vkDbgMessengerCreateInfo);
 #else
     vkDbgUtilsMessenger = VK_NULL_HANDLE;
 #endif
@@ -826,7 +859,7 @@ static VkInstance InitVkInstance(const char* pAppName, VkDebugUtilsMessengerEXT&
 }
 
 
-static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
+static VkSurfaceKHR CreateVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 {
     Timer timer;
 
@@ -849,7 +882,7 @@ static VkSurfaceKHR InitVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
 }
 
 
-static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
+static VkPhysicalDevice CreateVkPhysDevice(VkInstance vkInstance)
 {
     Timer timer;
 
@@ -883,13 +916,16 @@ static VkPhysicalDevice InitVkPhysDevice(VkInstance vkInstance)
 
     VK_ASSERT(pickedPhysDevice != VK_NULL_HANDLE);
 
+    s_vkPhysDeviceMemProps = {};
+    vkGetPhysicalDeviceMemoryProperties(pickedPhysDevice, &s_vkPhysDeviceMemProps);
+
     VK_LOG_INFO("VkPhysicalDevice initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return pickedPhysDevice;
 }
 
 
-static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
+static VkDevice CreateVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
     Timer timer;
 
@@ -970,9 +1006,14 @@ static VkDevice InitVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurfa
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
 
+    VkPhysicalDeviceVulkan12Features features12 = {};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features12.pNext = &features13;
+    features12.bufferDeviceAddress = VK_TRUE;
+
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features2.pNext = &features13;
+    features2.pNext = &features12;
 
     deviceCreateInfo.pNext = &features2;
 
@@ -1027,7 +1068,7 @@ static bool CheckVkPresentModeSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKH
 }
 
 
-static VkSwapchainKHR InitVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, 
+static VkSwapchainKHR CreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, 
     VkExtent2D requiredExtent, VkSwapchainKHR oldSwapchain, VkExtent2D& swapchainExtent)
 {
     Timer timer;
@@ -1116,7 +1157,7 @@ static void GetVkSwapchainImages(VkDevice vkDevice, VkSwapchainKHR vkSwapchain, 
 }
 
 
-static void InitVkSwapchainImageView(VkDevice vkDevice, const std::vector<VkImage>& swapchainImages, std::vector<VkImageView>& swapchainImageViews)
+static void CreateVkSwapchainImageView(VkDevice vkDevice, const std::vector<VkImage>& swapchainImages, std::vector<VkImageView>& swapchainImageViews)
 {
     if (swapchainImages.empty()) {
         return;
@@ -1175,20 +1216,20 @@ static VkSwapchainKHR RecreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevic
 {
     VK_CHECK(vkDeviceWaitIdle(vkDevice));
 
-    VkSwapchainKHR vkSwapchain = InitVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, swapchainExtent);
+    VkSwapchainKHR vkSwapchain = CreateVkSwapchain(vkPhysDevice, vkDevice, vkSurface, requiredExtent, oldSwapchain, swapchainExtent);
                 
     if (vkSwapchain != VK_NULL_HANDLE && vkSwapchain != oldSwapchain) {
         DestroyVkSwapchainImageViews(vkDevice, swapchainImageViews);
 
         GetVkSwapchainImages(vkDevice, vkSwapchain, swapchainImages);
-        InitVkSwapchainImageView(vkDevice, swapchainImages, swapchainImageViews);
+        CreateVkSwapchainImageView(vkDevice, swapchainImages, swapchainImageViews);
     }
 
     return vkSwapchain;
 }
 
 
-VkCommandPool InitVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
+VkCommandPool CreateVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
 {
     Timer timer;
 
@@ -1256,12 +1297,19 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
 }
 
 
-static VkPipelineLayout InitVkPipelineLayout(VkDevice vkDevice)
+static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice)
 {
     Timer timer;
 
     VkPipelineLayoutCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    
+    VkPushConstantRange pushConstants = {};
+    pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstants.size = sizeof(VkDeviceAddress);
+
+    createInfo.pushConstantRangeCount = 1;
+    createInfo.pPushConstantRanges = &pushConstants;
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
     VK_CHECK(vkCreatePipelineLayout(vkDevice, &createInfo, nullptr, &layout));
@@ -1273,7 +1321,7 @@ static VkPipelineLayout InitVkPipelineLayout(VkDevice vkDevice)
 }
 
 
-static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
+static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
 {
     Timer timer;
 
@@ -1315,7 +1363,7 @@ static VkPipeline InitVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkL
 }
 
 
-VkSemaphore InitVkSemaphore()
+VkSemaphore CreateVkSemaphore()
 {
     VkSemaphoreCreateInfo semaphoreCreateInfo = {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1328,7 +1376,7 @@ VkSemaphore InitVkSemaphore()
 }
 
 
-VkFence InitVkFence()
+VkFence CreateVkFence()
 {
     VkFenceCreateInfo fenceCreateInfo = {};
     fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -1339,6 +1387,88 @@ VkFence InitVkFence()
     VK_ASSERT(vkFence != VK_NULL_HANDLE);
 
     return vkFence;
+}
+
+
+static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    for (uint32_t i = 0; i < s_vkPhysDeviceMemProps.memoryTypeCount; ++i) {
+        const VkMemoryPropertyFlags propertyFlags = s_vkPhysDeviceMemProps.memoryTypes[i].propertyFlags;
+        
+        if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    return UINT32_MAX;
+}
+
+
+static Buffer CreateBuffer(VkDevice vkDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkMemoryAllocateFlags memAllocFlags)
+{
+    VkBufferCreateInfo bufferCreateInfo = {};
+    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCreateInfo.size = size;
+    bufferCreateInfo.usage = usage;
+    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkBuffer vkBuffer = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &vkBuffer));
+    VK_ASSERT(vkBuffer != VK_NULL_HANDLE);
+
+    VkBufferMemoryRequirementsInfo2 memRequirementsInfo = {};
+    memRequirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
+    memRequirementsInfo.buffer = vkBuffer;
+
+    VkMemoryRequirements2 memRequirements = {};
+    memRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+    vkGetBufferMemoryRequirements2(vkDevice, &memRequirementsInfo, &memRequirements);
+
+    VkMemoryAllocateFlagsInfo memAllocFlagsInfo = {};
+    memAllocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    memAllocFlagsInfo.flags = memAllocFlags;
+
+    VkMemoryAllocateInfo memAllocInfo = {};
+    memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memAllocInfo.pNext = &memAllocFlagsInfo;
+    memAllocInfo.allocationSize = size;
+    memAllocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryRequirements.memoryTypeBits, properties);
+    VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
+
+    VkDeviceMemory vkBufferMemory = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateMemory(vkDevice, &memAllocInfo, nullptr, &vkBufferMemory));
+    VK_ASSERT(vkBufferMemory != VK_NULL_HANDLE);
+
+    VkBindBufferMemoryInfo bindInfo = {};
+    bindInfo.sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO;
+    bindInfo.buffer = vkBuffer;
+    bindInfo.memory = vkBufferMemory;
+
+    VK_CHECK(vkBindBufferMemory2(vkDevice, 1, &bindInfo));
+
+    Buffer buffer = {};
+    buffer.vkBuffer = vkBuffer;
+    buffer.vkMemory = vkBufferMemory;
+    buffer.size = size;
+
+    VkBufferDeviceAddressInfo addressInfo = {};
+    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = vkBuffer;
+    buffer.deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
+
+    return buffer;
+}
+
+
+static void DestroyBuffer(VkDevice vkDevice, Buffer& buffer)
+{
+    vkFreeMemory(vkDevice, buffer.vkMemory, nullptr);
+    vkDestroyBuffer(vkDevice, buffer.vkBuffer, nullptr);
+
+    buffer.vkBuffer = VK_NULL_HANDLE;
+    buffer.vkMemory = VK_NULL_HANDLE;
+    buffer.deviceAddress = 0;
+    buffer.size = 0;
 }
 
 
@@ -1455,6 +1585,9 @@ void RenderScene()
             vkCmdSetScissor(s_vkCmdBuffer, 0, 1, &scissor);
 
             vkCmdBindPipeline(s_vkCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
+
+            vkCmdPushConstants(s_vkCmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.deviceAddress);
+
             vkCmdDraw(s_vkCmdBuffer, 3, 1, 0, 0);
         vkCmdEndRendering(s_vkCmdBuffer);
 
@@ -1534,23 +1667,31 @@ int main(int argc, char* argv[])
     pWnd->Init(wndInitInfo);
     ENG_ASSERT(pWnd->IsInitialized());
 
-    s_vkInstance = InitVkInstance(wndInitInfo.pTitle, s_vkDbgUtilsMessenger);
-    s_vkSurface = InitVkSurface(s_vkInstance, *pWnd);
-    s_vkPhysDevice = InitVkPhysDevice(s_vkInstance);
+    s_vkInstance = CreateVkInstance(wndInitInfo.pTitle, s_vkDbgUtilsMessenger);
+    s_vkSurface = CreateVkSurface(s_vkInstance, *pWnd);
+    s_vkPhysDevice = CreateVkPhysDevice(s_vkInstance);
 
-    s_vkDevice = InitVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
+    s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
 
     s_vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
 
-    s_vkCmdPool = InitVkCmdPool(s_vkDevice, s_queueFamilyIndex);
+    s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
     s_vkCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
 
-    s_vkPipelineLayout = InitVkPipelineLayout(s_vkDevice);
-    s_vkPipeline = InitVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
+    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice);
+    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
 
-    s_vkPresentFinishedSemaphore = InitVkSemaphore();
-    s_vkRenderingFinishedSemaphore = InitVkSemaphore();
-    s_vkRenderingFinishedFence = InitVkFence();
+    s_vkPresentFinishedSemaphore = CreateVkSemaphore();
+    s_vkRenderingFinishedSemaphore = CreateVkSemaphore();
+    s_vkRenderingFinishedFence = CreateVkFence();
+
+    s_vertexBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+
+    void* pVertexBufferData = nullptr;
+    VK_CHECK(vkMapMemory(s_vkDevice, s_vertexBuffer.vkMemory, 0, s_vertexBuffer.size, 0, &pVertexBufferData));
+        memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
+    vkUnmapMemory(s_vkDevice, s_vertexBuffer.vkMemory);
 
     s_swapchainRecreateRequired = true;
 
@@ -1599,6 +1740,8 @@ int main(int argc, char* argv[])
     }
 
     VK_CHECK(vkDeviceWaitIdle(s_vkDevice));
+
+    DestroyBuffer(s_vkDevice, s_vertexBuffer);
 
     vkDestroyFence(s_vkDevice, s_vkRenderingFinishedFence, nullptr);
     vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphore, nullptr);
