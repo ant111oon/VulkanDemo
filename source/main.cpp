@@ -1714,6 +1714,22 @@ void RenderScene()
 }
 
 
+static void ResizeVkSwapchain(BaseWindow* pWnd)
+{
+    if (!s_swapchainRecreateRequired) {
+        return;
+    }
+        
+    const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
+    const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
+        
+    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
+        s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
+    
+    s_swapchainRecreateRequired = false;
+}
+
+
 int main(int argc, char* argv[])
 {
     wndSysInit();
@@ -1723,6 +1739,7 @@ int main(int argc, char* argv[])
     wndInitInfo.pTitle = "Vulkan Demo";
     wndInitInfo.width = 980;
     wndInitInfo.height = 640;
+    wndInitInfo.isVisible = false;
 
     pWnd->Init(wndInitInfo);
     ENG_ASSERT(pWnd->IsInitialized());
@@ -1733,7 +1750,8 @@ int main(int argc, char* argv[])
 
     s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
 
-    s_vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
+    s_swapchainRecreateRequired = true;
+    s_vkSwapchain = VK_NULL_HANDLE; // Assumed that swapchain will be created during the first render loop cycle
 
     s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
     s_vkRenderCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
@@ -1767,21 +1785,7 @@ int main(int argc, char* argv[])
 
     DestroyBuffer(s_vkDevice, stagingBuffer);
 
-    s_swapchainRecreateRequired = true;
-
-    static auto ResizeSwapchain = [pWnd]() -> void {
-        if (!s_swapchainRecreateRequired) {
-            return;
-        }
-        
-        const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
-        const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
-        
-        s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
-            s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
-
-        s_swapchainRecreateRequired = false;
-    };
+    pWnd->SetVisible(true);
 
     Timer timer;
 
@@ -1800,7 +1804,7 @@ int main(int argc, char* argv[])
         }
 
         if (s_swapchainRecreateRequired) {
-            ResizeSwapchain();
+            ResizeVkSwapchain(pWnd);
         }
 
         if (s_vkSwapchain == VK_NULL_HANDLE) {

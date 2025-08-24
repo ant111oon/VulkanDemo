@@ -399,7 +399,7 @@ bool Win32Window::Init(const WindowInitInfo& initInfo)
     WIN32_ASSERT_MSG(m_HWND != nullptr, "Win32 window creation failed");
 
     SetInitializedState(true);
-    SetVisible(true);
+    SetVisible(initInfo.isVisible);
 
     return true;
 }
