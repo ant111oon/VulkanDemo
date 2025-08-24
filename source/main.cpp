@@ -65,7 +65,8 @@ static std::vector<VkImageView> s_swapchainImageViews;
 static VkExtent2D s_swapchainExtent = {};
 
 static VkCommandPool s_vkCmdPool = VK_NULL_HANDLE;
-static VkCommandBuffer s_vkCmdBuffer = VK_NULL_HANDLE;
+static VkCommandBuffer s_vkRenderCmdBuffer = VK_NULL_HANDLE;
+static VkCommandBuffer s_vkImmediateSubmitCmdBuffer = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
@@ -73,6 +74,7 @@ static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
 static VkSemaphore s_vkPresentFinishedSemaphore = VK_NULL_HANDLE;
 static VkSemaphore s_vkRenderingFinishedSemaphore = VK_NULL_HANDLE;
 static VkFence s_vkRenderingFinishedFence = VK_NULL_HANDLE;
+static VkFence s_vkImmediateSubmitFinishedFence = VK_NULL_HANDLE;
 
 static Buffer s_vertexBuffer = {};
 
@@ -544,10 +546,6 @@ private:
     VkPipelineRenderingCreateInfo m_renderingCreateInfo = {};
     VkPipelineLayout m_layout = VK_NULL_HANDLE;
     VkPipelineCreateFlags m_flags = {};
-
-    // std::array<VkVertexInputBindingDescription, MAX_VERTEX_ATTRIBUTES_COUNT> m_vertexInputBindingDescs = {};
-    // std::array<VkVertexInputAttributeDescription, MAX_VERTEX_ATTRIBUTES_COUNT> m_vertexInputAttributesDescs = {};
-    // size_t m_vertexInputAttribsCount = 0;
 
     std::array<VkPipelineShaderStageCreateInfo, SHADER_STAGE_COUNT> m_shaderStages = {};
     std::array<std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1>, SHADER_STAGE_COUNT> m_shaderEntryNames = {};
@@ -1099,7 +1097,7 @@ static VkSwapchainKHR CreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice 
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // Since we have one queue for graphics, compute and transfer
     swapchainCreateInfo.imageExtent = extent;
 
-    s_swapchainSurfFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+    s_swapchainSurfFormat.format = VK_FORMAT_B8G8R8A8_SRGB;
     s_swapchainSurfFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     VK_ASSERT_MSG(CheckVkSurfaceFormatSupport(vkPhysDevice, vkSurface, s_swapchainSurfFormat), "Unsupported swapchain surface format");
 
@@ -1365,6 +1363,8 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 
 VkSemaphore CreateVkSemaphore()
 {
+    Timer timer;
+
     VkSemaphoreCreateInfo semaphoreCreateInfo = {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -1372,12 +1372,16 @@ VkSemaphore CreateVkSemaphore()
     VK_CHECK(vkCreateSemaphore(s_vkDevice, &semaphoreCreateInfo, nullptr, &vkSemaphore));
     VK_ASSERT(vkSemaphore != VK_NULL_HANDLE);
 
+    VK_LOG_INFO("VkSemaphore initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
     return vkSemaphore;
 }
 
 
 VkFence CreateVkFence()
 {
+    Timer timer;
+
     VkFenceCreateInfo fenceCreateInfo = {};
     fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -1385,6 +1389,8 @@ VkFence CreateVkFence()
     VkFence vkFence = VK_NULL_HANDLE;
     VK_CHECK(vkCreateFence(s_vkDevice, &fenceCreateInfo, nullptr, &vkFence));
     VK_ASSERT(vkFence != VK_NULL_HANDLE);
+
+    VK_LOG_INFO("VkFence initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkFence;
 }
@@ -1406,6 +1412,8 @@ static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags proper
 
 static Buffer CreateBuffer(VkDevice vkDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkMemoryAllocateFlags memAllocFlags)
 {
+    Timer timer;
+
     VkBufferCreateInfo bufferCreateInfo = {};
     bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferCreateInfo.size = size;
@@ -1431,7 +1439,7 @@ static Buffer CreateBuffer(VkDevice vkDevice, VkDeviceSize size, VkBufferUsageFl
     VkMemoryAllocateInfo memAllocInfo = {};
     memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     memAllocInfo.pNext = &memAllocFlagsInfo;
-    memAllocInfo.allocationSize = size;
+    memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
     memAllocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryRequirements.memoryTypeBits, properties);
     VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
 
@@ -1449,12 +1457,16 @@ static Buffer CreateBuffer(VkDevice vkDevice, VkDeviceSize size, VkBufferUsageFl
     Buffer buffer = {};
     buffer.vkBuffer = vkBuffer;
     buffer.vkMemory = vkBufferMemory;
-    buffer.size = size;
+    buffer.size = memRequirements.memoryRequirements.size;
 
-    VkBufferDeviceAddressInfo addressInfo = {};
-    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    addressInfo.buffer = vkBuffer;
-    buffer.deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
+    if (memAllocFlags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) {
+        VkBufferDeviceAddressInfo addressInfo = {};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = vkBuffer;
+        buffer.deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
+    }
+
+    VK_LOG_INFO("Buffer initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return buffer;
 }
@@ -1472,14 +1484,14 @@ static void DestroyBuffer(VkDevice vkDevice, Buffer& buffer)
 }
 
 
-void CmdPipelineImageBarrier(
+static void CmdPipelineImageBarrier(
     VkCommandBuffer cmdBuffer, 
     VkImageLayout oldLayout, 
     VkImageLayout newLayout,
-    VkPipelineStageFlags srcStageMask, 
-    VkPipelineStageFlags dstStageMask,
-    VkAccessFlags srcAccessMask, 
-    VkAccessFlags dstAccessMask,
+    VkPipelineStageFlags2 srcStageMask, 
+    VkPipelineStageFlags2 dstStageMask,
+    VkAccessFlags2 srcAccessMask, 
+    VkAccessFlags2 dstAccessMask,
     VkImage image,
     VkImageAspectFlags aspectMask
 ) {
@@ -1509,6 +1521,74 @@ void CmdPipelineImageBarrier(
 }
 
 
+static void SubmitVkQueue(VkQueue vkQueue,
+    VkCommandBuffer vkCmdBuffer,
+    VkFence vkFinishFence,
+    VkSemaphore vkWaitSemaphore, 
+    VkPipelineStageFlags2 waitSemaphoreStageMask,
+    VkSemaphore vkSignalSemaphore, 
+    VkPipelineStageFlags2 signalSemaphoreStageMask
+) {
+    VkSemaphoreSubmitInfo waitSemaphoreInfo = {};
+    waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    waitSemaphoreInfo.semaphore = vkWaitSemaphore;
+    waitSemaphoreInfo.value = 0;
+    waitSemaphoreInfo.stageMask = waitSemaphoreStageMask;
+    waitSemaphoreInfo.deviceIndex = 0;
+
+    VkSemaphoreSubmitInfo signalSemaphoreInfo = {};
+    signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    signalSemaphoreInfo.semaphore = vkSignalSemaphore;
+    signalSemaphoreInfo.value = 0;
+    signalSemaphoreInfo.stageMask = signalSemaphoreStageMask;
+    signalSemaphoreInfo.deviceIndex = 0;
+    
+    VkCommandBufferSubmitInfo commandBufferInfo = {};
+    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    commandBufferInfo.commandBuffer = vkCmdBuffer;
+    commandBufferInfo.deviceMask = 0;
+
+    VkSubmitInfo2 submitInfo2 = {};
+    submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+    submitInfo2.waitSemaphoreInfoCount = vkWaitSemaphore != VK_NULL_HANDLE ? 1 : 0;
+    submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+    submitInfo2.commandBufferInfoCount = 1;
+    submitInfo2.pCommandBufferInfos = &commandBufferInfo;
+    submitInfo2.signalSemaphoreInfoCount = vkSignalSemaphore != VK_NULL_HANDLE ? 1 : 0;
+    submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
+
+    VK_CHECK(vkQueueSubmit2(vkQueue, 1, &submitInfo2, vkFinishFence));
+}
+
+
+template <typename Func, typename... Args>
+static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
+{   
+    VK_CHECK(vkResetFences(s_vkDevice, 1, &s_vkImmediateSubmitFinishedFence));
+    VK_CHECK(vkResetCommandBuffer(s_vkImmediateSubmitCmdBuffer, 0));
+
+    VkCommandBufferBeginInfo cmdBeginInfo = {};
+    cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VK_CHECK(vkBeginCommandBuffer(s_vkImmediateSubmitCmdBuffer, &cmdBeginInfo));
+        func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    VK_CHECK(vkEndCommandBuffer(s_vkImmediateSubmitCmdBuffer));
+
+    SubmitVkQueue(
+        vkQueue, 
+        s_vkImmediateSubmitCmdBuffer, 
+        s_vkImmediateSubmitFinishedFence, 
+        VK_NULL_HANDLE, 
+        VK_PIPELINE_STAGE_2_NONE,
+        VK_NULL_HANDLE, 
+        VK_PIPELINE_STAGE_2_NONE
+    );
+
+    VK_CHECK(vkWaitForFences(s_vkDevice, 1, &s_vkImmediateSubmitFinishedFence, VK_TRUE, UINT64_MAX));
+}
+
+
 void ProcessWndEvents(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
@@ -1532,7 +1612,7 @@ void RenderScene()
     }
 
     VK_CHECK(vkResetFences(s_vkDevice, 1, &s_vkRenderingFinishedFence));
-    VK_CHECK(vkResetCommandBuffer(s_vkCmdBuffer, 0));
+    VK_CHECK(vkResetCommandBuffer(s_vkRenderCmdBuffer, 0));
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
     cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1540,15 +1620,15 @@ void RenderScene()
 
     VkImage& rndImage = s_swapchainImages[nextImageIdx];
 
-    VK_CHECK(vkBeginCommandBuffer(s_vkCmdBuffer, &cmdBeginInfo));
+    VK_CHECK(vkBeginCommandBuffer(s_vkRenderCmdBuffer, &cmdBeginInfo));
         CmdPipelineImageBarrier(
-            s_vkCmdBuffer, 
+            s_vkRenderCmdBuffer, 
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            0, 
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0, 
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_NONE, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_ACCESS_2_NONE, 
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
@@ -1572,67 +1652,47 @@ void RenderScene()
         colorAttachment.clearValue.color.float32[3] = 255.f / 255.f;
         renderingInfo.pColorAttachments = &colorAttachment;
 
-        vkCmdBeginRendering(s_vkCmdBuffer, &renderingInfo);
+        vkCmdBeginRendering(s_vkRenderCmdBuffer, &renderingInfo);
             VkViewport viewport = {};
             viewport.width = s_swapchainExtent.width;
             viewport.height = s_swapchainExtent.height;
             viewport.minDepth = 0.f;
             viewport.maxDepth = 1.f;
-            vkCmdSetViewport(s_vkCmdBuffer, 0, 1, &viewport);
+            vkCmdSetViewport(s_vkRenderCmdBuffer, 0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.extent = s_swapchainExtent;
-            vkCmdSetScissor(s_vkCmdBuffer, 0, 1, &scissor);
+            vkCmdSetScissor(s_vkRenderCmdBuffer, 0, 1, &scissor);
 
-            vkCmdBindPipeline(s_vkCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
+            vkCmdBindPipeline(s_vkRenderCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
 
-            vkCmdPushConstants(s_vkCmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.deviceAddress);
+            vkCmdPushConstants(s_vkRenderCmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.deviceAddress);
 
-            vkCmdDraw(s_vkCmdBuffer, 3, 1, 0, 0);
-        vkCmdEndRendering(s_vkCmdBuffer);
+            vkCmdDraw(s_vkRenderCmdBuffer, 3, 1, 0, 0);
+        vkCmdEndRendering(s_vkRenderCmdBuffer);
 
         CmdPipelineImageBarrier(
-            s_vkCmdBuffer,
+            s_vkRenderCmdBuffer,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
-            0,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+            VK_ACCESS_2_NONE,
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
-    VK_CHECK(vkEndCommandBuffer(s_vkCmdBuffer));
+    VK_CHECK(vkEndCommandBuffer(s_vkRenderCmdBuffer));
 
-    VkSemaphoreSubmitInfo waitSemaphoreInfo = {};
-    waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    waitSemaphoreInfo.semaphore = s_vkPresentFinishedSemaphore;
-    waitSemaphoreInfo.value = 0;
-    waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
-    waitSemaphoreInfo.deviceIndex = 0;
-
-    VkSemaphoreSubmitInfo signalSemaphoreInfo = {};
-    signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    signalSemaphoreInfo.semaphore = s_vkRenderingFinishedSemaphore;
-    signalSemaphoreInfo.value = 0;
-    signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    signalSemaphoreInfo.deviceIndex = 0;
-    
-    VkCommandBufferSubmitInfo commandBufferInfo = {};
-    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    commandBufferInfo.commandBuffer = s_vkCmdBuffer;
-    commandBufferInfo.deviceMask = 0;
-
-    VkSubmitInfo2 submitInfo2 = {};
-    submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo2.waitSemaphoreInfoCount = 1;
-    submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
-    submitInfo2.commandBufferInfoCount = 1;
-    submitInfo2.pCommandBufferInfos = &commandBufferInfo;
-    submitInfo2.signalSemaphoreInfoCount = 1;
-    submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
-
-    VK_CHECK(vkQueueSubmit2(s_vkQueue, 1, &submitInfo2, s_vkRenderingFinishedFence));
+    SubmitVkQueue(
+        s_vkQueue, 
+        s_vkRenderCmdBuffer, 
+        s_vkRenderingFinishedFence, 
+        s_vkPresentFinishedSemaphore, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        s_vkRenderingFinishedSemaphore, 
+        VK_PIPELINE_STAGE_2_NONE
+    );
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1676,7 +1736,8 @@ int main(int argc, char* argv[])
     s_vkSwapchain = VK_NULL_HANDLE; // Assumed that OS will send resize event and swap chain will be created there
 
     s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
-    s_vkCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
+    s_vkRenderCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
+    s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
 
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice);
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
@@ -1684,14 +1745,27 @@ int main(int argc, char* argv[])
     s_vkPresentFinishedSemaphore = CreateVkSemaphore();
     s_vkRenderingFinishedSemaphore = CreateVkSemaphore();
     s_vkRenderingFinishedFence = CreateVkFence();
+    s_vkImmediateSubmitFinishedFence = CreateVkFence();
 
-    s_vertexBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+    Buffer stagingBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
 
     void* pVertexBufferData = nullptr;
-    VK_CHECK(vkMapMemory(s_vkDevice, s_vertexBuffer.vkMemory, 0, s_vertexBuffer.size, 0, &pVertexBufferData));
+    VK_CHECK(vkMapMemory(s_vkDevice, stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
         memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
-    vkUnmapMemory(s_vkDevice, s_vertexBuffer.vkMemory);
+    vkUnmapMemory(s_vkDevice, stagingBuffer.vkMemory);
+
+    s_vertexBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, 
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+
+    ImmediateSubmitQueue(s_vkQueue, [&](VkCommandBuffer vkCmdBuffer){
+        VkBufferCopy region = {};
+        region.size = TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]);
+        vkCmdCopyBuffer(vkCmdBuffer, stagingBuffer.vkBuffer, s_vertexBuffer.vkBuffer, 1, &region);
+    });
+
+    DestroyBuffer(s_vkDevice, stagingBuffer);
 
     s_swapchainRecreateRequired = true;
 
@@ -1743,6 +1817,7 @@ int main(int argc, char* argv[])
 
     DestroyBuffer(s_vkDevice, s_vertexBuffer);
 
+    vkDestroyFence(s_vkDevice, s_vkImmediateSubmitFinishedFence, nullptr);
     vkDestroyFence(s_vkDevice, s_vkRenderingFinishedFence, nullptr);
     vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphore, nullptr);
     vkDestroySemaphore(s_vkDevice, s_vkPresentFinishedSemaphore, nullptr);
