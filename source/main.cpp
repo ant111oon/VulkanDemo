@@ -71,13 +71,14 @@ static VkCommandBuffer s_vkImmediateSubmitCmdBuffer = VK_NULL_HANDLE;
 static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
 
-static VkSemaphore s_vkPresentFinishedSemaphore = VK_NULL_HANDLE;
-static VkSemaphore s_vkRenderingFinishedSemaphore = VK_NULL_HANDLE;
+static std::vector<VkSemaphore> s_vkPresentFinishedSemaphores;
+static std::vector<VkSemaphore> s_vkRenderingFinishedSemaphores;
 static VkFence s_vkRenderingFinishedFence = VK_NULL_HANDLE;
 static VkFence s_vkImmediateSubmitFinishedFence = VK_NULL_HANDLE;
 
 static Buffer s_vertexBuffer = {};
 
+static size_t s_frameNumber = 0;
 static bool s_swapchainRecreateRequired = false;
 
 
@@ -92,7 +93,7 @@ struct TestVertex
     glm::vec4 color;
 };
 
-static constexpr std::array<TestVertex, 3> TEST_VERTECIES = {
+static constexpr std::array TEST_VERTECIES = {
     TestVertex { glm::vec2(-0.5f, 0.5f), glm::vec2(0.f,  0.f), glm::vec4(1.f, 0.f, 0.f, 1.f) },
     TestVertex { glm::vec2( 0.5f, 0.5f), glm::vec2(1.f,  0.f), glm::vec4(0.f, 1.f, 0.f, 1.f) },
     TestVertex { glm::vec2( 0.f, -0.5f), glm::vec2(0.5f, 1.f), glm::vec4(0.f, 0.f, 1.f, 1.f) },
@@ -815,8 +816,7 @@ static VkInstance CreateVkInstance(const char* pAppName, VkDebugUtilsMessengerEX
     vkDbgMessengerCreateInfo.messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     vkDbgMessengerCreateInfo.messageSeverity = 
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
@@ -1589,6 +1589,22 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 }
 
 
+static void ResizeVkSwapchain(BaseWindow* pWnd)
+{
+    if (!s_swapchainRecreateRequired) {
+        return;
+    }
+        
+    const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
+    const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
+        
+    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
+        s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
+    
+    s_swapchainRecreateRequired = false;
+}
+
+
 void ProcessWndEvents(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
@@ -1599,10 +1615,15 @@ void ProcessWndEvents(const WndEvent& event)
 
 void RenderScene()
 {
+    const size_t syncResourceIdx = s_frameNumber % s_swapchainImages.size();
+
+    VkSemaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[syncResourceIdx];
+    VkSemaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphores[syncResourceIdx];
+
     VK_CHECK(vkWaitForFences(s_vkDevice, 1, &s_vkRenderingFinishedFence, VK_TRUE, UINT64_MAX));
 
     uint32_t nextImageIdx;
-    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice, s_vkSwapchain, UINT64_MAX, s_vkPresentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice, s_vkSwapchain, UINT64_MAX, presentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
     
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
@@ -1622,12 +1643,12 @@ void RenderScene()
 
     VK_CHECK(vkBeginCommandBuffer(s_vkRenderCmdBuffer, &cmdBeginInfo));
         CmdPipelineImageBarrier(
-            s_vkRenderCmdBuffer, 
+            s_vkRenderCmdBuffer,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE, 
+            VK_PIPELINE_STAGE_2_NONE,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_ACCESS_2_NONE, 
+            VK_ACCESS_2_NONE,
             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
@@ -1675,9 +1696,9 @@ void RenderScene()
             s_vkRenderCmdBuffer,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_2_NONE,
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
@@ -1685,12 +1706,12 @@ void RenderScene()
     VK_CHECK(vkEndCommandBuffer(s_vkRenderCmdBuffer));
 
     SubmitVkQueue(
-        s_vkQueue, 
-        s_vkRenderCmdBuffer, 
-        s_vkRenderingFinishedFence, 
-        s_vkPresentFinishedSemaphore, 
+        s_vkQueue,
+        s_vkRenderCmdBuffer,
+        s_vkRenderingFinishedFence,
+        presentFinishedSemaphore,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        s_vkRenderingFinishedSemaphore, 
+        renderingFinishedSemaphore,
         VK_PIPELINE_STAGE_2_NONE
     );
 
@@ -1698,7 +1719,7 @@ void RenderScene()
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pNext = NULL;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &s_vkRenderingFinishedSemaphore;
+    presentInfo.pWaitSemaphores = &renderingFinishedSemaphore;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &s_vkSwapchain;
     presentInfo.pImageIndices = &nextImageIdx;
@@ -1711,22 +1732,6 @@ void RenderScene()
         s_swapchainRecreateRequired = true;
         return;
     }
-}
-
-
-static void ResizeVkSwapchain(BaseWindow* pWnd)
-{
-    if (!s_swapchainRecreateRequired) {
-        return;
-    }
-        
-    const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
-    const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
-        
-    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
-        s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
-    
-    s_swapchainRecreateRequired = false;
 }
 
 
@@ -1751,7 +1756,7 @@ int main(int argc, char* argv[])
     s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
 
     s_swapchainRecreateRequired = true;
-    s_vkSwapchain = VK_NULL_HANDLE; // Assumed that swapchain will be created during the first render loop cycle
+    ResizeVkSwapchain(pWnd);
 
     s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
     s_vkRenderCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
@@ -1760,8 +1765,15 @@ int main(int argc, char* argv[])
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice);
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
 
-    s_vkPresentFinishedSemaphore = CreateVkSemaphore();
-    s_vkRenderingFinishedSemaphore = CreateVkSemaphore();
+    const size_t swapchainImageCount = s_swapchainImages.size();
+
+    s_vkRenderingFinishedSemaphores.resize(swapchainImageCount, VK_NULL_HANDLE);
+    s_vkPresentFinishedSemaphores.resize(swapchainImageCount, VK_NULL_HANDLE);
+    for (size_t i = 0; i < swapchainImageCount; ++i) {
+        s_vkRenderingFinishedSemaphores[i] = CreateVkSemaphore();
+        s_vkPresentFinishedSemaphores[i] = CreateVkSemaphore();
+    }
+
     s_vkRenderingFinishedFence = CreateVkFence();
     s_vkImmediateSubmitFinishedFence = CreateVkFence();
 
@@ -1813,6 +1825,8 @@ int main(int argc, char* argv[])
 
         RenderScene();
 
+        ++s_frameNumber;
+
         const float frameTime = timer.End().GetDuration<float, std::milli>();
         pWnd->SetTitle("%s: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, frameTime, 1000.f / frameTime);
     }
@@ -1823,8 +1837,11 @@ int main(int argc, char* argv[])
 
     vkDestroyFence(s_vkDevice, s_vkImmediateSubmitFinishedFence, nullptr);
     vkDestroyFence(s_vkDevice, s_vkRenderingFinishedFence, nullptr);
-    vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphore, nullptr);
-    vkDestroySemaphore(s_vkDevice, s_vkPresentFinishedSemaphore, nullptr);
+    
+    for (size_t i = 0; i < s_swapchainImages.size(); ++i) {
+        vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(s_vkDevice, s_vkPresentFinishedSemaphores[i], nullptr);
+    }
 
     vkDestroyPipeline(s_vkDevice, s_vkPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice, s_vkPipelineLayout, nullptr);
