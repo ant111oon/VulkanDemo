@@ -1009,9 +1009,14 @@ static VkDevice CreateVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSur
     features12.pNext = &features13;
     features12.bufferDeviceAddress = VK_TRUE;
 
+    VkPhysicalDeviceVulkan11Features features11 = {};
+    features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    features11.pNext = &features12;
+    features11.shaderDrawParameters = VK_TRUE; // Enables slang internal shader variables like "SV_VertexID" etc.
+
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features2.pNext = &features12;
+    features2.pNext = &features11;
 
     deviceCreateInfo.pNext = &features2;
 
@@ -1763,7 +1768,7 @@ int main(int argc, char* argv[])
     s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
 
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice);
-    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vert.spv", "shaders/bin/test.frag.spv");
+    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
 
     const size_t swapchainImageCount = s_swapchainImages.size();
 

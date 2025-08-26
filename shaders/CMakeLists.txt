@@ -17,17 +17,21 @@ if (NOT EXISTS ${SHADERS_OUTPUT_DIR})
 endif()
 
 
-set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/glslc.exe)
+set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/slangc.exe)
+set(SHADER_TARGET spirv)
+set(SHADER_ENTRY_NAME main)
 
 set(SHADER_COMPILER_COMMON_FLAGS
-    "-c"
     "-I${SHADERS_INCLUDE_DIR}"
+    "-target" ${SHADER_TARGET}
+    "-entry" ${SHADER_ENTRY_NAME}
 )
 
 set(SHADER_COMPILER_FLAGS
     ${SHADER_COMPILER_COMMON_FLAGS}
 
     $<$<CONFIG:Debug>:-O0>
+    $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-DDEBUG>
 
     $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-O>
@@ -37,13 +41,11 @@ message(STATUS "${SHADERS_PROJ_NAME}: Compiler flags: ${SHADER_COMPILER_FLAGS}")
 
 
 file(GLOB_RECURSE SHADER_SRC_FILES
-    ${SHADERS_SRC_DIR}/*.frag  
-    ${SHADERS_SRC_DIR}/*.vert
-    ${SHADERS_SRC_DIR}/*.comp
+    ${SHADERS_SRC_DIR}/*.slang
 )
 
 foreach(SHADER_SRC_FILE ${SHADER_SRC_FILES})
-    get_filename_component(FILE_NAME ${SHADER_SRC_FILE} NAME)
+    get_filename_component(FILE_NAME ${SHADER_SRC_FILE} NAME_WLE)
     
     set(SHADER_SPIRV_FILE ${SHADERS_OUTPUT_DIR}/${FILE_NAME}.spv)
     
