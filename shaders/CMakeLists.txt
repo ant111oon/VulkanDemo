@@ -20,11 +20,15 @@ endif()
 set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/slangc.exe)
 set(SHADER_TARGET spirv)
 set(SHADER_ENTRY_NAME main)
+set(SHADER_PROFILE spirv_1_4)
 
 set(SHADER_COMPILER_COMMON_FLAGS
-    "-I${SHADERS_INCLUDE_DIR}"
-    "-target" ${SHADER_TARGET}
-    "-entry" ${SHADER_ENTRY_NAME}
+    -emit-spirv-directly
+    -fvk-use-entrypoint-name
+    -I${SHADERS_INCLUDE_DIR}
+    -target ${SHADER_TARGET}
+    -entry ${SHADER_ENTRY_NAME}
+    -profile ${SHADER_PROFILE}
 )
 
 set(SHADER_COMPILER_FLAGS
@@ -49,12 +53,12 @@ foreach(SHADER_SRC_FILE ${SHADER_SRC_FILES})
     
     set(SHADER_SPIRV_FILE ${SHADERS_OUTPUT_DIR}/${FILE_NAME}.spv)
     
-    message(STATUS "${SHADERS_PROJ_NAME}: ${SHADER_SRC_FILE} will be compiled to ${SHADER_SPIRV_FILE}")
-    
     add_custom_command(
         OUTPUT ${SHADER_SPIRV_FILE}
         COMMAND ${SHADER_COMPILER} ${SHADER_SRC_FILE} ${SHADER_COMPILER_FLAGS} -o ${SHADER_SPIRV_FILE}
-        DEPENDS ${SHADER_SRC_FILE})
+        DEPENDS ${SHADER_SRC_FILE}
+        COMMENT "Compiling ${SHADER_SRC_FILE} -> ${SHADER_SPIRV_FILE}"
+    )
     list(APPEND SPIRV_BINARY_FILES ${SHADER_SPIRV_FILE})
 endforeach(SHADER_SRC_FILE)
 
