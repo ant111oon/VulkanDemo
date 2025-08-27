@@ -5,12 +5,11 @@
 #include "log.h" 
 
 #include <cstdint>
-#include <string_view>
 
 
 #if defined(ENG_BUILD_DEBUG)
     template <typename... Args>
-    inline void AssertImpl(std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, Args&&... args) noexcept
+    inline void AssertImpl(const char* file, uint32_t line, const char* system, const char* fmt, Args&&... args) noexcept
     {
         Log(stderr, LogLevel::ERROR, file, line, system, fmt, std::forward<Args>(args)...);
         ENG_DEBUG_BREAK();
