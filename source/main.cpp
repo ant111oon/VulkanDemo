@@ -1083,7 +1083,7 @@ static VkSwapchainKHR CreateVkSwapchain(VkPhysicalDevice vkPhysDevice, VkDevice 
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysDevice, vkSurface, &surfCapabilities));
 
     VkExtent2D extent = {};
-    if (surfCapabilities.currentExtent.width != UINT32_MAX || surfCapabilities.currentExtent.height != UINT32_MAX) {
+    if (surfCapabilities.currentExtent.width != UINT32_MAX && surfCapabilities.currentExtent.height != UINT32_MAX) {
         extent = surfCapabilities.currentExtent;
     } else {
         extent.width = std::clamp(requiredExtent.width, surfCapabilities.minImageExtent.width, surfCapabilities.maxImageExtent.width);
