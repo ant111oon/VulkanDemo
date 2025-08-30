@@ -69,35 +69,40 @@ static VkSurfaceFormatKHR s_swapchainSurfFormat = {};
 
 static VkDebugUtilsMessengerEXT s_vkDbgUtilsMessenger = VK_NULL_HANDLE;
 
-static VkInstance s_vkInstance = VK_NULL_HANDLE;
+static VkInstance   s_vkInstance = VK_NULL_HANDLE;
 static VkSurfaceKHR s_vkSurface = VK_NULL_HANDLE;
 
-static VkPhysicalDevice s_vkPhysDevice = VK_NULL_HANDLE;
+static VkPhysicalDevice                 s_vkPhysDevice = VK_NULL_HANDLE;
 static VkPhysicalDeviceMemoryProperties s_vkPhysDeviceMemProps = {};
 
 static uint32_t s_queueFamilyIndex = UINT32_MAX;
-static VkQueue s_vkQueue = VK_NULL_HANDLE;
+static VkQueue  s_vkQueue = VK_NULL_HANDLE;
 static VkDevice s_vkDevice = VK_NULL_HANDLE;
 
-static VkSwapchainKHR s_vkSwapchain = VK_NULL_HANDLE;
-static std::vector<VkImage> s_swapchainImages;
+static VkSwapchainKHR           s_vkSwapchain = VK_NULL_HANDLE;
+static std::vector<VkImage>     s_swapchainImages;
 static std::vector<VkImageView> s_swapchainImageViews;
-static VkExtent2D s_swapchainExtent = {};
+static VkExtent2D               s_swapchainExtent = {};
 
-static VkCommandPool s_vkCmdPool = VK_NULL_HANDLE;
+static VkCommandPool   s_vkCmdPool = VK_NULL_HANDLE;
 static VkCommandBuffer s_vkImmediateSubmitCmdBuffer = VK_NULL_HANDLE;
 
-static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline s_vkPipeline = VK_NULL_HANDLE;
+static VkDescriptorPool      s_vkDescriptorPool = VK_NULL_HANDLE;
+static VkDescriptorSet       s_vkDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_vkDescriptorSetLayout = VK_NULL_HANDLE;
 
-static std::vector<VkSemaphore> s_vkPresentFinishedSemaphores;
-static std::vector<VkSemaphore> s_vkRenderingFinishedSemaphores;
-static std::vector<VkFence> s_vkRenderingFinishedFences;
+static VkPipelineLayout      s_vkPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline            s_vkPipeline = VK_NULL_HANDLE;
+
+static std::vector<VkSemaphore>     s_vkPresentFinishedSemaphores;
+static std::vector<VkSemaphore>     s_vkRenderingFinishedSemaphores;
+static std::vector<VkFence>         s_vkRenderingFinishedFences;
 static std::vector<VkCommandBuffer> s_vkRenderCmdBuffers;
 
 static VkFence s_vkImmediateSubmitFinishedFence = VK_NULL_HANDLE;
 
 static Buffer s_vertexBuffer = {};
+static Buffer s_commonConstBuffer = {};
 
 static size_t s_frameNumber = 0;
 static bool s_swapchainRecreateRequired = false;
@@ -130,11 +135,11 @@ public:
     }
 
 
-    template<typename DURATION_T, typename PERIOD_T>
-    DURATION_T GetDuration() const
+    template<typename RESULT_T, typename DURATION_T>
+    RESULT_T GetDuration() const
     {
         CORE_ASSERT_MSG(m_end > m_start, "Need to call End() before GetDuration()");
-        return std::chrono::duration<DURATION_T, PERIOD_T>(m_end - m_start).count();
+        return std::chrono::duration<RESULT_T, DURATION_T>(m_end - m_start).count();
     }
 
 private:
@@ -1303,27 +1308,71 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
 }
 
 
-static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice)
-{
+static VkPipelineLayout CreateVkPipelineLayout(
+    VkDevice vkDevice,
+    VkDescriptorSetLayout& vkDescriptorSetLayout,
+    VkDescriptorPool& vkDescriptorPool,
+    VkDescriptorSet& vkDescriptorSet
+) {
     Timer timer;
 
-    VkPipelineLayoutCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    VkDescriptorSetLayoutBinding descriptor = {};
+    descriptor.binding = 0;
+    descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptor.descriptorCount = 1;
+    descriptor.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+    descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorSetLayoutCreateInfo.bindingCount = 1;
+    descriptorSetLayoutCreateInfo.pBindings = &descriptor;
+
+    vkDescriptorSetLayout = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout));
+    VK_ASSERT(vkDescriptorSetLayout != VK_NULL_HANDLE);
     
     VkPushConstantRange pushConstants = {};
     pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstants.size = sizeof(VkDeviceAddress);
 
+    VkPipelineLayoutCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     createInfo.pushConstantRangeCount = 1;
     createInfo.pPushConstantRanges = &pushConstants;
+    createInfo.setLayoutCount = 1;
+    createInfo.pSetLayouts = &vkDescriptorSetLayout;
 
-    VkPipelineLayout layout = VK_NULL_HANDLE;
-    VK_CHECK(vkCreatePipelineLayout(vkDevice, &createInfo, nullptr, &layout));
-    VK_ASSERT(layout != VK_NULL_HANDLE);
+    VkPipelineLayout vkLayout = VK_NULL_HANDLE;
+    VK_CHECK(vkCreatePipelineLayout(vkDevice, &createInfo, nullptr, &vkLayout));
+    VK_ASSERT(vkLayout != VK_NULL_HANDLE);
+
+    VkDescriptorPoolSize descPoolSize = {};
+    descPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descPoolSize.descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo descPoolCreateInfo = {};
+    descPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    descPoolCreateInfo.maxSets = 1;
+    descPoolCreateInfo.poolSizeCount = 1;
+    descPoolCreateInfo.pPoolSizes = &descPoolSize;
+
+    vkDescriptorPool = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateDescriptorPool(vkDevice, &descPoolCreateInfo, nullptr, &vkDescriptorPool));
+    VK_ASSERT(vkDescriptorPool != VK_NULL_HANDLE);
+
+    VkDescriptorSetAllocateInfo descSetAllocInfo = {};
+    descSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descSetAllocInfo.descriptorPool = vkDescriptorPool;
+    descSetAllocInfo.descriptorSetCount = 1;
+    descSetAllocInfo.pSetLayouts = &vkDescriptorSetLayout;
+
+    vkDescriptorSet = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateDescriptorSets(vkDevice, &descSetAllocInfo, &vkDescriptorSet));
+    VK_ASSERT(vkDescriptorSet != VK_NULL_HANDLE);
 
     VK_LOG_INFO("VkPipelineLayout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
-    return layout;
+    return vkLayout;
 }
 
 
@@ -1621,6 +1670,13 @@ void ProcessWndEvents(const WndEvent& event)
 }
 
 
+struct COMMON_CB_DATA
+{
+    glm::vec3 color;
+    float PAD0;
+};
+
+
 void RenderScene()
 {
     const size_t frameInFlightIdx = s_frameNumber % s_swapchainImages.size();
@@ -1701,6 +1757,8 @@ void RenderScene()
             vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
             vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
+            
+            vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
 
             vkCmdPushConstants(cmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.deviceAddress);
 
@@ -1778,8 +1836,36 @@ int main(int argc, char* argv[])
     s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
     s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
 
-    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice);
+    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice, s_vkDescriptorSetLayout, s_vkDescriptorPool, s_vkDescriptorSet);
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
+
+    s_commonConstBuffer = CreateBuffer(s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
+
+    {
+        COMMON_CB_DATA commonConstBuffer = {};
+        commonConstBuffer.color = glm::vec3(1.f, 0.f, 1.f);
+
+        void* pCommonConstBufferData = nullptr;
+        VK_CHECK(vkMapMemory(s_vkDevice, s_commonConstBuffer.vkMemory, 0, VK_WHOLE_SIZE, 0, &pCommonConstBufferData));
+            memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
+        vkUnmapMemory(s_vkDevice, s_commonConstBuffer.vkMemory);
+    }
+
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer = s_commonConstBuffer.vkBuffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(COMMON_CB_DATA);
+
+    VkWriteDescriptorSet descWrite = {};
+    descWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descWrite.dstSet = s_vkDescriptorSet;
+    descWrite.dstBinding = 0;
+    descWrite.dstArrayElement = 0;
+    descWrite.descriptorCount = 1;
+    descWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descWrite.pBufferInfo = &bufferInfo;
+    vkUpdateDescriptorSets(s_vkDevice, 1, &descWrite, 0, nullptr);
 
     const size_t swapchainImageCount = s_swapchainImages.size();
 
@@ -1799,10 +1885,12 @@ int main(int argc, char* argv[])
     Buffer stagingBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
 
-    void* pVertexBufferData = nullptr;
-    VK_CHECK(vkMapMemory(s_vkDevice, stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
-        memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
-    vkUnmapMemory(s_vkDevice, stagingBuffer.vkMemory);
+    {
+        void* pVertexBufferData = nullptr;
+        VK_CHECK(vkMapMemory(s_vkDevice, stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
+            memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
+        vkUnmapMemory(s_vkDevice, stagingBuffer.vkMemory);
+    }
 
     s_vertexBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, 
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
@@ -1850,6 +1938,7 @@ int main(int argc, char* argv[])
 
     VK_CHECK(vkDeviceWaitIdle(s_vkDevice));
 
+    DestroyBuffer(s_vkDevice, s_commonConstBuffer);
     DestroyBuffer(s_vkDevice, s_vertexBuffer);
 
     vkDestroyFence(s_vkDevice, s_vkImmediateSubmitFinishedFence, nullptr);
@@ -1862,6 +1951,8 @@ int main(int argc, char* argv[])
 
     vkDestroyPipeline(s_vkDevice, s_vkPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice, s_vkPipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice, s_vkDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(s_vkDevice, s_vkDescriptorPool, nullptr);
 
     vkDestroyCommandPool(s_vkDevice, s_vkCmdPool, nullptr);
 
