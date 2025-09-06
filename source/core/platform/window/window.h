@@ -23,7 +23,7 @@ public:
     BaseWindow() = default;
     virtual ~BaseWindow() = default;
 
-    virtual bool Init(const WindowInitInfo& initInfo) = 0;
+    virtual bool Create(const WindowInitInfo& initInfo) = 0;
     
     virtual void Destroy()
     {

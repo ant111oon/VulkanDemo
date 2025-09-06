@@ -1,0 +1,23 @@
+#pragma once
+
+#include "core/utils/assert.h"
+
+#include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
+
+
+#define VK_LOG_TRACE(FMT, ...)        ENG_LOG_TRACE("VULKAN", FMT, __VA_ARGS__)
+#define VK_LOG_INFO(FMT, ...)         ENG_LOG_INFO("VULKAN",  FMT, __VA_ARGS__)
+#define VK_LOG_WARN(FMT, ...)         ENG_LOG_WARN("VULKAN",  FMT, __VA_ARGS__)
+#define VK_LOG_ERROR(FMT, ...)        ENG_LOG_ERROR("VULKAN", FMT, __VA_ARGS__)
+#define VK_ASSERT_MSG(COND, FMT, ...) ENG_ASSERT_MSG(COND, "VULKAN", FMT, __VA_ARGS__)
+#define VK_ASSERT(COND)               VK_ASSERT_MSG(COND, #COND)
+#define VK_ASSERT_FAIL(FMT, ...)      VK_ASSERT_MSG(false, FMT, __VA_ARGS__)
+
+
+#define VK_CHECK(VkCall)                                                                  \
+    do {                                                                                  \
+        const VkResult _vkCallResult = VkCall;                                            \
+        (void)_vkCallResult;                                                              \
+        VK_ASSERT_MSG(_vkCallResult == VK_SUCCESS, "%s", string_VkResult(_vkCallResult)); \
+    } while(0)

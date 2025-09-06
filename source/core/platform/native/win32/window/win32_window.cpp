@@ -359,7 +359,7 @@ Win32Window::~Win32Window()
 }
 
 
-bool Win32Window::Init(const WindowInitInfo& initInfo)
+bool Win32Window::Create(const WindowInitInfo& initInfo)
 {
     if (IsInitialized()) {
         return true;

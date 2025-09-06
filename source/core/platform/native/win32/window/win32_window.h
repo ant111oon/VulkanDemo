@@ -17,7 +17,7 @@ class Win32Window final : public BaseWindow
 public:
     ~Win32Window() override;
 
-    bool Init(const WindowInitInfo& initInfo) override;
+    bool Create(const WindowInitInfo& initInfo) override;
     void Destroy() override;
 
     void ProcessEvents() override;
