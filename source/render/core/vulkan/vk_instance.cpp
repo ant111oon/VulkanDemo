@@ -96,8 +96,8 @@ namespace vkn
 
     bool Instance::Create(const InstanceCreateInfo& info)
     {
-        if (IsInitialized()) {
-            VK_LOG_WARN("Instance is already initialized");
+        if (IsCreated()) {
+            VK_LOG_WARN("Instance is already created");
             return true;
         }
 
@@ -145,7 +145,7 @@ namespace vkn
             m_dbgMessenger = CreateDebugMessenger(m_instance, vkDbgMessengerCreateInfo);
         }
 
-        m_flags.set(FLAG_IS_INITIALIZED, true);
+        m_flags.set(FLAG_IS_CREATED, true);
 
         return true;
     }
@@ -153,7 +153,7 @@ namespace vkn
 
     void Instance::Destroy()
     {
-        if (!IsInitialized()) {
+        if (!IsCreated()) {
             return;
         }
 
@@ -161,12 +161,7 @@ namespace vkn
         
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
-    }
 
-
-    Instance& GetInstance()
-    {
-        static Instance instance;
-        return instance;
+        m_flags.set(FLAG_IS_CREATED, false);
     }
 }

@@ -4,13 +4,7 @@
 #include "core/utils/timer.h"
 
 #include "render/core/vulkan/vk_instance.h"
-
-#include <vulkan/vulkan.h>
-#include <vulkan/vk_enum_string_helper.h>
-
-#ifdef ENG_OS_WINDOWS
-    #include <vulkan/vulkan_win32.h>
-#endif
+#include "render/core/vulkan/vk_surface.h"
 
 #include <glm/glm.hpp>
 
@@ -48,9 +42,9 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static vkn::Instance& s_vkInstance = vkn::GetInstance();
 
-static VkSurfaceKHR s_vkSurface = VK_NULL_HANDLE;
+static vkn::Instance& s_vkInstance = vkn::GetInstance();
+static vkn::Surface& s_vkSurface = vkn::GetSurface();
 
 static VkPhysicalDevice                 s_vkPhysDevice = VK_NULL_HANDLE;
 static VkPhysicalDeviceMemoryProperties s_vkPhysDeviceMemProps = {};
@@ -849,48 +843,6 @@ private:
 };
 
 
-static bool CheckVkInstExtensionsSupport(const std::span<const char* const> requiredExtensions)
-{
-    uint32_t vkInstExtensionPropsCount = 0;
-    VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &vkInstExtensionPropsCount, nullptr));
-    std::vector<VkExtensionProperties> vkInstExtensionProps(vkInstExtensionPropsCount);
-    VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &vkInstExtensionPropsCount, vkInstExtensionProps.data()));
-
-    for (const char* pExtensionName : requiredExtensions) {
-        const auto reqExtIt = std::find_if(vkInstExtensionProps.cbegin(), vkInstExtensionProps.cend(), [&](const VkExtensionProperties& props) {
-            return strcmp(pExtensionName, props.extensionName) == 0;
-        });
-        
-        if (reqExtIt == vkInstExtensionProps.cend()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
-static bool CheckVkInstLayersSupport(const std::span<const char* const> requiredLayers)
-{
-    uint32_t vkInstLayersPropsCount = 0;
-    VK_CHECK(vkEnumerateInstanceLayerProperties(&vkInstLayersPropsCount, nullptr));
-    std::vector<VkLayerProperties> vkInstLayerProps(vkInstLayersPropsCount);
-    VK_CHECK(vkEnumerateInstanceLayerProperties(&vkInstLayersPropsCount, vkInstLayerProps.data()));
-
-    for (const char* pLayerName : requiredLayers) {
-        const auto reqLayerIt = std::find_if(vkInstLayerProps.cbegin(), vkInstLayerProps.cend(), [&](const VkLayerProperties& props) {
-            return strcmp(pLayerName, props.layerName) == 0;
-        });
-        
-        if (reqLayerIt == vkInstLayerProps.cend()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
 static bool CheckVkDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::span<const char* const> requiredExtensions)
 {
     uint32_t vkDeviceExtensionsCount = 0;
@@ -964,45 +916,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     return VK_FALSE;
 }
 #endif
-
-
-static VkDebugUtilsMessengerEXT CreateVkDebugMessenger(VkInstance vkInstance, const VkDebugUtilsMessengerCreateInfoEXT& vkDbgMessengerCreateInfo)
-{
-    VkDebugUtilsMessengerEXT vkDbgUtilsMessenger = VK_NULL_HANDLE;
-
-    auto CreateDebugUtilsMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vkInstance, "vkCreateDebugUtilsMessengerEXT");
-    VK_ASSERT(CreateDebugUtilsMessenger);
-
-    VK_CHECK(CreateDebugUtilsMessenger(vkInstance, &vkDbgMessengerCreateInfo, nullptr, &vkDbgUtilsMessenger));
-    VK_ASSERT(vkDbgUtilsMessenger != VK_NULL_HANDLE);
-
-    CreateDebugUtilsMessenger = nullptr;
-
-    return vkDbgUtilsMessenger;
-}
-
-
-static VkSurfaceKHR CreateVkSurface(VkInstance vkInstance, const BaseWindow& wnd)
-{
-    Timer timer;
-
-    VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
-
-#ifdef ENG_OS_WINDOWS
-    VkWin32SurfaceCreateInfoKHR vkWin32SurfCreateInfo = {};
-    vkWin32SurfCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    vkWin32SurfCreateInfo.hinstance = GetModuleHandle(nullptr);
-    vkWin32SurfCreateInfo.hwnd = (HWND)wnd.GetNativeHandle();
-
-    VK_CHECK(vkCreateWin32SurfaceKHR(vkInstance, &vkWin32SurfCreateInfo, nullptr, &vkSurface));
-#endif
-
-    VK_ASSERT(vkSurface != VK_NULL_HANDLE);
-
-    VK_LOG_INFO("VkSurface initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkSurface;
-}
 
 
 static VkPhysicalDevice CreateVkPhysDevice(VkInstance vkInstance)
@@ -1771,7 +1684,7 @@ static void ResizeVkSwapchain(BaseWindow* pWnd)
     const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
     const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
         
-    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface, requiredExtent, oldSwapchain, 
+    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface.Get(), requiredExtent, oldSwapchain, 
         s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
     
     s_swapchainRecreateRequired = false;
@@ -1982,12 +1895,19 @@ int main(int argc, char* argv[])
 #endif
 
     s_vkInstance.Create(vkInstCreateInfo); 
-    CORE_ASSERT(s_vkInstance.IsInitialized());
+    CORE_ASSERT(s_vkInstance.IsCreated()); 
     
-    s_vkSurface = CreateVkSurface(s_vkInstance.Get(), *pWnd);
+
+    vkn::SurfaceCreateInfo vkSurfCreateInfo = {};
+    vkSurfCreateInfo.pInstance = &s_vkInstance.Get();
+    vkSurfCreateInfo.pWndHandle = pWnd->GetNativeHandle();
+
+    s_vkSurface.Create(vkSurfCreateInfo);
+    CORE_ASSERT(s_vkSurface.IsCreated());
+
     s_vkPhysDevice = CreateVkPhysDevice(s_vkInstance.Get());
 
-    s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface, s_queueFamilyIndex, s_vkQueue);
+    s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface.Get(), s_queueFamilyIndex, s_vkQueue);
 
     s_swapchainRecreateRequired = true;
     ResizeVkSwapchain(pWnd);
@@ -2124,8 +2044,8 @@ int main(int argc, char* argv[])
     vkDestroySwapchainKHR(s_vkDevice, s_vkSwapchain, nullptr);
 
     vkDestroyDevice(s_vkDevice, nullptr);
-    vkDestroySurfaceKHR(s_vkInstance.Get(), s_vkSurface, nullptr);
     
+    s_vkSurface.Destroy();
     s_vkInstance.Destroy();
 
     pWnd->Destroy();

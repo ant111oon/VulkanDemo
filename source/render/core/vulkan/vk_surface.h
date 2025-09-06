@@ -1,0 +1,58 @@
+#pragma once
+
+#include "vk_core.h"
+
+#include <bitset>
+
+
+namespace vkn
+{
+    struct SurfaceCreateInfo
+    {
+        VkInstance* pInstance;
+        void* pWndHandle;
+    };
+
+
+    class Surface
+    {
+        friend Surface& GetSurface();
+
+    public:
+        Surface(const Surface& surf) = delete;
+        Surface(Surface&& surf) = delete;
+
+        Surface& operator=(const Surface& surf) = delete;
+        Surface& operator=(Surface&& surf) = delete;
+
+        bool Create(const SurfaceCreateInfo& info);
+        void Destroy();
+
+        VkSurfaceKHR& Get() { return m_surface; }
+
+        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
+
+    private:
+        Surface() = default;
+
+    private:
+        enum
+        {
+            FLAG_IS_CREATED,
+            FLAG_COUNT,
+        };
+
+    private:
+        VkInstance* m_pInstance = nullptr;
+        VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+
+        std::bitset<FLAG_COUNT> m_flags = {};
+    };
+
+
+    ENG_FORCE_INLINE Surface& GetSurface()
+    {
+        static Surface surface;
+        return surface;
+    }
+}

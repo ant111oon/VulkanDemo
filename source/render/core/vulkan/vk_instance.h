@@ -49,7 +49,7 @@ namespace vkn
 
         VkInstance& Get() { return m_instance; }
 
-        bool IsInitialized() const { return m_flags.test(FLAG_IS_INITIALIZED); }
+        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
 
     private:
         Instance() = default;
@@ -57,7 +57,7 @@ namespace vkn
     private:
         enum
         {
-            FLAG_IS_INITIALIZED,
+            FLAG_IS_CREATED,
             FLAG_COUNT,
         };
 
@@ -69,5 +69,9 @@ namespace vkn
     };
 
 
-    Instance& GetInstance();
+    ENG_FORCE_INLINE Instance& GetInstance()
+    {
+        static Instance instance;
+        return instance;
+    }
 }

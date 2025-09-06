@@ -1,9 +1,15 @@
 #pragma once
 
+#include "core/platform/platform.h"
+
 #include "core/utils/assert.h"
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
+
+#ifdef ENG_OS_WINDOWS
+    #include <vulkan/vulkan_win32.h>
+#endif
 
 
 #define VK_LOG_TRACE(FMT, ...)        ENG_LOG_TRACE("VULKAN", FMT, __VA_ARGS__)
