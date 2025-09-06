@@ -7,6 +7,9 @@
 
 namespace vkn
 {
+    class Instance;
+
+
     struct PhysicalDeviceFeaturesRequirenments
     {
         std::optional<bool> independentBlend;
@@ -21,7 +24,7 @@ namespace vkn
 
     struct PhysicalDeviceCreateInfo
     {
-        VkInstance* pInstance;
+        Instance* pInstance;
         const PhysicalDeviceFeaturesRequirenments* pFeaturesRequirenments;
         const PhysicalDevicePropertiesRequirenments* pPropertiesRequirenments;
     };
@@ -78,7 +81,7 @@ namespace vkn
         };
 
     private:
-        VkInstance* m_pInstance = nullptr;
+        Instance* m_pInstance = nullptr;
         VkPhysicalDevice m_physDevice = VK_NULL_HANDLE;
 
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};

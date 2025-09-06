@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_surface.h"
+#include "vk_instance.h"
 
 
 namespace vkn
@@ -12,7 +13,7 @@ namespace vkn
             return true;
         }
 
-        VK_ASSERT(info.pInstance && *info.pInstance != VK_NULL_HANDLE);
+        VK_ASSERT(info.pInstance && info.pInstance->IsCreated());
         VK_ASSERT(info.pWndHandle != nullptr);
 
         m_pInstance = info.pInstance;
@@ -23,7 +24,7 @@ namespace vkn
         vkWin32SurfCreateInfo.hinstance = GetModuleHandle(nullptr);
         vkWin32SurfCreateInfo.hwnd = (HWND)info.pWndHandle;
 
-        VK_CHECK(vkCreateWin32SurfaceKHR(*m_pInstance, &vkWin32SurfCreateInfo, nullptr, &m_surface));
+        VK_CHECK(vkCreateWin32SurfaceKHR(m_pInstance->Get(), &vkWin32SurfCreateInfo, nullptr, &m_surface));
     #endif
 
         const bool isCreated = m_surface != VK_NULL_HANDLE;
@@ -41,7 +42,7 @@ namespace vkn
             return;
         }
         
-        vkDestroySurfaceKHR(*m_pInstance, m_surface, nullptr);
+        vkDestroySurfaceKHR(m_pInstance->Get(), m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
 
         m_pInstance = nullptr;

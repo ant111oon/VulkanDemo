@@ -7,9 +7,12 @@
 
 namespace vkn
 {
+    class Instance;
+
+
     struct SurfaceCreateInfo
     {
-        VkInstance* pInstance;
+        Instance* pInstance;
         void* pWndHandle;
     };
 
@@ -47,7 +50,7 @@ namespace vkn
         };
 
     private:
-        VkInstance* m_pInstance = nullptr;
+        Instance* m_pInstance = nullptr;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
         std::bitset<FLAG_COUNT> m_flags = {};

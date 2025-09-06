@@ -6,6 +6,7 @@
 #include "render/core/vulkan/vk_instance.h"
 #include "render/core/vulkan/vk_surface.h"
 #include "render/core/vulkan/vk_phys_device.h"
+#include "render/core/vulkan/vk_device.h"
 
 #include <glm/glm.hpp>
 
@@ -49,9 +50,7 @@ static vkn::Surface& s_vkSurface = vkn::GetSurface();
 
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
-static uint32_t s_queueFamilyIndex = UINT32_MAX;
-static VkQueue  s_vkQueue = VK_NULL_HANDLE;
-static VkDevice s_vkDevice = VK_NULL_HANDLE;
+static vkn::Device& s_vkDevice = vkn::GetDevice();
 
 static VkSwapchainKHR           s_vkSwapchain = VK_NULL_HANDLE;
 static std::vector<VkImage>     s_swapchainImages;
@@ -687,7 +686,7 @@ public:
         VK_ASSERT_MSG(!IsBindingExist(binding), "Binding %u has already been added", binding);
 
         VkDescriptorSetLayoutBinding descriptor = {};
-        descriptor.binding = 0;
+        descriptor.binding = binding;
         descriptor.descriptorType = type;
         descriptor.descriptorCount = descriptorCount;
         descriptor.stageFlags = stages;
@@ -842,27 +841,6 @@ private:
 };
 
 
-static bool CheckVkDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::span<const char* const> requiredExtensions)
-{
-    uint32_t vkDeviceExtensionsCount = 0;
-    VK_CHECK(vkEnumerateDeviceExtensionProperties(vkPhysDevice, nullptr, &vkDeviceExtensionsCount, nullptr));
-    std::vector<VkExtensionProperties> vkDeviceExtensionProps(vkDeviceExtensionsCount);
-    VK_CHECK(vkEnumerateDeviceExtensionProperties(vkPhysDevice, nullptr, &vkDeviceExtensionsCount, vkDeviceExtensionProps.data()));
-
-    for (const char* pExtensionName : requiredExtensions) {
-        const auto reqLayerIt = std::find_if(vkDeviceExtensionProps.cbegin(), vkDeviceExtensionProps.cend(), [&](const VkExtensionProperties& props) {
-            return strcmp(pExtensionName, props.extensionName) == 0;
-        });
-        
-        if (reqLayerIt == vkDeviceExtensionProps.cend()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-
 #ifdef ENG_BUILD_DEBUG
 static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
@@ -915,116 +893,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     return VK_FALSE;
 }
 #endif
-
-
-static VkDevice CreateVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
-{
-    Timer timer;
-
-    uint32_t queueFamilyPropsCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, nullptr);
-    
-    std::vector<VkQueueFamilyProperties> queueFamilyProps(queueFamilyPropsCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(vkPhysDevice, &queueFamilyPropsCount, queueFamilyProps.data());
-
-    uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
-    uint32_t computeQueueFamilyIndex = UINT32_MAX;
-    uint32_t transferQueueFamilyIndex = UINT32_MAX;
-
-    auto IsQueueFamilyIndexValid = [](uint32_t index) -> bool { return index != UINT32_MAX; };
-
-    for (uint32_t i = 0; i < queueFamilyProps.size(); ++i) {
-        const VkQueueFamilyProperties& props = queueFamilyProps[i];
-
-        VkBool32 isPresentSupported = VK_FALSE;
-        VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysDevice, i, vkSurface, &isPresentSupported));
-        if (!isPresentSupported) {
-            continue;
-        }
-
-        if (!IsQueueFamilyIndexValid(graphicsQueueFamilyIndex) && (props.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-            graphicsQueueFamilyIndex = i;
-        }
-
-        if (!IsQueueFamilyIndexValid(computeQueueFamilyIndex) && (props.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-            computeQueueFamilyIndex = i;
-        }
-
-        if (!IsQueueFamilyIndexValid(transferQueueFamilyIndex) && (props.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
-            transferQueueFamilyIndex = i;
-        }
-
-        if (IsQueueFamilyIndexValid(graphicsQueueFamilyIndex) && 
-            IsQueueFamilyIndexValid(computeQueueFamilyIndex) && 
-            IsQueueFamilyIndexValid(transferQueueFamilyIndex)
-        ) {
-            break;
-        }
-    }
-
-    VK_ASSERT_MSG(IsQueueFamilyIndexValid(graphicsQueueFamilyIndex), "Failed to get graphics queue family index");
-    VK_ASSERT_MSG(IsQueueFamilyIndexValid(computeQueueFamilyIndex), "Failed to get compute queue family index");
-    VK_ASSERT_MSG(IsQueueFamilyIndexValid(transferQueueFamilyIndex), "Failed to get transfer queue family index");
-
-    VK_ASSERT_MSG(graphicsQueueFamilyIndex == computeQueueFamilyIndex && computeQueueFamilyIndex == transferQueueFamilyIndex,
-        "Queue family indices for graphics, compute and transfer must be equal, for now. TODO: process the case when they are different");
-
-    queueFamilyIndex = graphicsQueueFamilyIndex;
-
-    VkDeviceQueueCreateInfo queueCreateInfo = {};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-    queueCreateInfo.queueCount = 1;
-    
-    const float queuePriority = 1.f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
-
-    VkDeviceCreateInfo deviceCreateInfo = {};
-    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.queueCreateInfoCount = 1;
-    deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
-
-    constexpr std::array deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    };
-
-    VK_ASSERT(CheckVkDeviceExtensionsSupport(vkPhysDevice, deviceExtensions));
-
-    deviceCreateInfo.enabledExtensionCount = deviceExtensions.size();
-    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
-
-    VkPhysicalDeviceVulkan13Features features13 = {};
-    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    features13.dynamicRendering = VK_TRUE;
-    features13.synchronization2 = VK_TRUE;
-
-    VkPhysicalDeviceVulkan12Features features12 = {};
-    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    features12.pNext = &features13;
-    features12.bufferDeviceAddress = VK_TRUE;
-
-    VkPhysicalDeviceVulkan11Features features11 = {};
-    features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-    features11.pNext = &features12;
-    features11.shaderDrawParameters = VK_TRUE; // Enables slang internal shader variables like "SV_VertexID" etc.
-
-    VkPhysicalDeviceFeatures2 features2 = {};
-    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features2.pNext = &features11;
-
-    deviceCreateInfo.pNext = &features2;
-
-    VkDevice device = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateDevice(vkPhysDevice, &deviceCreateInfo, nullptr, &device));
-    VK_ASSERT(device);
-    
-    vkGetDeviceQueue(device, queueFamilyIndex, 0, &vkQueue);
-    VK_ASSERT(vkQueue);
-
-    VK_LOG_INFO("VkDevice initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return device;
-}
 
 
 static bool CheckVkSurfaceFormatSupport(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR format)
@@ -1410,7 +1278,7 @@ VkSemaphore CreateVkSemaphore()
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
     VkSemaphore vkSemaphore = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateSemaphore(s_vkDevice, &semaphoreCreateInfo, nullptr, &vkSemaphore));
+    VK_CHECK(vkCreateSemaphore(s_vkDevice.Get(), &semaphoreCreateInfo, nullptr, &vkSemaphore));
     VK_ASSERT(vkSemaphore != VK_NULL_HANDLE);
 
     VK_LOG_INFO("VkSemaphore initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -1428,7 +1296,7 @@ VkFence CreateVkFence()
     fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     VkFence vkFence = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateFence(s_vkDevice, &fenceCreateInfo, nullptr, &vkFence));
+    VK_CHECK(vkCreateFence(s_vkDevice.Get(), &fenceCreateInfo, nullptr, &vkFence));
     VK_ASSERT(vkFence != VK_NULL_HANDLE);
 
     VK_LOG_INFO("VkFence initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -1607,7 +1475,7 @@ static void SubmitVkQueue(VkQueue vkQueue,
 template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 {   
-    VK_CHECK(vkResetFences(s_vkDevice, 1, &s_vkImmediateSubmitFinishedFence));
+    VK_CHECK(vkResetFences(s_vkDevice.Get(), 1, &s_vkImmediateSubmitFinishedFence));
     VK_CHECK(vkResetCommandBuffer(s_vkImmediateSubmitCmdBuffer, 0));
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
@@ -1628,7 +1496,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    VK_CHECK(vkWaitForFences(s_vkDevice, 1, &s_vkImmediateSubmitFinishedFence, VK_TRUE, UINT64_MAX));
+    VK_CHECK(vkWaitForFences(s_vkDevice.Get(), 1, &s_vkImmediateSubmitFinishedFence, VK_TRUE, UINT64_MAX));
 }
 
 
@@ -1641,7 +1509,7 @@ static void ResizeVkSwapchain(BaseWindow* pWnd)
     const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
     const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
         
-    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice.Get(), s_vkDevice, s_vkSurface.Get(), requiredExtent, oldSwapchain, 
+    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice.Get(), s_vkDevice.Get(), s_vkSurface.Get(), requiredExtent, oldSwapchain, 
         s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
     
     s_swapchainRecreateRequired = false;
@@ -1672,7 +1540,7 @@ void RenderScene()
     VkSemaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[frameInFlightIdx];
     VkSemaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[frameInFlightIdx];
 
-    const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice, renderingFinishedFence);
+    const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence);
     if (renderingFinishedFenceStatus == VK_NOT_READY) {
         return;
     }
@@ -1680,7 +1548,7 @@ void RenderScene()
     VK_CHECK(renderingFinishedFenceStatus);
 
     uint32_t nextImageIdx;
-    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice, s_vkSwapchain, UINT64_MAX, presentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain, UINT64_MAX, presentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
     
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
@@ -1689,7 +1557,7 @@ void RenderScene()
         return;
     }
 
-    VK_CHECK(vkResetFences(s_vkDevice, 1, &renderingFinishedFence));
+    VK_CHECK(vkResetFences(s_vkDevice.Get(), 1, &renderingFinishedFence));
     VK_CHECK(vkResetCommandBuffer(cmdBuffer, 0));
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
@@ -1765,7 +1633,7 @@ void RenderScene()
     VK_CHECK(vkEndCommandBuffer(cmdBuffer));
 
     SubmitVkQueue(
-        s_vkQueue,
+        s_vkDevice.GetQueue(),
         cmdBuffer,
         renderingFinishedFence,
         presentFinishedSemaphore,
@@ -1783,7 +1651,7 @@ void RenderScene()
     presentInfo.pSwapchains = &s_vkSwapchain;
     presentInfo.pImageIndices = &nextImageIdx;
     presentInfo.pResults = nullptr;
-    const VkResult presentResult = vkQueuePresentKHR(s_vkQueue, &presentInfo);
+    const VkResult presentResult = vkQueuePresentKHR(s_vkDevice.GetQueue(), &presentInfo);
 
     if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(presentResult);
@@ -1856,11 +1724,12 @@ int main(int argc, char* argv[])
     
 
     vkn::SurfaceCreateInfo vkSurfCreateInfo = {};
-    vkSurfCreateInfo.pInstance = &s_vkInstance.Get();
+    vkSurfCreateInfo.pInstance = &s_vkInstance;
     vkSurfCreateInfo.pWndHandle = pWnd->GetNativeHandle();
 
     s_vkSurface.Create(vkSurfCreateInfo);
     CORE_ASSERT(s_vkSurface.IsCreated());
+
 
     vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
     vkPhysDeviceFeturesReq.independentBlend = true;
@@ -1869,29 +1738,61 @@ int main(int argc, char* argv[])
     vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 
     vkn::PhysicalDeviceCreateInfo vkPhysDeviceCreateInfo = {};
-    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance.Get();
+    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance;
     vkPhysDeviceCreateInfo.pPropertiesRequirenments = &vkPhysDevicePropsReq;
     vkPhysDeviceCreateInfo.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
 
     s_vkPhysDevice.Create(vkPhysDeviceCreateInfo);
     CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
 
-    s_vkDevice = CreateVkDevice(s_vkPhysDevice.Get(), s_vkSurface.Get(), s_queueFamilyIndex, s_vkQueue);
+
+    constexpr std::array vkDeviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    };
+
+    VkPhysicalDeviceVulkan13Features features13 = {};
+    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features13.dynamicRendering = VK_TRUE;
+    features13.synchronization2 = VK_TRUE;
+
+    VkPhysicalDeviceVulkan12Features features12 = {};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features12.pNext = &features13;
+    features12.bufferDeviceAddress = VK_TRUE;
+
+    VkPhysicalDeviceVulkan11Features features11 = {};
+    features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    features11.pNext = &features12;
+    features11.shaderDrawParameters = VK_TRUE; // Enables slang internal shader variables like "SV_VertexID" etc.
+
+    VkPhysicalDeviceFeatures2 features2 = {};
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.pNext = &features11;
+
+    vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
+    vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
+    vkDeviceCreateInfo.pSurface = &s_vkSurface;
+    vkDeviceCreateInfo.queuePriority = 1.f;
+    vkDeviceCreateInfo.extensions = vkDeviceExtensions;
+    vkDeviceCreateInfo.pFeatures2 = &features2;
+
+    s_vkDevice.Create(vkDeviceCreateInfo);
+    CORE_ASSERT(s_vkDevice.IsCreated());  
 
     s_swapchainRecreateRequired = true;
     ResizeVkSwapchain(pWnd);
 
-    s_vkCmdPool = CreateVkCmdPool(s_vkDevice, s_queueFamilyIndex);
-    s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
+    s_vkCmdPool = CreateVkCmdPool(s_vkDevice.Get(), s_vkDevice.GetQueueFamilyIndex());
+    s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice.Get(), s_vkCmdPool);
 
-    s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice);
-    s_vkDescriptorSetLayout = CreateVkDescriptorSetLayout(s_vkDevice);
-    s_vkDescriptorSet = CreateVkDescriptorSet(s_vkDevice, s_vkDescriptorPool, s_vkDescriptorSetLayout);
+    s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice.Get());
+    s_vkDescriptorSetLayout = CreateVkDescriptorSetLayout(s_vkDevice.Get());
+    s_vkDescriptorSet = CreateVkDescriptorSet(s_vkDevice.Get(), s_vkDescriptorPool, s_vkDescriptorSetLayout);
 
-    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice, s_vkDescriptorSetLayout);
-    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice, s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
+    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
+    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
 
-    s_commonConstBuffer = CreateBuffer(s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    s_commonConstBuffer = CreateBuffer(s_vkDevice.Get(), sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
 
     {
@@ -1899,9 +1800,9 @@ int main(int argc, char* argv[])
         commonConstBuffer.color = glm::vec3(1.f, 0.f, 1.f);
 
         void* pCommonConstBufferData = nullptr;
-        VK_CHECK(vkMapMemory(s_vkDevice, s_commonConstBuffer.vkMemory, 0, VK_WHOLE_SIZE, 0, &pCommonConstBufferData));
+        VK_CHECK(vkMapMemory(s_vkDevice.Get(), s_commonConstBuffer.vkMemory, 0, VK_WHOLE_SIZE, 0, &pCommonConstBufferData));
             memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
-        vkUnmapMemory(s_vkDevice, s_commonConstBuffer.vkMemory);
+        vkUnmapMemory(s_vkDevice.Get(), s_commonConstBuffer.vkMemory);
     }
 
     VkDescriptorBufferInfo bufferInfo = {};
@@ -1917,7 +1818,7 @@ int main(int argc, char* argv[])
     descWrite.descriptorCount = 1;
     descWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     descWrite.pBufferInfo = &bufferInfo;
-    vkUpdateDescriptorSets(s_vkDevice, 1, &descWrite, 0, nullptr);
+    vkUpdateDescriptorSets(s_vkDevice.Get(), 1, &descWrite, 0, nullptr);
 
     const size_t swapchainImageCount = s_swapchainImages.size();
 
@@ -1929,32 +1830,32 @@ int main(int argc, char* argv[])
         s_vkRenderingFinishedSemaphores[i] = CreateVkSemaphore();
         s_vkPresentFinishedSemaphores[i] = CreateVkSemaphore();
         s_vkRenderingFinishedFences[i] = CreateVkFence();
-        s_vkRenderCmdBuffers[i] = AllocateVkCmdBuffer(s_vkDevice, s_vkCmdPool);
+        s_vkRenderCmdBuffers[i] = AllocateVkCmdBuffer(s_vkDevice.Get(), s_vkCmdPool);
     }
 
     s_vkImmediateSubmitFinishedFence = CreateVkFence();
 
-    Buffer stagingBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    Buffer stagingBuffer = CreateBuffer(s_vkDevice.Get(), VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
 
     {
         void* pVertexBufferData = nullptr;
-        VK_CHECK(vkMapMemory(s_vkDevice, stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
+        VK_CHECK(vkMapMemory(s_vkDevice.Get(), stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
             memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
-        vkUnmapMemory(s_vkDevice, stagingBuffer.vkMemory);
+        vkUnmapMemory(s_vkDevice.Get(), stagingBuffer.vkMemory);
     }
 
-    s_vertexBuffer = CreateBuffer(s_vkDevice, VERTEX_BUFFER_SIZE_BYTES, 
+    s_vertexBuffer = CreateBuffer(s_vkDevice.Get(), VERTEX_BUFFER_SIZE_BYTES, 
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
 
-    ImmediateSubmitQueue(s_vkQueue, [&](VkCommandBuffer vkCmdBuffer){
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){
         VkBufferCopy region = {};
         region.size = TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]);
         vkCmdCopyBuffer(vkCmdBuffer, stagingBuffer.vkBuffer, s_vertexBuffer.vkBuffer, 1, &region);
     });
 
-    DestroyBuffer(s_vkDevice, stagingBuffer);
+    DestroyBuffer(s_vkDevice.Get(), stagingBuffer);
 
     pWnd->SetVisible(true);
 
@@ -1988,32 +1889,31 @@ int main(int argc, char* argv[])
         pWnd->SetTitle("%s: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, frameTime, 1000.f / frameTime);
     }
 
-    VK_CHECK(vkDeviceWaitIdle(s_vkDevice));
+    VK_CHECK(vkDeviceWaitIdle(s_vkDevice.Get()));
 
-    DestroyBuffer(s_vkDevice, s_commonConstBuffer);
-    DestroyBuffer(s_vkDevice, s_vertexBuffer);
+    DestroyBuffer(s_vkDevice.Get(), s_commonConstBuffer);
+    DestroyBuffer(s_vkDevice.Get(), s_vertexBuffer);
 
-    vkDestroyFence(s_vkDevice, s_vkImmediateSubmitFinishedFence, nullptr);
+    vkDestroyFence(s_vkDevice.Get(), s_vkImmediateSubmitFinishedFence, nullptr);
     
     for (size_t i = 0; i < s_swapchainImages.size(); ++i) {
-        vkDestroySemaphore(s_vkDevice, s_vkRenderingFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(s_vkDevice, s_vkPresentFinishedSemaphores[i], nullptr);
-        vkDestroyFence(s_vkDevice, s_vkRenderingFinishedFences[i], nullptr);
+        vkDestroySemaphore(s_vkDevice.Get(), s_vkRenderingFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(s_vkDevice.Get(), s_vkPresentFinishedSemaphores[i], nullptr);
+        vkDestroyFence(s_vkDevice.Get(), s_vkRenderingFinishedFences[i], nullptr);
     }
 
-    vkDestroyPipeline(s_vkDevice, s_vkPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice, s_vkPipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice, s_vkDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(s_vkDevice, s_vkDescriptorPool, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_vkPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkPipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkDescriptorPool, nullptr);
 
-    vkDestroyCommandPool(s_vkDevice, s_vkCmdPool, nullptr);
+    vkDestroyCommandPool(s_vkDevice.Get(), s_vkCmdPool, nullptr);
 
-    DestroyVkSwapchainImageViews(s_vkDevice, s_swapchainImageViews);
+    DestroyVkSwapchainImageViews(s_vkDevice.Get(), s_swapchainImageViews);
 
-    vkDestroySwapchainKHR(s_vkDevice, s_vkSwapchain, nullptr);
-
-    vkDestroyDevice(s_vkDevice, nullptr);
+    vkDestroySwapchainKHR(s_vkDevice.Get(), s_vkSwapchain, nullptr);
     
+    s_vkDevice.Destroy();
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();
 

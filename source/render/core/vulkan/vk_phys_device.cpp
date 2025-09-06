@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_phys_device.h"
+#include "vk_instance.h"
 
 
 namespace vkn
@@ -35,18 +36,18 @@ namespace vkn
             return true;
         }
 
-        VK_ASSERT(info.pInstance && *info.pInstance != VK_NULL_HANDLE);
+        VK_ASSERT(info.pInstance && info.pInstance->IsCreated());
         VK_ASSERT(info.pFeaturesRequirenments);
         VK_ASSERT(info.pPropertiesRequirenments);
 
         m_pInstance = info.pInstance;
 
         uint32_t physDeviceCount = 0;
-        VK_CHECK(vkEnumeratePhysicalDevices(*m_pInstance, &physDeviceCount, nullptr));
+        VK_CHECK(vkEnumeratePhysicalDevices(m_pInstance->Get(), &physDeviceCount, nullptr));
         VK_ASSERT(physDeviceCount > 0);
         
         std::vector<VkPhysicalDevice> vkPhysDevices(physDeviceCount);
-        VK_CHECK(vkEnumeratePhysicalDevices(*m_pInstance, &physDeviceCount, vkPhysDevices.data()));
+        VK_CHECK(vkEnumeratePhysicalDevices(m_pInstance->Get(), &physDeviceCount, vkPhysDevices.data()));
 
         bool isPicked = false;
 
