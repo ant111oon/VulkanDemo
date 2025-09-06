@@ -28,7 +28,11 @@ namespace vkn
         bool Create(const SurfaceCreateInfo& info);
         void Destroy();
 
-        VkSurfaceKHR& Get() { return m_surface; }
+        VkSurfaceKHR& Get()
+        {
+            VK_ASSERT(IsCreated());
+            return m_surface;
+        }
 
         bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
 

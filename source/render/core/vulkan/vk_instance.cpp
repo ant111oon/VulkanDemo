@@ -139,15 +139,19 @@ namespace vkn
 
         m_instance = VK_NULL_HANDLE;
         VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &m_instance));
-        VK_ASSERT(m_instance != VK_NULL_HANDLE);
+
+        bool isCreated = m_instance != VK_NULL_HANDLE;
 
         if (dbgMessengerEnabled) {
             m_dbgMessenger = CreateDebugMessenger(m_instance, vkDbgMessengerCreateInfo);
+            isCreated = isCreated && m_dbgMessenger != VK_NULL_HANDLE;
         }
 
-        m_flags.set(FLAG_IS_CREATED, true);
+        VK_ASSERT(isCreated);
 
-        return true;
+        m_flags.set(FLAG_IS_CREATED, isCreated);
+
+        return isCreated;
     }
 
 
@@ -162,6 +166,6 @@ namespace vkn
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
 
-        m_flags.set(FLAG_IS_CREATED, false);
+        m_flags.reset();
     }
 }

@@ -5,6 +5,7 @@
 
 #include "render/core/vulkan/vk_instance.h"
 #include "render/core/vulkan/vk_surface.h"
+#include "render/core/vulkan/vk_phys_device.h"
 
 #include <glm/glm.hpp>
 
@@ -46,9 +47,7 @@ static constexpr bool VSYNC_ENABLED = false;
 static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
 
-static VkPhysicalDevice                 s_vkPhysDevice = VK_NULL_HANDLE;
-static VkPhysicalDeviceMemoryProperties s_vkPhysDeviceMemProps = {};
-static VkPhysicalDeviceProperties       s_vkPhysDeviceProperties = {};
+static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
 static uint32_t s_queueFamilyIndex = UINT32_MAX;
 static VkQueue  s_vkQueue = VK_NULL_HANDLE;
@@ -918,50 +917,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-static VkPhysicalDevice CreateVkPhysDevice(VkInstance vkInstance)
-{
-    Timer timer;
-
-    uint32_t physDeviceCount = 0;
-    VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, nullptr));
-    VK_ASSERT(physDeviceCount > 0);
-    
-    std::vector<VkPhysicalDevice> physDevices(physDeviceCount);
-    VK_CHECK(vkEnumeratePhysicalDevices(vkInstance, &physDeviceCount, physDevices.data()));
-
-    VkPhysicalDevice pickedPhysDevice = VK_NULL_HANDLE;
-
-    for (VkPhysicalDevice device : physDevices) {
-        bool isDeviceSuitable = true;
-
-        VkPhysicalDeviceFeatures features = {};
-        vkGetPhysicalDeviceFeatures(device, &features);
-
-        isDeviceSuitable = isDeviceSuitable && features.independentBlend;
-
-        VkPhysicalDeviceProperties props = {};
-        vkGetPhysicalDeviceProperties(device, &props);
-
-        isDeviceSuitable = isDeviceSuitable && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-
-        if (isDeviceSuitable) {
-            pickedPhysDevice = device;
-            s_vkPhysDeviceProperties = props;
-            break;
-        }
-    }
-
-    VK_ASSERT(pickedPhysDevice != VK_NULL_HANDLE);
-
-    s_vkPhysDeviceMemProps = {};
-    vkGetPhysicalDeviceMemoryProperties(pickedPhysDevice, &s_vkPhysDeviceMemProps);
-
-    VK_LOG_INFO("VkPhysicalDevice initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return pickedPhysDevice;
-}
-
-
 static VkDevice CreateVkDevice(VkPhysicalDevice vkPhysDevice, VkSurfaceKHR vkSurface, uint32_t& queueFamilyIndex, VkQueue& vkQueue)
 {
     Timer timer;
@@ -1394,7 +1349,7 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
 {
     Timer timer;
 
-    PipelineLayoutBuilder plBuilder(s_vkPhysDeviceProperties.limits.maxPushConstantsSize);
+    PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
         .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress))
@@ -1484,8 +1439,10 @@ VkFence CreateVkFence()
 
 static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
-    for (uint32_t i = 0; i < s_vkPhysDeviceMemProps.memoryTypeCount; ++i) {
-        const VkMemoryPropertyFlags propertyFlags = s_vkPhysDeviceMemProps.memoryTypes[i].propertyFlags;
+    const VkPhysicalDeviceMemoryProperties& memProps = s_vkPhysDevice.GetMemoryProperties();
+
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
+        const VkMemoryPropertyFlags propertyFlags = memProps.memoryTypes[i].propertyFlags;
         
         if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
             return i;
@@ -1684,7 +1641,7 @@ static void ResizeVkSwapchain(BaseWindow* pWnd)
     const VkSwapchainKHR oldSwapchain = s_vkSwapchain;
     const VkExtent2D requiredExtent = { pWnd->GetWidth(), pWnd->GetHeight() };
         
-    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice, s_vkDevice, s_vkSurface.Get(), requiredExtent, oldSwapchain, 
+    s_vkSwapchain = RecreateVkSwapchain(s_vkPhysDevice.Get(), s_vkDevice, s_vkSurface.Get(), requiredExtent, oldSwapchain, 
         s_swapchainImages, s_swapchainImageViews, s_swapchainExtent);
     
     s_swapchainRecreateRequired = false;
@@ -1905,9 +1862,21 @@ int main(int argc, char* argv[])
     s_vkSurface.Create(vkSurfCreateInfo);
     CORE_ASSERT(s_vkSurface.IsCreated());
 
-    s_vkPhysDevice = CreateVkPhysDevice(s_vkInstance.Get());
+    vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
+    vkPhysDeviceFeturesReq.independentBlend = true;
 
-    s_vkDevice = CreateVkDevice(s_vkPhysDevice, s_vkSurface.Get(), s_queueFamilyIndex, s_vkQueue);
+    vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
+    vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+
+    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCreateInfo = {};
+    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance.Get();
+    vkPhysDeviceCreateInfo.pPropertiesRequirenments = &vkPhysDevicePropsReq;
+    vkPhysDeviceCreateInfo.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
+
+    s_vkPhysDevice.Create(vkPhysDeviceCreateInfo);
+    CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
+
+    s_vkDevice = CreateVkDevice(s_vkPhysDevice.Get(), s_vkSurface.Get(), s_queueFamilyIndex, s_vkQueue);
 
     s_swapchainRecreateRequired = true;
     ResizeVkSwapchain(pWnd);

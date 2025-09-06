@@ -47,7 +47,11 @@ namespace vkn
         bool Create(const InstanceCreateInfo& info);
         void Destroy();
 
-        VkInstance& Get() { return m_instance; }
+        VkInstance& Get()
+        {
+            VK_ASSERT(IsCreated());
+            return m_instance;
+        }
 
         bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
 

@@ -26,11 +26,12 @@ namespace vkn
         VK_CHECK(vkCreateWin32SurfaceKHR(*m_pInstance, &vkWin32SurfCreateInfo, nullptr, &m_surface));
     #endif
 
-        VK_ASSERT(m_surface != VK_NULL_HANDLE);
+        const bool isCreated = m_surface != VK_NULL_HANDLE;
+        VK_ASSERT(isCreated);
 
-        m_flags.set(FLAG_IS_CREATED, true);
+        m_flags.set(FLAG_IS_CREATED, isCreated);
 
-        return true;
+        return isCreated;
     }
 
 
@@ -45,6 +46,6 @@ namespace vkn
 
         m_pInstance = nullptr;
 
-        m_flags.set(FLAG_IS_CREATED, false);
+        m_flags.reset();
     }
 }
