@@ -123,9 +123,11 @@ namespace vkn
         const bool isCreated = isBufferCreated && isMemoryAllocated;
         VK_ASSERT(isCreated);
 
-        if (info.pDebugName) {
-            utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, info.pDebugName);
-        }
+    #ifdef ENG_BUILD_DEBUG
+        utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, info.pDebugName);
+    #else
+        (void)info.pDebugName;
+    #endif
 
         m_state.set(FLAG_IS_CREATED, isCreated);
 
