@@ -8,20 +8,12 @@
 #include "render/core/vulkan/vk_phys_device.h"
 #include "render/core/vulkan/vk_device.h"
 #include "render/core/vulkan/vk_swapchain.h"
+#include "render/core/vulkan/vk_buffer.h"
 
 #include <glm/glm.hpp>
 
 
 namespace fs = std::filesystem;
-
-
-struct Buffer
-{
-    VkBuffer        vkBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory  vkMemory = VK_NULL_HANDLE;
-    VkDeviceAddress deviceAddress = 0;
-    VkDeviceSize    size = 0;
-};
 
 
 struct TestVertex
@@ -72,8 +64,8 @@ static std::vector<VkCommandBuffer> s_vkRenderCmdBuffers;
 
 static VkFence s_vkImmediateSubmitFinishedFence = VK_NULL_HANDLE;
 
-static Buffer s_vertexBuffer = {};
-static Buffer s_commonConstBuffer = {};
+static vkn::Buffer s_vertexBuffer;
+static vkn::Buffer s_commonConstBuffer;
 
 static size_t s_frameNumber = 0;
 static bool s_swapchainRecreateRequired = false;
@@ -1102,96 +1094,6 @@ VkFence CreateVkFence()
 }
 
 
-static uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-{
-    const VkPhysicalDeviceMemoryProperties& memProps = s_vkPhysDevice.GetMemoryProperties();
-
-    for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
-        const VkMemoryPropertyFlags propertyFlags = memProps.memoryTypes[i].propertyFlags;
-        
-        if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    return UINT32_MAX;
-}
-
-
-static Buffer CreateBuffer(VkDevice vkDevice, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkMemoryAllocateFlags memAllocFlags)
-{
-    Timer timer;
-
-    VkBufferCreateInfo bufferCreateInfo = {};
-    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size = size;
-    bufferCreateInfo.usage = usage;
-    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VkBuffer vkBuffer = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &vkBuffer));
-    VK_ASSERT(vkBuffer != VK_NULL_HANDLE);
-
-    VkBufferMemoryRequirementsInfo2 memRequirementsInfo = {};
-    memRequirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
-    memRequirementsInfo.buffer = vkBuffer;
-
-    VkMemoryRequirements2 memRequirements = {};
-    memRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-    vkGetBufferMemoryRequirements2(vkDevice, &memRequirementsInfo, &memRequirements);
-
-    VkMemoryAllocateFlagsInfo memAllocFlagsInfo = {};
-    memAllocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-    memAllocFlagsInfo.flags = memAllocFlags;
-
-    VkMemoryAllocateInfo memAllocInfo = {};
-    memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    memAllocInfo.pNext = &memAllocFlagsInfo;
-    memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
-    memAllocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryRequirements.memoryTypeBits, properties);
-    VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
-
-    VkDeviceMemory vkBufferMemory = VK_NULL_HANDLE;
-    VK_CHECK(vkAllocateMemory(vkDevice, &memAllocInfo, nullptr, &vkBufferMemory));
-    VK_ASSERT(vkBufferMemory != VK_NULL_HANDLE);
-
-    VkBindBufferMemoryInfo bindInfo = {};
-    bindInfo.sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO;
-    bindInfo.buffer = vkBuffer;
-    bindInfo.memory = vkBufferMemory;
-
-    VK_CHECK(vkBindBufferMemory2(vkDevice, 1, &bindInfo));
-
-    Buffer buffer = {};
-    buffer.vkBuffer = vkBuffer;
-    buffer.vkMemory = vkBufferMemory;
-    buffer.size = memRequirements.memoryRequirements.size;
-
-    if (memAllocFlags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) {
-        VkBufferDeviceAddressInfo addressInfo = {};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = vkBuffer;
-        buffer.deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
-    }
-
-    VK_LOG_INFO("Buffer initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return buffer;
-}
-
-
-static void DestroyBuffer(VkDevice vkDevice, Buffer& buffer)
-{
-    vkFreeMemory(vkDevice, buffer.vkMemory, nullptr);
-    vkDestroyBuffer(vkDevice, buffer.vkBuffer, nullptr);
-
-    buffer.vkBuffer = VK_NULL_HANDLE;
-    buffer.vkMemory = VK_NULL_HANDLE;
-    buffer.deviceAddress = 0;
-    buffer.size = 0;
-}
-
-
 static void CmdPipelineImageBarrier(
     VkCommandBuffer cmdBuffer, 
     VkImageLayout oldLayout, 
@@ -1409,7 +1311,7 @@ void RenderScene()
             
             vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
 
-            vkCmdPushConstants(cmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.deviceAddress);
+            vkCmdPushConstants(cmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &s_vertexBuffer.GetDeviceAddress());
 
             vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
         vkCmdEndRendering(cmdBuffer);
@@ -1605,21 +1507,28 @@ int main(int argc, char* argv[])
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
 
-    s_commonConstBuffer = CreateBuffer(s_vkDevice.Get(), sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
+
+    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
+    commonConstBufCreateInfo.pDevice = &s_vkDevice;
+    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
+    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commonConstBufCreateInfo.memAllocFlags = 0;
+
+    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
+    CORE_ASSERT(s_commonConstBuffer.IsCreated());
 
     {
         COMMON_CB_DATA commonConstBuffer = {};
         commonConstBuffer.color = glm::vec3(1.f, 0.f, 1.f);
 
-        void* pCommonConstBufferData = nullptr;
-        VK_CHECK(vkMapMemory(s_vkDevice.Get(), s_commonConstBuffer.vkMemory, 0, VK_WHOLE_SIZE, 0, &pCommonConstBufferData));
-            memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
-        vkUnmapMemory(s_vkDevice.Get(), s_commonConstBuffer.vkMemory);
+        void* pCommonConstBufferData = s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
+        s_commonConstBuffer.Unmap();
     }
 
     VkDescriptorBufferInfo bufferInfo = {};
-    bufferInfo.buffer = s_commonConstBuffer.vkBuffer;
+    bufferInfo.buffer = s_commonConstBuffer.Get();
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(COMMON_CB_DATA);
 
@@ -1648,27 +1557,44 @@ int main(int argc, char* argv[])
 
     s_vkImmediateSubmitFinishedFence = CreateVkFence();
 
-    Buffer stagingBuffer = CreateBuffer(s_vkDevice.Get(), VERTEX_BUFFER_SIZE_BYTES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    stagingBufCreateInfo.memAllocFlags = 0;
+
+    vkn::Buffer stagingBuffer;
+    stagingBuffer.Create(stagingBufCreateInfo); 
+    CORE_ASSERT(stagingBuffer.IsCreated());
 
     {
-        void* pVertexBufferData = nullptr;
-        VK_CHECK(vkMapMemory(s_vkDevice.Get(), stagingBuffer.vkMemory, 0, stagingBuffer.size, 0, &pVertexBufferData));
-            memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
-        vkUnmapMemory(s_vkDevice.Get(), stagingBuffer.vkMemory);
+        void* pVertexBufferData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
+        stagingBuffer.Unmap();
     }
 
-    s_vertexBuffer = CreateBuffer(s_vkDevice.Get(), VERTEX_BUFFER_SIZE_BYTES, 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
+
+    vkn::BufferCreateInfo vertBufCreateInfo = {};
+    vertBufCreateInfo.pDevice = &s_vkDevice;
+    vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
+    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+    s_vertexBuffer.Create(vertBufCreateInfo);
+    CORE_ASSERT(s_vertexBuffer.IsCreated());
+
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){
         VkBufferCopy region = {};
         region.size = TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]);
-        vkCmdCopyBuffer(vkCmdBuffer, stagingBuffer.vkBuffer, s_vertexBuffer.vkBuffer, 1, &region);
+
+        vkCmdCopyBuffer(vkCmdBuffer, stagingBuffer.Get(), s_vertexBuffer.Get(), 1, &region);
     });
 
-    DestroyBuffer(s_vkDevice.Get(), stagingBuffer);
+    stagingBuffer.Destroy();
 
     pWnd->SetVisible(true);
 
@@ -1702,8 +1628,8 @@ int main(int argc, char* argv[])
 
     VK_CHECK(vkDeviceWaitIdle(s_vkDevice.Get()));
 
-    DestroyBuffer(s_vkDevice.Get(), s_commonConstBuffer);
-    DestroyBuffer(s_vkDevice.Get(), s_vertexBuffer);
+    s_commonConstBuffer.Destroy();
+    s_vertexBuffer.Destroy(); 
 
     vkDestroyFence(s_vkDevice.Get(), s_vkImmediateSubmitFinishedFence, nullptr);
     

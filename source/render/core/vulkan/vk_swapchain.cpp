@@ -1,9 +1,6 @@
 #include "pch.h"
 
 #include "vk_swapchain.h"
-#include "vk_surface.h"
-#include "vk_phys_device.h"
-#include "vk_device.h"
 
 
 namespace vkn

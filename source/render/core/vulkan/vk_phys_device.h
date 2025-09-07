@@ -2,14 +2,11 @@
 
 #include "vk_core.h"
 
-#include <bitset>
+#include "vk_instance.h"
 
 
 namespace vkn
 {
-    class Instance;
-
-
     struct PhysicalDeviceFeaturesRequirenments
     {
         std::optional<bool> independentBlend;

@@ -2,14 +2,13 @@
 
 #include "vk_core.h"
 
+#include "vk_surface.h"
+#include "vk_phys_device.h"
+#include "vk_device.h"
+
 
 namespace vkn
 {
-    class Surface;
-    class PhysicalDevice;
-    class Device;
-
-
     struct SwapchainCreateInfo
     {
         Device*  pDevice;

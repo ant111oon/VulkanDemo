@@ -1,7 +1,6 @@
 #include "pch.h"
 
 #include "vk_surface.h"
-#include "vk_instance.h"
 
 
 namespace vkn

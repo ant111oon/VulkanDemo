@@ -2,16 +2,15 @@
 
 #include "vk_core.h"
 
+#include "vk_phys_device.h"
+#include "vk_surface.h"
+
 #include <bitset>
 #include <span>
 
 
 namespace vkn
 {
-    class PhysicalDevice;
-    class Surface;
-    
-
     struct DeviceCreateInfo
     {
         PhysicalDevice* pPhysDevice;
