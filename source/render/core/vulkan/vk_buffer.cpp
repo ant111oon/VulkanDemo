@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_buffer.h"
+#include "vk_utils.h"
 
 
 namespace vkn
@@ -121,6 +122,10 @@ namespace vkn
 
         const bool isCreated = isBufferCreated && isMemoryAllocated;
         VK_ASSERT(isCreated);
+
+        if (info.pDebugName) {
+            utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, info.pDebugName);
+        }
 
         m_state.set(FLAG_IS_CREATED, isCreated);
 

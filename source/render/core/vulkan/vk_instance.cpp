@@ -168,4 +168,11 @@ namespace vkn
 
         m_state.reset();
     }
+
+
+    PFN_vkVoidFunction Instance::GetProcAddr(const char* pFuncName) const
+    {
+        VK_ASSERT(IsCreated());
+        return vkGetInstanceProcAddr(m_instance, pFuncName);
+    }
 }

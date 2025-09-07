@@ -15,6 +15,8 @@ namespace vkn
         VkBufferUsageFlags usage;
         VkMemoryPropertyFlags properties;
         VkMemoryAllocateFlags memAllocFlags;
+
+        const char* pDebugName;
     };
 
 

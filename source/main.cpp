@@ -415,8 +415,8 @@ public:
         
         VkPipelineDynamicStateCreateInfo dynamicState = {};
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.pDynamicStates = m_dynamicStateValues.data();
         dynamicState.dynamicStateCount = m_dynamicStatesCount;
+        dynamicState.pDynamicStates = m_dynamicStateValues.data();
         
         pipelineCreateInfo.pDynamicState = &dynamicState;
 
@@ -1514,6 +1514,9 @@ int main(int argc, char* argv[])
     commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     commonConstBufCreateInfo.memAllocFlags = 0;
+#ifdef ENG_BUILD_DEBUG
+    commonConstBufCreateInfo.pDebugName = "COMMON_CB";
+#endif
 
     s_commonConstBuffer.Create(commonConstBufCreateInfo); 
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
@@ -1564,6 +1567,9 @@ int main(int argc, char* argv[])
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     stagingBufCreateInfo.memAllocFlags = 0;
+#ifdef ENG_BUILD_DEBUG
+    stagingBufCreateInfo.pDebugName = "STAGING_BUFFER";
+#endif
 
     vkn::Buffer stagingBuffer;
     stagingBuffer.Create(stagingBufCreateInfo); 
@@ -1582,6 +1588,9 @@ int main(int argc, char* argv[])
     vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+#ifdef ENG_BUILD_DEBUG
+    vertBufCreateInfo.pDebugName = "COMMON_VB";
+#endif
 
     s_vertexBuffer.Create(vertBufCreateInfo);
     CORE_ASSERT(s_vertexBuffer.IsCreated());

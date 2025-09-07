@@ -47,6 +47,8 @@ namespace vkn
         bool Create(const InstanceCreateInfo& info);
         void Destroy();
 
+        PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
+
         VkInstance& Get()
         {
             VK_ASSERT(IsCreated());
