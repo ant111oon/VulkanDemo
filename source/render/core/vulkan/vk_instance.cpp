@@ -149,7 +149,7 @@ namespace vkn
 
         VK_ASSERT(isCreated);
 
-        m_flags.set(FLAG_IS_CREATED, isCreated);
+        m_state.set(FLAG_IS_CREATED, isCreated);
 
         return isCreated;
     }
@@ -166,6 +166,6 @@ namespace vkn
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
 
-        m_flags.reset();
+        m_state.reset();
     }
 }

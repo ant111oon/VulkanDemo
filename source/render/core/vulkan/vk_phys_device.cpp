@@ -64,7 +64,7 @@ namespace vkn
         }
 
         VK_ASSERT(isPicked);
-        m_flags.set(FLAG_IS_CREATED, isPicked);
+        m_state.set(FLAG_IS_CREATED, isPicked);
 
         return isPicked;
     }
@@ -79,6 +79,6 @@ namespace vkn
         m_deviceProps = {};
         m_features = {};
 
-        m_flags.reset();
+        m_state.reset();
     }
 }

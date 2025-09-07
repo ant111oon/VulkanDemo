@@ -46,6 +46,12 @@ namespace vkn
             return m_device;
         }
 
+        PhysicalDevice* GetPhysDevice()
+        {
+            VK_ASSERT(IsCreated());
+            return m_pPhysDevice;
+        }
+
         VkQueue& GetQueue()
         {
             VK_ASSERT(IsCreated());
@@ -58,13 +64,13 @@ namespace vkn
             return m_queueFamilyIndex;
         }
 
-        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
+        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
 
     private:
         Device() = default;
 
     private:
-        enum
+        enum StateFlags
         {
             FLAG_IS_CREATED,
             FLAG_COUNT,
@@ -77,7 +83,7 @@ namespace vkn
         VkQueue m_queue = VK_NULL_HANDLE;
         uint32_t m_queueFamilyIndex = UINT32_MAX;
 
-        std::bitset<FLAG_COUNT> m_flags = {};
+        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

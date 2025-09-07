@@ -53,13 +53,13 @@ namespace vkn
             return m_instance;
         }
 
-        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
+        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
 
     private:
         Instance() = default;
 
     private:
-        enum
+        enum StateFlags
         {
             FLAG_IS_CREATED,
             FLAG_COUNT,
@@ -69,7 +69,7 @@ namespace vkn
         VkInstance m_instance = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT m_dbgMessenger = VK_NULL_HANDLE;
 
-        std::bitset<FLAG_COUNT> m_flags = {};
+        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

@@ -37,13 +37,13 @@ namespace vkn
             return m_surface;
         }
 
-        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
+        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
 
     private:
         Surface() = default;
 
     private:
-        enum
+        enum StateFlags
         {
             FLAG_IS_CREATED,
             FLAG_COUNT,
@@ -53,7 +53,7 @@ namespace vkn
         Instance* m_pInstance = nullptr;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
-        std::bitset<FLAG_COUNT> m_flags = {};
+        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

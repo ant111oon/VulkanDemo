@@ -130,7 +130,7 @@ namespace vkn
 
         const bool isCreated = isDeviceInitialized && isQueueInitialized;
 
-        m_flags.set(FLAG_IS_CREATED, isCreated);
+        m_state.set(FLAG_IS_CREATED, isCreated);
 
         return isCreated;
     }
@@ -149,6 +149,6 @@ namespace vkn
 
         m_queue = VK_NULL_HANDLE;
 
-        m_flags.reset();
+        m_state.reset();
     }
 }

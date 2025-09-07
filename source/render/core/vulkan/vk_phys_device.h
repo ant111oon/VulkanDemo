@@ -68,13 +68,13 @@ namespace vkn
             return m_features;
         }
 
-        bool IsCreated() const { return m_flags.test(FLAG_IS_CREATED); }
+        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
 
     private:
         PhysicalDevice() = default;
 
     private:
-        enum
+        enum StateFlags
         {
             FLAG_IS_CREATED,
             FLAG_COUNT,
@@ -88,7 +88,7 @@ namespace vkn
         VkPhysicalDeviceProperties m_deviceProps = {};
         VkPhysicalDeviceFeatures m_features = {};
 
-        std::bitset<FLAG_COUNT> m_flags = {};
+        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

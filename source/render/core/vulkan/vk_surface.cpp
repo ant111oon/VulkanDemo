@@ -30,7 +30,7 @@ namespace vkn
         const bool isCreated = m_surface != VK_NULL_HANDLE;
         VK_ASSERT(isCreated);
 
-        m_flags.set(FLAG_IS_CREATED, isCreated);
+        m_state.set(FLAG_IS_CREATED, isCreated);
 
         return isCreated;
     }
@@ -47,6 +47,6 @@ namespace vkn
 
         m_pInstance = nullptr;
 
-        m_flags.reset();
+        m_state.reset();
     }
 }
