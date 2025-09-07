@@ -286,7 +286,7 @@ public:
     }
 
 
-    GraphicsPipelineBuilder& AddRenderingColorAttachmentFormat(VkFormat format)
+    GraphicsPipelineBuilder& AddColorAttachmentFormat(VkFormat format)
     {
         CORE_ASSERT(m_colorAttachmentFormatsCount + 1 <= MAX_COLOR_ATTACHMENTS_COUNT);
         m_colorAttachmentFormats[m_colorAttachmentFormatsCount++] = format;
@@ -294,10 +294,10 @@ public:
         return *this;
     }
 
-    GraphicsPipelineBuilder& AddRenderingColorAttachmentFormat(const std::span<const VkFormat> formats)
+    GraphicsPipelineBuilder& AddColorAttachmentFormat(const std::span<const VkFormat> formats)
     {
         for (VkFormat format : formats) {
-            AddRenderingColorAttachmentFormat(format);
+            AddColorAttachmentFormat(format);
         }
         
         return *this;
@@ -372,7 +372,13 @@ public:
     #endif
 
         CORE_ASSERT(m_colorBlendAttachmentStatesCount == m_colorAttachmentFormatsCount);
-        CORE_ASSERT(m_layout != VK_NULL_HANDLE);
+        CORE_ASSERT_MSG(m_layout != VK_NULL_HANDLE, "Graphics pipeline layout is not set");
+        CORE_ASSERT_MSG(
+            m_colorAttachmentFormatsCount > 0 || 
+            m_renderingCreateInfo.depthAttachmentFormat != VK_FORMAT_UNDEFINED || 
+            m_renderingCreateInfo.stencilAttachmentFormat != VK_FORMAT_UNDEFINED,
+            "There is no format set for any of the graphics pipeline attachments"
+        );
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -409,6 +415,8 @@ public:
 
         pipelineCreateInfo.pDepthStencilState = &m_depthStencilState;
         
+        m_colorBlendState.logicOpEnable = VK_FALSE;
+        m_colorBlendState.logicOp = VK_LOGIC_OP_COPY;
         m_colorBlendState.attachmentCount = m_colorBlendAttachmentStatesCount;
         m_colorBlendState.pAttachments = m_colorBlendAttachmentStates.data();
         pipelineCreateInfo.pColorBlendState = &m_colorBlendState;
@@ -1046,6 +1054,8 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetLayout(vkLayout)
+        .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
+        .AddColorBlendAttachment(VK_TRUE, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
         .Build(vkDevice);
 
     for (VkShaderModule& shader : vkShaderModules) {
