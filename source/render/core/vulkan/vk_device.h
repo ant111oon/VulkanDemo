@@ -39,25 +39,25 @@ namespace vkn
         bool Create(const DeviceCreateInfo& info);
         void Destroy();
 
-        VkDevice& Get()
+        VkDevice Get() const
         {
             VK_ASSERT(IsCreated());
             return m_device;
         }
 
-        PhysicalDevice* GetPhysDevice()
+        PhysicalDevice* GetPhysDevice() const
         {
             VK_ASSERT(IsCreated());
             return m_pPhysDevice;
         }
 
-        VkQueue& GetQueue()
+        VkQueue GetQueue() const
         {
             VK_ASSERT(IsCreated());
             return m_queue;
         }
 
-        uint32_t GetQueueFamilyIndex()
+        uint32_t GetQueueFamilyIndex() const
         {
             VK_ASSERT(IsCreated());
             return m_queueFamilyIndex;

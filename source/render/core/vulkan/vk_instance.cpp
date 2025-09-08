@@ -98,7 +98,7 @@ namespace vkn
     {
         if (IsCreated()) {
             VK_LOG_WARN("Instance is already created");
-            return true;
+            return false;
         }
 
         CheckInstanceExtensionsSupport(info.extensions);

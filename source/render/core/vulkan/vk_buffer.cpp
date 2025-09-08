@@ -45,6 +45,10 @@ namespace vkn
         std::swap(m_properties, buffer.m_properties);
         std::swap(m_memAllocFlags, buffer.m_memAllocFlags);
 
+    #ifdef ENG_BUILD_DEBUG
+        m_debugName.swap(buffer.m_debugName);
+    #endif
+
         std::swap(m_state, buffer.m_state);
 
         return *this; 
@@ -60,8 +64,8 @@ namespace vkn
     bool Buffer::Create(const BufferCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Buffer is already created");
-            return true;
+            VK_LOG_WARN("Buffer %s is already created", GetDebugName());
+            return false;
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -158,6 +162,10 @@ namespace vkn
         m_properties = {};
         m_memAllocFlags = {};
 
+    #ifdef ENG_BUILD_DEBUG
+        m_debugName.fill('\0');
+    #endif
+
         m_state.reset();
     }
 
@@ -195,9 +203,20 @@ namespace vkn
         const size_t nameLength = strlen(pName);
         VK_ASSERT_MSG(nameLength < utils::MAX_VK_OBJ_DBG_NAME_LENGTH, "Debug name %s is too long: %zu (max length: %zu)", pName, nameLength, utils::MAX_VK_OBJ_DBG_NAME_LENGTH - 1);
 
+        m_debugName.fill('\0');
         memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
 
         utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName);
+    #endif
+    }
+
+
+    const char* Buffer::GetDebugName() const
+    {
+    #ifdef ENG_BUILD_DEBUG
+        return m_debugName.data();
+    #else
+        return "Buffer";
     #endif
     }
 }

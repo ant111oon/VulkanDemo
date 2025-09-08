@@ -32,7 +32,7 @@ namespace vkn
     {
         if (IsCreated()) {
             VK_LOG_WARN("PhysicalDevice is already initialized");
-            return true;
+            return false;
         }
 
         VK_ASSERT(info.pInstance && info.pInstance->IsCreated());

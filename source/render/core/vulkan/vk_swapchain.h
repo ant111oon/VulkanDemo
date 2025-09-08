@@ -46,32 +46,32 @@ namespace vkn
         bool Recreate(const SwapchainCreateInfo& info);
         bool Resize(uint32_t width, uint32_t height);
 
-        VkSwapchainKHR& Get()
+        VkSwapchainKHR Get() const
         {
             VK_ASSERT(IsCreated());
             return m_swapchain;
         }
 
-        Device* GetDevice()
+        Device* GetDevice() const
         {
             VK_ASSERT(IsCreated());
             return m_pDevice;
         }
 
-        Surface* GetSurface()
+        Surface* GetSurface() const
         {
             VK_ASSERT(IsCreated());
             return m_pSurface;
         }
 
-        VkImage& GetImage(size_t idx)
+        VkImage GetImage(size_t idx) const
         {
             VK_ASSERT(IsCreated());
             VK_ASSERT(idx < m_images.size());
             return m_images[idx];
         }
 
-        VkImageView& GetImageView(size_t idx)
+        VkImageView GetImageView(size_t idx) const
         {
             VK_ASSERT(IsCreated());
             VK_ASSERT(idx < m_imageViews.size());

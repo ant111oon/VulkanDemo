@@ -41,25 +41,25 @@ namespace vkn
         bool Create(const PhysicalDeviceCreateInfo& info);
         void Destroy();
 
-        VkPhysicalDevice& Get()
+        VkPhysicalDevice Get() const
         {
             VK_ASSERT(IsCreated());
             return m_physDevice;
         }
 
-        const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const
+        VkPhysicalDeviceMemoryProperties GetMemoryProperties() const
         {
             VK_ASSERT(IsCreated());
             return m_memoryProps;
         }
 
-        const VkPhysicalDeviceProperties& GetProperties() const
+        VkPhysicalDeviceProperties GetProperties() const
         {
             VK_ASSERT(IsCreated());
             return m_deviceProps;
         }
 
-        const VkPhysicalDeviceFeatures& GetFeatures() const
+        VkPhysicalDeviceFeatures GetFeatures() const
         {
             VK_ASSERT(IsCreated());
             return m_features;

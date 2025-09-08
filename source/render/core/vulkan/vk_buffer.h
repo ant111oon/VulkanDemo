@@ -37,26 +37,27 @@ namespace vkn
         void Unmap();
 
         void SetDebugName(const char* pName);
+        const char* GetDebugName() const;
 
-        Device* GetDevice()
+        Device* GetDevice() const
         {
             VK_ASSERT(IsCreated());
             return m_pDevice;
         }
 
-        const VkBuffer& Get() const
+        VkBuffer Get() const
         {
             VK_ASSERT(IsCreated());
             return m_buffer;
         }
 
-        const VkDeviceMemory& GetMemory() const
+        VkDeviceMemory GetMemory() const
         {
             VK_ASSERT(IsCreated());
             return m_memory;
         }
 
-        const VkDeviceAddress& GetDeviceAddress() const
+        VkDeviceAddress GetDeviceAddress() const
         {
             VK_ASSERT(IsCreated());
             return m_deviceAddress;

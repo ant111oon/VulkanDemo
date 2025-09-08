@@ -35,7 +35,7 @@ namespace vkn
     {
         if (IsCreated()) {
             VK_LOG_WARN("Device is already initialized");
-            return true;
+            return false;
         }
 
         VK_ASSERT(info.pPhysDevice && info.pPhysDevice->IsCreated());

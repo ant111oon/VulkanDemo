@@ -63,8 +63,8 @@ namespace vkn
         VK_ASSERT(info.pSurface && info.pSurface->IsCreated());
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
 
-        VkSurfaceKHR& vkSurface        = info.pSurface->Get();
-        VkPhysicalDevice& vkPhysDevice = info.pDevice->GetPhysDevice()->Get();
+        VkSurfaceKHR vkSurface = info.pSurface->Get();
+        VkPhysicalDevice vkPhysDevice = info.pDevice->GetPhysDevice()->Get();
 
         VkSurfaceFormatKHR surfaceFormat = {};
         surfaceFormat.format = info.imageFormat;
@@ -246,7 +246,7 @@ namespace vkn
 
     void Swapchain::PullImages()
     {
-        VkDevice& vkDevice = m_pDevice->Get();
+        VkDevice vkDevice = m_pDevice->Get();
 
         VK_ASSERT(vkDevice != VK_NULL_HANDLE);
         VK_ASSERT(m_swapchain != VK_NULL_HANDLE);
@@ -268,7 +268,7 @@ namespace vkn
     {
         VK_ASSERT(!m_images.empty());
 
-        VkDevice& vkDevice = m_pDevice->Get();
+        VkDevice vkDevice = m_pDevice->Get();
         VK_ASSERT(vkDevice != VK_NULL_HANDLE);
         
         m_imageViews.resize(m_images.size());
@@ -298,8 +298,7 @@ namespace vkn
 
     void Swapchain::DestroyImageViews()
     {
-        VkDevice& vkDevice = m_pDevice->Get();
-        VK_ASSERT(vkDevice != VK_NULL_HANDLE);
+        VkDevice vkDevice = m_pDevice->Get();
 
         for (VkImageView& view : m_imageViews) {
             vkDestroyImageView(vkDevice, view, nullptr);
