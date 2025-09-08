@@ -7,34 +7,31 @@
 
 namespace vkn
 {
-    struct FenceCreateInfo
+    struct SemaphoreCreateInfo
     {
         Device* pDevice;
-        VkFenceCreateFlags flags;
+        VkSemaphoreCreateFlags flags;
     };
 
 
-    class Fence
+    class Semaphore
     {
     public:
-        Fence() = default;
+        Semaphore() = default;
 
-        Fence(const FenceCreateInfo& info);
-        Fence(Device* pDevice, VkFenceCreateFlags flags = VK_FENCE_CREATE_SIGNALED_BIT);
+        Semaphore(const SemaphoreCreateInfo& info);
+        Semaphore(Device* pDevice, VkSemaphoreCreateFlags flags = 0);
 
-        Fence(const Fence& fence) = delete;
-        Fence& operator=(const Fence& fence) = delete;
+        Semaphore(const Semaphore& semaphore) = delete;
+        Semaphore& operator=(const Semaphore& semaphore) = delete;
 
-        Fence(Fence&& fence) noexcept;
-        Fence& operator=(Fence&& fence) noexcept;
+        Semaphore(Semaphore&& semaphore) noexcept;
+        Semaphore& operator=(Semaphore&& semaphore) noexcept;
 
-        bool Create(const FenceCreateInfo& info);
-        bool Create(Device* pDevice, VkFenceCreateFlags flags = VK_FENCE_CREATE_SIGNALED_BIT);
+        bool Create(const SemaphoreCreateInfo& info);
+        bool Create(Device* pDevice, VkSemaphoreCreateFlags flags = 0);
 
         void Destroy();
-
-        void Reset();
-        void WaitFor(uint64_t timeout);
 
         void SetDebugName(const char* pName);
         const char* GetDebugName() const;
@@ -45,10 +42,10 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkFence Get() const
+        VkSemaphore Get() const
         {
             VK_ASSERT(IsCreated());
-            return m_fence;
+            return m_semaphore;
         }
 
         bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
@@ -63,7 +60,7 @@ namespace vkn
     private:
         Device* m_pDevice = nullptr;
 
-        VkFence m_fence = VK_NULL_HANDLE;
+        VkSemaphore m_semaphore = VK_NULL_HANDLE;
 
     #ifdef ENG_BUILD_DEBUG
         std::array<char, utils::MAX_VK_OBJ_DBG_NAME_LENGTH> m_debugName = {};

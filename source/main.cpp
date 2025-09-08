@@ -10,6 +10,7 @@
 #include "render/core/vulkan/vk_swapchain.h"
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_fence.h"
+#include "render/core/vulkan/vk_semaphore.h"
 
 #include <glm/glm.hpp>
 
@@ -58,8 +59,8 @@ static VkDescriptorSetLayout s_vkDescriptorSetLayout = VK_NULL_HANDLE;
 static VkPipelineLayout      s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline            s_vkPipeline = VK_NULL_HANDLE;
 
-static std::vector<VkSemaphore>     s_vkPresentFinishedSemaphores;
-static std::vector<VkSemaphore>     s_vkRenderingFinishedSemaphores;
+static std::vector<vkn::Semaphore>  s_vkPresentFinishedSemaphores;
+static std::vector<vkn::Semaphore>  s_vkRenderingFinishedSemaphores;
 static std::vector<vkn::Fence>      s_vkRenderingFinishedFences;
 static std::vector<VkCommandBuffer> s_vkRenderCmdBuffers;
 
@@ -1241,10 +1242,10 @@ void RenderScene()
 {
     const size_t frameInFlightIdx = s_frameNumber % s_vkSwapchain.GetImageCount();
 
-    VkCommandBuffer& cmdBuffer              = s_vkRenderCmdBuffers[frameInFlightIdx];
-    vkn::Fence& renderingFinishedFence      = s_vkRenderingFinishedFences[frameInFlightIdx];
-    VkSemaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[frameInFlightIdx];
-    VkSemaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[frameInFlightIdx];
+    VkCommandBuffer& cmdBuffer                 = s_vkRenderCmdBuffers[frameInFlightIdx];
+    vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[frameInFlightIdx];
+    vkn::Semaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[frameInFlightIdx];
+    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[frameInFlightIdx];
 
     const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (renderingFinishedFenceStatus == VK_NOT_READY) {
@@ -1254,7 +1255,7 @@ void RenderScene()
     VK_CHECK(renderingFinishedFenceStatus);
 
     uint32_t nextImageIdx;
-    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), UINT64_MAX, presentFinishedSemaphore, VK_NULL_HANDLE, &nextImageIdx);
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), UINT64_MAX, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
     
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
@@ -1343,19 +1344,20 @@ void RenderScene()
         s_vkDevice.GetQueue(),
         cmdBuffer,
         renderingFinishedFence.Get(),
-        presentFinishedSemaphore,
+        presentFinishedSemaphore.Get(),
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        renderingFinishedSemaphore,
+        renderingFinishedSemaphore.Get(),
         VK_PIPELINE_STAGE_2_NONE
     );
 
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
+    VkSemaphore vkWaitSemaphore = renderingFinishedSemaphore.Get();
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pNext = nullptr;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderingFinishedSemaphore;
+    presentInfo.pWaitSemaphores = &vkWaitSemaphore;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &vkSwapchain;
     presentInfo.pImageIndices = &nextImageIdx;
@@ -1557,13 +1559,13 @@ int main(int argc, char* argv[])
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
-    s_vkRenderingFinishedSemaphores.resize(swapchainImageCount, VK_NULL_HANDLE);
-    s_vkPresentFinishedSemaphores.resize(swapchainImageCount, VK_NULL_HANDLE);
+    s_vkRenderingFinishedSemaphores.resize(swapchainImageCount);
+    s_vkPresentFinishedSemaphores.resize(swapchainImageCount);
     s_vkRenderingFinishedFences.resize(swapchainImageCount);
     s_vkRenderCmdBuffers.resize(swapchainImageCount, VK_NULL_HANDLE);
     for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_vkRenderingFinishedSemaphores[i] = CreateVkSemaphore();
-        s_vkPresentFinishedSemaphores[i] = CreateVkSemaphore();
+        s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
+        s_vkPresentFinishedSemaphores[i].Create(&s_vkDevice);
         s_vkRenderingFinishedFences[i].Create(&s_vkDevice);
         s_vkRenderCmdBuffers[i] = AllocateVkCmdBuffer(s_vkDevice.Get(), s_vkCmdPool);
     }
@@ -1655,8 +1657,8 @@ int main(int argc, char* argv[])
     s_vkImmediateSubmitFinishedFence.Destroy();
     
     for (size_t i = 0; i < s_vkSwapchain.GetImageCount(); ++i) {
-        vkDestroySemaphore(s_vkDevice.Get(), s_vkRenderingFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(s_vkDevice.Get(), s_vkPresentFinishedSemaphores[i], nullptr);
+        s_vkRenderingFinishedSemaphores[i].Destroy();
+        s_vkPresentFinishedSemaphores[i].Destroy();
         s_vkRenderingFinishedFences[i].Destroy();
     }
 

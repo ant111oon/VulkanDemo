@@ -27,6 +27,9 @@ namespace vkn
         }
 
         VK_ASSERT(areAllRequiredExtensionsAvailable);
+    #else
+        (void)vkPhysDevice;
+        (void)requiredExtensions;
     #endif
     }
 
