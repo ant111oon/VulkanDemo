@@ -51,6 +51,12 @@ namespace vkn
     }
 
 
+    Buffer::Buffer(const BufferCreateInfo& info)
+    {
+        Create(info);
+    }
+
+
     bool Buffer::Create(const BufferCreateInfo& info)
     {
         if (IsCreated()) {
@@ -123,12 +129,6 @@ namespace vkn
         const bool isCreated = isBufferCreated && isMemoryAllocated;
         VK_ASSERT(isCreated);
 
-    #ifdef ENG_BUILD_DEBUG
-        utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, info.pDebugName);
-    #else
-        (void)info.pDebugName;
-    #endif
-
         m_state.set(FLAG_IS_CREATED, isCreated);
 
         return isCreated;
@@ -183,5 +183,21 @@ namespace vkn
         vkUnmapMemory(m_pDevice->Get(), m_memory);
 
         m_state.set(FLAG_IS_MAPPED, false);
+    }
+
+
+    void Buffer::SetDebugName(const char* pName)
+    {
+    #ifdef ENG_BUILD_DEBUG
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(pName);
+        
+        const size_t nameLength = strlen(pName);
+        VK_ASSERT_MSG(nameLength < utils::MAX_VK_OBJ_DBG_NAME_LENGTH, "Debug name %s is too long: %zu (max length: %zu)", pName, nameLength, utils::MAX_VK_OBJ_DBG_NAME_LENGTH - 1);
+
+        memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
+
+        utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName);
+    #endif
     }
 }

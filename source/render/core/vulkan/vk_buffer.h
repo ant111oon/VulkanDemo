@@ -15,8 +15,6 @@ namespace vkn
         VkBufferUsageFlags usage;
         VkMemoryPropertyFlags properties;
         VkMemoryAllocateFlags memAllocFlags;
-
-        const char* pDebugName;
     };
 
 
@@ -24,6 +22,7 @@ namespace vkn
     {
     public:
         Buffer() = default;
+        Buffer(const BufferCreateInfo& info);
 
         Buffer(const Buffer& buffer) = delete;
         Buffer& operator=(const Buffer& buffer) = delete;
@@ -36,6 +35,8 @@ namespace vkn
 
         void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
         void Unmap();
+
+        void SetDebugName(const char* pName);
 
         Device* GetDevice()
         {
@@ -101,6 +102,10 @@ namespace vkn
         VkBufferUsageFlags m_usage = {};
         VkMemoryPropertyFlags m_properties = {};
         VkMemoryAllocateFlags m_memAllocFlags = {};
+
+    #ifdef ENG_BUILD_DEBUG
+        std::array<char, utils::MAX_VK_OBJ_DBG_NAME_LENGTH> m_debugName = {};
+    #endif
 
         std::bitset<FLAG_COUNT> m_state = {};
     };

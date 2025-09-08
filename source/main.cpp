@@ -1522,10 +1522,10 @@ int main(int argc, char* argv[])
     commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     commonConstBufCreateInfo.memAllocFlags = 0;
-    commonConstBufCreateInfo.pDebugName = "COMMON_CB";
 
     s_commonConstBuffer.Create(commonConstBufCreateInfo); 
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
+    s_commonConstBuffer.SetDebugName("COMMON_CB");
 
     {
         COMMON_CB_DATA commonConstBuffer = {};
@@ -1573,11 +1573,10 @@ int main(int argc, char* argv[])
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     stagingBufCreateInfo.memAllocFlags = 0;
-    stagingBufCreateInfo.pDebugName = "STAGING_BUFFER";
 
-    vkn::Buffer stagingBuffer;
-    stagingBuffer.Create(stagingBufCreateInfo); 
+    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
     CORE_ASSERT(stagingBuffer.IsCreated());
+    stagingBuffer.SetDebugName("STAGING_BUFFER");
 
     {
         void* pVertexBufferData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
@@ -1592,10 +1591,10 @@ int main(int argc, char* argv[])
     vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-    vertBufCreateInfo.pDebugName = "COMMON_VB";
 
     s_vertexBuffer.Create(vertBufCreateInfo);
     CORE_ASSERT(s_vertexBuffer.IsCreated());
+    s_vertexBuffer.SetDebugName("COMMON_VB");
 
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){

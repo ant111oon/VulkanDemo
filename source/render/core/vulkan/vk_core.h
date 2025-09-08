@@ -12,6 +12,14 @@
 #endif
 
 
+#define VK_CHECK(VkCall)                                                                  \
+    do {                                                                                  \
+        const VkResult _vkCallResult = VkCall;                                            \
+        (void)_vkCallResult;                                                              \
+        VK_ASSERT_MSG(_vkCallResult == VK_SUCCESS, "%s", string_VkResult(_vkCallResult)); \
+    } while(0)
+
+
 #define VK_LOG_TRACE(FMT, ...)        ENG_LOG_TRACE("VULKAN", FMT, __VA_ARGS__)
 #define VK_LOG_INFO(FMT, ...)         ENG_LOG_INFO("VULKAN",  FMT, __VA_ARGS__)
 #define VK_LOG_WARN(FMT, ...)         ENG_LOG_WARN("VULKAN",  FMT, __VA_ARGS__)
@@ -21,9 +29,7 @@
 #define VK_ASSERT_FAIL(FMT, ...)      VK_ASSERT_MSG(false, FMT, __VA_ARGS__)
 
 
-#define VK_CHECK(VkCall)                                                                  \
-    do {                                                                                  \
-        const VkResult _vkCallResult = VkCall;                                            \
-        (void)_vkCallResult;                                                              \
-        VK_ASSERT_MSG(_vkCallResult == VK_SUCCESS, "%s", string_VkResult(_vkCallResult)); \
-    } while(0)
+namespace vkn::utils
+{
+    inline constexpr size_t MAX_VK_OBJ_DBG_NAME_LENGTH = 64;
+}
