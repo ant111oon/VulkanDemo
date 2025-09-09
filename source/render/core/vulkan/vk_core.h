@@ -3,6 +3,7 @@
 #include "core/platform/platform.h"
 
 #include "core/utils/assert.h"
+#include "core/core.h"
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -28,8 +29,3 @@
 #define VK_ASSERT(COND)               VK_ASSERT_MSG(COND, #COND)
 #define VK_ASSERT_FAIL(FMT, ...)      VK_ASSERT_MSG(false, FMT, __VA_ARGS__)
 
-
-namespace vkn::utils
-{
-    inline constexpr size_t MAX_VK_OBJ_DBG_NAME_LENGTH = 64;
-}

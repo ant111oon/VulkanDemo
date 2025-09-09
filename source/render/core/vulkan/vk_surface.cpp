@@ -29,7 +29,7 @@ namespace vkn
         const bool isCreated = m_surface != VK_NULL_HANDLE;
         VK_ASSERT(isCreated);
 
-        m_state.set(FLAG_IS_CREATED, isCreated);
+        SetCreated(isCreated);
 
         return isCreated;
     }
@@ -40,12 +40,12 @@ namespace vkn
         if (!IsCreated()) {
             return;
         }
+
+        Object::Destroy();
         
         vkDestroySurfaceKHR(m_pInstance->Get(), m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
 
         m_pInstance = nullptr;
-
-        m_state.reset();
     }
 }

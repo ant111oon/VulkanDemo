@@ -1,7 +1,6 @@
 #pragma once
 
-#include "vk_core.h"
-
+#include "vk_object.h"
 #include "vk_surface.h"
 #include "vk_phys_device.h"
 #include "vk_device.h"
@@ -29,16 +28,13 @@ namespace vkn
     };
 
 
-    class Swapchain
+    class Swapchain : public Object
     {
         friend Swapchain& GetSwapchain();
 
     public:
-        Swapchain(const Swapchain& swapchain) = delete;
-        Swapchain(Swapchain&& swapchain) = delete;
-
-        Swapchain& operator=(const Swapchain& swapchain) = delete;
-        Swapchain& operator=(Swapchain&& swapchain) = delete;
+        ENG_DECL_CLASS_NO_COPIABLE(Swapchain);
+        ENG_DECL_CLASS_NO_MOVABLE(Swapchain);
 
         bool Create(const SwapchainCreateInfo& info);
         void Destroy();
@@ -102,8 +98,6 @@ namespace vkn
             return m_images.size();
         }
 
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
-
     private:
         Swapchain() = default;
 
@@ -112,13 +106,6 @@ namespace vkn
 
         void CreateImageViews();
         void DestroyImageViews();
-
-    private:
-        enum StateFlags
-        {
-            FLAG_IS_CREATED,
-            FLAG_COUNT,
-        };
 
     private:
         Device* m_pDevice = nullptr;
@@ -139,8 +126,6 @@ namespace vkn
         VkSurfaceTransformFlagBitsKHR m_transform = {};
         VkCompositeAlphaFlagBitsKHR   m_compositeAlpha = {};
         VkPresentModeKHR              m_presentMode = {};
-
-        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

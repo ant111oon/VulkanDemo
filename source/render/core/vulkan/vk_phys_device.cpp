@@ -63,7 +63,8 @@ namespace vkn
         }
 
         VK_ASSERT(isPicked);
-        m_state.set(FLAG_IS_CREATED, isPicked);
+
+        SetCreated(isPicked);
 
         return isPicked;
     }
@@ -71,13 +72,17 @@ namespace vkn
 
     void PhysicalDevice::Destroy()
     {
+        if (!IsCreated()) {
+            return;
+        }
+
+        Object::Destroy();
+
         m_physDevice = VK_NULL_HANDLE;
         m_pInstance = nullptr;
 
         m_memoryProps = {};
         m_deviceProps = {};
         m_features = {};
-
-        m_state.reset();
     }
 }

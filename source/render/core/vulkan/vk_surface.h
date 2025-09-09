@@ -1,7 +1,6 @@
 #pragma once
 
-#include "vk_core.h"
-
+#include "vk_object.h"
 #include "vk_instance.h"
 
 
@@ -14,16 +13,13 @@ namespace vkn
     };
 
 
-    class Surface
+    class Surface : public Object
     {
         friend Surface& GetSurface();
 
     public:
-        Surface(const Surface& surf) = delete;
-        Surface(Surface&& surf) = delete;
-
-        Surface& operator=(const Surface& surf) = delete;
-        Surface& operator=(Surface&& surf) = delete;
+        ENG_DECL_CLASS_NO_COPIABLE(Surface);
+        ENG_DECL_CLASS_NO_MOVABLE(Surface);
 
         bool Create(const SurfaceCreateInfo& info);
         void Destroy();
@@ -34,23 +30,12 @@ namespace vkn
             return m_surface;
         }
 
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
-
     private:
         Surface() = default;
 
     private:
-        enum StateFlags
-        {
-            FLAG_IS_CREATED,
-            FLAG_COUNT,
-        };
-
-    private:
         Instance* m_pInstance = nullptr;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-
-        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

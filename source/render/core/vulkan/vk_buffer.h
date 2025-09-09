@@ -1,7 +1,6 @@
 #pragma once
 
-#include "vk_core.h"
-
+#include "vk_object.h"
 #include "vk_device.h"
 
 
@@ -18,14 +17,13 @@ namespace vkn
     };
 
 
-    class Buffer
+    class Buffer : public Object
     {
     public:
+        ENG_DECL_CLASS_NO_COPIABLE(Buffer);
+
         Buffer() = default;
         Buffer(const BufferCreateInfo& info);
-
-        Buffer(const Buffer& buffer) = delete;
-        Buffer& operator=(const Buffer& buffer) = delete;
 
         Buffer(Buffer&& buffer) noexcept;
         Buffer& operator=(Buffer&& buffer) noexcept;
@@ -36,8 +34,8 @@ namespace vkn
         void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
         void Unmap();
 
-        void SetDebugName(const char* pName);
-        const char* GetDebugName() const;
+        void SetDebugName(const char* pName) { Object::SetDebugName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName); }
+        const char* GetDebugName() const { return Object::GetDebugName("Buffer"); }
 
         Device* GetDevice() const
         {
@@ -81,15 +79,13 @@ namespace vkn
             return (m_memAllocFlags & memoryAllocFlags) == memoryAllocFlags;
         }
 
-        bool IsMapped() const { return m_state.test(FLAG_IS_MAPPED); }
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
+        bool IsMapped() const { return m_state.test(BIT_IS_MAPPED); }
 
     private:
-        enum StateFlags
+        enum StateBits
         {
-            FLAG_IS_CREATED,
-            FLAG_IS_MAPPED,
-            FLAG_COUNT,
+            BIT_IS_MAPPED,
+            BIT_COUNT,
         };
 
     private:
@@ -104,10 +100,6 @@ namespace vkn
         VkMemoryPropertyFlags m_properties = {};
         VkMemoryAllocateFlags m_memAllocFlags = {};
 
-    #ifdef ENG_BUILD_DEBUG
-        std::array<char, utils::MAX_VK_OBJ_DBG_NAME_LENGTH> m_debugName = {};
-    #endif
-
-        std::bitset<FLAG_COUNT> m_state = {};
+        std::bitset<BIT_COUNT> m_state = {};
     };
 }

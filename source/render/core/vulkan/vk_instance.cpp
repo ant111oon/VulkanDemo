@@ -149,7 +149,7 @@ namespace vkn
 
         VK_ASSERT(isCreated);
 
-        m_state.set(FLAG_IS_CREATED, isCreated);
+        SetCreated(isCreated);
 
         return isCreated;
     }
@@ -161,12 +161,12 @@ namespace vkn
             return;
         }
 
+        Object::Destroy();
+
         DestroyDebugMessenger(m_instance, m_dbgMessenger);
         
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
-
-        m_state.reset();
     }
 
 

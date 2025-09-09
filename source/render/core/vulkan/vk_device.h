@@ -1,11 +1,10 @@
 #pragma once
 
-#include "vk_core.h"
 
 #include "vk_phys_device.h"
 #include "vk_surface.h"
+#include "vk_object.h"
 
-#include <bitset>
 #include <span>
 
 
@@ -25,16 +24,13 @@ namespace vkn
     };
 
 
-    class Device
+    class Device : public Object
     {
         friend Device& GetDevice();
 
     public:
-        Device(const Device& device) = delete;
-        Device(Device&& device) = delete;
-
-        Device& operator=(const Device& device) = delete;
-        Device& operator=(Device&& device) = delete;
+        ENG_DECL_CLASS_NO_COPIABLE(Device);
+        ENG_DECL_CLASS_NO_MOVABLE(Device);
 
         bool Create(const DeviceCreateInfo& info);
         void Destroy();
@@ -63,17 +59,8 @@ namespace vkn
             return m_queueFamilyIndex;
         }
 
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
-
     private:
         Device() = default;
-
-    private:
-        enum StateFlags
-        {
-            FLAG_IS_CREATED,
-            FLAG_COUNT,
-        };
 
     private:
         PhysicalDevice* m_pPhysDevice = nullptr;
@@ -81,8 +68,6 @@ namespace vkn
 
         VkQueue m_queue = VK_NULL_HANDLE;
         uint32_t m_queueFamilyIndex = UINT32_MAX;
-
-        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

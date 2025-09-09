@@ -1,8 +1,7 @@
 #pragma once
 
-#include "vk_core.h"
+#include "vk_object.h"
 
-#include <bitset>
 #include <span>
 
 
@@ -33,16 +32,13 @@ namespace vkn
     };
 
 
-    class Instance
+    class Instance : public Object
     {
         friend Instance& GetInstance();
 
     public:
-        Instance(const Instance& inst) = delete;
-        Instance(Instance&& inst) = delete;
-
-        Instance& operator=(const Instance& inst) = delete;
-        Instance& operator=(Instance&& inst) = delete;
+        ENG_DECL_CLASS_NO_COPIABLE(Instance);
+        ENG_DECL_CLASS_NO_MOVABLE(Instance);
 
         bool Create(const InstanceCreateInfo& info);
         void Destroy();
@@ -55,23 +51,12 @@ namespace vkn
             return m_instance;
         }
 
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
-
     private:
         Instance() = default;
 
     private:
-        enum StateFlags
-        {
-            FLAG_IS_CREATED,
-            FLAG_COUNT,
-        };
-
-    private:
         VkInstance m_instance = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT m_dbgMessenger = VK_NULL_HANDLE;
-
-        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

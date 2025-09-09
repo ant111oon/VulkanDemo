@@ -30,14 +30,10 @@ namespace vkn
             Destroy();
         }
 
+        Object::operator=(std::move(fence));
+
         std::swap(m_pDevice, fence.m_pDevice);
         std::swap(m_fence, fence.m_fence);
-
-    #ifdef ENG_BUILD_DEBUG
-        m_debugName.swap(fence.m_debugName);
-    #endif
-
-        std::swap(m_state, fence.m_state);
 
         return *this; 
     }
@@ -65,7 +61,8 @@ namespace vkn
         VK_ASSERT(isCreated);
 
         m_pDevice = info.pDevice;
-        m_state.set(FLAG_IS_CREATED, isCreated);
+
+        SetCreated(isCreated);
 
         return isCreated;
     }
@@ -87,16 +84,12 @@ namespace vkn
             return;
         }
 
+        Object::Destroy();
+
         vkDestroyFence(m_pDevice->Get(), m_fence, nullptr);
         m_fence = VK_NULL_HANDLE;
 
         m_pDevice = nullptr;
-
-    #ifdef ENG_BUILD_DEBUG
-        m_debugName.fill('\0');
-    #endif
-
-        m_state.reset();
     }
 
 
@@ -111,32 +104,5 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &m_fence, VK_TRUE, timeout));
-    }
-
-
-    void Fence::SetDebugName(const char* pName)
-    {
-    #ifdef ENG_BUILD_DEBUG
-        VK_ASSERT(IsCreated());
-        VK_ASSERT(pName);
-        
-        const size_t nameLength = strlen(pName);
-        VK_ASSERT_MSG(nameLength < utils::MAX_VK_OBJ_DBG_NAME_LENGTH, "Debug name %s is too long: %zu (max length: %zu)", pName, nameLength, utils::MAX_VK_OBJ_DBG_NAME_LENGTH - 1);
-
-        m_debugName.fill('\0');
-        memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
-
-        utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pName);
-    #endif
-    }
-
-
-    const char* Fence::GetDebugName() const
-    {
-    #ifdef ENG_BUILD_DEBUG
-        return m_debugName.data();
-    #else
-        return "Fence";
-    #endif
     }
 }

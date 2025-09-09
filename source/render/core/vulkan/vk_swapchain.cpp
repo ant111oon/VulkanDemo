@@ -140,6 +140,8 @@ namespace vkn
             return;
         }
 
+        Object::Destroy();
+
         DestroyImageViews();
         ClearImages();
 
@@ -159,8 +161,6 @@ namespace vkn
         m_transform = {};
         m_compositeAlpha = {};
         m_presentMode = {};
-
-        m_state.reset();
     }
 
 
@@ -186,6 +186,8 @@ namespace vkn
             vkDestroySwapchainKHR(info.pDevice->Get(), m_swapchain, nullptr);
         }
 
+        SetCreated(isCreated);
+
         if (!isCreated) {
             return false;
         }
@@ -209,8 +211,6 @@ namespace vkn
         DestroyImageViews();
         PullImages();
         CreateImageViews();
-
-        m_state.set(FLAG_IS_CREATED, isCreated);
 
         return isCreated;
     }

@@ -131,7 +131,7 @@ namespace vkn
 
         const bool isCreated = isDeviceInitialized && isQueueInitialized;
 
-        m_state.set(FLAG_IS_CREATED, isCreated);
+        SetCreated(isCreated);
 
         return isCreated;
     }
@@ -143,13 +143,13 @@ namespace vkn
             return;
         }
 
+        Object::Destroy();
+
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
 
         m_pPhysDevice = VK_NULL_HANDLE;
 
         m_queue = VK_NULL_HANDLE;
-
-        m_state.reset();
     }
 }

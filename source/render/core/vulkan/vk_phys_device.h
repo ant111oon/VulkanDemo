@@ -1,7 +1,6 @@
 #pragma once
 
-#include "vk_core.h"
-
+#include "vk_object.h"
 #include "vk_instance.h"
 
 
@@ -27,16 +26,13 @@ namespace vkn
     };
 
 
-    class PhysicalDevice
+    class PhysicalDevice : public Object
     {
         friend PhysicalDevice& GetPhysicalDevice();
 
     public:
-        PhysicalDevice(const PhysicalDevice& device) = delete;
-        PhysicalDevice(PhysicalDevice&& device) = delete;
-
-        PhysicalDevice& operator=(const PhysicalDevice& device) = delete;
-        PhysicalDevice& operator=(PhysicalDevice&& device) = delete;
+        ENG_DECL_CLASS_NO_COPIABLE(PhysicalDevice);
+        ENG_DECL_CLASS_NO_MOVABLE(PhysicalDevice);
 
         bool Create(const PhysicalDeviceCreateInfo& info);
         void Destroy();
@@ -65,17 +61,8 @@ namespace vkn
             return m_features;
         }
 
-        bool IsCreated() const { return m_state.test(FLAG_IS_CREATED); }
-
     private:
         PhysicalDevice() = default;
-
-    private:
-        enum StateFlags
-        {
-            FLAG_IS_CREATED,
-            FLAG_COUNT,
-        };
 
     private:
         Instance* m_pInstance = nullptr;
@@ -84,8 +71,6 @@ namespace vkn
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};
         VkPhysicalDeviceProperties m_deviceProps = {};
         VkPhysicalDeviceFeatures m_features = {};
-
-        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

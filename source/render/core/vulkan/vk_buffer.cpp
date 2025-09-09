@@ -22,6 +22,13 @@ namespace vkn
     }
 
 
+    Buffer::Buffer(const BufferCreateInfo& info)
+        : Object()
+    {
+        Create(info);
+    }
+
+
     Buffer::Buffer(Buffer&& buffer) noexcept
     {
         *this = std::move(buffer);
@@ -34,6 +41,8 @@ namespace vkn
             Destroy();
         }
 
+        Object::operator=(std::move(buffer));
+
         std::swap(m_pDevice, buffer.m_pDevice);
 
         std::swap(m_buffer, buffer.m_buffer);
@@ -45,19 +54,9 @@ namespace vkn
         std::swap(m_properties, buffer.m_properties);
         std::swap(m_memAllocFlags, buffer.m_memAllocFlags);
 
-    #ifdef ENG_BUILD_DEBUG
-        m_debugName.swap(buffer.m_debugName);
-    #endif
-
         std::swap(m_state, buffer.m_state);
 
         return *this; 
-    }
-
-
-    Buffer::Buffer(const BufferCreateInfo& info)
-    {
-        Create(info);
     }
 
 
@@ -133,7 +132,7 @@ namespace vkn
         const bool isCreated = isBufferCreated && isMemoryAllocated;
         VK_ASSERT(isCreated);
 
-        m_state.set(FLAG_IS_CREATED, isCreated);
+        SetCreated(isCreated);
 
         return isCreated;
     }
@@ -144,6 +143,8 @@ namespace vkn
         if (!IsCreated()) {
             return;
         }
+
+        Object::Destroy();
 
         VkDevice vkDevice = m_pDevice->Get();
 
@@ -162,10 +163,6 @@ namespace vkn
         m_properties = {};
         m_memAllocFlags = {};
 
-    #ifdef ENG_BUILD_DEBUG
-        m_debugName.fill('\0');
-    #endif
-
         m_state.reset();
     }
 
@@ -173,11 +170,12 @@ namespace vkn
     void* Buffer::Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags)
     {
         VK_ASSERT(IsCreated());
+        VK_ASSERT(!IsMapped());
 
         void* pData = nullptr;
         VK_CHECK(vkMapMemory(m_pDevice->Get(), m_memory, offset, size, flags, &pData));
 
-        m_state.set(FLAG_IS_MAPPED, pData != nullptr);
+        m_state.set(BIT_IS_MAPPED, pData != nullptr);
 
         return pData;
     }
@@ -190,33 +188,6 @@ namespace vkn
 
         vkUnmapMemory(m_pDevice->Get(), m_memory);
 
-        m_state.set(FLAG_IS_MAPPED, false);
-    }
-
-
-    void Buffer::SetDebugName(const char* pName)
-    {
-    #ifdef ENG_BUILD_DEBUG
-        VK_ASSERT(IsCreated());
-        VK_ASSERT(pName);
-        
-        const size_t nameLength = strlen(pName);
-        VK_ASSERT_MSG(nameLength < utils::MAX_VK_OBJ_DBG_NAME_LENGTH, "Debug name %s is too long: %zu (max length: %zu)", pName, nameLength, utils::MAX_VK_OBJ_DBG_NAME_LENGTH - 1);
-
-        m_debugName.fill('\0');
-        memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
-
-        utils::SetObjectName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName);
-    #endif
-    }
-
-
-    const char* Buffer::GetDebugName() const
-    {
-    #ifdef ENG_BUILD_DEBUG
-        return m_debugName.data();
-    #else
-        return "Buffer";
-    #endif
+        m_state.set(BIT_IS_MAPPED, false);
     }
 }
