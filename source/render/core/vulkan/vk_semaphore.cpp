@@ -26,6 +26,10 @@ namespace vkn
 
     Semaphore& Semaphore::operator=(Semaphore&& semaphore) noexcept
     {
+        if (this == &semaphore) {
+            return *this;
+        }
+
         if (IsCreated()) {
             Destroy();
         }

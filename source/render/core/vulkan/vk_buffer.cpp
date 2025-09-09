@@ -37,6 +37,10 @@ namespace vkn
 
     Buffer& Buffer::operator=(Buffer&& buffer) noexcept
     {
+        if (this == &buffer) {
+            return *this;
+        }
+
         if (IsCreated()) {
             Destroy();
         }

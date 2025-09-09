@@ -14,8 +14,12 @@ namespace vkn
 
     Object& Object::operator=(Object&& obj) noexcept
     {
+        if (this == &obj) {
+            return *this;
+        }
+
         if (IsCreated()) {
-            Destroy();
+            Object::Destroy();
         }
 
     #ifdef ENG_BUILD_DEBUG

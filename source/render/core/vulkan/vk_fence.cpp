@@ -26,6 +26,10 @@ namespace vkn
 
     Fence& Fence::operator=(Fence&& fence) noexcept
     {
+        if (this == &fence) {
+            return *this;
+        }
+
         if (IsCreated()) {
             Destroy();
         }
