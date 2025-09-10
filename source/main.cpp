@@ -1035,41 +1035,6 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 }
 
 
-VkSemaphore CreateVkSemaphore()
-{
-    Timer timer;
-
-    VkSemaphoreCreateInfo semaphoreCreateInfo = {};
-    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkSemaphore vkSemaphore = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateSemaphore(s_vkDevice.Get(), &semaphoreCreateInfo, nullptr, &vkSemaphore));
-    VK_ASSERT(vkSemaphore != VK_NULL_HANDLE);
-
-    VK_LOG_INFO("VkSemaphore initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkSemaphore;
-}
-
-
-VkFence CreateVkFence()
-{
-    Timer timer;
-
-    VkFenceCreateInfo fenceCreateInfo = {};
-    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    VkFence vkFence = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateFence(s_vkDevice.Get(), &fenceCreateInfo, nullptr, &vkFence));
-    VK_ASSERT(vkFence != VK_NULL_HANDLE);
-
-    VK_LOG_INFO("VkFence initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkFence;
-}
-
-
 static void CmdPipelineImageBarrier(
     VkCommandBuffer cmdBuffer, 
     VkImageLayout oldLayout, 
