@@ -58,7 +58,7 @@ namespace vkn
     }
     
     
-    std::optional<VkSwapchainCreateInfoKHR> CreateSwapchainCreateInfo(const SwapchainCreateInfo& info, Swapchain& oldSwapchain)
+    VkSwapchainCreateInfoKHR CreateSwapchainCreateInfo(const SwapchainCreateInfo& info, Swapchain& oldSwapchain)
     {
         VK_ASSERT(info.pSurface && info.pSurface->IsCreated());
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -93,12 +93,6 @@ namespace vkn
         VK_ASSERT((info.imageUsage & surfCapabilities.supportedUsageFlags) == info.imageUsage);
         VK_ASSERT((info.compositeAlpha & surfCapabilities.supportedCompositeAlpha) == info.compositeAlpha);
 
-        const VkExtent2D extent = EvaluateExtent(info.width, info.height, surfCapabilities);
-
-        if (extent.width == 0 || extent.height == 0) {
-            return std::nullopt;
-        }
-
         const VkPresentModeKHR presentMode = CheckPresentModeSupport(vkPhysDevice, vkSurface, info.presentMode) ? info.presentMode : VK_PRESENT_MODE_FIFO_KHR;
 
         VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
@@ -110,7 +104,7 @@ namespace vkn
         swapchainCreateInfo.compositeAlpha = info.compositeAlpha;
         swapchainCreateInfo.imageUsage = info.imageUsage;
         swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // Since we have one queue for graphics, compute and transfer
-        swapchainCreateInfo.imageExtent = extent;
+        swapchainCreateInfo.imageExtent = EvaluateExtent(info.width, info.height, surfCapabilities);
         swapchainCreateInfo.imageFormat = surfaceFormat.format;
         swapchainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
         swapchainCreateInfo.minImageCount = minImageCount;
@@ -166,13 +160,17 @@ namespace vkn
 
     bool Swapchain::Recreate(const SwapchainCreateInfo& info)
     {
-        std::optional<VkSwapchainCreateInfoKHR> swapchainCreateInfoOpt = CreateSwapchainCreateInfo(info, *this);
+        VkSwapchainCreateInfoKHR swapchainCreateInfo = CreateSwapchainCreateInfo(info, *this);
 
-        if (!swapchainCreateInfoOpt.has_value()) {
+        const VkExtent2D newExtent = swapchainCreateInfo.imageExtent;
+
+        if (newExtent.width == 0 || newExtent.height == 0) {
             return true;
         }
 
-        const VkSwapchainCreateInfoKHR& swapchainCreateInfo = swapchainCreateInfoOpt.value();
+        if (newExtent.width == m_imageExtent.width && newExtent.height == m_imageExtent.height) {
+            return true;
+        }
 
         VK_CHECK(vkDeviceWaitIdle(info.pDevice->Get()));
 

@@ -8,9 +8,10 @@
 #include "render/core/vulkan/vk_phys_device.h"
 #include "render/core/vulkan/vk_device.h"
 #include "render/core/vulkan/vk_swapchain.h"
-#include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_fence.h"
 #include "render/core/vulkan/vk_semaphore.h"
+#include "render/core/vulkan/vk_cmd.h"
+#include "render/core/vulkan/vk_buffer.h"
 
 #include <glm/glm.hpp>
 
@@ -49,8 +50,8 @@ static vkn::Device& s_vkDevice = vkn::GetDevice();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
-static VkCommandPool   s_vkCmdPool = VK_NULL_HANDLE;
-static VkCommandBuffer s_vkImmediateSubmitCmdBuffer = VK_NULL_HANDLE;
+static vkn::CmdPool   s_vkCmdPool;
+static vkn::CmdBuffer s_vkImmediateSubmitCmdBuffer;
 
 static VkDescriptorPool      s_vkDescriptorPool = VK_NULL_HANDLE;
 static VkDescriptorSet       s_vkDescriptorSet = VK_NULL_HANDLE;
@@ -59,10 +60,10 @@ static VkDescriptorSetLayout s_vkDescriptorSetLayout = VK_NULL_HANDLE;
 static VkPipelineLayout      s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline            s_vkPipeline = VK_NULL_HANDLE;
 
-static std::vector<vkn::Semaphore>  s_vkPresentFinishedSemaphores;
-static std::vector<vkn::Semaphore>  s_vkRenderingFinishedSemaphores;
-static std::vector<vkn::Fence>      s_vkRenderingFinishedFences;
-static std::vector<VkCommandBuffer> s_vkRenderCmdBuffers;
+static std::vector<vkn::Semaphore> s_vkPresentFinishedSemaphores;
+static std::vector<vkn::Semaphore> s_vkRenderingFinishedSemaphores;
+static std::vector<vkn::Fence>     s_vkRenderingFinishedFences;
+static std::vector<vkn::CmdBuffer> s_vkRenderCmdBuffers;
 
 static vkn::Fence s_vkImmediateSubmitFinishedFence;
 
@@ -892,44 +893,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-VkCommandPool CreateVkCmdPool(VkDevice vkDevice, uint32_t queueFamilyIndex)
-{
-    Timer timer;
-
-    VkCommandPoolCreateInfo cmdPoolCreateInfo = {};
-    cmdPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmdPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-
-    VkCommandPool cmdPool = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &cmdPool));
-    VK_ASSERT(cmdPool != VK_NULL_HANDLE);
-
-    VK_LOG_INFO("VkCommandPool initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return cmdPool;
-}
-
-
-static VkCommandBuffer AllocateVkCmdBuffer(VkDevice vkDevice, VkCommandPool vkCmdPool)
-{
-    Timer timer;
-
-    VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
-    cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdBufferAllocInfo.commandPool = vkCmdPool;
-    cmdBufferAllocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
-    VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &cmdBuffer));
-    VK_ASSERT(cmdBuffer != VK_NULL_HANDLE);
-
-    VK_LOG_INFO("VkCommandBuffer allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return cmdBuffer;
-}
-
-
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
     Timer timer;
@@ -1039,6 +1002,9 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         CreateVkShaderModule(vkDevice, psPath, &shaderCodeBuffer),
     };
 
+    VkPipelineColorBlendAttachmentState blendState = {};
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
     GraphicsPipelineBuilder builder;
     
     VkPipeline vkPipeline = builder
@@ -1053,7 +1019,7 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         .SetStencilTestState(VK_FALSE, {}, {})
         .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
         .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
-        .AddColorBlendAttachment(VkPipelineColorBlendAttachmentState{ .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT})
+        .AddColorBlendAttachment(blendState)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetLayout(vkLayout)
         .Build(vkDevice);
@@ -1185,19 +1151,19 @@ template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 {   
     s_vkImmediateSubmitFinishedFence.Reset();
-    VK_CHECK(vkResetCommandBuffer(s_vkImmediateSubmitCmdBuffer, 0));
+    s_vkImmediateSubmitCmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
     cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    VK_CHECK(vkBeginCommandBuffer(s_vkImmediateSubmitCmdBuffer, &cmdBeginInfo));
-        func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    VK_CHECK(vkEndCommandBuffer(s_vkImmediateSubmitCmdBuffer));
+    s_vkImmediateSubmitCmdBuffer.Begin(cmdBeginInfo);
+        func(s_vkImmediateSubmitCmdBuffer.Get(), std::forward<Args>(args)...);
+    s_vkImmediateSubmitCmdBuffer.End();
 
     SubmitVkQueue(
         vkQueue, 
-        s_vkImmediateSubmitCmdBuffer, 
+        s_vkImmediateSubmitCmdBuffer.Get(), 
         s_vkImmediateSubmitFinishedFence.Get(), 
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE,
@@ -1242,7 +1208,7 @@ void RenderScene()
 {
     const size_t frameInFlightIdx = s_frameNumber % s_vkSwapchain.GetImageCount();
 
-    VkCommandBuffer& cmdBuffer                 = s_vkRenderCmdBuffers[frameInFlightIdx];
+    vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[frameInFlightIdx];
     vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[frameInFlightIdx];
     vkn::Semaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[frameInFlightIdx];
     vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[frameInFlightIdx];
@@ -1265,7 +1231,7 @@ void RenderScene()
     }
 
     renderingFinishedFence.Reset();
-    VK_CHECK(vkResetCommandBuffer(cmdBuffer, 0));
+    cmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
     cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1273,9 +1239,9 @@ void RenderScene()
 
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
-    VK_CHECK(vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo));
+    cmdBuffer.Begin(cmdBeginInfo);
         CmdPipelineImageBarrier(
-            cmdBuffer,
+            cmdBuffer.Get(),
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_2_NONE,
@@ -1305,30 +1271,30 @@ void RenderScene()
         colorAttachment.clearValue.color.float32[3] = 255.f / 255.f;
         renderingInfo.pColorAttachments = &colorAttachment;
 
-        vkCmdBeginRendering(cmdBuffer, &renderingInfo);
+        vkCmdBeginRendering(cmdBuffer.Get(), &renderingInfo);
             VkViewport viewport = {};
             viewport.width = renderingInfo.renderArea.extent.width;
             viewport.height = renderingInfo.renderArea.extent.height;
             viewport.minDepth = 0.f;
             viewport.maxDepth = 1.f;
-            vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+            vkCmdSetViewport(cmdBuffer.Get(), 0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.extent = renderingInfo.renderArea.extent;
-            vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+            vkCmdSetScissor(cmdBuffer.Get(), 0, 1, &scissor);
 
-            vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
+            vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
             
-            vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
+            vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
 
             const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
-            vkCmdPushConstants(cmdBuffer, s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
 
-            vkCmdDraw(cmdBuffer, 3, 1, 0, 0);
-        vkCmdEndRendering(cmdBuffer);
+            vkCmdDraw(cmdBuffer.Get(), 3, 1, 0, 0);
+        vkCmdEndRendering(cmdBuffer.Get());
 
         CmdPipelineImageBarrier(
-            cmdBuffer,
+            cmdBuffer.Get(),
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1338,11 +1304,11 @@ void RenderScene()
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
-    VK_CHECK(vkEndCommandBuffer(cmdBuffer));
+    cmdBuffer.End();
 
     SubmitVkQueue(
         s_vkDevice.GetQueue(),
-        cmdBuffer,
+        cmdBuffer.Get(),
         renderingFinishedFence.Get(),
         presentFinishedSemaphore.Get(),
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1511,8 +1477,20 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkSwapchain.IsCreated());
 
 
-    s_vkCmdPool = CreateVkCmdPool(s_vkDevice.Get(), s_vkDevice.GetQueueFamilyIndex());
-    s_vkImmediateSubmitCmdBuffer = AllocateVkCmdBuffer(s_vkDevice.Get(), s_vkCmdPool);
+    vkn::CmdPoolCreateInfo vkCmdPoolCreateInfo = {};
+    vkCmdPoolCreateInfo.pDevice = &s_vkDevice;
+    vkCmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
+    vkCmdPoolCreateInfo.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    
+    s_vkCmdPool.Create(vkCmdPoolCreateInfo);
+    CORE_ASSERT(s_vkCmdPool.IsCreated());
+    s_vkCmdPool.SetDebugName("COMMON_CMD_POOL");
+
+    
+    s_vkImmediateSubmitCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_vkImmediateSubmitCmdBuffer.IsCreated());
+    s_vkImmediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
+
 
     s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice.Get());
     s_vkDescriptorSetLayout = CreateVkDescriptorSetLayout(s_vkDevice.Get());
@@ -1562,12 +1540,38 @@ int main(int argc, char* argv[])
     s_vkRenderingFinishedSemaphores.resize(swapchainImageCount);
     s_vkPresentFinishedSemaphores.resize(swapchainImageCount);
     s_vkRenderingFinishedFences.resize(swapchainImageCount);
-    s_vkRenderCmdBuffers.resize(swapchainImageCount, VK_NULL_HANDLE);
+    s_vkRenderCmdBuffers.resize(swapchainImageCount);
     for (size_t i = 0; i < swapchainImageCount; ++i) {
         s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
+        CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
+
         s_vkPresentFinishedSemaphores[i].Create(&s_vkDevice);
+        CORE_ASSERT(s_vkPresentFinishedSemaphores[i].IsCreated());
+
         s_vkRenderingFinishedFences[i].Create(&s_vkDevice);
-        s_vkRenderCmdBuffers[i] = AllocateVkCmdBuffer(s_vkDevice.Get(), s_vkCmdPool);
+        CORE_ASSERT(s_vkRenderingFinishedFences[i].IsCreated());
+        
+        s_vkRenderCmdBuffers[i] = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        CORE_ASSERT(s_vkRenderCmdBuffers[i].IsCreated());
+
+    #ifdef ENG_BUILD_DEBUG
+        char vkObjDbgName[64] = {'\0'};
+
+        sprintf_s(vkObjDbgName, "RND_FINISH_SEMAPHORE_%zu", i);
+        s_vkRenderingFinishedSemaphores[i].SetDebugName(vkObjDbgName);
+
+        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
+        sprintf_s(vkObjDbgName, "PRESENT_FINISH_SEMAPHORE_%zu", i);
+        s_vkPresentFinishedSemaphores[i].SetDebugName(vkObjDbgName);
+
+        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
+        sprintf_s(vkObjDbgName, "RND_FINISH_FENCE_%zu", i);
+        s_vkRenderingFinishedFences[i].SetDebugName(vkObjDbgName);
+
+        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
+        sprintf_s(vkObjDbgName, "RND_CMD_BUFFER_%zu", i);
+        s_vkRenderCmdBuffers[i].SetDebugName(vkObjDbgName);
+    #endif
     }
 
     s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
@@ -1667,7 +1671,7 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkDescriptorPool, nullptr);
 
-    vkDestroyCommandPool(s_vkDevice.Get(), s_vkCmdPool, nullptr);
+    s_vkCmdPool.Destroy();
     
     s_vkSwapchain.Destroy();
     s_vkDevice.Destroy();

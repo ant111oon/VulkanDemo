@@ -126,15 +126,15 @@ namespace vkn
             m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
         }
 
+        const bool isCreated = isBufferCreated && isMemoryAllocated;
+        VK_ASSERT(isCreated);
+
         m_pDevice = info.pDevice;
 
         m_size = memRequirements.memoryRequirements.size;
         m_usage = info.usage;
         m_properties = info.properties;
         m_memAllocFlags = info.memAllocFlags;
-
-        const bool isCreated = isBufferCreated && isMemoryAllocated;
-        VK_ASSERT(isCreated);
 
         SetCreated(isCreated);
 
