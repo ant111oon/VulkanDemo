@@ -5,6 +5,15 @@
 
 namespace vkn
 {
+    #define VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR) \
+        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsCreated(), "Cmd Buffer \'%s\' is invalid", CMD_BUFFER_PTR->GetDebugName());     \
+        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsStarted(), "Cmd Buffer \'%s\' is not started", CMD_BUFFER_PTR->GetDebugName())
+
+    #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
+        VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
+        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+
+
     CmdBuffer::CmdBuffer(CmdBuffer&& cmdBuffer) noexcept
     {
         *this = std::move(cmdBuffer);
@@ -25,22 +34,97 @@ namespace vkn
 
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
         std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
+        std::swap(m_state, cmdBuffer.m_state);
 
         return *this;
     }
 
 
-    void CmdBuffer::Begin(const VkCommandBufferBeginInfo& beginInfo) const
+    CmdBuffer& CmdBuffer::Begin(const VkCommandBufferBeginInfo& beginInfo)
     {
         VK_ASSERT(IsCreated());
+        VK_ASSERT(!IsStarted());
+
         VK_CHECK(vkBeginCommandBuffer(m_cmdBuffer, &beginInfo));
+
+        m_state.set(FLAG_IS_STARTED, true);
+
+        return *this;
     }
     
     
-    void CmdBuffer::End() const
+    void CmdBuffer::End()
     {
-        VK_ASSERT(IsCreated());
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
         VK_CHECK(vkEndCommandBuffer(m_cmdBuffer));
+
+        m_state.set(FLAG_IS_STARTED, false);
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdPipelineBarrier2(const VkDependencyInfo& depInfo)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdPipelineBarrier2(m_cmdBuffer, &depInfo);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::BeginRendering(const VkRenderingInfo& renderingInfo)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(!IsRenderingStarted());
+
+        vkCmdBeginRendering(m_cmdBuffer, &renderingInfo);
+
+        m_state.set(FLAG_IS_RENDERING_STARTED, true);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::EndRendering()
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+
+        vkCmdEndRendering(m_cmdBuffer);
+
+        m_state.set(FLAG_IS_RENDERING_STARTED, false);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetViewport(m_cmdBuffer, firstViewport, viewportCount, pViewports);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetScissor(m_cmdBuffer, firstScissor, scissorCount, pScissors);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+
+        vkCmdDraw(m_cmdBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+
+        return *this;
     }
 
 
@@ -121,6 +205,8 @@ namespace vkn
         m_cmdBuffer = VK_NULL_HANDLE;
 
         m_pOwner = nullptr;
+
+        m_state.reset();
     }
 
 

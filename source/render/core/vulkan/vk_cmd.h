@@ -23,8 +23,19 @@ namespace vkn
 
         void Reset(VkCommandBufferResetFlags flags = 0);
 
-        void Begin(const VkCommandBufferBeginInfo& beginInfo) const;
-        void End() const;
+        CmdBuffer& Begin(const VkCommandBufferBeginInfo& beginInfo);
+        void End();
+        
+        CmdBuffer& CmdPipelineBarrier2(const VkDependencyInfo& depInfo);
+
+        CmdBuffer& BeginRendering(const VkRenderingInfo& renderingInfo);
+        CmdBuffer& EndRendering();
+
+        CmdBuffer& CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports);
+        CmdBuffer& CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors);
+
+        CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+        
 
         void SetDebugName(const char* pName);
         const char* GetDebugName() const;
@@ -43,6 +54,9 @@ namespace vkn
 
         Device* GetDevice() const;
 
+        bool IsStarted() const { return m_state.test(FLAG_IS_STARTED); }
+        bool IsRenderingStarted() const { return m_state.test(FLAG_IS_RENDERING_STARTED); }
+
     private:
         CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level);
 
@@ -50,8 +64,18 @@ namespace vkn
         void Free();
 
     private:
+        enum StateFlags
+        {
+            FLAG_IS_STARTED,
+            FLAG_IS_RENDERING_STARTED,
+            FLAG_COUNT,
+        };
+
+    private:
         CmdPool* m_pOwner = nullptr;
         VkCommandBuffer m_cmdBuffer = VK_NULL_HANDLE;
+
+        std::bitset<FLAG_COUNT> m_state = {};
     };
 
 

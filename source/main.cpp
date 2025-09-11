@@ -1036,7 +1036,7 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 
 
 static void CmdPipelineImageBarrier(
-    VkCommandBuffer cmdBuffer, 
+    vkn::CmdBuffer& cmdBuffer, 
     VkImageLayout oldLayout, 
     VkImageLayout newLayout,
     VkPipelineStageFlags2 srcStageMask, 
@@ -1068,7 +1068,7 @@ static void CmdPipelineImageBarrier(
     vkDependencyInfo.imageMemoryBarrierCount = 1;
     vkDependencyInfo.pImageMemoryBarriers = &imageBarrier2;
 
-    vkCmdPipelineBarrier2(cmdBuffer, &vkDependencyInfo);
+    cmdBuffer.CmdPipelineBarrier2(vkDependencyInfo);
 }
 
 
@@ -1136,7 +1136,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    s_vkImmediateSubmitFinishedFence.WaitFor(UINT64_MAX);
+    s_vkImmediateSubmitFinishedFence.WaitFor(10'000'000'000);
 }
 
 
@@ -1186,7 +1186,7 @@ void RenderScene()
     VK_CHECK(renderingFinishedFenceStatus);
 
     uint32_t nextImageIdx;
-    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), UINT64_MAX, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
     
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
@@ -1206,7 +1206,7 @@ void RenderScene()
 
     cmdBuffer.Begin(cmdBeginInfo);
         CmdPipelineImageBarrier(
-            cmdBuffer.Get(),
+            cmdBuffer,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_2_NONE,
@@ -1236,17 +1236,17 @@ void RenderScene()
         colorAttachment.clearValue.color.float32[3] = 255.f / 255.f;
         renderingInfo.pColorAttachments = &colorAttachment;
 
-        vkCmdBeginRendering(cmdBuffer.Get(), &renderingInfo);
+        cmdBuffer.BeginRendering(renderingInfo);
             VkViewport viewport = {};
             viewport.width = renderingInfo.renderArea.extent.width;
             viewport.height = renderingInfo.renderArea.extent.height;
             viewport.minDepth = 0.f;
             viewport.maxDepth = 1.f;
-            vkCmdSetViewport(cmdBuffer.Get(), 0, 1, &viewport);
+            cmdBuffer.CmdSetViewport(0, 1, &viewport);
 
             VkRect2D scissor = {};
             scissor.extent = renderingInfo.renderArea.extent;
-            vkCmdSetScissor(cmdBuffer.Get(), 0, 1, &scissor);
+            cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
             vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
             
@@ -1255,11 +1255,11 @@ void RenderScene()
             const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
             vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
 
-            vkCmdDraw(cmdBuffer.Get(), 3, 1, 0, 0);
-        vkCmdEndRendering(cmdBuffer.Get());
+            cmdBuffer.CmdDraw(3, 1, 0, 0);
+        cmdBuffer.EndRendering();
 
         CmdPipelineImageBarrier(
-            cmdBuffer.Get(),
+            cmdBuffer,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
