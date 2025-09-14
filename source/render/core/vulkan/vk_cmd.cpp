@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_cmd.h"
+#include "vk_query.h"
 
 
 namespace vkn
@@ -68,6 +69,28 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
         vkCmdPipelineBarrier2(m_cmdBuffer, &depInfo);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdResetQueryPool(QueryPool& queryPool, uint32_t firstQuery, uint32_t queryCount)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(firstQuery + queryCount <= queryPool.GetQueryCount());
+
+        vkCmdResetQueryPool(m_cmdBuffer, queryPool.Get(), firstQuery, queryCount);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(queryPool.IsQueryIndexValid(queryIndex));
+
+        vkCmdWriteTimestamp2(m_cmdBuffer, stage, queryPool.Get(), queryIndex);
 
         return *this;
     }

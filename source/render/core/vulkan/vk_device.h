@@ -35,6 +35,8 @@ namespace vkn
         bool Create(const DeviceCreateInfo& info);
         void Destroy();
 
+        void WaitIdle() const;
+
         VkDevice Get() const
         {
             VK_ASSERT(IsCreated());

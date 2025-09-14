@@ -152,4 +152,11 @@ namespace vkn
 
         m_queue = VK_NULL_HANDLE;
     }
+
+
+    void Device::WaitIdle() const
+    {
+        VK_ASSERT(IsCreated());
+        VK_CHECK(vkDeviceWaitIdle(m_device));
+    }
 }

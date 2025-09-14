@@ -13,6 +13,7 @@
 #include "render/core/vulkan/vk_cmd.h"
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_pipeline.h"
+#include "render/core/vulkan/vk_query.h"
 
 #include <glm/glm.hpp>
 
@@ -71,7 +72,10 @@ static vkn::Fence s_vkImmediateSubmitFinishedFence;
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_commonConstBuffer;
 
+static vkn::QueryPool s_vkQueryPool;
+
 static size_t s_frameNumber = 0;
+static size_t s_frameInFlightNumber = 0;
 static bool s_swapchainRecreateRequired = false;
 
 
@@ -271,6 +275,21 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 }
 
 
+static VkQueryPool CreateVkQueryPool(VkDevice vkDevice, uint32_t queryCount)
+{
+    VkQueryPoolCreateInfo vkQueryPoolCreateInfo = {};
+    vkQueryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    vkQueryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    vkQueryPoolCreateInfo.queryCount = queryCount;
+
+    VkQueryPool vkQueryPool = VK_NULL_HANDLE;
+    
+    VK_CHECK(vkCreateQueryPool(vkDevice, &vkQueryPoolCreateInfo, nullptr, &vkQueryPool));
+
+    return vkQueryPool;
+}
+
+
 static void CmdPipelineImageBarrier(
     vkn::CmdBuffer& cmdBuffer, 
     VkImageLayout oldLayout, 
@@ -407,12 +426,10 @@ struct COMMON_CB_DATA
 
 void RenderScene()
 {
-    const size_t frameInFlightIdx = s_frameNumber % s_vkSwapchain.GetImageCount();
-
-    vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[frameInFlightIdx];
-    vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[frameInFlightIdx];
-    vkn::Semaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[frameInFlightIdx];
-    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[frameInFlightIdx];
+    vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
+    vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[s_frameInFlightNumber];
+    vkn::Semaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[s_frameInFlightNumber];
+    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[s_frameInFlightNumber];
 
     const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (renderingFinishedFenceStatus == VK_NOT_READY) {
@@ -441,6 +458,10 @@ void RenderScene()
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
     cmdBuffer.Begin(cmdBeginInfo);
+        cmdBuffer
+            .CmdResetQueryPool(s_vkQueryPool, 0, 2)
+            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0);
+
         CmdPipelineImageBarrier(
             cmdBuffer,
             VK_IMAGE_LAYOUT_UNDEFINED,
@@ -505,6 +526,8 @@ void RenderScene()
             rndImage,
             VK_IMAGE_ASPECT_COLOR_BIT
         );
+
+        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 1);
     cmdBuffer.End();
 
     SubmitVkQueue(
@@ -539,6 +562,7 @@ void RenderScene()
     }
 
     ++s_frameNumber;
+    s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
 }
 
 
@@ -817,6 +841,17 @@ int main(int argc, char* argv[])
 
     stagingBuffer.Destroy();
 
+
+    vkn::QueryCreateInfo queryCreateInfo = {};
+    queryCreateInfo.pDevice = &s_vkDevice;
+    queryCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryCreateInfo.queryCount = 2;
+
+    s_vkQueryPool.Create(queryCreateInfo);
+    CORE_ASSERT(s_vkQueryPool.IsCreated());
+    s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
+
+
     pWnd->SetVisible(true);
 
     Timer timer;
@@ -843,18 +878,26 @@ int main(int argc, char* argv[])
 
         RenderScene();
 
+        s_vkDevice.WaitIdle();
+
+        uint64_t queryResults[2] = { 0 };
+        s_vkQueryPool.GetResults(0, _countof(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
+
     #ifdef ENG_BUILD_DEBUG
         constexpr const char* BUILD_TYPE_STR = "DEBUG";
     #else
         constexpr const char* BUILD_TYPE_STR = "RELEASE";
     #endif
+        
+        const float gpuFrameTime = (queryResults[1] - queryResults[0]) * s_vkPhysDevice.GetProperties().limits.timestampPeriod / 1'000'000.f;
+        const float cpuFrameTime = timer.End().GetDuration<float, std::milli>();
 
-        const float frameTime = timer.End().GetDuration<float, std::milli>();
-
-        pWnd->SetTitle("%s | %s: %.3f ms (%.1f FPS)", BUILD_TYPE_STR, wndInitInfo.pTitle, frameTime, 1000.f / frameTime);
+        pWnd->SetTitle("%s | %s: GPU: %.3f ms, CPU: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime);
     }
 
-    VK_CHECK(vkDeviceWaitIdle(s_vkDevice.Get()));
+    s_vkDevice.WaitIdle();
+
+    s_vkQueryPool.Destroy();
 
     s_commonConstBuffer.Destroy();
     s_vertexBuffer.Destroy(); 
