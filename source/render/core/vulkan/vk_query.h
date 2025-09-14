@@ -3,6 +3,8 @@
 #include "vk_object.h"
 #include "vk_device.h"
 
+#include <array>
+
 
 namespace vkn
 {
@@ -31,6 +33,22 @@ namespace vkn
         void Destroy();
 
         void GetResults(uint32_t firstQuery, uint32_t queryCount, size_t dataSize, void *pData, VkDeviceSize stride, VkQueryResultFlags flags) const;
+
+        template <typename T>
+        void GetResults(uint32_t firstQuery, uint32_t queryCount, std::span<T> outData, VkQueryResultFlags flags) const
+        {
+            VK_ASSERT(queryCount <= outData.size());
+            GetResults(firstQuery, queryCount, outData.size() * sizeof(T), outData.data(), sizeof(T), flags);
+        }
+
+        template <typename T, size_t QUERY_COUNT>
+        std::array<T, QUERY_COUNT> GetResults(uint32_t firstQuery, VkQueryResultFlags flags) const
+        {
+            std::array<T, QUERY_COUNT> outData = {};
+            GetResults(firstQuery, QUERY_COUNT, QUERY_COUNT * sizeof(T), outData.data(), sizeof(T), flags);
+
+            return outData;
+        }
 
         bool IsQueryIndexValid(uint32_t queryIndex) const;
 

@@ -275,21 +275,6 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 }
 
 
-static VkQueryPool CreateVkQueryPool(VkDevice vkDevice, uint32_t queryCount)
-{
-    VkQueryPoolCreateInfo vkQueryPoolCreateInfo = {};
-    vkQueryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    vkQueryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    vkQueryPoolCreateInfo.queryCount = queryCount;
-
-    VkQueryPool vkQueryPool = VK_NULL_HANDLE;
-    
-    VK_CHECK(vkCreateQueryPool(vkDevice, &vkQueryPoolCreateInfo, nullptr, &vkQueryPool));
-
-    return vkQueryPool;
-}
-
-
 static void CmdPipelineImageBarrier(
     vkn::CmdBuffer& cmdBuffer, 
     VkImageLayout oldLayout, 
@@ -424,7 +409,7 @@ struct COMMON_CB_DATA
 };
 
 
-void RenderScene()
+bool RenderScene()
 {
     vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
     vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[s_frameInFlightNumber];
@@ -433,7 +418,7 @@ void RenderScene()
 
     const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (renderingFinishedFenceStatus == VK_NOT_READY) {
-        return;
+        return false;
     }
 
     VK_CHECK(renderingFinishedFenceStatus);
@@ -445,7 +430,7 @@ void RenderScene()
         VK_CHECK(acquireResult);
     } else {
         s_swapchainRecreateRequired = true;
-        return;
+        return false;
     }
 
     renderingFinishedFence.Reset();
@@ -459,8 +444,8 @@ void RenderScene()
 
     cmdBuffer.Begin(cmdBeginInfo);
         cmdBuffer
-            .CmdResetQueryPool(s_vkQueryPool, 0, 2)
-            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0);
+            .CmdResetQueryPool(s_vkQueryPool, s_frameInFlightNumber * 2, 2)
+            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, s_frameInFlightNumber * 2);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -527,7 +512,7 @@ void RenderScene()
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
-        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 1);
+        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, s_frameInFlightNumber * 2 + 1);
     cmdBuffer.End();
 
     SubmitVkQueue(
@@ -558,11 +543,10 @@ void RenderScene()
         VK_CHECK(presentResult);
     } else {
         s_swapchainRecreateRequired = true;
-        return;
+        return false;
     }
 
-    ++s_frameNumber;
-    s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
+    return true;
 }
 
 
@@ -845,7 +829,7 @@ int main(int argc, char* argv[])
     vkn::QueryCreateInfo queryCreateInfo = {};
     queryCreateInfo.pDevice = &s_vkDevice;
     queryCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryCreateInfo.queryCount = 2;
+    queryCreateInfo.queryCount = 128;
 
     s_vkQueryPool.Create(queryCreateInfo);
     CORE_ASSERT(s_vkQueryPool.IsCreated());
@@ -876,12 +860,11 @@ int main(int argc, char* argv[])
             }
         }
 
-        RenderScene();
+        if (!RenderScene()) {
+            continue;
+        }
 
-        s_vkDevice.WaitIdle();
-
-        uint64_t queryResults[2] = { 0 };
-        s_vkQueryPool.GetResults(0, _countof(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
+        const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(s_frameInFlightNumber * 2, VK_QUERY_RESULT_64_BIT);
 
     #ifdef ENG_BUILD_DEBUG
         constexpr const char* BUILD_TYPE_STR = "DEBUG";
@@ -893,6 +876,9 @@ int main(int argc, char* argv[])
         const float cpuFrameTime = timer.End().GetDuration<float, std::milli>();
 
         pWnd->SetTitle("%s | %s: GPU: %.3f ms, CPU: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime);
+        
+        ++s_frameNumber;
+        s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
     }
 
     s_vkDevice.WaitIdle();
