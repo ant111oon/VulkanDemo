@@ -16,27 +16,50 @@
 #include "render/core/vulkan/vk_query.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp> 
+
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_NOEXCEPTION
+#include <tiny_gltf.h>
 
 
 namespace fs = std::filesystem;
+namespace gltf = tinygltf;
 
 
-struct TestVertex
+struct Mesh
 {
-    glm::vec2 ndc;
-    glm::vec2 uv;
-    glm::vec4 color;
-};
-
-static constexpr std::array TEST_VERTECIES = {
-    TestVertex { glm::vec2(-0.5f, 0.5f), glm::vec2(0.f,  0.f), glm::vec4(1.f, 0.f, 0.f, 1.f) },
-    TestVertex { glm::vec2( 0.5f, 0.5f), glm::vec2(1.f,  0.f), glm::vec4(0.f, 1.f, 0.f, 1.f) },
-    TestVertex { glm::vec2( 0.f, -0.5f), glm::vec2(0.5f, 1.f), glm::vec4(0.f, 0.f, 1.f, 1.f) },
+    uint32_t firstVertex;
+    uint32_t vertexCount;
+    uint32_t firstIndex;
+    uint32_t indexCount;
 };
 
 
-static constexpr size_t VERTEX_BUFFER_SIZE_F4 = 4096;
-static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = VERTEX_BUFFER_SIZE_F4 * sizeof(glm::vec4);
+struct Vertex
+{
+    glm::uint posXY;
+    glm::uint posZnormX;
+    glm::uint normYZ;
+    glm::uint texcoord;
+};
+
+
+struct COMMON_CB_DATA
+{
+    glm::mat4x4 COMMON_VIEW_MATRIX;
+    glm::mat4x4 COMMON_PROJ_MATRIX;
+    glm::mat4x4 COMMON_VIEW_PROJ_MATRIX;
+};
+
+
+static constexpr size_t MAX_VERTEX_COUNT = 256 * 1024;
+static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Vertex);
+
+static constexpr size_t MAX_INDEX_COUNT = 1'000'000;
+static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(uint16_t);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -70,9 +93,12 @@ static std::vector<vkn::CmdBuffer> s_vkRenderCmdBuffers;
 static vkn::Fence s_vkImmediateSubmitFinishedFence;
 
 static vkn::Buffer s_vertexBuffer;
+static vkn::Buffer s_indexBuffer;
 static vkn::Buffer s_commonConstBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
+
+static std::vector<Mesh> s_meshes;
 
 static size_t s_frameNumber = 0;
 static size_t s_frameInFlightNumber = 0;
@@ -402,13 +428,6 @@ void ProcessWndEvents(const WndEvent& event)
 }
 
 
-struct COMMON_CB_DATA
-{
-    glm::vec3 color;
-    float PAD0;
-};
-
-
 bool RenderScene()
 {
     vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
@@ -497,7 +516,11 @@ bool RenderScene()
             const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
             vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
 
-            cmdBuffer.CmdDraw(3, 1, 0, 0);
+            vkCmdBindIndexBuffer(cmdBuffer.Get(), s_indexBuffer.Get(), 0, VK_INDEX_TYPE_UINT16);
+
+            for (const Mesh& mesh : s_meshes) {
+                cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+            }
         cmdBuffer.EndRendering();
 
         CmdPipelineImageBarrier(
@@ -547,6 +570,190 @@ bool RenderScene()
     }
 
     return true;
+}
+
+
+static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Buffer& indexBuffer)
+{
+    CORE_LOG_TRACE("Loading %s...", filepath.string().c_str());
+
+    gltf::TinyGLTF modelLoader;
+    gltf::Model model;
+    std::string error, warning;
+
+    const bool isMeshLoaded = filepath.extension() == ".gltf" ? 
+        modelLoader.LoadASCIIFromFile(&model, &error, &warning, filepath.string()) :
+        modelLoader.LoadBinaryFromFile(&model, &error, &warning, filepath.string());
+
+    if (!warning.empty()) {
+        CORE_LOG_WARN("Warning during %s model loading: %s", filepath.string().c_str(), warning.c_str());
+    }
+    CORE_ASSERT_MSG(isMeshLoaded && error.empty(), "Failed to load %s model: %s", filepath.string().c_str(), error.c_str());
+
+    size_t vertexCount = 0;
+    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
+        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &vertexCount](const gltf::Primitive& primitive){
+            CORE_ASSERT(primitive.attributes.contains("POSITION"));
+            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
+            const gltf::Accessor& positionAccessor = model.accessors[positionAccessorIndex];
+
+            vertexCount += positionAccessor.count;
+        });
+    });
+
+    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "GLTF scene %s vertex buffer overflow: %zu, max vertex count: %zu", filepath.string().c_str(), vertexCount, MAX_VERTEX_COUNT);
+
+    std::vector<Vertex> cpuVertBuffer;
+    cpuVertBuffer.reserve(vertexCount);
+
+    size_t indexCount = 0;
+    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &indexCount](const gltf::Mesh& mesh){
+        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &indexCount](const gltf::Primitive& primitive){
+            if (primitive.indices >= 0) {
+                const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+
+                indexCount += indexAccessor.count;
+            }
+        });
+    });
+
+    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", filepath.string().c_str(), indexCount, MAX_INDEX_COUNT);
+
+    std::vector<uint16_t> cpuIndexBuffer;
+    cpuIndexBuffer.reserve(indexCount);
+
+    s_meshes.reserve(model.meshes.size());
+    s_meshes.resize(0);
+
+    for (const gltf::Mesh& mesh : model.meshes) {
+        Mesh internalMesh = {};
+
+        internalMesh.firstVertex = cpuVertBuffer.size();
+        internalMesh.firstIndex = cpuIndexBuffer.size();
+
+        for (const gltf::Primitive& primitive : mesh.primitives) {
+            CORE_ASSERT(primitive.attributes.contains("POSITION"));
+            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
+            const gltf::Accessor& positionAccessor  = model.accessors[positionAccessorIndex];
+            
+            const auto& positionBufferView = model.bufferViews[positionAccessor.bufferView];
+            const auto& positionBuffer = model.buffers[positionBufferView.buffer];
+
+            const uint8_t* pPositionData = positionBuffer.data.data() + positionBufferView.byteOffset + positionAccessor.byteOffset;
+
+            CORE_ASSERT(primitive.attributes.contains("NORMAL"));
+            const uint32_t normalAccessorIndex = primitive.attributes.at("NORMAL");
+            const gltf::Accessor& normalAccessor = model.accessors[normalAccessorIndex];
+
+            const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
+            const auto& normalBuffer = model.buffers[normalBufferView.buffer];
+
+            const uint8_t* pNormalData = normalBuffer.data.data() + normalBufferView.byteOffset + normalAccessor.byteOffset;
+
+            CORE_ASSERT(primitive.attributes.contains("TEXCOORD_0"));
+            const uint32_t texcoordAccessorIndex = primitive.attributes.at("TEXCOORD_0");
+            const gltf::Accessor& texcoordAccessor = model.accessors[texcoordAccessorIndex];
+
+            const auto& texcoordBufferView = model.bufferViews[texcoordAccessor.bufferView];
+            const auto& texcoordBuffer = model.buffers[texcoordBufferView.buffer];
+
+            const uint8_t* pTexcoordData = texcoordBuffer.data.data() + texcoordBufferView.byteOffset + texcoordAccessor.byteOffset;
+
+            internalMesh.vertexCount += positionAccessor.count;
+
+            for (size_t i = 0; i < positionAccessor.count; ++i) {
+                const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * positionAccessor.ByteStride(positionBufferView));
+                const float* pNormal = reinterpret_cast<const float*>(pNormalData + i * normalAccessor.ByteStride(normalBufferView));
+                const float* pTexcoord = reinterpret_cast<const float*>(pTexcoordData + i * texcoordAccessor.ByteStride(texcoordBufferView));
+                
+                Vertex vertex = {};
+
+                vertex.posXY = glm::packHalf2x16(glm::vec2(pPosition[0], pPosition[1]));
+                vertex.posZnormX = glm::packHalf2x16(glm::vec2(pPosition[2], pNormal[0]));
+                vertex.normYZ = glm::packHalf2x16(glm::vec2(pNormal[1], pNormal[2]));
+                vertex.texcoord = glm::packHalf2x16(glm::vec2(pTexcoord[0], pTexcoord[1]));
+
+                cpuVertBuffer.emplace_back(vertex);
+            }
+
+            CORE_ASSERT_MSG(primitive.indices >= 0, "GLTF primitive must have index accessor");
+
+            const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+            const gltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+            const gltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+
+            const uint8_t* pIndexData = indexBuffer.data.data() + indexBufferView.byteOffset + indexAccessor.byteOffset;
+
+            internalMesh.indexCount += indexAccessor.count;
+
+            for (size_t i = 0; i < indexAccessor.count; ++i) {
+                uint32_t index = UINT32_MAX;
+
+                switch (indexAccessor.componentType) {
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint8_t*>(pIndexData + i)));
+                        break;
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint16_t*>(pIndexData + i * 2)));
+                        break;
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint32_t*>(pIndexData + i * 4)));
+                        break;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid GLTF index type: %d", indexAccessor.componentType);
+                        break;
+                }
+
+                CORE_ASSERT_MSG(index < UINT16_MAX, "Vertex index is greater than %zu", UINT16_MAX);
+                cpuIndexBuffer.push_back(static_cast<uint16_t>(index));
+            }
+        }
+
+        s_meshes.emplace_back(internalMesh);
+    }
+
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    stagingBufCreateInfo.memAllocFlags = 0;
+
+    vkn::Buffer stagingVertBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingVertBuffer.IsCreated());
+    stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
+
+    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(uint16_t);
+
+    vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingIndexBuffer.IsCreated());
+    stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
+
+    {
+        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]));
+        stagingVertBuffer.Unmap();
+    }
+
+    {
+        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]));
+        stagingIndexBuffer.Unmap();
+    }
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){
+        VkBufferCopy region = {};
+        
+        region.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
+        vkCmdCopyBuffer(vkCmdBuffer, stagingVertBuffer.Get(), vertBuffer.Get(), 1, &region);
+
+        region.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
+        vkCmdCopyBuffer(vkCmdBuffer, stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &region);
+    });
+
+    stagingVertBuffer.Destroy();
+    stagingIndexBuffer.Destroy();
 }
 
 
@@ -722,7 +929,19 @@ int main(int argc, char* argv[])
 
     {
         COMMON_CB_DATA commonConstBuffer = {};
-        commonConstBuffer.color = glm::vec3(1.f, 0.f, 1.f);
+
+        const glm::mat4x4 viewMat = glm::transpose(glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f), glm::vec3(0.f, 1.f, 0.f)));
+        
+        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100000.f);
+        projMat[1][1] *= -1.f;
+        projMat = glm::transpose(projMat);
+
+        const glm::mat4x4 viewProjMat = viewMat * projMat;
+
+        commonConstBuffer.COMMON_VIEW_MATRIX = viewMat;
+        commonConstBuffer.COMMON_PROJ_MATRIX = projMat;
+
+        commonConstBuffer.COMMON_VIEW_PROJ_MATRIX = viewProjMat;
 
         void* pCommonConstBufferData = s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0);
         memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
@@ -786,24 +1005,6 @@ int main(int argc, char* argv[])
     s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
 
 
-    vkn::BufferCreateInfo stagingBufCreateInfo = {};
-    stagingBufCreateInfo.pDevice = &s_vkDevice;
-    stagingBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    stagingBufCreateInfo.memAllocFlags = 0;
-
-    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
-    CORE_ASSERT(stagingBuffer.IsCreated());
-    stagingBuffer.SetDebugName("STAGING_BUFFER");
-
-    {
-        void* pVertexBufferData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pVertexBufferData, TEST_VERTECIES.data(), TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]));
-        stagingBuffer.Unmap();
-    }
-
-
     vkn::BufferCreateInfo vertBufCreateInfo = {};
     vertBufCreateInfo.pDevice = &s_vkDevice;
     vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
@@ -816,14 +1017,19 @@ int main(int argc, char* argv[])
     s_vertexBuffer.SetDebugName("COMMON_VB");
 
 
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){
-        VkBufferCopy region = {};
-        region.size = TEST_VERTECIES.size() * sizeof(TEST_VERTECIES[0]);
+    vkn::BufferCreateInfo idxBufCreateInfo = {};
+    idxBufCreateInfo.pDevice = &s_vkDevice;
+    idxBufCreateInfo.size = INDEX_BUFFER_SIZE_BYTES;
+    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    idxBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    idxBufCreateInfo.memAllocFlags = 0;
 
-        vkCmdCopyBuffer(vkCmdBuffer, stagingBuffer.Get(), s_vertexBuffer.Get(), 1, &region);
-    });
+    s_indexBuffer.Create(idxBufCreateInfo);
+    CORE_ASSERT(s_indexBuffer.IsCreated());
+    s_indexBuffer.SetDebugName("COMMON_IB");
 
-    stagingBuffer.Destroy();
+    const fs::path filepath = argc > 1 ? argv[1] : "../assets/DamagedHelmet/DamagedHelmet.gltf";
+    LoadScene(filepath, s_vertexBuffer, s_indexBuffer);
 
 
     vkn::QueryCreateInfo queryCreateInfo = {};
@@ -886,7 +1092,8 @@ int main(int argc, char* argv[])
     s_vkQueryPool.Destroy();
 
     s_commonConstBuffer.Destroy();
-    s_vertexBuffer.Destroy(); 
+    s_indexBuffer.Destroy();
+    s_vertexBuffer.Destroy();
 
     s_vkImmediateSubmitFinishedFence.Destroy();
     

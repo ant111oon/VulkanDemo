@@ -1,17 +1,11 @@
 
-struct COMMON_CB_DATA
-{
-    float3 color;
-    float PAD0;
-};
-
-[vk::binding(0, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
-
 
 struct TEST_PS_INPUT
 {
-    [[vk::location(0)]] float4 color;
-    [[vk::location(1)]] float2 texCooord;
+    [[vk::location(0)]] float3 lnorm;
+    [[vk::location(1)]] float2 texCoord;
+
+    float4 hpos : SV_Position;
 };
 
 
@@ -26,7 +20,7 @@ TEST_PS_OUTPUT main(TEST_PS_INPUT input)
 {
     TEST_PS_OUTPUT result = (TEST_PS_OUTPUT)0;
 
-    result.color = float4(input.color.rgb * COMMON_CB.color, 1.f);
+    result.color = float4(input.lnorm, 1.f);
     
     return result;
 }

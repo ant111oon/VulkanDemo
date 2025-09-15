@@ -151,6 +151,16 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance)
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+
+        vkCmdDrawIndexed(m_cmdBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+
+        return *this;
+    }
+
+
     void CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
         VK_ASSERT(IsCreated());

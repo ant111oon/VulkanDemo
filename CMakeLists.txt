@@ -19,12 +19,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG        v1.91.9b
 )
 FetchContent_MakeAvailable(imgui)
+
+
+FetchContent_Declare(
+    tinygltf
+    GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+    GIT_TAG        v2.9.6
+)
+FetchContent_MakeAvailable(tinygltf)
+
 
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.h
@@ -67,7 +77,7 @@ target_include_directories(${ENGINE_PROJ_NAME}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
 )
 
-target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan vma glm imgui)
+target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan vma glm imgui tinygltf)
 if(WIN32)
     target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE 
         user32.lib gdi32.lib kernel32.lib
