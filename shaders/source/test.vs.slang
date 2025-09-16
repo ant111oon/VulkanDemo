@@ -1,9 +1,15 @@
+struct INPUT_DATA
+{
+    float3 position;
+    float3 lnorm;
+    float2 texCoord;
+};
+
 
 struct BINDLESS_REGISTRY
 {
     uint4* VERTEX_DATA;
 };
-
 
 [[vk::push_constant]] BINDLESS_REGISTRY REGISTRY;
 
@@ -18,37 +24,24 @@ struct COMMON_CB_DATA
 [vk::binding(0, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 
-struct INPUT_DATA
+float halfToFloat(uint packed)
 {
-    float3 position;
-    float3 lnorm;
-    float2 texCoord;
-};
+    uint sign = (packed >> 15) & 0x1;
+    uint exponent = (packed >> 10) & 0x1F; // Extract exponent (5 bits)
+    uint fraction = packed & 0x3FF;        // Extract fraction (10 bits)
 
-// Convert a half-precision (16-bit) float to a single-precision (32-bit) float
-float halfToFloat(uint h)
-{
-    // Half-precision (16-bit) float to 32-bit float conversion
-    uint sign = (h >> 15) & 0x1;      // Extract sign (1 bit)
-    uint exponent = (h >> 10) & 0x1F; // Extract exponent (5 bits)
-    uint fraction = h & 0x3FF;        // Extract fraction (10 bits)
-
-    // If the exponent is 0, it's a subnormal number or zero
-    if (exponent == 0)
-    {
-        if (fraction == 0)
-        {
-            return sign == 0 ? 0.0 : -0.0; // Zero (signed)
+    if (exponent == 0) {
+        if (fraction == 0) {
+            return sign == 0 ? 0.f : -0.f;
         } else {
-            // Handle subnormal numbers (denormalized floats)
-            exponent = 1;
+            exponent = 1; // Handle subnormal numbers (denormalized floats)
         }
     }
+
     // If the exponent is 31, it could be infinity or NaN
-    if (exponent == 31)
-    {
+    if (exponent == 31) {
         if (fraction == 0) {
-            return sign == 0 ? float(1.0 / 0.0) : float(-1.0 / 0.0); // Infinity
+            return sign == 0 ? float(1.f / 0.f) : float(-1.f / 0.f); // Infinity
         } else {
             return asfloat(0x7FC00000); // NaN
         }
@@ -58,27 +51,19 @@ float halfToFloat(uint h)
     exponent = exponent - 15 + 127; // Bias conversion (15 for half-float, 127 for single-precision float)
 
     // Assemble the final 32-bit float
-    uint result = (sign << 31) | (exponent << 23) | (fraction << 13);
-    return asfloat(result); // Convert the result to a float
+    const uint result = (sign << 31) | (exponent << 23) | (fraction << 13);
+
+    return asfloat(result);
 }
 
 
-// Manually unpack a packed 32-bit uint to two half-floats
 float2 unpackHalf2x16(uint packed)
 {
-    // Extract the low and high 16 bits
-    uint lowBits = packed & 0xFFFFu; // lower 16 bits
-    uint highBits = packed >> 16;    // upper 16 bits
+    const uint lowBits = packed & 0xFFFF;
+    const uint highBits = packed >> 16;
 
-    // Convert each half-precision value to float
-    float2 result;
-    result.x = halfToFloat(lowBits);  // Convert the lower half-float to float
-    result.y = halfToFloat(highBits); // Convert the upper half-float to float
-
-    return result;
+    return float2(halfToFloat(lowBits), halfToFloat(highBits));
 }
-
-
 
 
 #define UNPACK_VERTEX_LPOS(VERTEX_OFFSET)     float3(unpackHalf2x16(REGISTRY.VERTEX_DATA[VERTEX_OFFSET][0]), unpackHalf2x16(REGISTRY.VERTEX_DATA[VERTEX_OFFSET][1]).x)

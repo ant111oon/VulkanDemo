@@ -15,8 +15,8 @@
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp> 
+#include "core/camera/camera.h"
+
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -27,6 +27,8 @@
 
 namespace fs = std::filesystem;
 namespace gltf = tinygltf;
+
+using VertexIndexType = uint32_t;
 
 
 struct Mesh
@@ -55,16 +57,19 @@ struct COMMON_CB_DATA
 };
 
 
-static constexpr size_t MAX_VERTEX_COUNT = 256 * 1024;
+static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
 static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Vertex);
 
-static constexpr size_t MAX_INDEX_COUNT = 1'000'000;
-static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(uint16_t);
+static constexpr size_t MAX_INDEX_COUNT = 2'000'000;
+static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(VertexIndexType);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
+static constexpr float CAMERA_SPEED = 10.f;
+
+static BaseWindow* s_pWnd = nullptr;
 
 static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
@@ -100,9 +105,12 @@ static vkn::QueryPool s_vkQueryPool;
 
 static std::vector<Mesh> s_meshes;
 
+static eng::Camera s_camera;
+
 static size_t s_frameNumber = 0;
 static size_t s_frameInFlightNumber = 0;
 static bool s_swapchainRecreateRequired = false;
+static bool s_flyCameraMode = false;
 
 
 #ifdef ENG_BUILD_DEBUG
@@ -406,28 +414,6 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 }
 
 
-static bool ResizeVkSwapchain(BaseWindow* pWnd)
-{
-    if (!s_swapchainRecreateRequired) {
-        return false;
-    }
-
-    const bool resizeResult = s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight());
-    
-    s_swapchainRecreateRequired = !resizeResult;
-
-    return s_swapchainRecreateRequired;
-}
-
-
-void ProcessWndEvents(const WndEvent& event)
-{
-    if (event.Is<WndResizeEvent>()) {
-        s_swapchainRecreateRequired = true;
-    }
-}
-
-
 void RenderScene()
 {
     vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
@@ -516,7 +502,7 @@ void RenderScene()
             const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
             vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
 
-            vkCmdBindIndexBuffer(cmdBuffer.Get(), s_indexBuffer.Get(), 0, VK_INDEX_TYPE_UINT16);
+            vkCmdBindIndexBuffer(cmdBuffer.Get(), s_indexBuffer.Get(), 0, std::is_same_v<VertexIndexType, uint16_t> ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 
             for (const Mesh& mesh : s_meshes) {
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
@@ -617,7 +603,7 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
 
     CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", filepath.string().c_str(), indexCount, MAX_INDEX_COUNT);
 
-    std::vector<uint16_t> cpuIndexBuffer;
+    std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
     s_meshes.reserve(model.meshes.size());
@@ -630,6 +616,8 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
         internalMesh.firstIndex = cpuIndexBuffer.size();
 
         for (const gltf::Primitive& primitive : mesh.primitives) {
+            const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
+
             CORE_ASSERT(primitive.attributes.contains("POSITION"));
             const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
             const gltf::Accessor& positionAccessor  = model.accessors[positionAccessorIndex];
@@ -702,8 +690,10 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
                         break;
                 }
 
-                CORE_ASSERT_MSG(index < UINT16_MAX, "Vertex index is greater than %zu", UINT16_MAX);
-                cpuIndexBuffer.push_back(static_cast<uint16_t>(index));
+                index = primitiveStartIndex + index;
+
+                CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
+                cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
             }
         }
 
@@ -722,7 +712,7 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
     CORE_ASSERT(stagingVertBuffer.IsCreated());
     stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
 
-    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(uint16_t);
+    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
 
     vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
     CORE_ASSERT(stagingIndexBuffer.IsCreated());
@@ -773,15 +763,153 @@ void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
         const float gpuFrameTime = (queryResults[1] - queryResults[0]) * s_vkPhysDevice.GetProperties().limits.timestampPeriod / 1'000'000.f;
         const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
 
-        pWnd->SetTitle("%s | %s: GPU: %.3f ms, CPU: %.3f ms (%.1f FPS)", APP_NAME, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime);
+        pWnd->SetTitle("%s | %s | GPU: %.3f ms, CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s", 
+            APP_NAME, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF");
+    }
+}
+
+
+static bool ResizeVkSwapchain(BaseWindow* pWnd)
+{
+    if (!s_swapchainRecreateRequired) {
+        return false;
+    }
+
+    const bool resizeResult = s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight());
+    
+    s_swapchainRecreateRequired = !resizeResult;
+
+    return s_swapchainRecreateRequired;
+}
+
+
+static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
+{
+    static bool firstEvent = true;
+
+    if (event.Is<WndKeyEvent>()) {
+        const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
+
+        if (keyEvent.IsPressed() || keyEvent.IsHold()) {
+            if (keyEvent.key == WndKey::KEY_W) { 
+                camera.velocity.z = -CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_S) {
+                camera.velocity.z = CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_A) {
+                camera.velocity.x = -CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_D) {
+                camera.velocity.x = CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_E) {
+                camera.velocity.y = CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_Q) {
+                camera.velocity.y = -CAMERA_SPEED;
+            }
+            if (keyEvent.key == WndKey::KEY_F5) {
+                firstEvent = true;
+            }
+        }
+
+        if (keyEvent.IsReleased()) {
+            if (keyEvent.key == WndKey::KEY_W) {
+                camera.velocity.z = 0;
+            }
+            if (keyEvent.key == WndKey::KEY_S) {
+                camera.velocity.z = 0;
+            }
+            if (keyEvent.key == WndKey::KEY_A) {
+                camera.velocity.x = 0;
+            }
+            if (keyEvent.key == WndKey::KEY_D) {
+                camera.velocity.x = 0;
+            }
+            if (keyEvent.key == WndKey::KEY_E) {
+                camera.velocity.y = 0;
+            }
+            if (keyEvent.key == WndKey::KEY_Q) {
+                camera.velocity.y = 0;
+            }
+        }
+    }
+
+    if (event.Is<WndCursorEvent>()) {
+        const WndCursorEvent& cursorEvent = event.Get<WndCursorEvent>();
+
+        static int16_t prevX = 0;
+        static int16_t prevY = 0; 
+
+        if (firstEvent) {
+            firstEvent = false;
+        } else {
+            camera.yaw += (float)(cursorEvent.x - prevX) / 200.f;
+            camera.pitch -= (float)(cursorEvent.y - prevY) / 200.f;
+        }
+
+        prevX = cursorEvent.x;
+        prevY = cursorEvent.y;
+    }
+}
+
+
+void ProcessWndEvents(const WndEvent& event)
+{
+    if (event.Is<WndResizeEvent>()) {
+        s_swapchainRecreateRequired = true;
+    }
+
+    if (event.Is<WndKeyEvent>()) {
+        const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
+
+        if (keyEvent.key == WndKey::KEY_F5 && keyEvent.IsPressed()) {
+            s_flyCameraMode = !s_flyCameraMode;
+            
+            ShowCursor(!s_flyCameraMode);
+        }
+    }
+
+    if (s_flyCameraMode) {
+        CameraProcessWndEvent(s_camera, event);
+    }
+}
+
+
+void UpdateCommonConstBuffer(BaseWindow* pWnd)
+{
+    if (s_frameNumber % s_vkSwapchain.GetImageCount()) {
+        for (vkn::Fence& fence : s_vkRenderingFinishedFences) {
+            fence.WaitFor(UINT64_MAX);
+        }
+
+        const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
+        
+        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100000.f);
+        projMat[1][1] *= -1.f;
+        projMat = glm::transpose(projMat);
+
+        COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
+
+        pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
+        pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
+        pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
+
+        s_commonConstBuffer.Unmap();
     }
 }
 
 
 int main(int argc, char* argv[])
 {
+    s_camera.velocity = glm::vec3(0.f);
+	s_camera.position = glm::vec3(0.f, 0.f, 2.f);
+    s_camera.pitch = 0.f;
+    s_camera.yaw = 0.f;
+
     wndSysInit();
-    BaseWindow* pWnd = wndSysGetMainWindow();
+    s_pWnd = wndSysGetMainWindow();
 
     WindowInitInfo wndInitInfo = {};
     wndInitInfo.pTitle = APP_NAME;
@@ -789,8 +917,8 @@ int main(int argc, char* argv[])
     wndInitInfo.height = 640;
     wndInitInfo.isVisible = false;
 
-    pWnd->Create(wndInitInfo);
-    ENG_ASSERT(pWnd->IsInitialized());
+    s_pWnd->Create(wndInitInfo);
+    ENG_ASSERT(s_pWnd->IsInitialized());
 
 #ifdef ENG_BUILD_DEBUG
     vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCreateInfo = {};
@@ -839,7 +967,7 @@ int main(int argc, char* argv[])
 
     vkn::SurfaceCreateInfo vkSurfCreateInfo = {};
     vkSurfCreateInfo.pInstance = &s_vkInstance;
-    vkSurfCreateInfo.pWndHandle = pWnd->GetNativeHandle();
+    vkSurfCreateInfo.pWndHandle = s_pWnd->GetNativeHandle();
 
     s_vkSurface.Create(vkSurfCreateInfo);
     CORE_ASSERT(s_vkSurface.IsCreated());
@@ -898,8 +1026,8 @@ int main(int argc, char* argv[])
     vkSwapchainCreateInfo.pDevice = &s_vkDevice;
     vkSwapchainCreateInfo.pSurface = &s_vkSurface;
 
-    vkSwapchainCreateInfo.width = pWnd->GetWidth();
-    vkSwapchainCreateInfo.height = pWnd->GetHeight();
+    vkSwapchainCreateInfo.width = s_pWnd->GetWidth();
+    vkSwapchainCreateInfo.height = s_pWnd->GetHeight();
 
     vkSwapchainCreateInfo.minImageCount = 2;
     vkSwapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
@@ -951,54 +1079,6 @@ int main(int argc, char* argv[])
 
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
-
-
-    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
-    commonConstBufCreateInfo.pDevice = &s_vkDevice;
-    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
-    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    commonConstBufCreateInfo.memAllocFlags = 0;
-
-    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
-    CORE_ASSERT(s_commonConstBuffer.IsCreated());
-    s_commonConstBuffer.SetDebugName("COMMON_CB");
-
-    {
-        COMMON_CB_DATA commonConstBuffer = {};
-
-        const glm::mat4x4 viewMat = glm::transpose(glm::lookAt(glm::vec3(0.f, 2.f, 0.f), glm::vec3(0.f), glm::vec3(0.f, 0.f, -1.f)));
-        
-        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100000.f);
-        projMat[1][1] *= -1.f;
-        projMat = glm::transpose(projMat);
-
-        const glm::mat4x4 viewProjMat = viewMat * projMat;
-
-        commonConstBuffer.COMMON_VIEW_MATRIX = viewMat;
-        commonConstBuffer.COMMON_PROJ_MATRIX = projMat;
-
-        commonConstBuffer.COMMON_VIEW_PROJ_MATRIX = viewProjMat;
-
-        void* pCommonConstBufferData = s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pCommonConstBufferData, &commonConstBuffer, sizeof(commonConstBuffer));
-        s_commonConstBuffer.Unmap();
-    }
-
-    VkDescriptorBufferInfo bufferInfo = {};
-    bufferInfo.buffer = s_commonConstBuffer.Get();
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(COMMON_CB_DATA);
-
-    VkWriteDescriptorSet descWrite = {};
-    descWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descWrite.dstSet = s_vkDescriptorSet;
-    descWrite.dstBinding = 0;
-    descWrite.dstArrayElement = 0;
-    descWrite.descriptorCount = 1;
-    descWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descWrite.pBufferInfo = &bufferInfo;
-    vkUpdateDescriptorSets(s_vkDevice.Get(), 1, &descWrite, 0, nullptr);
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
@@ -1063,36 +1143,66 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_indexBuffer.IsCreated());
     s_indexBuffer.SetDebugName("COMMON_IB");
 
-    const fs::path filepath = argc > 1 ? argv[1] : "../assets/DamagedHelmet/DamagedHelmet.gltf";
+    const fs::path filepath = argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf";
     LoadScene(filepath, s_vertexBuffer, s_indexBuffer);
 
-    pWnd->SetVisible(true);
+    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
+    commonConstBufCreateInfo.pDevice = &s_vkDevice;
+    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
+    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commonConstBufCreateInfo.memAllocFlags = 0;
+
+    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
+    CORE_ASSERT(s_commonConstBuffer.IsCreated());
+    s_commonConstBuffer.SetDebugName("COMMON_CB");
+
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer = s_commonConstBuffer.Get();
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(COMMON_CB_DATA);
+
+    VkWriteDescriptorSet descWrite = {};
+    descWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descWrite.dstSet = s_vkDescriptorSet;
+    descWrite.dstBinding = 0;
+    descWrite.dstArrayElement = 0;
+    descWrite.descriptorCount = 1;
+    descWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descWrite.pBufferInfo = &bufferInfo;
+    vkUpdateDescriptorSets(s_vkDevice.Get(), 1, &descWrite, 0, nullptr);
+
+    s_pWnd->SetVisible(true);
 
     Timer timer;
 
-    while(!pWnd->IsClosed()) {
+    while(!s_pWnd->IsClosed()) {
         timer.Reset();
 
-        pWnd->ProcessEvents();
+        s_pWnd->ProcessEvents();
         
         WndEvent event;
-        while(pWnd->PopEvent(event)) {
+        while(s_pWnd->PopEvent(event)) {
             ProcessWndEvents(event);
         }
 
-        if (pWnd->IsMinimized()) {
+        if (s_pWnd->IsMinimized()) {
             continue;
         }
 
         if (s_swapchainRecreateRequired) {
-            if (ResizeVkSwapchain(pWnd)) {
+            if (ResizeVkSwapchain(s_pWnd)) {
                 continue;
             }
         }
 
+        s_camera.Update();
+
+        UpdateCommonConstBuffer(s_pWnd);
+
         RenderScene();
 
-        UpdateTimings(pWnd, timer);
+        UpdateTimings(s_pWnd, timer);
 
         ++s_frameNumber;
         s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
@@ -1126,7 +1236,7 @@ int main(int argc, char* argv[])
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();
 
-    pWnd->Destroy();
+    s_pWnd->Destroy();
     wndSysTerminate();
 
     return 0;
