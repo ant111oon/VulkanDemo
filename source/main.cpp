@@ -389,7 +389,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
     cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     s_vkImmediateSubmitCmdBuffer.Begin(cmdBeginInfo);
-        func(s_vkImmediateSubmitCmdBuffer.Get(), std::forward<Args>(args)...);
+        func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
     s_vkImmediateSubmitCmdBuffer.End();
 
     SubmitVkQueue(
@@ -428,7 +428,7 @@ void ProcessWndEvents(const WndEvent& event)
 }
 
 
-bool RenderScene()
+void RenderScene()
 {
     vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
     vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[s_frameInFlightNumber];
@@ -437,10 +437,11 @@ bool RenderScene()
 
     const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (renderingFinishedFenceStatus == VK_NOT_READY) {
-        return false;
+        return;
     }
 
     VK_CHECK(renderingFinishedFenceStatus);
+    renderingFinishedFence.Reset();
 
     uint32_t nextImageIdx;
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
@@ -449,10 +450,9 @@ bool RenderScene()
         VK_CHECK(acquireResult);
     } else {
         s_swapchainRecreateRequired = true;
-        return false;
+        return;
     }
 
-    renderingFinishedFence.Reset();
     cmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
@@ -566,10 +566,8 @@ bool RenderScene()
         VK_CHECK(presentResult);
     } else {
         s_swapchainRecreateRequired = true;
-        return false;
+        return;
     }
-
-    return true;
 }
 
 
@@ -742,18 +740,41 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
         stagingIndexBuffer.Unmap();
     }
 
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](VkCommandBuffer vkCmdBuffer){
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy region = {};
         
         region.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
-        vkCmdCopyBuffer(vkCmdBuffer, stagingVertBuffer.Get(), vertBuffer.Get(), 1, &region);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), vertBuffer.Get(), 1, &region);
 
         region.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
-        vkCmdCopyBuffer(vkCmdBuffer, stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &region);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &region);
     });
 
     stagingVertBuffer.Destroy();
     stagingIndexBuffer.Destroy();
+}
+
+
+void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
+{
+    const uint32_t queryStep = s_vkSwapchain.GetImageCount() - 1;
+    const uint32_t firstQuery = s_frameInFlightNumber >= queryStep ?
+        s_frameInFlightNumber - queryStep : s_vkSwapchain.GetImageCount() - queryStep + s_frameInFlightNumber;
+    
+    const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(firstQuery * 2, VK_QUERY_RESULT_64_BIT);
+
+    if (queryResults[0] != 0 && queryResults[1] != 0) {
+    #ifdef ENG_BUILD_DEBUG
+        constexpr const char* BUILD_TYPE_STR = "DEBUG";
+    #else
+        constexpr const char* BUILD_TYPE_STR = "RELEASE";
+    #endif
+        
+        const float gpuFrameTime = (queryResults[1] - queryResults[0]) * s_vkPhysDevice.GetProperties().limits.timestampPeriod / 1'000'000.f;
+        const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
+
+        pWnd->SetTitle("%s | %s: GPU: %.3f ms, CPU: %.3f ms (%.1f FPS)", APP_NAME, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime);
+    }
 }
 
 
@@ -901,11 +922,27 @@ int main(int argc, char* argv[])
     s_vkCmdPool.Create(vkCmdPoolCreateInfo);
     CORE_ASSERT(s_vkCmdPool.IsCreated());
     s_vkCmdPool.SetDebugName("COMMON_CMD_POOL");
-
     
     s_vkImmediateSubmitCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     CORE_ASSERT(s_vkImmediateSubmitCmdBuffer.IsCreated());
     s_vkImmediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
+
+
+    s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
+
+
+    vkn::QueryCreateInfo queryCreateInfo = {};
+    queryCreateInfo.pDevice = &s_vkDevice;
+    queryCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryCreateInfo.queryCount = 128;
+
+    s_vkQueryPool.Create(queryCreateInfo);
+    CORE_ASSERT(s_vkQueryPool.IsCreated());
+    s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        cmdBuffer.CmdResetQueryPool(s_vkQueryPool);
+    });
 
 
     s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice.Get());
@@ -930,7 +967,7 @@ int main(int argc, char* argv[])
     {
         COMMON_CB_DATA commonConstBuffer = {};
 
-        const glm::mat4x4 viewMat = glm::transpose(glm::lookAt(glm::vec3(0.f, 0.f, 2.f), glm::vec3(0.f), glm::vec3(0.f, 1.f, 0.f)));
+        const glm::mat4x4 viewMat = glm::transpose(glm::lookAt(glm::vec3(0.f, 2.f, 0.f), glm::vec3(0.f), glm::vec3(0.f, 0.f, -1.f)));
         
         glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100000.f);
         projMat[1][1] *= -1.f;
@@ -1002,8 +1039,6 @@ int main(int argc, char* argv[])
     #endif
     }
 
-    s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
-
 
     vkn::BufferCreateInfo vertBufCreateInfo = {};
     vertBufCreateInfo.pDevice = &s_vkDevice;
@@ -1031,17 +1066,6 @@ int main(int argc, char* argv[])
     const fs::path filepath = argc > 1 ? argv[1] : "../assets/DamagedHelmet/DamagedHelmet.gltf";
     LoadScene(filepath, s_vertexBuffer, s_indexBuffer);
 
-
-    vkn::QueryCreateInfo queryCreateInfo = {};
-    queryCreateInfo.pDevice = &s_vkDevice;
-    queryCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryCreateInfo.queryCount = 128;
-
-    s_vkQueryPool.Create(queryCreateInfo);
-    CORE_ASSERT(s_vkQueryPool.IsCreated());
-    s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
-
-
     pWnd->SetVisible(true);
 
     Timer timer;
@@ -1066,23 +1090,10 @@ int main(int argc, char* argv[])
             }
         }
 
-        if (!RenderScene()) {
-            continue;
-        }
+        RenderScene();
 
-        const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(s_frameInFlightNumber * 2, VK_QUERY_RESULT_64_BIT);
+        UpdateTimings(pWnd, timer);
 
-    #ifdef ENG_BUILD_DEBUG
-        constexpr const char* BUILD_TYPE_STR = "DEBUG";
-    #else
-        constexpr const char* BUILD_TYPE_STR = "RELEASE";
-    #endif
-        
-        const float gpuFrameTime = (queryResults[1] - queryResults[0]) * s_vkPhysDevice.GetProperties().limits.timestampPeriod / 1'000'000.f;
-        const float cpuFrameTime = timer.End().GetDuration<float, std::milli>();
-
-        pWnd->SetTitle("%s | %s: GPU: %.3f ms, CPU: %.3f ms (%.1f FPS)", wndInitInfo.pTitle, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime);
-        
         ++s_frameNumber;
         s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
     }

@@ -85,6 +85,12 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdResetQueryPool(QueryPool& queryPool)
+    {
+        return CmdResetQueryPool(queryPool, 0, queryPool.GetQueryCount());
+    }
+
+
     CmdBuffer& CmdBuffer::CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);

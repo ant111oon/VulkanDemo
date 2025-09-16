@@ -97,7 +97,13 @@ namespace vkn
         VK_ASSERT(pData);
         VK_ASSERT(firstQuery + queryCount <= m_queryCount);
 
-        VK_CHECK(vkGetQueryPoolResults(m_pDevice->Get(), m_pool, firstQuery, queryCount, dataSize, pData, stride, flags));
+        const VkResult result = vkGetQueryPoolResults(m_pDevice->Get(), m_pool, firstQuery, queryCount, dataSize, pData, stride, flags);
+
+        if (result == VK_NOT_READY) {
+            return;
+        }
+
+        VK_CHECK(result);
     }
 
 

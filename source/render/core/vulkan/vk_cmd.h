@@ -30,6 +30,7 @@ namespace vkn
         CmdBuffer& CmdPipelineBarrier2(const VkDependencyInfo& depInfo);
 
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool, uint32_t firstQuery, uint32_t queryCount);
+        CmdBuffer& CmdResetQueryPool(QueryPool& queryPool);
         CmdBuffer& CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex);
 
         CmdBuffer& BeginRendering(const VkRenderingInfo& renderingInfo);
