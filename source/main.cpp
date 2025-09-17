@@ -31,6 +31,14 @@ namespace gltf = tinygltf;
 using VertexIndexType = uint32_t;
 
 
+struct Image
+{
+    VkImage vkImage;
+    VkDeviceMemory vkImageMemory;
+    VkImageView vkImageView;
+};
+
+
 struct Mesh
 {
     uint32_t firstVertex;
@@ -63,6 +71,8 @@ static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Ver
 static constexpr size_t MAX_INDEX_COUNT = 2'000'000;
 static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(VertexIndexType);
 
+static constexpr size_t SHADER_RESOURCE_UPDATE_FREQUENCY = 1; // Update shader resources avery SHADER_RESOURCE_UPDATE_FREQUENCY's frame
+
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
@@ -79,6 +89,8 @@ static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 static vkn::Device& s_vkDevice = vkn::GetDevice();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
+
+static Image s_vkDepthImage;
 
 static vkn::CmdPool   s_vkCmdPool;
 static vkn::CmdBuffer s_vkImmediateSubmitCmdBuffer;
@@ -165,6 +177,113 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     return VK_FALSE;
 }
 #endif
+
+
+static Image CreateVkImage(vkn::Device* pDevice, VkImageType type, const VkExtent3D& extent, VkFormat format, VkImageUsageFlags usage, 
+    VkImageLayout initialLayout, VkImageCreateFlags flags, VkMemoryAllocateFlags memAllocFlags, VkMemoryPropertyFlags memoryProps)
+{
+    Image image = {};
+
+    VkImageCreateInfo vkImageCreateInfo = {};
+    vkImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    vkImageCreateInfo.flags = flags;
+    vkImageCreateInfo.imageType = type;
+    vkImageCreateInfo.format = format;
+    vkImageCreateInfo.extent = extent;
+    vkImageCreateInfo.mipLevels = 1;
+    vkImageCreateInfo.arrayLayers = 1;
+    vkImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    vkImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    vkImageCreateInfo.usage = usage;
+    vkImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    vkImageCreateInfo.queueFamilyIndexCount = 0;
+    vkImageCreateInfo.pQueueFamilyIndices = nullptr;
+    vkImageCreateInfo.initialLayout = initialLayout;
+
+    VK_CHECK(vkCreateImage(pDevice->Get(), &vkImageCreateInfo, nullptr, &image.vkImage));
+    
+    const bool isImageCreated = image.vkImage != VK_NULL_HANDLE;
+    VK_ASSERT(isImageCreated);
+
+    static const auto FindMemoryType = [](vkn::Device* pDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
+    {
+        const VkPhysicalDeviceMemoryProperties& memProps = pDevice->GetPhysDevice()->GetMemoryProperties();
+
+        for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
+            const VkMemoryPropertyFlags propertyFlags = memProps.memoryTypes[i].propertyFlags;
+            
+            if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        return UINT32_MAX;
+    };
+
+    VkImageMemoryRequirementsInfo2 memRequirementsInfo = {};
+    memRequirementsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
+    memRequirementsInfo.image = image.vkImage;
+
+    VkMemoryRequirements2 memRequirements = {};
+    memRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+    vkGetImageMemoryRequirements2(pDevice->Get(), &memRequirementsInfo, &memRequirements);
+
+    VkMemoryAllocateFlagsInfo memAllocFlagsInfo = {};
+    memAllocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    memAllocFlagsInfo.flags = memAllocFlags;
+
+    VkMemoryAllocateInfo memAllocInfo = {};
+    memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memAllocInfo.pNext = &memAllocFlagsInfo;
+    memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
+    memAllocInfo.memoryTypeIndex = FindMemoryType(pDevice, memRequirements.memoryRequirements.memoryTypeBits, memoryProps);
+    VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
+
+    image.vkImageMemory = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateMemory(pDevice->Get(), &memAllocInfo, nullptr, &image.vkImageMemory));
+
+    const bool isMemoryAllocated = image.vkImageMemory != VK_NULL_HANDLE;
+    VK_ASSERT(isMemoryAllocated);
+
+    VkBindImageMemoryInfo bindInfo = {};
+    bindInfo.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO;
+    bindInfo.image = image.vkImage;
+    bindInfo.memory = image.vkImageMemory;
+
+    VK_CHECK(vkBindImageMemory2(pDevice->Get(), 1, &bindInfo));
+
+    VkImageViewCreateInfo imageViewCreateInfo = {};
+    imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    imageViewCreateInfo.image = image.vkImage;
+    imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    imageViewCreateInfo.format = format;
+    imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    imageViewCreateInfo.subresourceRange.levelCount = 1;
+    imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+    VK_CHECK(vkCreateImageView(pDevice->Get(), &imageViewCreateInfo, nullptr, &image.vkImageView));
+
+    return image;
+}
+
+
+static void DestroyVkImage(vkn::Device* pDevice, Image& image)
+{
+    vkDestroyImageView(pDevice->Get(), image.vkImageView, nullptr);
+    image.vkImageView = VK_NULL_HANDLE;
+
+    vkFreeMemory(pDevice->Get(), image.vkImageMemory, nullptr);
+    image.vkImageMemory = VK_NULL_HANDLE;
+
+    vkDestroyImage(pDevice->Get(), image.vkImage, nullptr);
+    image.vkImage = VK_NULL_HANDLE;
+}
 
 
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
@@ -289,9 +408,10 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
-        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
         .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
+        .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
+        .SetDepthAttachmentFormat(VK_FORMAT_D32_SFLOAT)
         .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
         .AddColorBlendAttachment(blendState)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
@@ -464,6 +584,18 @@ void RenderScene()
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            s_vkDepthImage.vkImage,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+
         VkRenderingInfo renderingInfo = {};
         renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         renderingInfo.renderArea.extent = s_vkSwapchain.GetImageExtent();
@@ -482,6 +614,15 @@ void RenderScene()
         colorAttachment.clearValue.color.float32[2] = 220.f / 255.f;
         colorAttachment.clearValue.color.float32[3] = 255.f / 255.f;
         renderingInfo.pColorAttachments = &colorAttachment;
+
+        VkRenderingAttachmentInfo depthAttachment = {};
+        depthAttachment.sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depthAttachment.imageView = s_vkDepthImage.vkImageView;
+        depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+        renderingInfo.pDepthAttachment = &depthAttachment;
 
         cmdBuffer.BeginRendering(renderingInfo);
             VkViewport viewport = {};
@@ -879,14 +1020,14 @@ void ProcessWndEvents(const WndEvent& event)
 
 void UpdateCommonConstBuffer(BaseWindow* pWnd)
 {
-    if (s_frameNumber % s_vkSwapchain.GetImageCount()) {
+    if (s_frameNumber % SHADER_RESOURCE_UPDATE_FREQUENCY == 0) {
         for (vkn::Fence& fence : s_vkRenderingFinishedFences) {
             fence.WaitFor(UINT64_MAX);
         }
 
         const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
         
-        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100000.f);
+        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
         projMat[1][1] *= -1.f;
         projMat = glm::transpose(projMat);
 
@@ -1120,6 +1261,10 @@ int main(int argc, char* argv[])
     }
 
 
+    s_vkDepthImage = CreateVkImage(&s_vkDevice, VK_IMAGE_TYPE_2D, VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1}, VK_FORMAT_D32_SFLOAT, 
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_LAYOUT_UNDEFINED, 0, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+
     vkn::BufferCreateInfo vertBufCreateInfo = {};
     vertBufCreateInfo.pDevice = &s_vkDevice;
     vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
@@ -1194,6 +1339,12 @@ int main(int argc, char* argv[])
             if (ResizeVkSwapchain(s_pWnd)) {
                 continue;
             }
+
+            s_vkDevice.WaitIdle();
+
+            DestroyVkImage(&s_vkDevice, s_vkDepthImage);
+            s_vkDepthImage = CreateVkImage(&s_vkDevice, VK_IMAGE_TYPE_2D, VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1}, VK_FORMAT_D32_SFLOAT, 
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_LAYOUT_UNDEFINED, 0, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         }
 
         s_camera.Update();
@@ -1215,6 +1366,8 @@ int main(int argc, char* argv[])
     s_commonConstBuffer.Destroy();
     s_indexBuffer.Destroy();
     s_vertexBuffer.Destroy();
+
+    DestroyVkImage(&s_vkDevice, s_vkDepthImage);
 
     s_vkImmediateSubmitFinishedFence.Destroy();
     

@@ -91,7 +91,10 @@ target_compile_options(${ENGINE_PROJ_NAME} PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
 )
 
-target_compile_definitions(${ENGINE_PROJ_NAME} PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_compile_definitions(${ENGINE_PROJ_NAME}
+    PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE
+    PRIVATE GLM_ENABLE_EXPERIMENTAL
+)
 
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shaders)

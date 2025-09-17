@@ -211,14 +211,14 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRenderingDepthAttachmentFormat(VkFormat format)
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetDepthAttachmentFormat(VkFormat format)
     {
         m_renderingCreateInfo.depthAttachmentFormat = format;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRenderingStencilAttachmentFormat(VkFormat format)
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetStencilAttachmentFormat(VkFormat format)
     {
         m_renderingCreateInfo.stencilAttachmentFormat = format;
         return *this;

@@ -49,9 +49,9 @@ namespace vkn
 
         GraphicsPipelineBuilder& SetRenderingViewMask(uint32_t viewMask);
 
-        GraphicsPipelineBuilder& SetRenderingDepthAttachmentFormat(VkFormat format);
+        GraphicsPipelineBuilder& SetDepthAttachmentFormat(VkFormat format);
 
-        GraphicsPipelineBuilder& SetRenderingStencilAttachmentFormat(VkFormat format);
+        GraphicsPipelineBuilder& SetStencilAttachmentFormat(VkFormat format);
 
         GraphicsPipelineBuilder& AddColorAttachmentFormat(VkFormat format);
 
