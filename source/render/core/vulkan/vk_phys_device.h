@@ -61,6 +61,18 @@ namespace vkn
             return m_features;
         }
 
+        const Instance* GetInstance() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_pInstance;
+        }
+
+        Instance* GetInstance()
+        {
+            VK_ASSERT(IsCreated());
+            return m_pInstance;
+        }
+
     private:
         PhysicalDevice() = default;
 

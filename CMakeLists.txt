@@ -61,6 +61,9 @@ FetchContent_MakeAvailable(vma)
 add_library(vma INTERFACE)
 target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
 
+# VMA generates a lot of warnings, so disable it
+target_compile_options(vma INTERFACE -w)
+
 
 set(ENGINE_CXX_SOURCE_DIR ${PROJECT_SOURCE_DIR}/source)
 

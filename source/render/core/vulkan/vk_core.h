@@ -12,6 +12,8 @@
     #include <vulkan/vulkan_win32.h>
 #endif
 
+#include <vk_mem_alloc.h>
+
 
 #define VK_CHECK(VkCall)                                                                  \
     do {                                                                                  \

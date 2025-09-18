@@ -149,6 +149,8 @@ namespace vkn
 
         VK_ASSERT(isCreated);
 
+        m_apiVersion = info.apiVersion;
+
         SetCreated(isCreated);
 
         return isCreated;
@@ -165,6 +167,8 @@ namespace vkn
         
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
+
+        m_apiVersion = UINT32_MAX;
 
         Object::Destroy();
     }

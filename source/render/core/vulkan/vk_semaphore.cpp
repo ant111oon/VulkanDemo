@@ -1,7 +1,7 @@
 #include "pch.h"
 
 #include "vk_semaphore.h"
-#include "vk_utils.h"
+#include "utils/vk_utils.h"
 
 
 namespace vkn

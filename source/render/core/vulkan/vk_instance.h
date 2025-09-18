@@ -51,12 +51,20 @@ namespace vkn
             return m_instance;
         }
 
+        uint32_t GetApiVersion() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_apiVersion;
+        }
+
     private:
         Instance() = default;
 
     private:
         VkInstance m_instance = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT m_dbgMessenger = VK_NULL_HANDLE;
+
+        uint32_t m_apiVersion = UINT32_MAX;
     };
 
 

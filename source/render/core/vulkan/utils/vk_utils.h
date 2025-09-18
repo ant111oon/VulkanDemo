@@ -1,7 +1,7 @@
 #pragma once
 
-#include "vk_device.h"
-#include "vk_phys_device.h"
+#include "../vk_device.h"
+#include "../vk_phys_device.h"
 
 
 namespace vkn::utils
