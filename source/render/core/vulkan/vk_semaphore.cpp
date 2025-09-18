@@ -88,11 +88,23 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         vkDestroySemaphore(m_pDevice->Get(), m_semaphore, nullptr);
         m_semaphore = VK_NULL_HANDLE;
 
         m_pDevice = nullptr;
+
+        Object::Destroy();
+    }
+
+
+    void Semaphore::SetDebugName(const char* pName)
+    {
+        Object::SetDebugName(*m_pDevice, (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pName);
+    }
+
+
+    const char* Semaphore::GetDebugName() const
+    {
+        return Object::GetDebugName("Semaphore");
     }
 }

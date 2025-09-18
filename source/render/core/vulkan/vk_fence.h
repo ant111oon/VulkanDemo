@@ -34,8 +34,8 @@ namespace vkn
         void Reset();
         void WaitFor(uint64_t timeout);
 
-        void SetDebugName(const char* pName) { Object::SetDebugName(m_pDevice->Get(), (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pName); }
-        const char* GetDebugName() const { return Object::GetDebugName("Fence"); }
+        void SetDebugName(const char* pName);
+        const char* GetDebugName() const;
 
         Device* GetDevice() const
         {

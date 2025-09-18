@@ -52,8 +52,8 @@ namespace vkn
 
         bool IsQueryIndexValid(uint32_t queryIndex) const;
 
-        void SetDebugName(const char* pName) { Object::SetDebugName(m_pDevice->Get(), (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pName); }
-        const char* GetDebugName() const { return Object::GetDebugName("QueryPool"); }
+        void SetDebugName(const char* pName);
+        const char* GetDebugName() const;
 
         Device* GetDevice() const
         {

@@ -134,8 +134,6 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         DestroyImageViews();
         ClearImages();
 
@@ -155,6 +153,8 @@ namespace vkn
         m_transform = {};
         m_compositeAlpha = {};
         m_presentMode = {};
+
+        Object::Destroy();
     }
 
 

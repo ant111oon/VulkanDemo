@@ -8,6 +8,8 @@
 
 namespace vkn
 {
+    class Device;
+
     class Object
     {
     public:
@@ -26,7 +28,7 @@ namespace vkn
 
         void SetCreated(bool isCreated) { m_internalState.set(INTERNAL_BIT_IS_CREATED, isCreated); } 
         
-        void SetDebugName(VkDevice vkDevice, uint64_t objectHandle, VkObjectType objectType, const char* pName);  
+        void SetDebugName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pName);  
         const char* GetDebugName(const char* pReleaseName) const;
 
     private:

@@ -161,12 +161,12 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         DestroyDebugMessenger(m_instance, m_dbgMessenger);
         
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
+
+        Object::Destroy();
     }
 
 

@@ -40,12 +40,12 @@ namespace vkn
         if (!IsCreated()) {
             return;
         }
-
-        Object::Destroy();
         
         vkDestroySurfaceKHR(m_pInstance->Get(), m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
 
         m_pInstance = nullptr;
+
+        Object::Destroy();
     }
 }

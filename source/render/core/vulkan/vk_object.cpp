@@ -1,6 +1,8 @@
 #include "pch.h"
 
 #include "vk_object.h"
+#include "vk_device.h"
+
 #include "vk_utils.h"
 
 
@@ -40,7 +42,7 @@ namespace vkn
     }
 
 
-    void Object::SetDebugName(VkDevice vkDevice, uint64_t objectHandle, VkObjectType objectType, const char* pName)
+    void Object::SetDebugName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pName)
     {
     #ifdef ENG_BUILD_DEBUG
         VK_ASSERT(IsCreated());
@@ -52,7 +54,7 @@ namespace vkn
         m_debugName.fill('\0');
         memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
 
-        utils::SetObjectName(vkDevice, objectHandle, objectType, pName);
+        utils::SetObjectName(device, objectHandle, objectType, pName);
     #endif
     }
 

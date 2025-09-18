@@ -78,8 +78,6 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         VkDevice vkDevice = m_pDevice->Get();
 
         vkDestroyQueryPool(vkDevice, m_pool, nullptr);
@@ -88,6 +86,8 @@ namespace vkn
         m_queryCount = 0;
 
         m_pDevice = nullptr;
+
+        Object::Destroy();
     }
 
 
@@ -110,5 +110,17 @@ namespace vkn
     bool QueryPool::IsQueryIndexValid(uint32_t queryIndex) const
     {
         return IsCreated() ? queryIndex < m_queryCount : false;
+    }
+
+
+    void QueryPool::SetDebugName(const char* pName)
+    {
+        Object::SetDebugName(*m_pDevice, (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pName);
+    }
+
+
+    const char* QueryPool::GetDebugName() const
+    {
+        return Object::GetDebugName("QueryPool");
     }
 }

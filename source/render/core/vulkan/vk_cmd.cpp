@@ -176,7 +176,7 @@ namespace vkn
 
     void CmdBuffer::SetDebugName(const char* pName)
     {
-        Object::SetDebugName(m_pOwner->GetDevice()->Get(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pName);
+        Object::SetDebugName(*m_pOwner->GetDevice(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pName);
     }
 
 
@@ -236,8 +236,6 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         VkDevice vkDevice = GetDevice()->Get();
 
         vkFreeCommandBuffers(vkDevice, m_pOwner->Get(), 1, &m_cmdBuffer);
@@ -246,6 +244,8 @@ namespace vkn
         m_pOwner = nullptr;
 
         m_state.reset();
+
+        Object::Destroy();
     }
 
 
@@ -345,5 +345,17 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         cmdBuffer.Free();
+    }
+
+
+    void CmdPool::SetDebugName(const char* pName)
+    {
+        Object::SetDebugName(*m_pDevice, (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pName);
+    }
+
+
+    const char* CmdPool::GetDebugName() const
+    {
+        return Object::GetDebugName("CommandBuffer");
     }
 }

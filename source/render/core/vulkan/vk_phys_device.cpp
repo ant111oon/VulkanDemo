@@ -76,13 +76,13 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         m_physDevice = VK_NULL_HANDLE;
         m_pInstance = nullptr;
 
         m_memoryProps = {};
         m_deviceProps = {};
         m_features = {};
+
+        Object::Destroy();
     }
 }

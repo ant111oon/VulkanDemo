@@ -42,9 +42,10 @@ namespace vkn
         CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
         
-
         void SetDebugName(const char* pName);
         const char* GetDebugName() const;
+
+        Device* GetDevice() const;
 
         CmdPool* GetOwnerPool() const
         {
@@ -58,10 +59,17 @@ namespace vkn
             return m_cmdBuffer;
         }
 
-        Device* GetDevice() const;
+        bool IsStarted() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_state.test(FLAG_IS_STARTED);
+        }
 
-        bool IsStarted() const { return m_state.test(FLAG_IS_STARTED); }
-        bool IsRenderingStarted() const { return m_state.test(FLAG_IS_RENDERING_STARTED); }
+        bool IsRenderingStarted() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_state.test(FLAG_IS_RENDERING_STARTED);
+        }
 
     private:
         CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level);
@@ -113,8 +121,8 @@ namespace vkn
         CmdBuffer AllocCmdBuffer(VkCommandBufferLevel level);
         void FreeCmdBuffer(CmdBuffer& cmdBuffer);
 
-        void SetDebugName(const char* pName) { Object::SetDebugName(m_pDevice->Get(), (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pName); }
-        const char* GetDebugName() const { return Object::GetDebugName("CommandBuffer"); }
+        void SetDebugName(const char* pName);
+        const char* GetDebugName() const;
 
         Device* GetDevice() const
         {

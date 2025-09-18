@@ -6,22 +6,6 @@
 
 namespace vkn
 {
-    static uint32_t FindMemoryType(Device* pDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
-    {
-        const VkPhysicalDeviceMemoryProperties& memProps = pDevice->GetPhysDevice()->GetMemoryProperties();
-
-        for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
-            const VkMemoryPropertyFlags propertyFlags = memProps.memoryTypes[i].propertyFlags;
-            
-            if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
-                return i;
-            }
-        }
-
-        return UINT32_MAX;
-    }
-
-
     Buffer::Buffer(const BufferCreateInfo& info)
         : Object()
     {
@@ -103,7 +87,8 @@ namespace vkn
         memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         memAllocInfo.pNext = &memAllocFlagsInfo;
         memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
-        memAllocInfo.memoryTypeIndex = FindMemoryType(info.pDevice, memRequirements.memoryRequirements.memoryTypeBits, info.properties);
+        memAllocInfo.memoryTypeIndex = utils::FindMemoryType(*info.pDevice->GetPhysDevice(),
+            memRequirements.memoryRequirements.memoryTypeBits, info.properties);
         VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
 
         m_memory = VK_NULL_HANDLE;
@@ -148,8 +133,6 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         VkDevice vkDevice = m_pDevice->Get();
 
         vkFreeMemory(vkDevice, m_memory, nullptr);
@@ -168,6 +151,8 @@ namespace vkn
         m_memAllocFlags = {};
 
         m_state.reset();
+
+        Object::Destroy();
     }
 
 
@@ -193,5 +178,17 @@ namespace vkn
         vkUnmapMemory(m_pDevice->Get(), m_memory);
 
         m_state.set(BIT_IS_MAPPED, false);
+    }
+
+
+    void Buffer::SetDebugName(const char* pName)
+    {
+        Object::SetDebugName(*m_pDevice, (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName);
+    }
+
+
+    const char* Buffer::GetDebugName() const
+    {
+        return Object::GetDebugName("Buffer");
     }
 }

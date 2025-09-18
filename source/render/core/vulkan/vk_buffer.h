@@ -34,8 +34,8 @@ namespace vkn
         void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
         void Unmap();
 
-        void SetDebugName(const char* pName) { Object::SetDebugName(m_pDevice->Get(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName); }
-        const char* GetDebugName() const { return Object::GetDebugName("Buffer"); }
+        void SetDebugName(const char* pName);
+        const char* GetDebugName() const;
 
         Device* GetDevice() const
         {
@@ -79,7 +79,11 @@ namespace vkn
             return (m_memAllocFlags & memoryAllocFlags) == memoryAllocFlags;
         }
 
-        bool IsMapped() const { return m_state.test(BIT_IS_MAPPED); }
+        bool IsMapped() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_state.test(BIT_IS_MAPPED);
+        }
 
     private:
         enum StateBits

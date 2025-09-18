@@ -88,12 +88,12 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         vkDestroyFence(m_pDevice->Get(), m_fence, nullptr);
         m_fence = VK_NULL_HANDLE;
 
         m_pDevice = nullptr;
+
+        Object::Destroy();
     }
 
 
@@ -108,5 +108,17 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &m_fence, VK_TRUE, timeout));
+    }
+
+
+    void Fence::SetDebugName(const char* pName)
+    {
+        Object::SetDebugName(*m_pDevice, (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pName);
+    }
+
+
+    const char* Fence::GetDebugName() const
+    {
+        return Object::GetDebugName("Fence");
     }
 }

@@ -143,14 +143,14 @@ namespace vkn
             return;
         }
 
-        Object::Destroy();
-
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
 
         m_pPhysDevice = VK_NULL_HANDLE;
 
         m_queue = VK_NULL_HANDLE;
+
+        Object::Destroy();
     }
 
 
