@@ -16,6 +16,8 @@
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
+#include "render/core/vulkan/vk_mem_allocator.h"
+
 #include "core/camera/camera.h"
 
 
@@ -80,6 +82,8 @@ static vkn::Surface& s_vkSurface = vkn::GetSurface();
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
 static vkn::Device& s_vkDevice = vkn::GetDevice();
+
+static vkn::MemAllocator& s_vkMemAlloc = vkn::GetMemAllocator();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
@@ -1101,6 +1105,14 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkDevice.IsCreated());
 
 
+    vkn::MemAllocatorCreateInfo memAllocCreateInfo = {};
+    memAllocCreateInfo.pDevice = &s_vkDevice;
+    memAllocCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    s_vkMemAlloc.Create(memAllocCreateInfo);
+    CORE_ASSERT(s_vkMemAlloc.IsCreated());
+
+
     vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
     vkSwapchainCreateInfo.pDevice = &s_vkDevice;
     vkSwapchainCreateInfo.pSurface = &s_vkSurface;
@@ -1295,7 +1307,6 @@ int main(int argc, char* argv[])
 
     s_vkDevice.WaitIdle();
 
-
     s_vkQueryPool.Destroy();
 
     s_commonConstBuffer.Destroy();
@@ -1321,6 +1332,7 @@ int main(int argc, char* argv[])
     s_vkCmdPool.Destroy();
     
     s_vkSwapchain.Destroy();
+    s_vkMemAlloc.Destroy();
     s_vkDevice.Destroy();
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();

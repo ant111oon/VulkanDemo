@@ -1,10 +1,7 @@
 #include "pch.h"
 
 #include "vk_utils.h"
-#include "../vk_instance.h"
-
-#define VMA_IMPLEMENTATION
-#include <vk_mem_alloc.h>
+#include "vk_instance.h"
 
 
 namespace vkn::utils

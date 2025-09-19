@@ -3,7 +3,7 @@
 #include "vk_object.h"
 #include "vk_device.h"
 
-#include "utils/vk_utils.h"
+#include "vk_utils.h"
 
 
 namespace vkn

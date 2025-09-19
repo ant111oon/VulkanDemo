@@ -1,9 +1,10 @@
 #include "pch.h"
 
+#define VMA_IMPLEMENTATION
 #include "vk_mem_allocator.h"
 
-#include "../vk_instance.h"
-#include "../vk_device.h"
+#include "vk_instance.h"
+#include "vk_device.h"
 
 
 #define VMA_LOG_TRACE(FMT, ...)        ENG_LOG_TRACE("VMA", FMT, __VA_ARGS__)
@@ -27,11 +28,16 @@ namespace vkn
 
         VMA_ASSERT(info.pDevice && info.pDevice->IsCreated());
 
+        Device* pDevice             = info.pDevice;
+        PhysicalDevice* pPhysDevice = pDevice->GetPhysDevice();
+        Instance* pInstance         = pPhysDevice->GetInstance();
+
         VmaAllocatorCreateInfo createInfo = {};
-        createInfo.instance = info.pDevice->GetPhysDevice()->GetInstance()->Get();
-        createInfo.device = info.pDevice->Get();
-        createInfo.physicalDevice = info.pDevice->GetPhysDevice()->Get();
-        createInfo.flags = info.flags;
+        createInfo.instance         = pInstance->Get();
+        createInfo.device           = pDevice->Get();
+        createInfo.physicalDevice   = pPhysDevice->Get();
+        createInfo.flags            = info.flags;
+        createInfo.vulkanApiVersion = pInstance->GetApiVersion();
 
         m_allocator = VK_NULL_HANDLE;
         VK_CHECK(vmaCreateAllocator(&createInfo, &m_allocator));

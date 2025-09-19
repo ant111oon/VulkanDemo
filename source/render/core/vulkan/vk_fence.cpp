@@ -1,7 +1,7 @@
 #include "pch.h"
 
 #include "vk_fence.h"
-#include "utils/vk_utils.h"
+#include "vk_utils.h"
 
 
 namespace vkn

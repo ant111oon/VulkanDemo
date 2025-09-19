@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../vk_object.h"
+#include "vk_object.h"
+
+#include <vk_mem_alloc.h>
 
 
 namespace vkn
