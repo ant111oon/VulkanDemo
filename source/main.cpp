@@ -34,6 +34,14 @@ namespace gltf = tinygltf;
 using VertexIndexType = uint32_t;
 
 
+enum GpuQueryIndex
+{
+    GPU_QUERY_BEGIN_RENDER,
+    GPU_QUERY_END_RENDER,
+    GPU_QUERY_COUNT,
+};
+
+
 struct Mesh
 {
     uint32_t firstVertex;
@@ -66,8 +74,6 @@ static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Ver
 static constexpr size_t MAX_INDEX_COUNT = 2'000'000;
 static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(VertexIndexType);
 
-static constexpr size_t SHADER_RESOURCE_UPDATE_FREQUENCY = 1; // Update shader resources avery SHADER_RESOURCE_UPDATE_FREQUENCY's frame
-
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
@@ -97,10 +103,10 @@ static VkDescriptorSetLayout s_vkDescriptorSetLayout = VK_NULL_HANDLE;
 static VkPipelineLayout      s_vkPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline            s_vkPipeline = VK_NULL_HANDLE;
 
-static std::vector<vkn::Semaphore> s_vkPresentFinishedSemaphores;
 static std::vector<vkn::Semaphore> s_vkRenderingFinishedSemaphores;
-static std::vector<vkn::Fence>     s_vkRenderingFinishedFences;
-static std::vector<vkn::CmdBuffer> s_vkRenderCmdBuffers;
+static vkn::Semaphore s_vkPresentFinishedSemaphore;
+static vkn::Fence     s_vkRenderingFinishedFence;
+static vkn::CmdBuffer s_vkRenderCmdBuffer;
 
 static vkn::Fence s_vkImmediateSubmitFinishedFence;
 
@@ -118,7 +124,6 @@ static std::vector<Mesh> s_meshes;
 static eng::Camera s_camera;
 
 static size_t s_frameNumber = 0;
-static size_t s_frameInFlightNumber = 0;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
 
@@ -427,18 +432,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 
 void RenderScene()
 {
-    vkn::CmdBuffer& cmdBuffer                  = s_vkRenderCmdBuffers[s_frameInFlightNumber];
-    vkn::Fence& renderingFinishedFence         = s_vkRenderingFinishedFences[s_frameInFlightNumber];
-    vkn::Semaphore& presentFinishedSemaphore   = s_vkPresentFinishedSemaphores[s_frameInFlightNumber];
-    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[s_frameInFlightNumber];
-
-    const VkResult renderingFinishedFenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
-    if (renderingFinishedFenceStatus == VK_NOT_READY) {
-        return;
-    }
-
-    VK_CHECK(renderingFinishedFenceStatus);
-    renderingFinishedFence.Reset();
+    vkn::Semaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphore;
 
     uint32_t nextImageIdx;
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
@@ -450,6 +444,9 @@ void RenderScene()
         return;
     }
 
+    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[nextImageIdx];
+    vkn::CmdBuffer& cmdBuffer = s_vkRenderCmdBuffer;
+
     cmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
@@ -460,8 +457,8 @@ void RenderScene()
 
     cmdBuffer.Begin(cmdBeginInfo);
         cmdBuffer
-            .CmdResetQueryPool(s_vkQueryPool, s_frameInFlightNumber * 2, 2)
-            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, s_frameInFlightNumber * 2);
+            .CmdResetQueryPool(s_vkQueryPool, GPU_QUERY_BEGIN_RENDER, GPU_QUERY_END_RENDER - GPU_QUERY_BEGIN_RENDER + 1)
+            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, GPU_QUERY_BEGIN_RENDER);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -553,8 +550,11 @@ void RenderScene()
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
-        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, s_frameInFlightNumber * 2 + 1);
+        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, GPU_QUERY_END_RENDER);
     cmdBuffer.End();
+
+    vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
+    renderingFinishedFence.Reset();
 
     SubmitVkQueue(
         s_vkDevice.GetQueue(),
@@ -586,6 +586,8 @@ void RenderScene()
         s_swapchainRecreateRequired = true;
         return;
     }
+
+    renderingFinishedFence.WaitFor(10'000'000'000);
 }
 
 
@@ -830,11 +832,7 @@ static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageV
 
 void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
 {
-    const uint32_t queryStep = s_vkSwapchain.GetImageCount() - 1;
-    const uint32_t firstQuery = s_frameInFlightNumber >= queryStep ?
-        s_frameInFlightNumber - queryStep : s_vkSwapchain.GetImageCount() - queryStep + s_frameInFlightNumber;
-    
-    const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(firstQuery * 2, VK_QUERY_RESULT_64_BIT);
+    const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(GPU_QUERY_BEGIN_RENDER, VK_QUERY_RESULT_64_BIT);
 
     if (queryResults[0] != 0 && queryResults[1] != 0) {
     #ifdef ENG_BUILD_DEBUG
@@ -962,25 +960,19 @@ void ProcessWndEvents(const WndEvent& event)
 
 void UpdateCommonConstBuffer(BaseWindow* pWnd)
 {
-    if (s_frameNumber % SHADER_RESOURCE_UPDATE_FREQUENCY == 0) {
-        for (vkn::Fence& fence : s_vkRenderingFinishedFences) {
-            fence.WaitFor(UINT64_MAX);
-        }
-
-        const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
+    const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
         
-        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
-        projMat[1][1] *= -1.f;
-        projMat = glm::transpose(projMat);
+    glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
+    projMat[1][1] *= -1.f;
+    projMat = glm::transpose(projMat);
 
-        COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
+    COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
 
-        pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
-        pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
-        pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
+    pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
+    pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
+    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
 
-        s_commonConstBuffer.Unmap();
-    }
+    s_commonConstBuffer.Unmap();
 }
 
 
@@ -1174,42 +1166,29 @@ int main(int argc, char* argv[])
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
     s_vkRenderingFinishedSemaphores.resize(swapchainImageCount);
-    s_vkPresentFinishedSemaphores.resize(swapchainImageCount);
-    s_vkRenderingFinishedFences.resize(swapchainImageCount);
-    s_vkRenderCmdBuffers.resize(swapchainImageCount);
     for (size_t i = 0; i < swapchainImageCount; ++i) {
         s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
         CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
-
-        s_vkPresentFinishedSemaphores[i].Create(&s_vkDevice);
-        CORE_ASSERT(s_vkPresentFinishedSemaphores[i].IsCreated());
-
-        s_vkRenderingFinishedFences[i].Create(&s_vkDevice);
-        CORE_ASSERT(s_vkRenderingFinishedFences[i].IsCreated());
-        
-        s_vkRenderCmdBuffers[i] = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        CORE_ASSERT(s_vkRenderCmdBuffers[i].IsCreated());
 
     #ifdef ENG_BUILD_DEBUG
         char vkObjDbgName[64] = {'\0'};
 
         sprintf_s(vkObjDbgName, "RND_FINISH_SEMAPHORE_%zu", i);
         s_vkRenderingFinishedSemaphores[i].SetDebugName(vkObjDbgName);
-
-        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
-        sprintf_s(vkObjDbgName, "PRESENT_FINISH_SEMAPHORE_%zu", i);
-        s_vkPresentFinishedSemaphores[i].SetDebugName(vkObjDbgName);
-
-        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
-        sprintf_s(vkObjDbgName, "RND_FINISH_FENCE_%zu", i);
-        s_vkRenderingFinishedFences[i].SetDebugName(vkObjDbgName);
-
-        memset(vkObjDbgName, 0, sizeof(vkObjDbgName));
-        sprintf_s(vkObjDbgName, "RND_CMD_BUFFER_%zu", i);
-        s_vkRenderCmdBuffers[i].SetDebugName(vkObjDbgName);
     #endif
     }
 
+    s_vkPresentFinishedSemaphore.Create(&s_vkDevice);
+    CORE_ASSERT(s_vkPresentFinishedSemaphore.IsCreated());
+    s_vkPresentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
+
+    s_vkRenderingFinishedFence.Create(&s_vkDevice);
+    CORE_ASSERT(s_vkRenderingFinishedFence.IsCreated());
+    s_vkRenderingFinishedFence.SetDebugName("RND_FINISH_FENCE");
+    
+    s_vkRenderCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_vkRenderCmdBuffer.IsCreated());
+    s_vkRenderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
 
@@ -1302,7 +1281,6 @@ int main(int argc, char* argv[])
         UpdateTimings(s_pWnd, timer);
 
         ++s_frameNumber;
-        s_frameInFlightNumber = s_frameNumber % s_vkSwapchain.GetImageCount();
     }
 
     s_vkDevice.WaitIdle();
@@ -1320,9 +1298,10 @@ int main(int argc, char* argv[])
     
     for (size_t i = 0; i < s_vkSwapchain.GetImageCount(); ++i) {
         s_vkRenderingFinishedSemaphores[i].Destroy();
-        s_vkPresentFinishedSemaphores[i].Destroy();
-        s_vkRenderingFinishedFences[i].Destroy();
     }
+
+    s_vkPresentFinishedSemaphore.Destroy();
+    s_vkRenderingFinishedFence.Destroy();
 
     vkDestroyPipeline(s_vkDevice.Get(), s_vkPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkPipelineLayout, nullptr);
