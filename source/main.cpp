@@ -16,8 +16,6 @@
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
-#include "render/core/vulkan/vk_mem_allocator.h"
-
 #include "core/camera/camera.h"
 
 
@@ -88,8 +86,6 @@ static vkn::Surface& s_vkSurface = vkn::GetSurface();
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
 static vkn::Device& s_vkDevice = vkn::GetDevice();
-
-static vkn::MemAllocator& s_vkMemAlloc = vkn::GetMemAllocator();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
@@ -430,8 +426,37 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 }
 
 
+void UpdateCommonConstBuffer(BaseWindow* pWnd)
+{
+    const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
+        
+    glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
+    projMat[1][1] *= -1.f;
+    projMat = glm::transpose(projMat);
+
+    COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
+
+    pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
+    pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
+    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
+
+    s_commonConstBuffer.Unmap();
+}
+
+
 void RenderScene()
 {
+    vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
+
+    const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
+    if (fenceStatus == VK_NOT_READY) {
+        return;
+    } else {
+        renderingFinishedFence.Reset();
+    }
+
+    UpdateCommonConstBuffer(s_pWnd);
+
     vkn::Semaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphore;
 
     uint32_t nextImageIdx;
@@ -553,9 +578,6 @@ void RenderScene()
         cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, GPU_QUERY_END_RENDER);
     cmdBuffer.End();
 
-    vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
-    renderingFinishedFence.Reset();
-
     SubmitVkQueue(
         s_vkDevice.GetQueue(),
         cmdBuffer.Get(),
@@ -586,8 +608,6 @@ void RenderScene()
         s_swapchainRecreateRequired = true;
         return;
     }
-
-    renderingFinishedFence.WaitFor(10'000'000'000);
 }
 
 
@@ -958,24 +978,6 @@ void ProcessWndEvents(const WndEvent& event)
 }
 
 
-void UpdateCommonConstBuffer(BaseWindow* pWnd)
-{
-    const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
-        
-    glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
-    projMat[1][1] *= -1.f;
-    projMat = glm::transpose(projMat);
-
-    COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
-
-    pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
-    pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
-    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
-
-    s_commonConstBuffer.Unmap();
-}
-
-
 int main(int argc, char* argv[])
 {
     s_camera.velocity = glm::vec3(0.f);
@@ -1095,14 +1097,6 @@ int main(int argc, char* argv[])
 
     s_vkDevice.Create(vkDeviceCreateInfo);
     CORE_ASSERT(s_vkDevice.IsCreated());
-
-
-    vkn::MemAllocatorCreateInfo memAllocCreateInfo = {};
-    memAllocCreateInfo.pDevice = &s_vkDevice;
-    memAllocCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-
-    s_vkMemAlloc.Create(memAllocCreateInfo);
-    CORE_ASSERT(s_vkMemAlloc.IsCreated());
 
 
     vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
@@ -1274,8 +1268,6 @@ int main(int argc, char* argv[])
 
         s_camera.Update();
 
-        UpdateCommonConstBuffer(s_pWnd);
-
         RenderScene();
 
         UpdateTimings(s_pWnd, timer);
@@ -1311,7 +1303,6 @@ int main(int argc, char* argv[])
     s_vkCmdPool.Destroy();
     
     s_vkSwapchain.Destroy();
-    s_vkMemAlloc.Destroy();
     s_vkDevice.Destroy();
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();

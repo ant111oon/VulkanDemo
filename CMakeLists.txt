@@ -51,18 +51,28 @@ target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 
 
+# FetchContent_Declare(
+#     vma
+#     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+#     GIT_TAG        v3.3.0
+# )
+# FetchContent_MakeAvailable(vma)
+
+# add_library(vma INTERFACE)
+# target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
+
+# # VMA generates a lot of warnings, so disable it
+# target_compile_options(vma INTERFACE -w)
+
+
 FetchContent_Declare(
-    vma
-    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG        v3.3.0
+    tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.12.2
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
 )
-FetchContent_MakeAvailable(vma)
-
-add_library(vma INTERFACE)
-target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
-
-# VMA generates a lot of warnings, so disable it
-target_compile_options(vma INTERFACE -w)
+FetchContent_MakeAvailable(tracy)
 
 
 set(ENGINE_CXX_SOURCE_DIR ${PROJECT_SOURCE_DIR}/source)
@@ -80,7 +90,8 @@ target_include_directories(${ENGINE_PROJ_NAME}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
 )
 
-target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan vma glm imgui tinygltf)
+target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan glm imgui tinygltf TracyClient)
+
 if(WIN32)
     target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE 
         user32.lib gdi32.lib kernel32.lib
@@ -97,6 +108,7 @@ target_compile_options(${ENGINE_PROJ_NAME} PRIVATE
 target_compile_definitions(${ENGINE_PROJ_NAME}
     PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE
     PRIVATE GLM_ENABLE_EXPERIMENTAL
+    PRIVATE TRACY_ENABLE
 )
 
 
