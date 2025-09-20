@@ -1,4 +1,4 @@
-#include "core/wnd_system/wnd_system.h"
+#include "core/engine/wnd_system/wnd_system.h"
 
 #include "core/platform/file/file.h"
 #include "core/utils/timer.h"
@@ -16,7 +16,7 @@
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
-#include "core/camera/camera.h"
+#include "core/engine/camera/camera.h"
 
 
 #define TINYGLTF_IMPLEMENTATION
