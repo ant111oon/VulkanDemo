@@ -136,8 +136,6 @@ private:
 };
 
 
-#include "core/platform/platform.h"
-
 #if defined(ENG_OS_WINDOWS)
     #include "core/platform/native/win32/window/win32_window.h" 
 #endif

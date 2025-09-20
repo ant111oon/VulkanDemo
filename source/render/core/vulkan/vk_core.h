@@ -1,5 +1,10 @@
 #pragma once
 
+#if !defined(ENG_GFX_API_VULKAN)
+    #error Invalid Gpraphics API defines
+#endif
+
+
 #include "core/platform/platform.h"
 
 #include "core/utils/assert.h"

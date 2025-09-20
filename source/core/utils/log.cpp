@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "log.h"
 
+#include "core/profiler/cpu_profiler.h"
+
 
 static constexpr const char* LogLevelToStr(LogLevel level)
 {
@@ -60,6 +62,26 @@ void LogInternal(FILE* pStream, LogLevel level, const char* file, uint32_t line,
         SetConsoleTextAttribute(hConsole, logColor);
             vfprintf_s(pStream, fmt, args);
         SetConsoleTextAttribute(hConsole, OUTPUT_COLOR_DEFAULT);
+
+    #ifdef ENG_PROFILING_ENABLED
+        char profilerMsgBuffer[2048] = {'\0'};
+        vsprintf_s(profilerMsgBuffer, fmt, args);
+        
+        switch (level) {
+            case LogLevel::TRACE:
+                ENG_PROFILE_LOG(profilerMsgBuffer, 255, 255, 255, 255);
+                break;
+            case LogLevel::INFO:
+                ENG_PROFILE_LOG(profilerMsgBuffer, 0, 255, 0, 255);
+                break;
+            case LogLevel::WARN:
+                ENG_PROFILE_LOG(profilerMsgBuffer, 255, 255, 0, 255);
+                break;
+            case LogLevel::ERROR:
+                ENG_PROFILE_LOG(profilerMsgBuffer, 255, 0, 0, 255);
+                break;
+        }
+    #endif
     va_end(args);
 
     fprintf_s(pStream, " (%s:%u)\n", file, line);

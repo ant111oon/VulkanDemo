@@ -18,6 +18,8 @@
 
 #include "core/engine/camera/camera.h"
 
+#include "core/profiler/cpu_profiler.h"
+
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -187,11 +189,12 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     
     pShaderData = pExternalBuffer ? pExternalBuffer : &localBuffer;
 
+    const std::string pathS = shaderSpirVPath.string();
+
     if (!ReadFile(*pShaderData, shaderSpirVPath)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", shaderSpirVPath.string().c_str());
+        VK_ASSERT_FAIL("Failed to load shader: %s", pathS.c_str());
     }
-    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", 
-        shaderSpirVPath.string().c_str(), sizeof(uint32_t));
+    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
 
     VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
     shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -202,7 +205,7 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCreateInfo, nullptr, &vkShaderModule));
     VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
 
-    VK_LOG_INFO("Shader module \"%s\" creating finished: %f ms", shaderSpirVPath.string().c_str(), timer.End().GetDuration<float, std::milli>());
+    VK_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 
     return vkShaderModule;
 }
@@ -428,6 +431,8 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 
 void UpdateCommonConstBuffer(BaseWindow* pWnd)
 {
+    ENG_PROFILE_SCOPED_MARKER_C(UpdateCommonConstBuffer, "UpdateCommonConstBuffer", 200, 200, 0, 255);
+
     const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
         
     glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
@@ -446,14 +451,18 @@ void UpdateCommonConstBuffer(BaseWindow* pWnd)
 
 void RenderScene()
 {
+    ENG_PROFILE_SCOPED_MARKER_C(RenderScene, "RenderScene", 255, 255, 0, 255);
+
     vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
 
+    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(WaitForRenderFence, "WaitForRenderFence", 200, 200, 0, 255);
     const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (fenceStatus == VK_NOT_READY) {
         return;
     } else {
         renderingFinishedFence.Reset();
     }
+    ENG_PROFILE_END_MARKER_SCOPE();
 
     UpdateCommonConstBuffer(s_pWnd);
 
@@ -588,6 +597,7 @@ void RenderScene()
         VK_PIPELINE_STAGE_2_NONE
     );
 
+    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(Presenting, "Presenting", 200, 200, 0, 255);
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
     VkSemaphore vkWaitSemaphore = renderingFinishedSemaphore.Get();
 
@@ -608,25 +618,29 @@ void RenderScene()
         s_swapchainRecreateRequired = true;
         return;
     }
+    ENG_PROFILE_END_MARKER_SCOPE();
 }
 
 
 static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Buffer& indexBuffer)
 {
-    CORE_LOG_TRACE("Loading %s...", filepath.string().c_str());
+    ENG_PROFILE_SCOPED_MARKER_C(LoadScene, "LoadScene", 255, 0, 255, 255);
+
+    const std::string pathS = filepath.string();
+    CORE_LOG_TRACE("Loading %s...", pathS.c_str());
 
     gltf::TinyGLTF modelLoader;
     gltf::Model model;
     std::string error, warning;
 
     const bool isMeshLoaded = filepath.extension() == ".gltf" ? 
-        modelLoader.LoadASCIIFromFile(&model, &error, &warning, filepath.string()) :
-        modelLoader.LoadBinaryFromFile(&model, &error, &warning, filepath.string());
+        modelLoader.LoadASCIIFromFile(&model, &error, &warning, pathS) :
+        modelLoader.LoadBinaryFromFile(&model, &error, &warning, pathS);
 
     if (!warning.empty()) {
-        CORE_LOG_WARN("Warning during %s model loading: %s", filepath.string().c_str(), warning.c_str());
+        CORE_LOG_WARN("Warning during %s model loading: %s", pathS.c_str(), warning.c_str());
     }
-    CORE_ASSERT_MSG(isMeshLoaded && error.empty(), "Failed to load %s model: %s", filepath.string().c_str(), error.c_str());
+    CORE_ASSERT_MSG(isMeshLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
 
     size_t vertexCount = 0;
     std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
@@ -639,7 +653,7 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
         });
     });
 
-    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "GLTF scene %s vertex buffer overflow: %zu, max vertex count: %zu", filepath.string().c_str(), vertexCount, MAX_VERTEX_COUNT);
+    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "GLTF scene %s vertex buffer overflow: %zu, max vertex count: %zu", pathS.c_str(), vertexCount, MAX_VERTEX_COUNT);
 
     std::vector<Vertex> cpuVertBuffer;
     cpuVertBuffer.reserve(vertexCount);
@@ -655,7 +669,7 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
         });
     });
 
-    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", filepath.string().c_str(), indexCount, MAX_INDEX_COUNT);
+    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", pathS.c_str(), indexCount, MAX_INDEX_COUNT);
 
     std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
@@ -855,8 +869,10 @@ void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
     const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(GPU_QUERY_BEGIN_RENDER, VK_QUERY_RESULT_64_BIT);
 
     if (queryResults[0] != 0 && queryResults[1] != 0) {
-    #ifdef ENG_BUILD_DEBUG
+    #if defined(ENG_BUILD_DEBUG)
         constexpr const char* BUILD_TYPE_STR = "DEBUG";
+    #elif defined(ENG_BUILD_PROFILE)
+        constexpr const char* BUILD_TYPE_STR = "PROFILE";
     #else
         constexpr const char* BUILD_TYPE_STR = "RELEASE";
     #endif
@@ -975,6 +991,44 @@ void ProcessWndEvents(const WndEvent& event)
     if (s_flyCameraMode) {
         CameraProcessWndEvent(s_camera, event);
     }
+}
+
+
+void ProcessFrame()
+{
+    ENG_PROFILE_BEGIN_FRAME("Frame");
+
+    Timer timer;
+
+    s_pWnd->ProcessEvents();
+    
+    WndEvent event;
+    while(s_pWnd->PopEvent(event)) {
+        ProcessWndEvents(event);
+    }
+
+    if (s_pWnd->IsMinimized()) {
+        return;
+    }
+
+    if (s_swapchainRecreateRequired) {
+        if (ResizeVkSwapchain(s_pWnd)) {
+            return;
+        }
+
+        s_vkDevice.WaitIdle();
+        CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
+    }
+
+    s_camera.Update();
+
+    RenderScene();
+
+    UpdateTimings(s_pWnd, timer);
+
+    ++s_frameNumber;
+
+    ENG_PROFILE_END_FRAME("Frame");
 }
 
 
@@ -1241,38 +1295,8 @@ int main(int argc, char* argv[])
 
     s_pWnd->SetVisible(true);
 
-    Timer timer;
-
     while(!s_pWnd->IsClosed()) {
-        timer.Reset();
-
-        s_pWnd->ProcessEvents();
-        
-        WndEvent event;
-        while(s_pWnd->PopEvent(event)) {
-            ProcessWndEvents(event);
-        }
-
-        if (s_pWnd->IsMinimized()) {
-            continue;
-        }
-
-        if (s_swapchainRecreateRequired) {
-            if (ResizeVkSwapchain(s_pWnd)) {
-                continue;
-            }
-
-            s_vkDevice.WaitIdle();
-            CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
-        }
-
-        s_camera.Update();
-
-        RenderScene();
-
-        UpdateTimings(s_pWnd, timer);
-
-        ++s_frameNumber;
+        ProcessFrame();
     }
 
     s_vkDevice.WaitIdle();

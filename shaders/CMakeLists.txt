@@ -10,6 +10,10 @@ set(SHADERS_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/source)
 set(SHADERS_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 set(SHADERS_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
+if(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+    message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Use Debug/RelWithDebInfo (Profile)/Release")
+endif()
+
 if (NOT EXISTS ${SHADERS_OUTPUT_DIR})
     message(STATUS "${SHADERS_PROJ_NAME}: Creating ${SHADERS_OUTPUT_DIR}...")
 
@@ -38,7 +42,7 @@ set(SHADER_COMPILER_FLAGS
     $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-DDEBUG>
 
-    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-O>
+    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-O>
 )
 
 message(STATUS "${SHADERS_PROJ_NAME}: Compiler flags: ${SHADER_COMPILER_FLAGS}")

@@ -1,18 +1,5 @@
 #pragma once
 
-#if defined(_WIN32)
-    #define ENG_OS_WINDOWS
-#else
-    #error Currently, only Windows is supported
-#endif
-
-
-#if defined(NDEBUG)
-    #define ENG_BUILD_RELEASE
-#else
-    #define ENG_BUILD_DEBUG
-#endif
-
 
 #if defined(_MSC_VER)
     #define ENG_DEBUG_BREAK() __debugbreak()
@@ -39,5 +26,3 @@
 #define ENG_PRAGMA_OPTIMIZE_OFF _Pragma("optimize(\"\", off)")
 #define ENG_PRAGMA_OPTIMIZE_ON  _Pragma("optimize(\"\", on)")
 
-
-#define ENG_GFX_API_VULKAN

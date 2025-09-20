@@ -9,6 +9,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(ENGINE_PROJ_NAME ${PROJECT_NAME})
 
 
+if (NOT WIN32)
+    message(FATAL_ERROR "Currently, only Windows is supported")
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+    message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Use Debug/RelWithDebInfo (Profile)/Release")
+else()
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(STATUS "Build type: DEBUG")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        message(STATUS "Build type: PROFILE")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(STATUS "Build type: RELEASE")
+    endif()
+endif()
+
+
 find_package(Vulkan REQUIRED)
 
 include(FetchContent)
@@ -34,6 +51,8 @@ FetchContent_Declare(
     GIT_TAG        v2.9.6
 )
 FetchContent_MakeAvailable(tinygltf)
+
+target_compile_options(tinygltf PRIVATE -w)
 
 
 add_library(imgui STATIC
@@ -85,30 +104,39 @@ file(GLOB_RECURSE ENGINE_CXX_SOURCE_FILES
 
 add_executable(${ENGINE_PROJ_NAME} ${ENGINE_CXX_SOURCE_FILES})
 
+target_precompile_headers(${ENGINE_PROJ_NAME}
+    PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h
+)
+
+target_link_libraries(${ENGINE_PROJ_NAME}
+    PRIVATE Vulkan::Vulkan
+    PRIVATE glm 
+    PRIVATE imgui
+    PRIVATE tinygltf
+    PRIVATE TracyClient
+
+    PRIVATE
+    $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
+)
+
 target_include_directories(${ENGINE_PROJ_NAME} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
 )
 
-target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE Vulkan::Vulkan glm imgui tinygltf TracyClient)
-
-if(WIN32)
-    target_link_libraries(${ENGINE_PROJ_NAME} PRIVATE 
-        user32.lib gdi32.lib kernel32.lib
-    )
-endif()
-
-target_precompile_headers(${ENGINE_PROJ_NAME} PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h)
-
-target_compile_options(${ENGINE_PROJ_NAME} PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic -Wno-gnu-anonymous-struct>
-    $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
+target_compile_options(${ENGINE_PROJ_NAME}
+    PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>: -Wall -Wextra -Wpedantic -Wno-gnu-anonymous-struct>
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>: /W4 /WX>
 )
 
 target_compile_definitions(${ENGINE_PROJ_NAME}
-    PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE
-    PRIVATE GLM_ENABLE_EXPERIMENTAL
-    PRIVATE TRACY_ENABLE
+    PRIVATE ENG_GFX_API_VULKAN
+
+    PRIVATE $<$<CONFIG:Debug>:-DENG_BUILD_DEBUG>
+    PRIVATE $<$<CONFIG:RelWithDebInfo>:-DENG_BUILD_PROFILE>
+    PRIVATE $<$<CONFIG:Release>:-DENG_BUILD_RELEASE>
+
+    PRIVATE $<$<PLATFORM_ID:Windows>:-DENG_OS_WINDOWS>
 )
 
 

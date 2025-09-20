@@ -1,7 +1,5 @@
 #pragma once
 
-#include "core/platform/platform.h"
-
 #include "log.h" 
 
 #include <cstdint>
