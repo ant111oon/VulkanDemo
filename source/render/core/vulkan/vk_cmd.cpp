@@ -7,12 +7,17 @@
 namespace vkn
 {
     #define VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR) \
-        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsCreated(), "Cmd Buffer \'%s\' is invalid", CMD_BUFFER_PTR->GetDebugName());     \
         VK_ASSERT_MSG(CMD_BUFFER_PTR->IsStarted(), "Cmd Buffer \'%s\' is not started", CMD_BUFFER_PTR->GetDebugName())
 
     #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
         VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
         VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+
+    
+    bool CmdBuffer::IsValid() const
+    {
+        return m_pOwner ? (m_pOwner->IsCreated() && IsCreated()) : false;
+    }
 
 
     CmdBuffer::CmdBuffer(CmdBuffer&& cmdBuffer) noexcept
@@ -27,7 +32,7 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
+        if (IsValid()) {
             Destroy();
         }
 
@@ -43,7 +48,7 @@ namespace vkn
 
     CmdBuffer& CmdBuffer::Begin(const VkCommandBufferBeginInfo& beginInfo)
     {
-        VK_ASSERT(IsCreated());
+        VK_ASSERT(IsValid());
         VK_ASSERT(!IsStarted());
 
         VK_CHECK(vkBeginCommandBuffer(m_cmdBuffer, &beginInfo));
@@ -169,7 +174,7 @@ namespace vkn
 
     void CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
-        VK_ASSERT(IsCreated());
+        VK_ASSERT(IsValid());
         VK_CHECK(vkResetCommandBuffer(m_cmdBuffer, flags));
     }
 
@@ -200,6 +205,8 @@ namespace vkn
 
     bool CmdBuffer::Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level)
     {
+        VK_ASSERT(pOwnerPool->IsCreated());
+
         if (IsCreated()) {
             VK_LOG_WARN("Command buffer %s is already allocated", GetDebugName());
             return false;
@@ -232,7 +239,7 @@ namespace vkn
 
     void CmdBuffer::Free()
     {
-        if (!IsCreated()) {
+        if (!IsValid()) {
             return;
         }
 

@@ -19,6 +19,7 @@
 #include "core/engine/camera/camera.h"
 
 #include "core/profiler/cpu_profiler.h"
+#include "render/core/vulkan/vk_profiler.h"
 
 
 #define TINYGLTF_IMPLEMENTATION
@@ -88,6 +89,8 @@ static vkn::Surface& s_vkSurface = vkn::GetSurface();
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
 static vkn::Device& s_vkDevice = vkn::GetDevice();
+
+static vkn::Profiler& s_vkProfiler = vkn::GetProfiler();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
@@ -431,7 +434,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 
 void UpdateCommonConstBuffer(BaseWindow* pWnd)
 {
-    ENG_PROFILE_SCOPED_MARKER_C(UpdateCommonConstBuffer, "UpdateCommonConstBuffer", 200, 200, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C(UpdateCommonConstBuffer, 200, 200, 0, 255);
 
     const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
         
@@ -451,11 +454,11 @@ void UpdateCommonConstBuffer(BaseWindow* pWnd)
 
 void RenderScene()
 {
-    ENG_PROFILE_SCOPED_MARKER_C(RenderScene, "RenderScene", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C(RenderScene, 255, 255, 0, 255);
 
     vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
 
-    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(WaitForRenderFence, "WaitForRenderFence", 200, 200, 0, 255);
+    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(WaitForRenderFence, 200, 200, 0, 255);
     const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (fenceStatus == VK_NOT_READY) {
         return;
@@ -490,6 +493,7 @@ void RenderScene()
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
     cmdBuffer.Begin(cmdBeginInfo);
+        ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(cmdBuffer, BeginCmdBuffer);
         cmdBuffer
             .CmdResetQueryPool(s_vkQueryPool, GPU_QUERY_BEGIN_RENDER, GPU_QUERY_END_RENDER - GPU_QUERY_BEGIN_RENDER + 1)
             .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, GPU_QUERY_BEGIN_RENDER);
@@ -546,6 +550,7 @@ void RenderScene()
 
         renderingInfo.pDepthAttachment = &depthAttachment;
 
+        ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(cmdBuffer, BeginRender);
         cmdBuffer.BeginRendering(renderingInfo);
             VkViewport viewport = {};
             viewport.width = renderingInfo.renderArea.extent.width;
@@ -571,6 +576,7 @@ void RenderScene()
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
         cmdBuffer.EndRendering();
+        ENG_PROFILE_END_GPU_MARKER_SCOPE();
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -585,6 +591,9 @@ void RenderScene()
         );
 
         cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, GPU_QUERY_END_RENDER);
+    ENG_PROFILE_END_GPU_MARKER_SCOPE();
+
+        ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
     cmdBuffer.End();
 
     SubmitVkQueue(
@@ -597,7 +606,7 @@ void RenderScene()
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(Presenting, "Presenting", 200, 200, 0, 255);
+    ENG_PROFILE_BEGIN_MARKER_C_SCOPE(Presenting, 200, 200, 0, 255);
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
     VkSemaphore vkWaitSemaphore = renderingFinishedSemaphore.Get();
 
@@ -624,7 +633,7 @@ void RenderScene()
 
 static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Buffer& indexBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C(LoadScene, "LoadScene", 255, 0, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C(LoadScene, 255, 0, 255, 255);
 
     const std::string pathS = filepath.string();
     CORE_LOG_TRACE("Loading %s...", pathS.c_str());
@@ -1153,6 +1162,10 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkDevice.IsCreated());
 
 
+    s_vkProfiler.Create(&s_vkDevice);
+    CORE_ASSERT(s_vkProfiler.IsCreated());
+
+
     vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
     vkSwapchainCreateInfo.pDevice = &s_vkDevice;
     vkSwapchainCreateInfo.pSurface = &s_vkSurface;
@@ -1327,6 +1340,8 @@ int main(int argc, char* argv[])
     s_vkCmdPool.Destroy();
     
     s_vkSwapchain.Destroy();
+
+    s_vkProfiler.Destroy();
     s_vkDevice.Destroy();
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();

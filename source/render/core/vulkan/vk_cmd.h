@@ -55,21 +55,23 @@ namespace vkn
 
         VkCommandBuffer Get() const
         {
-            VK_ASSERT(IsCreated());
+            VK_ASSERT(IsValid());
             return m_cmdBuffer;
         }
 
         bool IsStarted() const
         {
-            VK_ASSERT(IsCreated());
+            VK_ASSERT(IsValid());
             return m_state.test(FLAG_IS_STARTED);
         }
 
         bool IsRenderingStarted() const
         {
-            VK_ASSERT(IsCreated());
+            VK_ASSERT(IsValid());
             return m_state.test(FLAG_IS_RENDERING_STARTED);
         }
+
+        bool IsValid() const;
 
     private:
         CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level);
