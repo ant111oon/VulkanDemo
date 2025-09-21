@@ -5,6 +5,16 @@
 #endif
 
 
+#if defined(ENG_BUILD_DEBUG) || defined(ENG_BUILD_PROFILE)
+    #define ENG_VK_DEBUG_UTILS_ENABLED
+#endif
+
+
+#if defined(ENG_BUILD_DEBUG) || defined(ENG_BUILD_PROFILE)
+    #define ENG_VK_OBJ_DEBUG_NAME_ENABLED
+#endif
+
+
 #include "core/platform/platform.h"
 
 #include "core/utils/assert.h"

@@ -5,7 +5,12 @@
 #include <cstdint>
 
 
-#if defined(ENG_BUILD_DEBUG)
+#ifdef ENG_BUILD_DEBUG
+    #define ENG_ASSERT_ENABLED
+#endif
+
+
+#ifdef ENG_ASSERT_ENABLED
     template <typename... Args>
     inline void AssertImpl(const char* file, uint32_t line, const char* system, const char* fmt, Args&&... args) noexcept
     {

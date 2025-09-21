@@ -35,14 +35,6 @@ namespace gltf = tinygltf;
 using VertexIndexType = uint32_t;
 
 
-enum GpuQueryIndex
-{
-    GPU_QUERY_BEGIN_RENDER,
-    GPU_QUERY_END_RENDER,
-    GPU_QUERY_COUNT,
-};
-
-
 struct Mesh
 {
     uint32_t firstVertex;
@@ -129,7 +121,7 @@ static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
 
 
-#ifdef ENG_BUILD_DEBUG
+#ifdef ENG_VK_DEBUG_UTILS_ENABLED
 static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
     VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -499,10 +491,7 @@ void RenderScene()
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
     cmdBuffer.Begin(cmdBeginInfo);
-        ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(cmdBuffer, "BeginCmdBuffer");
-        cmdBuffer
-            .CmdResetQueryPool(s_vkQueryPool, GPU_QUERY_BEGIN_RENDER, GPU_QUERY_END_RENDER - GPU_QUERY_BEGIN_RENDER + 1)
-            .CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, GPU_QUERY_BEGIN_RENDER);
+        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BeginCmdBuffer", 255, 165, 0, 255);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -561,7 +550,7 @@ void RenderScene()
 
         renderingInfo.pDepthAttachment = &depthAttachment;
 
-        ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(cmdBuffer, "BeginRender");
+        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BeginRender", 200, 120, 0, 255);
         cmdBuffer.BeginRendering(renderingInfo);
             VkViewport viewport = {};
             viewport.width = renderingInfo.renderArea.extent.width;
@@ -587,7 +576,7 @@ void RenderScene()
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
         cmdBuffer.EndRendering();
-        ENG_PROFILE_END_GPU_MARKER_SCOPE();
+        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -601,8 +590,7 @@ void RenderScene()
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
-        cmdBuffer.CmdWriteTimestamp(s_vkQueryPool, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, GPU_QUERY_END_RENDER);
-        ENG_PROFILE_END_GPU_MARKER_SCOPE();
+        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
     cmdBuffer.End();
@@ -886,23 +874,18 @@ static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageV
 
 void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
 {
-    const std::array queryResults = s_vkQueryPool.GetResults<uint64_t, 2>(GPU_QUERY_BEGIN_RENDER, VK_QUERY_RESULT_64_BIT);
-
-    if (queryResults[0] != 0 && queryResults[1] != 0) {
-    #if defined(ENG_BUILD_DEBUG)
-        constexpr const char* BUILD_TYPE_STR = "DEBUG";
-    #elif defined(ENG_BUILD_PROFILE)
-        constexpr const char* BUILD_TYPE_STR = "PROFILE";
-    #else
-        constexpr const char* BUILD_TYPE_STR = "RELEASE";
-    #endif
+#if defined(ENG_BUILD_DEBUG)
+    constexpr const char* BUILD_TYPE_STR = "DEBUG";
+#elif defined(ENG_BUILD_PROFILE)
+    constexpr const char* BUILD_TYPE_STR = "PROFILE";
+#else
+    constexpr const char* BUILD_TYPE_STR = "RELEASE";
+#endif
         
-        const float gpuFrameTime = (queryResults[1] - queryResults[0]) * s_vkPhysDevice.GetProperties().limits.timestampPeriod / 1'000'000.f;
-        const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
+    const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
 
-        pWnd->SetTitle("%s | %s | GPU: %.3f ms, CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s", 
-            APP_NAME, BUILD_TYPE_STR, gpuFrameTime, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF");
-    }
+    pWnd->SetTitle("%s | %s | CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s", 
+        APP_NAME, BUILD_TYPE_STR, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF");
 }
 
 
@@ -1071,7 +1054,7 @@ int main(int argc, char* argv[])
     s_pWnd->Create(wndInitInfo);
     ENG_ASSERT(s_pWnd->IsInitialized());
 
-#ifdef ENG_BUILD_DEBUG
+#ifdef ENG_VK_DEBUG_UTILS_ENABLED
     vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCreateInfo = {};
     vkDbgMessengerCreateInfo.messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
@@ -1090,7 +1073,7 @@ int main(int argc, char* argv[])
 #endif
 
     constexpr std::array vkInstExtensions = {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
     #endif
 
@@ -1107,7 +1090,7 @@ int main(int argc, char* argv[])
     vkInstCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     vkInstCreateInfo.apiVersion = VK_API_VERSION_1_3;
     vkInstCreateInfo.extensions = vkInstExtensions;
-#ifdef ENG_BUILD_DEBUG
+#ifdef ENG_VK_DEBUG_UTILS_ENABLED
     vkInstCreateInfo.layers = vkInstLayers;
     vkInstCreateInfo.pDbgMessengerCreateInfo = &vkDbgMessengerCreateInfo;
 #endif
@@ -1242,7 +1225,7 @@ int main(int argc, char* argv[])
         s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
         CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
 
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         char vkObjDbgName[64] = {'\0'};
 
         sprintf_s(vkObjDbgName, "RND_FINISH_SEMAPHORE_%zu", i);

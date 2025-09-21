@@ -8,7 +8,7 @@ namespace vkn
 {
     static void CheckInstanceExtensionsSupport(const std::span<const char* const> requiredExtensions)
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
         uint32_t vkInstExtensionPropsCount = 0;
         VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &vkInstExtensionPropsCount, nullptr));
         std::vector<VkExtensionProperties> vkInstExtensionProps(vkInstExtensionPropsCount);
@@ -34,7 +34,7 @@ namespace vkn
 
     static void CheckInstanceLayersSupport(const std::span<const char* const> requiredLayers)
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
         uint32_t vkInstLayersPropsCount = 0;
         VK_CHECK(vkEnumerateInstanceLayerProperties(&vkInstLayersPropsCount, nullptr));
         std::vector<VkLayerProperties> vkInstLayerProps(vkInstLayersPropsCount);
@@ -177,6 +177,11 @@ namespace vkn
     PFN_vkVoidFunction Instance::GetProcAddr(const char* pFuncName) const
     {
         VK_ASSERT(IsCreated());
-        return vkGetInstanceProcAddr(m_instance, pFuncName);
+        VK_ASSERT(pFuncName != nullptr);
+
+        PFN_vkVoidFunction pFunc = vkGetInstanceProcAddr(m_instance, pFuncName);
+        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", pFuncName);
+
+        return pFunc;
     }
 }

@@ -7,7 +7,7 @@ namespace vkn
 {
     static void CheckDeviceExtensionsSupport(VkPhysicalDevice vkPhysDevice, const std::span<const char* const> requiredExtensions)
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
         uint32_t vkDeviceExtensionsCount = 0;
         VK_CHECK(vkEnumerateDeviceExtensionProperties(vkPhysDevice, nullptr, &vkDeviceExtensionsCount, nullptr));
         std::vector<VkExtensionProperties> vkDeviceExtensionProps(vkDeviceExtensionsCount);

@@ -311,7 +311,7 @@ namespace vkn
 
     VkPipeline GraphicsPipelineBuilder::Build(VkDevice vkDevice)
     {   
-    #if defined(ENG_BUILD_DEBUG)
+    #if defined(ENG_ASSERT_ENABLED)
         for (size_t i = 0; i < m_shaderStages.size(); ++i) {
             CORE_ASSERT_MSG(m_shaderStages[i].module != VK_NULL_HANDLE, "Shader stage (index: %zu) module is VK_NULL_HANDLE", i);
         }

@@ -24,7 +24,7 @@ namespace vkn
             Object::Destroy();
         }
 
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         m_debugName.swap(obj.m_debugName);
     #endif
         std::swap(m_internalState, obj.m_internalState);
@@ -35,7 +35,7 @@ namespace vkn
 
     void Object::Destroy()
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         m_debugName.fill('\0');
     #endif
         SetCreated(false);
@@ -44,7 +44,7 @@ namespace vkn
 
     void Object::SetDebugName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pName)
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         VK_ASSERT(IsCreated());
         VK_ASSERT(pName);
         
@@ -61,7 +61,7 @@ namespace vkn
 
     const char* Object::GetDebugName(const char* pReleaseName) const
     {
-    #ifdef ENG_BUILD_DEBUG
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         return m_debugName.data();
     #else
         return pReleaseName;
