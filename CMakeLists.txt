@@ -17,11 +17,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Use Debug/RelWithDebInfo (Profile)/Release")
 else()
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        message(STATUS "Build type: DEBUG")
+        message(STATUS "${ENGINE_PROJ_NAME}: BUILD TYPE: DEBUG")
     elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-        message(STATUS "Build type: PROFILE")
+        message(STATUS "${ENGINE_PROJ_NAME}: BUILD TYPE: PROFILE")
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-        message(STATUS "Build type: RELEASE")
+        message(STATUS "${ENGINE_PROJ_NAME}: BUILD TYPE: RELEASE")
     endif()
 endif()
 
@@ -104,6 +104,11 @@ file(GLOB_RECURSE ENGINE_CXX_SOURCE_FILES
 
 add_executable(${ENGINE_PROJ_NAME} ${ENGINE_CXX_SOURCE_FILES})
 
+
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shaders)
+add_dependencies(${ENGINE_PROJ_NAME} ${SHADERS_PROJ_NAME})
+
+
 target_precompile_headers(${ENGINE_PROJ_NAME}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}/pch.h
 )
@@ -139,6 +144,8 @@ target_compile_definitions(${ENGINE_PROJ_NAME}
     PRIVATE $<$<PLATFORM_ID:Windows>:-DENG_OS_WINDOWS>
 )
 
-
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/shaders)
-add_dependencies(${ENGINE_PROJ_NAME} ${SHADERS_PROJ_NAME})
+if (SHADER_USE_REVERSED_Z)
+    target_compile_definitions(${ENGINE_PROJ_NAME}
+        PRIVATE ENG_REVERSED_Z
+    )
+endif()

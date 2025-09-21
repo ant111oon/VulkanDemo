@@ -307,7 +307,11 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
         .SetStencilTestState(VK_FALSE, {}, {})
+    #ifdef ENG_REVERSED_Z
         .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+    #else
+        .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
+    #endif
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .SetDepthAttachmentFormat(VK_FORMAT_D32_SFLOAT)
         .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
@@ -437,8 +441,12 @@ void UpdateCommonConstBuffer(BaseWindow* pWnd)
     ENG_PROFILE_SCOPED_MARKER_C("UpdateCommonConstBuffer", 200, 200, 0, 255);
 
     const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
-        
-    glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
+    
+    #ifdef ENG_REVERSED_Z
+        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
+    #else
+        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100'000.f);
+    #endif
     projMat[1][1] *= -1.f;
     projMat = glm::transpose(projMat);
 
@@ -545,6 +553,11 @@ void RenderScene()
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    #ifdef ENG_REVERSED_Z
+        depthAttachment.clearValue.depthStencil.depth = 0.f;
+    #else
+        depthAttachment.clearValue.depthStencil.depth = 1.f;
+    #endif
 
         renderingInfo.pDepthAttachment = &depthAttachment;
 
