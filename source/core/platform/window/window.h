@@ -7,6 +7,8 @@
 #include <bitset>
 #include <array>
 
+#include <memory>
+
 
 struct WindowInitInfo
 {
@@ -17,11 +19,11 @@ struct WindowInitInfo
 };
 
 
-class BaseWindow
+class Window
 {
 public:
-    BaseWindow() = default;
-    virtual ~BaseWindow() = default;
+    Window() = default;
+    virtual ~Window() = default;
 
     virtual bool Create(const WindowInitInfo& initInfo) = 0;
     
@@ -136,6 +138,4 @@ private:
 };
 
 
-#if defined(ENG_OS_WINDOWS)
-    #include "core/platform/native/win32/window/win32_window.h" 
-#endif
+std::unique_ptr<Window> AllocateWindow();

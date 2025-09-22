@@ -8,7 +8,7 @@
 #define WND_ASSERT(COND) ENG_ASSERT_SYSTEM(COND, "WINDOW")
 
 
-static std::unique_ptr<BaseWindow> pWndSysInst = nullptr;
+static std::unique_ptr<Window> pWndSysInst = nullptr;
 
 
 void wndSysInit()
@@ -17,10 +17,7 @@ void wndSysInit()
         return;
     }
 
-#ifdef ENG_OS_WINDOWS
-    pWndSysInst = std::make_unique<Win32Window>();
-#endif
-
+    pWndSysInst = AllocateWindow();
     WND_ASSERT(pWndSysInst != nullptr);
 }
 
@@ -32,7 +29,7 @@ void wndSysTerminate()
 }
 
 
-BaseWindow* wndSysGetMainWindow()
+Window* wndSysGetMainWindow()
 {
     WND_ASSERT(pWndSysInst != nullptr);
     return pWndSysInst.get();

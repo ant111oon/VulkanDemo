@@ -7,4 +7,4 @@ void wndSysInit();
 void wndSysTerminate();
 
 
-BaseWindow* wndSysGetMainWindow();
+Window* wndSysGetMainWindow();

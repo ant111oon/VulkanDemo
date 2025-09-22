@@ -1,10 +1,9 @@
+#if defined(ENG_OS_WINDOWS)
+
 #include "pch.h"
 
 #include "win32_window.h"
-#include "core/utils/assert.h"
 
-
-#if defined(ENG_OS_WINDOWS)
 
 #define WIN32_ASSERT_MSG(COND, FMT, ...) ENG_ASSERT_MSG(COND, "WIN32", FMT, __VA_ARGS__)
 #define WIN32_ASSERT(COND)               WIN32_ASSERT_MSG(COND, #COND)
@@ -417,7 +416,7 @@ void Win32Window::Destroy()
 
     m_HWND = nullptr;
 
-    BaseWindow::Destroy();
+    Window::Destroy();
 }
 
 
@@ -456,6 +455,12 @@ void Win32Window::UpdateTitleInternal()
 {
     WIN32_ASSERT(IsInitialized());
     SetWindowTextA(m_HWND, GetTitle().data());
+}
+
+
+std::unique_ptr<Window> AllocateWindow()
+{
+    return std::make_unique<Win32Window>();
 }
 
 #endif

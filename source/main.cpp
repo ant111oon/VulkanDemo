@@ -73,7 +73,7 @@ static constexpr bool VSYNC_ENABLED = false;
 
 static constexpr float CAMERA_SPEED = 10.f;
 
-static BaseWindow* s_pWnd = nullptr;
+static Window* s_pWnd = nullptr;
 
 static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
@@ -428,7 +428,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 }
 
 
-void UpdateCommonConstBuffer(BaseWindow* pWnd)
+void UpdateCommonConstBuffer(Window* pWnd)
 {
     ENG_PROFILE_SCOPED_MARKER_C("UpdateCommonConstBuffer", 200, 200, 0, 255);
 
@@ -872,7 +872,7 @@ static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageV
 }
 
 
-void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
+void UpdateTimings(Window* pWnd, Timer& cpuTimer)
 {
 #if defined(ENG_BUILD_DEBUG)
     constexpr const char* BUILD_TYPE_STR = "DEBUG";
@@ -889,7 +889,7 @@ void UpdateTimings(BaseWindow* pWnd, Timer& cpuTimer)
 }
 
 
-static bool ResizeVkSwapchain(BaseWindow* pWnd)
+static bool ResizeVkSwapchain(Window* pWnd)
 {
     if (!s_swapchainRecreateRequired) {
         return false;

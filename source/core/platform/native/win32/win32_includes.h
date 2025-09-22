@@ -11,3 +11,4 @@
 #undef OUT
 #undef near
 #undef far
+#undef CreateWindow

@@ -1,18 +1,13 @@
 #pragma once
 
+#ifdef ENG_OS_WINDOWS
+
 #include "core/platform/window/window.h"
 
-#if defined(ENG_OS_WINDOWS)
-
-using HINSTANCE = struct HINSTANCE__*;
-using HWND = struct HWND__*;
-using LRESULT = long long;
-using WPARAM = unsigned long long;
-using LPARAM = long long;
-using UINT = unsigned int;
+#include "core/platform/native/win32/window/win32_window.h"
 
 
-class Win32Window final : public BaseWindow
+class Win32Window final : public Window
 {
 public:
     ~Win32Window() override;
