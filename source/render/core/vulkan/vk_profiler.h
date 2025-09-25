@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef ENG_PROFILING_ENABLED
+
 #include "vk_object.h"
 #include "vk_cmd.h"
 
@@ -34,7 +36,6 @@ namespace vkn
         Profiler() = default;
 
     private:
-    #ifdef ENG_PROFILING_ENABLED
         Device* m_pDevice = nullptr;
 
         CmdPool m_cmdPool;
@@ -44,7 +45,6 @@ namespace vkn
 
         PFN_vkCmdBeginDebugUtilsLabelEXT m_vkCmdBeginDebugUtilsLabelFunc = nullptr;
         PFN_vkCmdEndDebugUtilsLabelEXT   m_vkCmdEndDebugUtilsLabelFunc = nullptr;
-    #endif
     };
 
 
@@ -56,7 +56,6 @@ namespace vkn
 }
 
 
-#ifdef ENG_PROFILING_ENABLED
 #define _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, MSG, ...) VK_ASSERT_MSG(CMD_BUFFER.IsStarted(), MSG, __VA_ARGS__) 
 
 

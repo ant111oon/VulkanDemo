@@ -1,3 +1,5 @@
+#ifdef ENG_PROFILING_ENABLED
+
 #include "pch.h"
 
 #include "vk_profiler.h"
@@ -130,3 +132,5 @@ namespace vkn
     #endif
     }
 }
+
+#endif

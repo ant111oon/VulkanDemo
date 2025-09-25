@@ -45,6 +45,35 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 
+if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+    if (CMAKE_CONFIGURATION_TYPES)
+        set(ENG_ENABLE_TRACY ON)
+    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(ENG_ENABLE_TRACY ON)
+    endif()
+endif()
+
+
+if (ENG_ENABLE_TRACY)
+    FetchContent_Declare(
+        tracy
+        GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+        GIT_TAG        v0.12.2
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
+    )
+    FetchContent_MakeAvailable(tracy)
+endif()
+
+
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        v0.25
+)
+FetchContent_MakeAvailable(meshoptimizer)
+
+
 FetchContent_Declare(
     tinygltf
     GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
@@ -84,16 +113,6 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 # target_compile_options(vma INTERFACE -w)
 
 
-FetchContent_Declare(
-    tracy
-    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        v0.12.2
-    GIT_SHALLOW TRUE
-    GIT_PROGRESS TRUE
-)
-FetchContent_MakeAvailable(tracy)
-
-
 set(ENGINE_CXX_SOURCE_DIR ${PROJECT_SOURCE_DIR}/source)
 
 file(GLOB_RECURSE ENGINE_CXX_SOURCE_FILES
@@ -118,10 +137,11 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE glm 
     PRIVATE imgui
     PRIVATE tinygltf
-    PRIVATE TracyClient
+    PRIVATE meshoptimizer
+    
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient>
 
-    PRIVATE
-    $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
+    PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
 )
 
 target_include_directories(${ENGINE_PROJ_NAME} 

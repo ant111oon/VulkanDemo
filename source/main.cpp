@@ -82,8 +82,6 @@ static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 
 static vkn::Device& s_vkDevice = vkn::GetDevice();
 
-static vkn::Profiler& s_vkProfiler = vkn::GetProfiler();
-
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
 static vkn::CmdPool   s_vkCmdPool;
@@ -686,12 +684,12 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
     s_meshes.resize(0);
 
     for (const gltf::Mesh& mesh : model.meshes) {
-        Mesh internalMesh = {};
-
-        internalMesh.firstVertex = cpuVertBuffer.size();
-        internalMesh.firstIndex = cpuIndexBuffer.size();
-
         for (const gltf::Primitive& primitive : mesh.primitives) {
+            Mesh internalMesh = {};
+
+            internalMesh.firstVertex = cpuVertBuffer.size();
+            internalMesh.firstIndex = cpuIndexBuffer.size();
+
             const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
 
             CORE_ASSERT(primitive.attributes.contains("POSITION"));
@@ -771,9 +769,9 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
                 CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
                 cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
             }
-        }
 
-        s_meshes.emplace_back(internalMesh);
+            s_meshes.emplace_back(internalMesh);
+        }
     }
 
 
@@ -1156,8 +1154,10 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkDevice.IsCreated());
 
 
-    s_vkProfiler.Create(&s_vkDevice);
-    CORE_ASSERT(s_vkProfiler.IsCreated());
+#ifdef ENG_PROFILING_ENABLED
+    vkn::GetProfiler().Create(&s_vkDevice);
+    CORE_ASSERT(vkn::GetProfiler().IsCreated());
+#endif
 
 
     vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
@@ -1335,7 +1335,9 @@ int main(int argc, char* argv[])
     
     s_vkSwapchain.Destroy();
 
-    s_vkProfiler.Destroy();
+#ifdef ENG_PROFILING_ENABLED
+    vkn::GetProfiler().Destroy();
+#endif
     s_vkDevice.Destroy();
     s_vkSurface.Destroy();
     s_vkInstance.Destroy();

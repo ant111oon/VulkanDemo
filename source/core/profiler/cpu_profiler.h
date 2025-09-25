@@ -2,11 +2,13 @@
 
 #include "core/profiler/core.h"
 
-#include <tracy/Tracy.hpp>
 #include <cstdint>
 
 
 #if defined(ENG_PROFILING_ENABLED)
+#include <tracy/Tracy.hpp>
+
+
 #define ENG_PROFILE_FRAME(NAME)         FrameMarkNamed(NAME)
 
 #define ENG_PROFILE_BEGIN_FRAME(NAME)   FrameMarkStart(NAME)
