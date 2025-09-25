@@ -1,11 +1,11 @@
 #pragma once
 
+#include "core/profiler/core.h"
+
 #ifdef ENG_PROFILING_ENABLED
 
 #include "vk_object.h"
 #include "vk_cmd.h"
-
-#include "core/profiler/core.h"
 
 #include <tracy/TracyVulkan.hpp>
 

@@ -1,11 +1,8 @@
-#ifdef ENG_PROFILING_ENABLED
-
 #include "pch.h"
 
 #include "vk_profiler.h"
 
-#include "vk_device.h"
-
+#ifdef ENG_PROFILING_ENABLED
 
 namespace vkn
 {
