@@ -21,6 +21,8 @@
 #include "core/profiler/cpu_profiler.h"
 #include "render/core/vulkan/vk_profiler.h"
 
+#include <meshoptimizer.h>
+
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
