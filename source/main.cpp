@@ -24,9 +24,10 @@
 #include <meshoptimizer.h>
 
 
-#define TINYGLTF_IMPLEMENTATION
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NOEXCEPTION
 #include <tiny_gltf.h>
 
@@ -36,14 +37,6 @@ namespace gltf = tinygltf;
 
 using VertexIndexType = uint32_t;
 
-
-struct Mesh
-{
-    uint32_t firstVertex;
-    uint32_t vertexCount;
-    uint32_t firstIndex;
-    uint32_t indexCount;
-};
 
 
 struct Vertex
@@ -55,6 +48,15 @@ struct Vertex
 };
 
 
+struct Mesh
+{
+    uint32_t firstVertex;
+    uint32_t vertexCount;
+    uint32_t firstIndex;
+    uint32_t indexCount;
+};
+
+
 struct COMMON_CB_DATA
 {
     glm::mat4x4 COMMON_VIEW_MATRIX;
@@ -63,10 +65,31 @@ struct COMMON_CB_DATA
 };
 
 
-static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
+struct TEST_BINDLESS_REGISTRY
+{
+    VkDeviceAddress VERTEX_DATA;
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    VkDeviceAddress MESHLET_DATA;
+    VkDeviceAddress MESHLET_VERTS_DATA;
+    VkDeviceAddress MESHLET_TRI_DATA;
+#else
+    VkDeviceAddress _PADD;
+#endif
+};
+
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+using Meshlet = meshopt_Meshlet;
+
+static constexpr size_t MESHLET_MAX_VERTICES = 64;
+static constexpr size_t MESHLET_MAX_TRIANGLES = 124;
+#endif
+
+static constexpr size_t MAX_VERTEX_COUNT = 256'000;
 static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Vertex);
 
-static constexpr size_t MAX_INDEX_COUNT = 2'000'000;
+static constexpr size_t MAX_INDEX_COUNT = 1'000'000;
 static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(VertexIndexType);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -106,13 +129,27 @@ static vkn::Fence s_vkImmediateSubmitFinishedFence;
 static vkn::Image s_vkDepthImage;
 static vkn::ImageView s_vkDepthImageView;
 
-static vkn::Buffer s_vertexBuffer;
-static vkn::Buffer s_indexBuffer;
 static vkn::Buffer s_commonConstBuffer;
+
+static vkn::Buffer s_vertexBuffer;
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    static vkn::Buffer s_meshletBuffer;
+    static vkn::Buffer s_meshletVertIdxBuffer;
+    static vkn::Buffer s_meshletTrianglesBuffer;
+#else
+    static vkn::Buffer s_indexBuffer;
+#endif
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<Mesh> s_meshes;
+#ifdef ENG_USE_MESHLET_PIPELINE
+    static std::vector<Meshlet> s_meshlets;
+    static std::vector<uint32_t> s_meshletVertices;
+    static std::vector<uint32_t> s_meshletTrianglesU32;
+#else
+    static std::vector<Mesh> s_meshes;
+#endif
 
 static eng::Camera s_camera;
 
@@ -263,7 +300,7 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
-        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress))
+        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TEST_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
@@ -273,27 +310,52 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
 }
 
 
+#ifdef ENG_USE_MESHLET_PIPELINE
+static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, std::optional<fs::path> tsksPath, const fs::path& mshsPath, const fs::path& psPath)
+#else
 static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
+#endif
 {
     Timer timer;
 
-    static constexpr size_t SHADER_STAGES_COUNT = 2;
-
     std::vector<uint8_t> shaderCodeBuffer;
-    std::array<VkShaderModule, SHADER_STAGES_COUNT> vkShaderModules = {
+    
+    std::array vkShaderModules = {
+    #ifdef ENG_USE_MESHLET_PIPELINE
+        tsksPath ? CreateVkShaderModule(vkDevice, tsksPath.value(), &shaderCodeBuffer) : VK_NULL_HANDLE,
+        CreateVkShaderModule(vkDevice, mshsPath, &shaderCodeBuffer),
+    #else
         CreateVkShaderModule(vkDevice, vsPath, &shaderCodeBuffer),
+    #endif
         CreateVkShaderModule(vkDevice, psPath, &shaderCodeBuffer),
     };
+
+    std::array vkShaderModuleStages = {
+    #ifdef ENG_USE_MESHLET_PIPELINE
+        VK_SHADER_STAGE_TASK_BIT_EXT,
+        VK_SHADER_STAGE_MESH_BIT_EXT,
+    #else
+        VK_SHADER_STAGE_VERTEX_BIT,
+    #endif
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    static_assert(vkShaderModules.size() == vkShaderModuleStages.size());
+    const size_t shadersCount = vkShaderModules.size();
 
     VkPipelineColorBlendAttachmentState blendState = {};
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     vkn::GraphicsPipelineBuilder builder;
     
-    VkPipeline vkPipeline = builder
-        .SetVertexShader(vkShaderModules[0], "main")
-        .SetPixelShader(vkShaderModules[1], "main")
+    for (size_t i = 0; i < shadersCount; ++i) {
+        builder.AddShader(vkShaderModules[i], vkShaderModuleStages[i], "main");
+    }
+
+    builder
+    #if !defined(ENG_USE_MESHLET_PIPELINE)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+    #endif
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
@@ -309,8 +371,9 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
         .AddColorBlendAttachment(blendState)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(vkLayout)
-        .Build(vkDevice);
+        .SetLayout(vkLayout);
+
+        VkPipeline vkPipeline = builder.Build(vkDevice);
 
     for (VkShaderModule& shader : vkShaderModules) {
         vkDestroyShaderModule(vkDevice, shader, nullptr);
@@ -452,6 +515,414 @@ void UpdateCommonConstBuffer(Window* pWnd)
 }
 
 
+static void LoadScene(const fs::path& filepath)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
+
+    const std::string pathS = filepath.string();
+    CORE_LOG_TRACE("Loading %s...", pathS.c_str());
+
+    gltf::TinyGLTF modelLoader;
+    gltf::Model model;
+    std::string error, warning;
+
+    const bool isMeshLoaded = filepath.extension() == ".gltf" ? 
+        modelLoader.LoadASCIIFromFile(&model, &error, &warning, pathS) :
+        modelLoader.LoadBinaryFromFile(&model, &error, &warning, pathS);
+
+    if (!warning.empty()) {
+        CORE_LOG_WARN("Warning during %s model loading: %s", pathS.c_str(), warning.c_str());
+    }
+    CORE_ASSERT_MSG(isMeshLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
+
+    size_t vertexCount = 0;
+    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
+        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &vertexCount](const gltf::Primitive& primitive){
+            CORE_ASSERT(primitive.attributes.contains("POSITION"));
+            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
+            const gltf::Accessor& positionAccessor = model.accessors[positionAccessorIndex];
+
+            vertexCount += positionAccessor.count;
+        });
+    });
+
+    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "GLTF scene %s vertex buffer overflow: %zu, max vertex count: %zu", pathS.c_str(), vertexCount, MAX_VERTEX_COUNT);
+    CORE_LOG_TRACE("%s vertex count: %zu", pathS.c_str(), vertexCount);
+
+    size_t indexCount = 0;
+    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &indexCount](const gltf::Mesh& mesh){
+        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &indexCount](const gltf::Primitive& primitive){
+            if (primitive.indices >= 0) {
+                const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+
+                indexCount += indexAccessor.count;
+            }
+        });
+    });
+
+    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", pathS.c_str(), indexCount, MAX_INDEX_COUNT);
+    CORE_LOG_TRACE("%s index count: %zu", pathS.c_str(), indexCount);
+
+    std::vector<Vertex> cpuVertBuffer;
+    cpuVertBuffer.reserve(vertexCount);
+
+    std::vector<VertexIndexType> cpuIndexBuffer(indexCount);
+    cpuIndexBuffer.clear();
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    std::vector<glm::vec3> cpuVertPosBuffer(vertexCount);
+    cpuVertPosBuffer.clear();
+#else
+    s_meshes.reserve(model.meshes.size());
+    s_meshes.clear();
+#endif
+
+    for (const gltf::Mesh& mesh : model.meshes) {
+        for (const gltf::Primitive& primitive : mesh.primitives) {
+        #if !defined(ENG_USE_MESHLET_PIPELINE)
+            Mesh internalMesh = {};
+
+            internalMesh.firstVertex = cpuVertBuffer.size();
+            internalMesh.firstIndex = cpuIndexBuffer.size();
+        #endif
+
+            const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
+
+            CORE_ASSERT(primitive.attributes.contains("POSITION"));
+            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
+            const gltf::Accessor& positionAccessor  = model.accessors[positionAccessorIndex];
+            
+            const auto& positionBufferView = model.bufferViews[positionAccessor.bufferView];
+            const auto& positionBuffer = model.buffers[positionBufferView.buffer];
+
+            const uint8_t* pPositionData = positionBuffer.data.data() + positionBufferView.byteOffset + positionAccessor.byteOffset;
+
+            CORE_ASSERT(primitive.attributes.contains("NORMAL"));
+            const uint32_t normalAccessorIndex = primitive.attributes.at("NORMAL");
+            const gltf::Accessor& normalAccessor = model.accessors[normalAccessorIndex];
+
+            const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
+            const auto& normalBuffer = model.buffers[normalBufferView.buffer];
+
+            const uint8_t* pNormalData = normalBuffer.data.data() + normalBufferView.byteOffset + normalAccessor.byteOffset;
+
+            CORE_ASSERT(primitive.attributes.contains("TEXCOORD_0"));
+            const uint32_t texcoordAccessorIndex = primitive.attributes.at("TEXCOORD_0");
+            const gltf::Accessor& texcoordAccessor = model.accessors[texcoordAccessorIndex];
+
+            const auto& texcoordBufferView = model.bufferViews[texcoordAccessor.bufferView];
+            const auto& texcoordBuffer = model.buffers[texcoordBufferView.buffer];
+
+            const uint8_t* pTexcoordData = texcoordBuffer.data.data() + texcoordBufferView.byteOffset + texcoordAccessor.byteOffset;
+
+        #if !defined(ENG_USE_MESHLET_PIPELINE)
+            internalMesh.vertexCount += positionAccessor.count;
+        #endif
+
+            for (size_t i = 0; i < positionAccessor.count; ++i) {
+                const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * positionAccessor.ByteStride(positionBufferView));
+                const float* pNormal = reinterpret_cast<const float*>(pNormalData + i * normalAccessor.ByteStride(normalBufferView));
+                const float* pTexcoord = reinterpret_cast<const float*>(pTexcoordData + i * texcoordAccessor.ByteStride(texcoordBufferView));
+                
+                Vertex vertex = {};
+
+                const glm::vec3 position(pPosition[0], pPosition[1], pPosition[2]);
+                const glm::vec3 normal(pNormal[0], pNormal[1], pNormal[2]);
+                const glm::vec2 texcoord(pTexcoord[0], pTexcoord[1]);
+
+                vertex.posXY = glm::packHalf2x16(glm::vec2(position.x, position.y));
+                vertex.posZnormX = glm::packHalf2x16(glm::vec2(position.z, normal.x));
+                vertex.normYZ = glm::packHalf2x16(glm::vec2(normal.y, normal.z));
+                vertex.texcoord = glm::packHalf2x16(texcoord);
+
+                cpuVertBuffer.emplace_back(vertex);
+            
+            #ifdef ENG_USE_MESHLET_PIPELINE
+                cpuVertPosBuffer.emplace_back(position);
+            #endif
+            }
+
+            CORE_ASSERT_MSG(primitive.indices >= 0, "GLTF primitive must have index accessor");
+
+            const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+            const gltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+            const gltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+
+            const uint8_t* pIndexData = indexBuffer.data.data() + indexBufferView.byteOffset + indexAccessor.byteOffset;
+
+        #if !defined(ENG_USE_MESHLET_PIPELINE)
+            internalMesh.indexCount += indexAccessor.count;
+        #endif
+
+            for (size_t i = 0; i < indexAccessor.count; ++i) {
+                uint32_t index = UINT32_MAX;
+
+                switch (indexAccessor.componentType) {
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint8_t*>(pIndexData + i)));
+                        break;
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint16_t*>(pIndexData + i * 2)));
+                        break;
+                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT:
+                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint32_t*>(pIndexData + i * 4)));
+                        break;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid GLTF index type: %d", indexAccessor.componentType);
+                        break;
+                }
+
+                index = primitiveStartIndex + index;
+
+                CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "PackedVertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
+                cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
+            }
+
+        #if !defined(ENG_USE_MESHLET_PIPELINE)
+            s_meshes.emplace_back(internalMesh);
+        #endif
+        }
+    }
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    const size_t maxMeshletsCount = meshopt_buildMeshletsBound(indexCount, MESHLET_MAX_VERTICES, MESHLET_MAX_TRIANGLES);
+
+    s_meshlets.resize(maxMeshletsCount);
+    s_meshletVertices.resize(maxMeshletsCount * MESHLET_MAX_VERTICES);
+
+    std::vector<uint8_t> meshletTriangles(maxMeshletsCount * MESHLET_MAX_TRIANGLES * 3);
+
+    const size_t meshletCount = meshopt_buildMeshlets(
+        s_meshlets.data(), s_meshletVertices.data(), meshletTriangles.data(),
+        cpuIndexBuffer.data(), cpuIndexBuffer.size(), 
+        &cpuVertPosBuffer.data()->x, cpuVertPosBuffer.size(),
+        sizeof(glm::vec3), MESHLET_MAX_VERTICES, MESHLET_MAX_TRIANGLES, 0.f
+    );
+
+    const Meshlet& lastMeshlet = s_meshlets[meshletCount - 1];
+    s_meshletVertices.resize(lastMeshlet.vertex_offset + lastMeshlet.vertex_count);
+    meshletTriangles.resize(lastMeshlet.triangle_offset + ((lastMeshlet.triangle_count * 3 + 3) & ~3));
+    s_meshlets.resize(meshletCount);
+
+    for (Meshlet& meshlet : s_meshlets) {
+        uint32_t triangleOffset = static_cast<uint32_t>(s_meshletTrianglesU32.size());
+
+        for (uint32_t i = 0; i < meshlet.triangle_count; ++i) {
+            uint32_t i0 = 3 * i + 0 + meshlet.triangle_offset;
+            uint32_t i1 = 3 * i + 1 + meshlet.triangle_offset;
+            uint32_t i2 = 3 * i + 2 + meshlet.triangle_offset;
+
+            uint8_t  vIdx0  = meshletTriangles[i0];
+            uint8_t  vIdx1  = meshletTriangles[i1];
+            uint8_t  vIdx2  = meshletTriangles[i2];
+            uint32_t packed = ((static_cast<uint32_t>(vIdx0) & 0xFF) << 0) |
+                              ((static_cast<uint32_t>(vIdx1) & 0xFF) << 8) |
+                              ((static_cast<uint32_t>(vIdx2) & 0xFF) << 16);
+            s_meshletTrianglesU32.push_back(packed);
+        }
+
+        meshlet.triangle_offset = triangleOffset;
+    }
+
+#endif
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    stagingBufCreateInfo.memAllocFlags = 0;
+
+    vkn::Buffer stagingVertBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingVertBuffer.IsCreated());
+    stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
+
+    {
+        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]));
+        stagingVertBuffer.Unmap();
+    }
+
+    vkn::BufferCreateInfo vertBufCreateInfo = {};
+    vertBufCreateInfo.pDevice = &s_vkDevice;
+    vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
+    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+    s_vertexBuffer.Create(vertBufCreateInfo);
+    CORE_ASSERT(s_vertexBuffer.IsCreated());
+    s_vertexBuffer.SetDebugName("COMMON_VB");
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    vkn::BufferCreateInfo meshletBufCreateInfo = {};
+    meshletBufCreateInfo.pDevice = &s_vkDevice;
+    meshletBufCreateInfo.size = s_meshlets.size() * sizeof(s_meshlets[0]);
+    meshletBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    meshletBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    meshletBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+    s_meshletBuffer.Create(meshletBufCreateInfo);
+    CORE_ASSERT(s_meshletBuffer.IsCreated());
+    s_meshletBuffer.SetDebugName("COMMON_MESHLET_BUFFER");
+
+    meshletBufCreateInfo.size = s_meshletVertices.size() * sizeof(s_meshletVertices[0]);
+
+    s_meshletVertIdxBuffer.Create(meshletBufCreateInfo);
+    CORE_ASSERT(s_meshletVertIdxBuffer.IsCreated());
+    s_meshletVertIdxBuffer.SetDebugName("COMMON_MESHLET_VERT_BUFFER");
+
+    meshletBufCreateInfo.size = s_meshletTrianglesU32.size() * sizeof(s_meshletTrianglesU32[0]);
+
+    s_meshletTrianglesBuffer.Create(meshletBufCreateInfo);
+    CORE_ASSERT(s_meshletTrianglesBuffer.IsCreated());
+    s_meshletTrianglesBuffer.SetDebugName("COMMON_MESHLET_TRI_BUFFER");
+
+
+    stagingBufCreateInfo.size = s_meshletBuffer.GetSize();
+
+    vkn::Buffer stagingMeshletBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingMeshletBuffer.IsCreated());
+    stagingMeshletBuffer.SetDebugName("STAGING_MESHLET_BUFFER");
+
+    {
+        void* pMeshletBufferData = stagingMeshletBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pMeshletBufferData, s_meshlets.data(), s_meshlets.size() * sizeof(s_meshlets[0]));
+        stagingMeshletBuffer.Unmap();
+    }
+
+    stagingBufCreateInfo.size = s_meshletVertIdxBuffer.GetSize();
+
+    vkn::Buffer stagingMehsletVertIdxBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingMehsletVertIdxBuffer.IsCreated());
+    stagingMehsletVertIdxBuffer.SetDebugName("STAGING_MESHLET_VERT_IDX_BUFFER");
+
+    {
+        void* pMehsletVertBufferData = stagingMehsletVertIdxBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pMehsletVertBufferData, s_meshletVertices.data(), s_meshletVertices.size() * sizeof(s_meshletVertices[0]));
+        stagingMehsletVertIdxBuffer.Unmap();
+    }
+
+    stagingBufCreateInfo.size = s_meshletTrianglesBuffer.GetSize();
+
+    vkn::Buffer stagingMeshletTrianglesBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingMeshletTrianglesBuffer.IsCreated());
+    stagingMeshletTrianglesBuffer.SetDebugName("STAGING_MESHLET_TRI_BUFFER");
+
+    {
+        void* pMeshletTrianglesBufferData = stagingMeshletTrianglesBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pMeshletTrianglesBufferData, s_meshletTrianglesU32.data(), s_meshletTrianglesU32.size() * sizeof(s_meshletTrianglesU32[0]));
+        stagingMeshletTrianglesBuffer.Unmap();
+    }
+#else
+    vkn::BufferCreateInfo idxBufCreateInfo = {};
+    idxBufCreateInfo.pDevice = &s_vkDevice;
+    idxBufCreateInfo.size = INDEX_BUFFER_SIZE_BYTES;
+    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    idxBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    idxBufCreateInfo.memAllocFlags = 0;
+
+    s_indexBuffer.Create(idxBufCreateInfo);
+    CORE_ASSERT(s_indexBuffer.IsCreated());
+    s_indexBuffer.SetDebugName("COMMON_IB");
+
+    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+
+    vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingIndexBuffer.IsCreated());
+    stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
+
+    {
+        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]));
+        stagingIndexBuffer.Unmap();
+    }
+#endif
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy region = {};
+        
+        region.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), s_vertexBuffer.Get(), 1, &region);
+
+    #ifdef ENG_USE_MESHLET_PIPELINE
+        region.size = s_meshlets.size() * sizeof(s_meshlets[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshletBuffer.Get(), s_meshletBuffer.Get(), 1, &region);
+
+        region.size = s_meshletVertices.size() * sizeof(s_meshletVertices[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMehsletVertIdxBuffer.Get(), s_meshletVertIdxBuffer.Get(), 1, &region);
+
+        region.size = s_meshletTrianglesU32.size() * sizeof(s_meshletTrianglesU32[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshletTrianglesBuffer.Get(), s_meshletTrianglesBuffer.Get(), 1, &region);
+    #else
+        region.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &region);
+    #endif
+    });
+
+    stagingVertBuffer.Destroy();
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    stagingMeshletBuffer.Destroy();
+    stagingMehsletVertIdxBuffer.Destroy();
+    stagingMeshletTrianglesBuffer.Destroy();
+#else
+    stagingIndexBuffer.Destroy();
+#endif
+}
+
+
+static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageView)
+{
+    if (depthImageView.IsCreated()) {
+        depthImageView.Destroy();
+    }
+
+    if (depthImage.IsCreated()) {
+        depthImage.Destroy();
+    }
+
+    vkn::ImageCreateInfo depthImageCreateInfo = {};
+    depthImageCreateInfo.pDevice = &s_vkDevice;
+
+    depthImageCreateInfo.type = VK_IMAGE_TYPE_2D;
+    depthImageCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
+    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthImageCreateInfo.flags = 0;
+    depthImageCreateInfo.mipLevels = 1;
+    depthImageCreateInfo.arrayLayers = 1;
+    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    
+    depthImageCreateInfo.memAllocInfo.flags = 0;
+    depthImageCreateInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    depthImage.Create(depthImageCreateInfo);
+    CORE_ASSERT(depthImage.IsCreated());
+    depthImage.SetDebugName("COMMON_DEPTH");
+
+    vkn::ImageViewCreateInfo depthImageViewCreateInfo = {};
+    depthImageViewCreateInfo.pOwner = &depthImage;
+    depthImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    depthImageViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    depthImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    depthImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    depthImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
+    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
+
+    depthImageView.Create(depthImageViewCreateInfo);
+    CORE_ASSERT(depthImageView.IsValid());
+    depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
+}
+
+
 void RenderScene()
 {
     ENG_PROFILE_SCOPED_MARKER_C("RenderScene", 255, 255, 0, 255);
@@ -567,15 +1038,29 @@ void RenderScene()
             
             vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
 
-            const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
+            TEST_BINDLESS_REGISTRY bindlessReg = {};
+            bindlessReg.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
 
+        #ifdef ENG_USE_MESHLET_PIPELINE
+            bindlessReg.MESHLET_DATA = s_meshletBuffer.GetDeviceAddress();
+            bindlessReg.MESHLET_VERTS_DATA = s_meshletVertIdxBuffer.GetDeviceAddress();
+            bindlessReg.MESHLET_TRI_DATA = s_meshletTrianglesBuffer.GetDeviceAddress();
+        #endif
+
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(TEST_BINDLESS_REGISTRY), &bindlessReg);
+
+        #ifdef ENG_USE_MESHLET_PIPELINE
+            static auto vkCmdDrawMeshTasksEXT = (PFN_vkCmdDrawMeshTasksEXT)s_vkInstance.GetProcAddr("vkCmdDrawMeshTasksEXT");
+            vkCmdDrawMeshTasksEXT(cmdBuffer.Get(), static_cast<uint32_t>(s_meshlets.size()), 1, 1);
+        #else
             vkCmdBindIndexBuffer(cmdBuffer.Get(), s_indexBuffer.Get(), 0, std::is_same_v<VertexIndexType, uint16_t> ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
 
             for (const Mesh& mesh : s_meshes) {
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
+        #endif
         cmdBuffer.EndRendering();
+
         ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
         CmdPipelineImageBarrier(
@@ -627,248 +1112,6 @@ void RenderScene()
         return;
     }
     ENG_PROFILE_END_MARKER_SCOPE();
-}
-
-
-static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Buffer& indexBuffer)
-{
-    ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
-
-    const std::string pathS = filepath.string();
-    CORE_LOG_TRACE("Loading %s...", pathS.c_str());
-
-    gltf::TinyGLTF modelLoader;
-    gltf::Model model;
-    std::string error, warning;
-
-    const bool isMeshLoaded = filepath.extension() == ".gltf" ? 
-        modelLoader.LoadASCIIFromFile(&model, &error, &warning, pathS) :
-        modelLoader.LoadBinaryFromFile(&model, &error, &warning, pathS);
-
-    if (!warning.empty()) {
-        CORE_LOG_WARN("Warning during %s model loading: %s", pathS.c_str(), warning.c_str());
-    }
-    CORE_ASSERT_MSG(isMeshLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
-
-    size_t vertexCount = 0;
-    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
-        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &vertexCount](const gltf::Primitive& primitive){
-            CORE_ASSERT(primitive.attributes.contains("POSITION"));
-            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
-            const gltf::Accessor& positionAccessor = model.accessors[positionAccessorIndex];
-
-            vertexCount += positionAccessor.count;
-        });
-    });
-
-    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "GLTF scene %s vertex buffer overflow: %zu, max vertex count: %zu", pathS.c_str(), vertexCount, MAX_VERTEX_COUNT);
-
-    std::vector<Vertex> cpuVertBuffer;
-    cpuVertBuffer.reserve(vertexCount);
-
-    size_t indexCount = 0;
-    std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &indexCount](const gltf::Mesh& mesh){
-        std::for_each(mesh.primitives.cbegin(), mesh.primitives.cend(), [&model, &indexCount](const gltf::Primitive& primitive){
-            if (primitive.indices >= 0) {
-                const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-
-                indexCount += indexAccessor.count;
-            }
-        });
-    });
-
-    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "GLTF scene %s index buffer overflow: %zu, max index count: %zu", pathS.c_str(), indexCount, MAX_INDEX_COUNT);
-
-    std::vector<VertexIndexType> cpuIndexBuffer;
-    cpuIndexBuffer.reserve(indexCount);
-
-    s_meshes.reserve(model.meshes.size());
-    s_meshes.resize(0);
-
-    for (const gltf::Mesh& mesh : model.meshes) {
-        for (const gltf::Primitive& primitive : mesh.primitives) {
-            Mesh internalMesh = {};
-
-            internalMesh.firstVertex = cpuVertBuffer.size();
-            internalMesh.firstIndex = cpuIndexBuffer.size();
-
-            const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
-
-            CORE_ASSERT(primitive.attributes.contains("POSITION"));
-            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
-            const gltf::Accessor& positionAccessor  = model.accessors[positionAccessorIndex];
-            
-            const auto& positionBufferView = model.bufferViews[positionAccessor.bufferView];
-            const auto& positionBuffer = model.buffers[positionBufferView.buffer];
-
-            const uint8_t* pPositionData = positionBuffer.data.data() + positionBufferView.byteOffset + positionAccessor.byteOffset;
-
-            CORE_ASSERT(primitive.attributes.contains("NORMAL"));
-            const uint32_t normalAccessorIndex = primitive.attributes.at("NORMAL");
-            const gltf::Accessor& normalAccessor = model.accessors[normalAccessorIndex];
-
-            const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
-            const auto& normalBuffer = model.buffers[normalBufferView.buffer];
-
-            const uint8_t* pNormalData = normalBuffer.data.data() + normalBufferView.byteOffset + normalAccessor.byteOffset;
-
-            CORE_ASSERT(primitive.attributes.contains("TEXCOORD_0"));
-            const uint32_t texcoordAccessorIndex = primitive.attributes.at("TEXCOORD_0");
-            const gltf::Accessor& texcoordAccessor = model.accessors[texcoordAccessorIndex];
-
-            const auto& texcoordBufferView = model.bufferViews[texcoordAccessor.bufferView];
-            const auto& texcoordBuffer = model.buffers[texcoordBufferView.buffer];
-
-            const uint8_t* pTexcoordData = texcoordBuffer.data.data() + texcoordBufferView.byteOffset + texcoordAccessor.byteOffset;
-
-            internalMesh.vertexCount += positionAccessor.count;
-
-            for (size_t i = 0; i < positionAccessor.count; ++i) {
-                const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * positionAccessor.ByteStride(positionBufferView));
-                const float* pNormal = reinterpret_cast<const float*>(pNormalData + i * normalAccessor.ByteStride(normalBufferView));
-                const float* pTexcoord = reinterpret_cast<const float*>(pTexcoordData + i * texcoordAccessor.ByteStride(texcoordBufferView));
-                
-                Vertex vertex = {};
-
-                vertex.posXY = glm::packHalf2x16(glm::vec2(pPosition[0], pPosition[1]));
-                vertex.posZnormX = glm::packHalf2x16(glm::vec2(pPosition[2], pNormal[0]));
-                vertex.normYZ = glm::packHalf2x16(glm::vec2(pNormal[1], pNormal[2]));
-                vertex.texcoord = glm::packHalf2x16(glm::vec2(pTexcoord[0], pTexcoord[1]));
-
-                cpuVertBuffer.emplace_back(vertex);
-            }
-
-            CORE_ASSERT_MSG(primitive.indices >= 0, "GLTF primitive must have index accessor");
-
-            const gltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const gltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
-            const gltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
-
-            const uint8_t* pIndexData = indexBuffer.data.data() + indexBufferView.byteOffset + indexAccessor.byteOffset;
-
-            internalMesh.indexCount += indexAccessor.count;
-
-            for (size_t i = 0; i < indexAccessor.count; ++i) {
-                uint32_t index = UINT32_MAX;
-
-                switch (indexAccessor.componentType) {
-                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE:
-                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint8_t*>(pIndexData + i)));
-                        break;
-                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT:
-                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint16_t*>(pIndexData + i * 2)));
-                        break;
-                    case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT:
-                        index = static_cast<uint32_t>(*(reinterpret_cast<const uint32_t*>(pIndexData + i * 4)));
-                        break;
-                    default:
-                        CORE_ASSERT_FAIL("Invalid GLTF index type: %d", indexAccessor.componentType);
-                        break;
-                }
-
-                index = primitiveStartIndex + index;
-
-                CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
-                cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
-            }
-
-            s_meshes.emplace_back(internalMesh);
-        }
-    }
-
-
-    vkn::BufferCreateInfo stagingBufCreateInfo = {};
-    stagingBufCreateInfo.pDevice = &s_vkDevice;
-    stagingBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    stagingBufCreateInfo.memAllocFlags = 0;
-
-    vkn::Buffer stagingVertBuffer(stagingBufCreateInfo);
-    CORE_ASSERT(stagingVertBuffer.IsCreated());
-    stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
-
-    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
-
-    vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
-    CORE_ASSERT(stagingIndexBuffer.IsCreated());
-    stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
-
-    {
-        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]));
-        stagingVertBuffer.Unmap();
-    }
-
-    {
-        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]));
-        stagingIndexBuffer.Unmap();
-    }
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        VkBufferCopy region = {};
-        
-        region.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), vertBuffer.Get(), 1, &region);
-
-        region.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &region);
-    });
-
-    stagingVertBuffer.Destroy();
-    stagingIndexBuffer.Destroy();
-}
-
-
-static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageView)
-{
-    if (depthImageView.IsCreated()) {
-        depthImageView.Destroy();
-    }
-
-    if (depthImage.IsCreated()) {
-        depthImage.Destroy();
-    }
-
-    vkn::ImageCreateInfo depthImageCreateInfo = {};
-    depthImageCreateInfo.pDevice = &s_vkDevice;
-
-    depthImageCreateInfo.type = VK_IMAGE_TYPE_2D;
-    depthImageCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
-    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthImageCreateInfo.flags = 0;
-    depthImageCreateInfo.mipLevels = 1;
-    depthImageCreateInfo.arrayLayers = 1;
-    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    
-    depthImageCreateInfo.memAllocInfo.flags = 0;
-    depthImageCreateInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-    depthImage.Create(depthImageCreateInfo);
-    CORE_ASSERT(depthImage.IsCreated());
-    depthImage.SetDebugName("COMMON_DEPTH");
-
-    vkn::ImageViewCreateInfo depthImageViewCreateInfo = {};
-    depthImageViewCreateInfo.pOwner = &depthImage;
-    depthImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    depthImageViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    depthImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    depthImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    depthImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
-    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
-
-    depthImageView.Create(depthImageViewCreateInfo);
-    CORE_ASSERT(depthImageView.IsValid());
-    depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
 }
 
 
@@ -1124,10 +1367,24 @@ int main(int argc, char* argv[])
 
     constexpr std::array vkDeviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    #ifdef ENG_USE_MESHLET_PIPELINE
+        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        VK_EXT_MESH_SHADER_EXTENSION_NAME,
+    #endif
     };
+
+
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {};
+    meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+#ifdef ENG_USE_MESHLET_PIPELINE
+    meshShaderFeatures.taskShader = VK_TRUE;
+    meshShaderFeatures.meshShader = VK_TRUE;
+#endif
 
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features13.pNext = &meshShaderFeatures;
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
 
@@ -1218,7 +1475,12 @@ int main(int argc, char* argv[])
     s_vkDescriptorSet = CreateVkDescriptorSet(s_vkDevice.Get(), s_vkDescriptorPool, s_vkDescriptorSetLayout);
 
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
+
+#ifdef ENG_USE_MESHLET_PIPELINE
+    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, std::nullopt, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
+#else
     s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
+#endif
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
@@ -1249,32 +1511,8 @@ int main(int argc, char* argv[])
 
     CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
 
-
-    vkn::BufferCreateInfo vertBufCreateInfo = {};
-    vertBufCreateInfo.pDevice = &s_vkDevice;
-    vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
-    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-
-    s_vertexBuffer.Create(vertBufCreateInfo);
-    CORE_ASSERT(s_vertexBuffer.IsCreated());
-    s_vertexBuffer.SetDebugName("COMMON_VB");
-
-
-    vkn::BufferCreateInfo idxBufCreateInfo = {};
-    idxBufCreateInfo.pDevice = &s_vkDevice;
-    idxBufCreateInfo.size = INDEX_BUFFER_SIZE_BYTES;
-    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    idxBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    idxBufCreateInfo.memAllocFlags = 0;
-
-    s_indexBuffer.Create(idxBufCreateInfo);
-    CORE_ASSERT(s_indexBuffer.IsCreated());
-    s_indexBuffer.SetDebugName("COMMON_IB");
-
     const fs::path filepath = argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf";
-    LoadScene(filepath, s_vertexBuffer, s_indexBuffer);
+    LoadScene(filepath);
 
     vkn::BufferCreateInfo commonConstBufCreateInfo = {};
     commonConstBufCreateInfo.pDevice = &s_vkDevice;
@@ -1313,7 +1551,10 @@ int main(int argc, char* argv[])
     s_vkQueryPool.Destroy();
 
     s_commonConstBuffer.Destroy();
+
+#if !defined(ENG_USE_MESHLET_PIPELINE)
     s_indexBuffer.Destroy();
+#endif
     s_vertexBuffer.Destroy();
 
     s_vkDepthImageView.Destroy();
