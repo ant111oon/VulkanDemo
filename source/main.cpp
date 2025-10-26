@@ -1134,15 +1134,26 @@ int main(int argc, char* argv[])
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
 
+    VK_ASSERT(s_vkPhysDevice.GetFeatures13().dynamicRendering);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures13().synchronization2);
+
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
 
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().bufferDeviceAddress);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().descriptorBindingPartiallyBound);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().runtimeDescriptorArray);
+
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     features12.pNext = &features13;
     features12.bufferDeviceAddress = VK_TRUE;
+    features12.descriptorBindingPartiallyBound = VK_TRUE;
+    features12.runtimeDescriptorArray = VK_TRUE;
+
+    VK_ASSERT(s_vkPhysDevice.GetFeatures11().shaderDrawParameters);
 
     VkPhysicalDeviceVulkan11Features features11 = {};
     features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;

@@ -8,7 +8,9 @@ namespace vkn
 {
     struct PhysicalDeviceFeaturesRequirenments
     {
-        std::optional<bool> independentBlend;
+        bool independentBlend;
+        bool descriptorBindingPartiallyBound;
+        bool runtimeDescriptorArray;
     };
 
 
@@ -43,22 +45,40 @@ namespace vkn
             return m_physDevice;
         }
 
-        VkPhysicalDeviceMemoryProperties GetMemoryProperties() const
+        const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const
         {
             VK_ASSERT(IsCreated());
             return m_memoryProps;
         }
 
-        VkPhysicalDeviceProperties GetProperties() const
+        const VkPhysicalDeviceProperties& GetProperties() const
         {
             VK_ASSERT(IsCreated());
             return m_deviceProps;
         }
 
-        VkPhysicalDeviceFeatures GetFeatures() const
+        const VkPhysicalDeviceVulkan11Features& GetFeatures11() const
         {
             VK_ASSERT(IsCreated());
-            return m_features;
+            return m_features11;
+        }
+
+        const VkPhysicalDeviceVulkan12Features& GetFeatures12() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_features12;
+        }
+
+        const VkPhysicalDeviceVulkan13Features& GetFeatures13() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_features13;
+        }
+
+        const VkPhysicalDeviceFeatures2& GetFeatures2() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_features2;
         }
 
         const Instance* GetInstance() const
@@ -82,7 +102,11 @@ namespace vkn
 
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};
         VkPhysicalDeviceProperties m_deviceProps = {};
-        VkPhysicalDeviceFeatures m_features = {};
+
+        VkPhysicalDeviceVulkan13Features m_features13 = {};
+        VkPhysicalDeviceVulkan12Features m_features12 = {};
+        VkPhysicalDeviceVulkan11Features m_features11 = {};
+        VkPhysicalDeviceFeatures2 m_features2 = {};
     };
 
 

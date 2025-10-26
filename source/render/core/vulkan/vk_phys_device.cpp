@@ -8,21 +8,38 @@ namespace vkn
     static bool IsPhysicalDeviceSuitable(
         VkPhysicalDevice vkPhysDevice, 
         const PhysicalDeviceFeaturesRequirenments& featuresReq, 
-        const PhysicalDevicePropertiesRequirenments& propsReq
+        const PhysicalDevicePropertiesRequirenments& propsReq,
+        VkPhysicalDeviceProperties& outDeviceProps,
+        VkPhysicalDeviceMemoryProperties& outMemoryProps,
+        VkPhysicalDeviceFeatures2& outFeatures2
     ) {
-        VkPhysicalDeviceFeatures features = {};
-        vkGetPhysicalDeviceFeatures(vkPhysDevice, &features);
+        VK_ASSERT(vkPhysDevice != VK_NULL_HANDLE);
+        
+        vkGetPhysicalDeviceFeatures2(vkPhysDevice, &outFeatures2);        
 
-        if (featuresReq.independentBlend.has_value() && featuresReq.independentBlend.value() != features.independentBlend) {
+        if (featuresReq.independentBlend && featuresReq.independentBlend != outFeatures2.features.independentBlend) {
             return false;
         }
 
-        VkPhysicalDeviceProperties deviceProps = {};
-        vkGetPhysicalDeviceProperties(vkPhysDevice, &deviceProps);
+        const auto pFeatures11 = static_cast<VkPhysicalDeviceVulkan11Features*>(outFeatures2.pNext);
+        const auto pFeatures12 = static_cast<VkPhysicalDeviceVulkan12Features*>(pFeatures11->pNext);
+        const auto pFeatures13 = static_cast<VkPhysicalDeviceVulkan13Features*>(pFeatures12->pNext);
 
-        if (propsReq.deviceType != deviceProps.deviceType) {
+        if (featuresReq.descriptorBindingPartiallyBound && featuresReq.descriptorBindingPartiallyBound != pFeatures12->descriptorBindingPartiallyBound) {
             return false;
         }
+
+        if (featuresReq.runtimeDescriptorArray && featuresReq.runtimeDescriptorArray != pFeatures12->runtimeDescriptorArray) {
+            return false;
+        }
+
+        vkGetPhysicalDeviceProperties(vkPhysDevice, &outDeviceProps);
+
+        if (propsReq.deviceType != outDeviceProps.deviceType) {
+            return false;
+        }
+
+        vkGetPhysicalDeviceMemoryProperties(vkPhysDevice, &outMemoryProps);
 
         return true;
     }
@@ -50,14 +67,33 @@ namespace vkn
 
         bool isPicked = false;
 
-        for (VkPhysicalDevice vkPhysDevice : vkPhysDevices) {
-            if (IsPhysicalDeviceSuitable(vkPhysDevice, *info.pFeaturesRequirenments, *info.pPropertiesRequirenments)) {
-                m_physDevice = vkPhysDevice;
-                vkGetPhysicalDeviceProperties(m_physDevice, &m_deviceProps);
-                vkGetPhysicalDeviceFeatures(m_physDevice, &m_features);
-                vkGetPhysicalDeviceMemoryProperties(m_physDevice, &m_memoryProps);
+        m_features13 = {};
+        m_features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 
+        m_features12 = {};
+        m_features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        m_features12.pNext = &m_features13;
+
+        m_features11 = {};
+        m_features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        m_features11.pNext = &m_features12;
+
+        m_features2 = {};
+        m_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        m_features2.pNext = &m_features11;
+
+        for (VkPhysicalDevice vkPhysDevice : vkPhysDevices) {
+            if (IsPhysicalDeviceSuitable(
+                vkPhysDevice, 
+                *info.pFeaturesRequirenments, 
+                *info.pPropertiesRequirenments, 
+                m_deviceProps,
+                m_memoryProps,
+                m_features2)
+            ) {
+                m_physDevice = vkPhysDevice;
                 isPicked = true;
+
                 break;
             }
         }
@@ -81,7 +117,11 @@ namespace vkn
 
         m_memoryProps = {};
         m_deviceProps = {};
-        m_features = {};
+        
+        m_features13 = {};
+        m_features12 = {};
+        m_features11 = {};
+        m_features2 = {};
 
         Object::Destroy();
     }
