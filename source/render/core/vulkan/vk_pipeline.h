@@ -16,8 +16,7 @@ namespace vkn
 
         GraphicsPipelineBuilder& SetLayout(VkPipelineLayout layout);
 
-        GraphicsPipelineBuilder& SetVertexShader(VkShaderModule shader, const char* pEntryName = "main");
-        GraphicsPipelineBuilder& SetPixelShader(VkShaderModule shader, const char* pEntryName = "main");
+        GraphicsPipelineBuilder& AddShader(VkShaderModule shader, VkShaderStageFlagBits stage, const char* pEntryName = "main");
 
         GraphicsPipelineBuilder& SetInputAssemblyState(VkPrimitiveTopology topology, VkBool32 primitiveRestartEnable = VK_FALSE);
 
@@ -78,20 +77,6 @@ namespace vkn
         VkPipeline Build(VkDevice vkDevice);
 
     private:
-        enum ShaderStageIndex
-        { 
-            SHADER_STAGE_VERTEX,
-            SHADER_STAGE_PIXEL,
-            SHADER_STAGE_COUNT
-        };
-
-    private:
-        static constexpr VkShaderStageFlagBits ShaderStageIndexToFlagBits(ShaderStageIndex index);
-
-    private:
-        GraphicsPipelineBuilder& SetShaderInfo(ShaderStageIndex index, VkShaderModule shader, const char* pEntryName);
-
-    private:
         static inline constexpr size_t MAX_SHADER_ENTRY_NAME_LENGTH = 64;
         static inline constexpr size_t MAX_VERTEX_ATTRIBUTES_COUNT = 16;
         static inline constexpr size_t MAX_DYNAMIC_STATES_COUNT = 16;
@@ -109,8 +94,8 @@ namespace vkn
         VkPipelineLayout m_layout = VK_NULL_HANDLE;
         VkPipelineCreateFlags m_flags = {};
 
-        std::array<VkPipelineShaderStageCreateInfo, SHADER_STAGE_COUNT> m_shaderStages = {};
-        std::array<std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1>, SHADER_STAGE_COUNT> m_shaderEntryNames = {};
+        std::vector<VkPipelineShaderStageCreateInfo> m_shaderStages;
+        std::vector<std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1>> m_shaderEntryNames = {};
 
         std::array<VkDynamicState, MAX_DYNAMIC_STATES_COUNT> m_dynamicStateValues = {};
         size_t m_dynamicStatesCount = 0;

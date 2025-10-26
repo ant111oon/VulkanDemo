@@ -13,20 +13,13 @@ namespace vkn
         std::vector<VkExtensionProperties> vkDeviceExtensionProps(vkDeviceExtensionsCount);
         VK_CHECK(vkEnumerateDeviceExtensionProperties(vkPhysDevice, nullptr, &vkDeviceExtensionsCount, vkDeviceExtensionProps.data()));
 
-        bool areAllRequiredExtensionsAvailable = true;
-
         for (const char* pExtensionName : requiredExtensions) {
             const auto reqLayerIt = std::find_if(vkDeviceExtensionProps.cbegin(), vkDeviceExtensionProps.cend(), [&](const VkExtensionProperties& props) {
                 return strcmp(pExtensionName, props.extensionName) == 0;
             });
             
-            if (reqLayerIt == vkDeviceExtensionProps.cend()) {
-                VK_LOG_ERROR("%s device extension is not supported", pExtensionName);
-                areAllRequiredExtensionsAvailable = false;
-            }
+            VK_ASSERT_MSG(reqLayerIt != vkDeviceExtensionProps.cend(), "\'%s\' device extension is not supported", pExtensionName);
         }
-
-        VK_ASSERT(areAllRequiredExtensionsAvailable);
     #else
         (void)vkPhysDevice;
         (void)requiredExtensions;

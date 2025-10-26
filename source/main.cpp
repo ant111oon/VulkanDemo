@@ -277,22 +277,30 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 {
     Timer timer;
 
-    static constexpr size_t SHADER_STAGES_COUNT = 2;
-
     std::vector<uint8_t> shaderCodeBuffer;
-    std::array<VkShaderModule, SHADER_STAGES_COUNT> vkShaderModules = {
+    std::array vkShaderModules = {
         CreateVkShaderModule(vkDevice, vsPath, &shaderCodeBuffer),
         CreateVkShaderModule(vkDevice, psPath, &shaderCodeBuffer),
     };
+
+    std::array vkShaderModuleStages = {
+        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    static_assert(vkShaderModules.size() == vkShaderModuleStages.size());
+    const size_t shadersCount = vkShaderModules.size();
 
     VkPipelineColorBlendAttachmentState blendState = {};
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     vkn::GraphicsPipelineBuilder builder;
+
+    for (size_t i = 0; i < shadersCount; ++i) {
+        builder.AddShader(vkShaderModules[i], vkShaderModuleStages[i], "main");
+    }
     
     VkPipeline vkPipeline = builder
-        .SetVertexShader(vkShaderModules[0], "main")
-        .SetPixelShader(vkShaderModules[1], "main")
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
