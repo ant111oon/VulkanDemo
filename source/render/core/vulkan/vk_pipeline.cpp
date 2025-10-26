@@ -71,27 +71,15 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddShader(VkShaderModule shader, VkShaderStageFlagBits stage, const char* pEntryName)
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetVertexShader(VkShaderModule shader, const char* pEntryName)
     {
-        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
-        for (const VkPipelineShaderStageCreateInfo& shaderStage : m_shaderStages) {
-            CORE_ASSERT_MSG(shaderStage.stage != stage, "There already is shader with same shader stage: %d", stage);
-        }
-        
-        const size_t index = m_shaderStages.size();
+        return SetShaderInfo(SHADER_STAGE_VERTEX, shader, pEntryName);
+    }
 
-        m_shaderStages.resize(index + 1);
-        m_shaderEntryNames.resize(m_shaderStages.size());
 
-        auto& entryName = m_shaderEntryNames[index];
-        strcpy_s(entryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
-
-        VkPipelineShaderStageCreateInfo& shaderStageCreateInfo = m_shaderStages[index];
-        shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStageCreateInfo.module = shader;
-        shaderStageCreateInfo.stage = stage;
-
-        return *this;
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetPixelShader(VkShaderModule shader, const char* pEntryName)
+    {
+        return SetShaderInfo(SHADER_STAGE_PIXEL, shader, pEntryName);
     }
 
 
@@ -322,7 +310,13 @@ namespace vkn
 
 
     VkPipeline GraphicsPipelineBuilder::Build(VkDevice vkDevice)
-    {
+    {   
+    #if defined(ENG_ASSERT_ENABLED)
+        for (size_t i = 0; i < m_shaderStages.size(); ++i) {
+            CORE_ASSERT_MSG(m_shaderStages[i].module != VK_NULL_HANDLE, "Shader stage (index: %zu) module is VK_NULL_HANDLE", i);
+        }
+    #endif
+
         CORE_ASSERT_MSG(m_colorBlendAttachmentStatesCount == m_colorAttachmentFormatsCount, "Color attachments count and color blend states count must be equal");
         CORE_ASSERT_MSG(m_layout != VK_NULL_HANDLE, "Graphics pipeline layout is not set");
         CORE_ASSERT_MSG(
@@ -331,11 +325,6 @@ namespace vkn
             m_renderingCreateInfo.stencilAttachmentFormat != VK_FORMAT_UNDEFINED,
             "There is no format set for any of the graphics pipeline attachments"
         );
-
-        for (size_t i = 0; i < m_shaderStages.size(); ++i) {
-            CORE_ASSERT_MSG(m_shaderStages[i].module != VK_NULL_HANDLE, "Shader stage (index: %zu) module is VK_NULL_HANDLE", i);
-            m_shaderStages[i].pName = m_shaderEntryNames[i].data();
-        }
 
         VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -390,6 +379,36 @@ namespace vkn
         VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
 
         return vkPipeline;
+    }
+
+    
+    constexpr VkShaderStageFlagBits GraphicsPipelineBuilder::ShaderStageIndexToFlagBits(ShaderStageIndex index)
+    {
+        switch(index) {
+            case SHADER_STAGE_VERTEX:
+                return VK_SHADER_STAGE_VERTEX_BIT;
+            case SHADER_STAGE_PIXEL:
+                return VK_SHADER_STAGE_FRAGMENT_BIT;
+            default:
+                CORE_ASSERT_FAIL("Invalid shader stage index");
+                return {};
+        }
+    }
+
+
+    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetShaderInfo(ShaderStageIndex index, VkShaderModule shader, const char* pEntryName)
+    {   
+        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
+        auto& entryName = m_shaderEntryNames[index];
+        strcpy_s(entryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
+
+        VkPipelineShaderStageCreateInfo& shaderStageCreateInfo = m_shaderStages[index];
+
+        shaderStageCreateInfo.module = shader;
+        shaderStageCreateInfo.pName = entryName.data();
+        shaderStageCreateInfo.stage = ShaderStageIndexToFlagBits(index);
+
+        return *this;
     }
 
 

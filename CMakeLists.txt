@@ -169,9 +169,3 @@ if (SHADER_USE_REVERSED_Z)
         PRIVATE ENG_REVERSED_Z
     )
 endif()
-
-if (SHADER_USE_MESHLET_PIPELINE)
-    target_compile_definitions(${ENGINE_PROJ_NAME}
-        PRIVATE ENG_USE_MESHLET_PIPELINE
-    )
-endif()
