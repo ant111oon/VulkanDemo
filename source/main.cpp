@@ -175,6 +175,20 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
+static constexpr VkIndexType GetVkIndexType()
+{
+    static_assert(std::is_same_v<VertexIndexType, uint8_t> || std::is_same_v<VertexIndexType, uint16_t> || std::is_same_v<VertexIndexType, uint32_t>);
+
+    if constexpr (std::is_same_v<VertexIndexType, uint8_t>) {
+        return VK_INDEX_TYPE_UINT8;
+    } else if constexpr (std::is_same_v<VertexIndexType, uint16_t>) {
+        return VK_INDEX_TYPE_UINT16;
+    } else {
+        return VK_INDEX_TYPE_UINT32;
+    }
+}
+
+
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
     Timer timer;
@@ -212,9 +226,13 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
 
     vkn::DescriptorPoolBuilder builder;
 
-    VkDescriptorPool vkPool = builder.SetMaxDescriptorSetsCount(5)
-        .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .Build(vkDevice);
+    builder
+        // .SetFlags(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT)
+        .SetMaxDescriptorSetsCount(5);
+        
+    builder.AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+    
+    VkDescriptorPool vkPool = builder.Build(vkDevice);
 
     VK_LOG_INFO("VkDescriptorPool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
@@ -228,9 +246,11 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
 
     vkn::DescriptorSetLayoutBuilder builder;
 
-    VkDescriptorSetLayout vkLayout = builder
-        .AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT)
-        .Build(vkDevice);
+    builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+
+    VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
     VK_LOG_INFO("VkDescriptorSetLayout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
@@ -246,7 +266,8 @@ static VkDescriptorSet CreateVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool
 
     VkDescriptorSet vkDescriptorSets[] = { VK_NULL_HANDLE };
 
-    allocator.SetPool(vkDescriptorPool)
+    allocator
+        .SetPool(vkDescriptorPool)
         .AddLayout(vkDescriptorSetLayout)
         .Allocate(vkDevice, vkDescriptorSets);
 
@@ -559,7 +580,7 @@ void RenderScene()
         renderingInfo.pDepthAttachment = &depthAttachment;
 
         ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BeginRender", 200, 120, 0, 255);
-        cmdBuffer.BeginRendering(renderingInfo);
+        cmdBuffer.CmdBeginRendering(renderingInfo);
             VkViewport viewport = {};
             viewport.width = renderingInfo.renderArea.extent.width;
             viewport.height = renderingInfo.renderArea.extent.height;
@@ -578,12 +599,12 @@ void RenderScene()
             const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
             vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
 
-            vkCmdBindIndexBuffer(cmdBuffer.Get(), s_indexBuffer.Get(), 0, std::is_same_v<VertexIndexType, uint16_t> ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+            cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
             for (const Mesh& mesh : s_meshes) {
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
-        cmdBuffer.EndRendering();
+        cmdBuffer.CmdEndRendering();
         ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
         CmdPipelineImageBarrier(

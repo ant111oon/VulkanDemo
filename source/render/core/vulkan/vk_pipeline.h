@@ -172,11 +172,13 @@ namespace vkn
     class DescriptorSetLayoutBuilder
     {
     public:
-        DescriptorSetLayoutBuilder(size_t bindingsCount = 0);
+        DescriptorSetLayoutBuilder(size_t bindingsCount = 1);
 
         DescriptorSetLayoutBuilder& Reset();
 
-        DescriptorSetLayoutBuilder& AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages);
+        DescriptorSetLayoutBuilder& AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages, VkDescriptorBindingFlags flags = 0);
+
+        DescriptorSetLayoutBuilder& SetFlags(VkDescriptorSetLayoutCreateFlags flags);
 
         VkDescriptorSetLayout Build(VkDevice vkDevice);
 
@@ -185,6 +187,7 @@ namespace vkn
 
     private:
         std::vector<VkDescriptorSetLayoutBinding> m_bindings;
+        std::vector<VkDescriptorBindingFlags> m_bindingsFlags;
         VkDescriptorSetLayoutCreateFlags m_flags = 0;
     };
 

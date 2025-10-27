@@ -8,6 +8,7 @@ namespace vkn
 {
     class CmdPool;
     class QueryPool;
+    class Buffer;
 
 
     class CmdBuffer : public Object
@@ -33,11 +34,13 @@ namespace vkn
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool);
         CmdBuffer& CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex);
 
-        CmdBuffer& BeginRendering(const VkRenderingInfo& renderingInfo);
-        CmdBuffer& EndRendering();
+        CmdBuffer& CmdBeginRendering(const VkRenderingInfo& renderingInfo);
+        CmdBuffer& CmdEndRendering();
 
         CmdBuffer& CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports);
         CmdBuffer& CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors);
+        
+        CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 
         CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);

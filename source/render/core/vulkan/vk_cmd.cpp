@@ -2,6 +2,7 @@
 
 #include "vk_cmd.h"
 #include "vk_query.h"
+#include "vk_buffer.h"
 
 
 namespace vkn
@@ -107,7 +108,7 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::BeginRendering(const VkRenderingInfo& renderingInfo)
+    CmdBuffer& CmdBuffer::CmdBeginRendering(const VkRenderingInfo& renderingInfo)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(!IsRenderingStarted());
@@ -120,7 +121,7 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::EndRendering()
+    CmdBuffer& CmdBuffer::CmdEndRendering()
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
@@ -147,6 +148,16 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
         vkCmdSetScissor(m_cmdBuffer, firstScissor, scissorCount, pScissors);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdBindIndexBuffer(m_cmdBuffer, idxBuffer.Get(), offset, idxType);
 
         return *this;
     }

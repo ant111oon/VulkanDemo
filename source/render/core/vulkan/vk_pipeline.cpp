@@ -531,19 +531,21 @@ namespace vkn
     {
         Reset();
         m_bindings.reserve(bindingsCount);
+        m_bindingsFlags.reserve(bindingsCount);
     }
 
 
     DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::Reset()
     {
         m_bindings.clear();
+        m_bindingsFlags.clear();
         m_flags = 0;
 
         return *this;
     }
 
 
-    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages)
+    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages, VkDescriptorBindingFlags flags)
     {
         VK_ASSERT_MSG(!IsBindingExist(binding), "Binding %u has already been added", binding);
 
@@ -555,6 +557,17 @@ namespace vkn
 
         m_bindings.emplace_back(descriptor);
 
+        if (flags != 0x0) {
+            m_bindingsFlags.emplace_back(flags);
+        }
+
+        return *this;
+    }
+
+
+    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::SetFlags(VkDescriptorSetLayoutCreateFlags flags)
+    {
+        m_flags = flags;
         return *this;
     }
 
@@ -566,6 +579,16 @@ namespace vkn
         descriptorSetLayoutCreateInfo.flags = m_flags;
         descriptorSetLayoutCreateInfo.bindingCount = m_bindings.size();
         descriptorSetLayoutCreateInfo.pBindings = m_bindings.data();
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = {};
+        bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        
+        if (!m_bindingsFlags.empty()) {
+            bindingFlagsCreateInfo.bindingCount = m_bindingsFlags.size();
+            bindingFlagsCreateInfo.pBindingFlags = m_bindingsFlags.data();
+    
+            descriptorSetLayoutCreateInfo.pNext = &bindingFlagsCreateInfo;
+        }
 
         VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
         VK_CHECK(vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout));
