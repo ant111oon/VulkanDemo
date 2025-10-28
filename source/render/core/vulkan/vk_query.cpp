@@ -113,12 +113,6 @@ namespace vkn
     }
 
 
-    void QueryPool::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(*m_pDevice, (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pName);
-    }
-
-
     const char* QueryPool::GetDebugName() const
     {
         return Object::GetDebugName("QueryPool");

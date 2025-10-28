@@ -111,12 +111,6 @@ namespace vkn
     }
 
 
-    void Fence::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(*m_pDevice, (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pName);
-    }
-
-
     const char* Fence::GetDebugName() const
     {
         return Object::GetDebugName("Fence");

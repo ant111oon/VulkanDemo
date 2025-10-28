@@ -11,6 +11,7 @@ namespace vkn
         bool independentBlend;
         bool descriptorBindingPartiallyBound;
         bool runtimeDescriptorArray;
+        bool samplerAnisotropy;
     };
 
 

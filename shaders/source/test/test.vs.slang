@@ -15,7 +15,7 @@ TEST_VS_OUTPUT main(uint vid : SV_VertexID)
     result.lnorm = inputData.lnorm;
     result.texCoord = inputData.texCoord;
 
-    result.hpos = mul(float4(inputData.position, 1.f), COMMON_CB.COMMON_VIEW_PROJ_MATRIX);
+    result.hpos = mul(float4(inputData.position, 1.f), COMMON_CB.COMMON_VIEW_PROJ_MATRIX); 
 
     return result;
 }

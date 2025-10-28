@@ -31,7 +31,12 @@ namespace vkn
 
         void Destroy();
 
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const

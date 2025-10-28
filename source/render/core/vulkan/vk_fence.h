@@ -34,7 +34,12 @@ namespace vkn
         void Reset();
         void WaitFor(uint64_t timeout);
 
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*m_pDevice, (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const

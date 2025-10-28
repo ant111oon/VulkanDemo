@@ -26,7 +26,18 @@ namespace vkn
     protected:
         void Destroy();
 
-        void SetCreated(bool isCreated) { m_internalState.set(INTERNAL_BIT_IS_CREATED, isCreated); } 
+        void SetCreated(bool isCreated) { m_internalState.set(INTERNAL_BIT_IS_CREATED, isCreated); }
+
+        template <typename... Args>
+        void SetDebugName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pFmt, Args&&... args)
+        {
+        #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+            char name[MAX_OBJ_DBG_NAME_LENGTH] = {0};
+            sprintf_s(name, pFmt, std::forward<Args>(args)...);
+
+            SetDebugName(device, objectHandle, objectType, name);
+        #endif
+        }
         
         void SetDebugName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pName);  
         const char* GetDebugName(const char* pReleaseName) const;

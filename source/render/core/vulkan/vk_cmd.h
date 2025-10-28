@@ -45,7 +45,12 @@ namespace vkn
         CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
         
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const;
@@ -126,7 +131,12 @@ namespace vkn
         CmdBuffer AllocCmdBuffer(VkCommandBufferLevel level);
         void FreeCmdBuffer(CmdBuffer& cmdBuffer);
 
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const

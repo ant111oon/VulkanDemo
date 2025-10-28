@@ -34,7 +34,12 @@ namespace vkn
         void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
         void Unmap();
 
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*m_pDevice, (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const

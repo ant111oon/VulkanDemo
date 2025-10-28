@@ -97,12 +97,6 @@ namespace vkn
     }
 
 
-    void Semaphore::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(*m_pDevice, (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pName);
-    }
-
-
     const char* Semaphore::GetDebugName() const
     {
         return Object::GetDebugName("Semaphore");

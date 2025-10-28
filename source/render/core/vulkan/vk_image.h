@@ -34,6 +34,12 @@ namespace vkn
         bool Create(const ImageViewCreateInfo& info);
         void Destroy();
 
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
+        }
+
         void SetDebugName(const char* pName);
         const char* GetDebugName() const;
 
@@ -129,7 +135,12 @@ namespace vkn
         bool Create(const ImageCreateInfo& info);
         void Destroy();
 
-        void SetDebugName(const char* pName);
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+        }
+
         const char* GetDebugName() const;
 
         Device* GetDevice() const
@@ -177,5 +188,69 @@ namespace vkn
         VkImageType m_type = {};
         VkExtent3D m_extent = {};
         VkFormat m_format = {};
+    };
+
+
+    struct SamplerCreateInfo
+    {
+        Device* pDevice;
+
+        VkSamplerCreateFlags    flags;
+        VkFilter                magFilter;
+        VkFilter                minFilter;
+        VkSamplerMipmapMode     mipmapMode;
+        VkSamplerAddressMode    addressModeU;
+        VkSamplerAddressMode    addressModeV;
+        VkSamplerAddressMode    addressModeW;
+        float                   mipLodBias;
+        VkBool32                anisotropyEnable;
+        float                   maxAnisotropy;
+        VkBool32                compareEnable;
+        VkCompareOp             compareOp;
+        float                   minLod;
+        float                   maxLod;
+        VkBorderColor           borderColor;
+        VkBool32                unnormalizedCoordinates;
+    };
+
+
+    class Sampler : public Object
+    {
+    public:
+        ENG_DECL_CLASS_NO_COPIABLE(Sampler);
+
+        Sampler() = default;
+        Sampler(const SamplerCreateInfo& info);
+
+        Sampler(Sampler&& sampler) noexcept;
+        Sampler& operator=(Sampler&& sampler) noexcept;
+
+        bool Create(const SamplerCreateInfo& info);
+        void Destroy();
+
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_sampler, VK_OBJECT_TYPE_SAMPLER, pFmt, std::forward<Args>(args)...);
+        }
+
+        const char* GetDebugName() const;
+
+        Device* GetDevice() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_pDevice;
+        }
+
+        VkSampler Get() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_sampler;
+        }
+
+    private:
+        Device* m_pDevice = nullptr;
+
+        VkSampler m_sampler = VK_NULL_HANDLE;
     };
 }

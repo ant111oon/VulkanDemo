@@ -63,6 +63,15 @@ struct COMMON_CB_DATA
 };
 
 
+struct TEST_BINDLESS_REGISTRY
+{
+    VkDeviceAddress VERTEX_DATA;
+
+    glm::uint TEX_IDX;
+    uint32_t  PADD;
+};
+
+
 static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
 static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Vertex);
 
@@ -112,9 +121,19 @@ static vkn::Buffer s_commonConstBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<Mesh> s_meshes;
+static std::vector<Mesh> s_sceneMeshes;
+
+static std::vector<vkn::Image>     s_sceneImages;
+static std::vector<vkn::ImageView> s_sceneImageViews;
+
+static vkn::Image     s_sceneDefaultImage;
+static vkn::ImageView s_sceneDefaultImageView;
+
+static vkn::Sampler s_commonSampler;
 
 static eng::Camera s_camera;
+
+static uint32_t s_currTexIdx = 0;
 
 static size_t s_frameNumber = 0;
 static bool s_swapchainRecreateRequired = false;
@@ -189,6 +208,112 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
+static constexpr VkFormat GetImageFormatR(uint32_t pixelType, bool isSRGB)
+{
+    if (isSRGB) {
+        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+            "If texture is in sRGB, it must be 8-bit per component");
+    }
+
+    switch (pixelType) {
+        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
+        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
+    }
+
+    CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
+    return VK_FORMAT_UNDEFINED;
+}
+
+
+static constexpr VkFormat  GetImageFormatRG(uint32_t pixelType, bool isSRGB)
+{
+    if (isSRGB) {
+        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+            "If texture is in sRGB, it must be 8-bit per component");
+    }
+
+    switch (pixelType) {
+        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
+        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
+    }
+
+    CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
+    return VK_FORMAT_UNDEFINED;
+}
+
+
+static constexpr VkFormat GetImageFormatRGB(uint32_t pixelType, bool isSRGB)
+{
+    if (isSRGB) {
+        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+            "If texture is in sRGB, it must be 8-bit per component");
+    }
+
+    switch (pixelType) {
+        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
+        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
+    }
+
+    CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
+    return VK_FORMAT_UNDEFINED;
+}
+
+
+static constexpr VkFormat GetImageFormatRGBA(uint32_t pixelType, bool isSRGB)
+{
+    if (isSRGB) {
+        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+            "If texture is in sRGB, it must be 8-bit per component");
+    }
+
+    switch (pixelType) {
+        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
+        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
+    }
+
+    CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
+    return VK_FORMAT_UNDEFINED;
+}
+
+
+static constexpr VkFormat GetImageFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
+{
+    switch (component) {
+        case 1: return GetImageFormatR(pixelType, isSRGB);
+        case 2: return GetImageFormatRG(pixelType, isSRGB);
+        case 3: return GetImageFormatRGB(pixelType, isSRGB);
+        case 4: return GetImageFormatRGBA(pixelType, isSRGB);
+    }
+
+    CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
+    return VK_FORMAT_UNDEFINED;
+}
+
+
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
     Timer timer;
@@ -228,9 +353,12 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
 
     builder
         // .SetFlags(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT)
-        .SetMaxDescriptorSetsCount(5);
+        .SetMaxDescriptorSetsCount(1);
         
-    builder.AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+    builder
+        .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, 1)
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 128);
     
     VkDescriptorPool vkPool = builder.Build(vkDevice);
 
@@ -248,7 +376,9 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
 
     builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+        .AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 128, VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
@@ -284,7 +414,7 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
-        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress))
+        .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
@@ -349,6 +479,88 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
     VK_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkPipeline;
+}
+
+
+static void WriteDescriptorSet()
+{
+    std::vector<VkWriteDescriptorSet> descWrites(s_sceneImageViews.size() + 2);
+    descWrites.clear();
+
+    std::vector<VkDescriptorImageInfo> imageInfos(s_sceneImageViews.size());
+    imageInfos.clear();
+
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer = s_commonConstBuffer.Get();
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(COMMON_CB_DATA);
+
+    VkWriteDescriptorSet commonConstBufWrite = {};
+    commonConstBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonConstBufWrite.dstSet = s_vkDescriptorSet;
+    commonConstBufWrite.dstBinding = 0;
+    commonConstBufWrite.dstArrayElement = 0;
+    commonConstBufWrite.descriptorCount = 1;
+    commonConstBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    commonConstBufWrite.pBufferInfo = &bufferInfo;
+
+    descWrites.emplace_back(commonConstBufWrite);
+
+
+    VkDescriptorImageInfo commonSamplerInfo = {};
+    commonSamplerInfo.sampler = s_commonSampler.Get();
+    commonSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkWriteDescriptorSet commonSamplerWrite = {};
+    commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonSamplerWrite.dstSet = s_vkDescriptorSet;
+    commonSamplerWrite.dstBinding = 1;
+    commonSamplerWrite.dstArrayElement = 0;
+    commonSamplerWrite.descriptorCount = 1;
+    commonSamplerWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    commonSamplerWrite.pImageInfo = &commonSamplerInfo;
+
+    descWrites.emplace_back(commonSamplerWrite);
+
+
+    for (size_t i = 0; i < s_sceneImageViews.size(); ++i) {
+        VkDescriptorImageInfo imageInfo = {};
+        imageInfo.imageView = s_sceneImageViews[i].Get();
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        imageInfos.emplace_back(imageInfo);
+
+        VkWriteDescriptorSet texWrite = {};
+        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstBinding = 2;
+        texWrite.dstArrayElement = i;
+        texWrite.descriptorCount = 1;
+        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        texWrite.pImageInfo = &imageInfos.back();
+
+        descWrites.emplace_back(texWrite);
+    }
+
+    for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
+        VkDescriptorImageInfo emptyTexInfo = {};
+        emptyTexInfo.imageView = s_sceneDefaultImageView.Get();
+        emptyTexInfo.sampler = VK_NULL_HANDLE;
+        emptyTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet texWrite = {};
+        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstBinding = 2;
+        texWrite.dstArrayElement = i;
+        texWrite.descriptorCount = 1;
+        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        texWrite.pImageInfo = &emptyTexInfo;
+
+        descWrites.emplace_back(texWrite);
+    }
+    
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
 
@@ -596,12 +808,15 @@ void RenderScene()
             
             vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
 
-            const VkDeviceAddress vertBufferAddress = s_vertexBuffer.GetDeviceAddress();
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &vertBufferAddress);
+            TEST_BINDLESS_REGISTRY registry = {};
+            registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
+            registry.TEX_IDX     = s_currTexIdx;
+
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
 
             cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
-            for (const Mesh& mesh : s_meshes) {
+            for (const Mesh& mesh : s_sceneMeshes) {
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
         cmdBuffer.CmdEndRendering();
@@ -663,6 +878,8 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
 
+    const fs::path dirPath = filepath.parent_path();
+
     const std::string pathS = filepath.string();
     CORE_LOG_TRACE("Loading %s...", pathS.c_str());
 
@@ -711,8 +928,8 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
     std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
-    s_meshes.reserve(model.meshes.size());
-    s_meshes.resize(0);
+    s_sceneMeshes.reserve(model.meshes.size());
+    s_sceneMeshes.clear();
 
     for (const gltf::Mesh& mesh : model.meshes) {
         for (const gltf::Primitive& primitive : mesh.primitives) {
@@ -801,9 +1018,117 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
                 cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
             }
 
-            s_meshes.emplace_back(internalMesh);
+            s_sceneMeshes.emplace_back(internalMesh);
         }
     }
+
+
+    std::vector<vkn::Buffer> stagingSceneImageBuffers(model.images.size());
+    stagingSceneImageBuffers.clear();
+
+    s_sceneImages.reserve(model.images.size());
+    s_sceneImages.clear();
+
+    s_sceneImageViews.reserve(model.images.size());
+    s_sceneImageViews.clear();
+
+    for (size_t i = 0; i < model.images.size(); ++i) {
+        const tinygltf::Image& image = model.images[i];
+
+        vkn::BufferCreateInfo stagingTexBufCreateInfo = {};
+        stagingTexBufCreateInfo.pDevice = &s_vkDevice;
+        stagingTexBufCreateInfo.size = image.image.size() * sizeof(image.image[0]);
+        stagingTexBufCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingTexBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        stagingTexBufCreateInfo.memAllocFlags = 0;
+
+        stagingSceneImageBuffers.emplace_back(stagingTexBufCreateInfo);
+        vkn::Buffer& stagingTexBuffer = stagingSceneImageBuffers.back();
+        CORE_ASSERT(stagingTexBuffer.IsCreated());
+
+        void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pImageData, image.image.data(), stagingTexBufCreateInfo.size);
+        stagingTexBuffer.Unmap();
+
+        vkn::ImageCreateInfo info = {};
+
+        info.pDevice = &s_vkDevice;
+        info.type = VK_IMAGE_TYPE_2D;
+        info.extent.width = image.width;
+        info.extent.height = image.height;
+        info.extent.depth = 1;
+        info.format = GetImageFormat(image.component, image.pixel_type, false);
+        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        info.mipLevels = 1;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+        s_sceneImages.emplace_back(info);
+        CORE_ASSERT(s_sceneImages.back().IsCreated());
+        s_sceneImages.back().SetDebugName("COMMON_MTL_TEXTURE_%zu", i);
+
+        vkn::ImageViewCreateInfo viewInfo = {};
+
+        viewInfo.pOwner = &s_sceneImages.back();
+        viewInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = info.format;
+        viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+        s_sceneImageViews.emplace_back(viewInfo);
+        CORE_ASSERT(s_sceneImageViews.back().IsCreated());
+        s_sceneImageViews.back().SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", i);
+    }
+
+
+    vkn::ImageCreateInfo defTexInfo = {};
+
+    defTexInfo.pDevice = &s_vkDevice;
+    defTexInfo.type = VK_IMAGE_TYPE_2D;
+    defTexInfo.extent.width = 1;
+    defTexInfo.extent.height = 1;
+    defTexInfo.extent.depth = 1;
+    defTexInfo.format = VK_FORMAT_R8_UNORM;
+    defTexInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    defTexInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    defTexInfo.mipLevels = 1;
+    defTexInfo.arrayLayers = 1;
+    defTexInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    defTexInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    defTexInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    s_sceneDefaultImage.Create(defTexInfo);
+    CORE_ASSERT(s_sceneDefaultImage.IsCreated());
+    s_sceneDefaultImage.SetDebugName("DEFAULT_TEX");
+
+    vkn::ImageViewCreateInfo defTexViewInfo = {};
+
+    defTexViewInfo.pOwner = &s_sceneDefaultImage;
+    defTexViewInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    defTexViewInfo.format = defTexInfo.format;
+    defTexViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    defTexViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    defTexViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    defTexViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    defTexViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    defTexViewInfo.subresourceRange.baseMipLevel = 0;
+    defTexViewInfo.subresourceRange.baseArrayLayer = 0;
+    defTexViewInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    defTexViewInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    s_sceneDefaultImageView.Create(defTexViewInfo);
+    CORE_ASSERT(s_sceneDefaultImageView.IsCreated());
+    s_sceneDefaultImageView.SetDebugName("DEFAULT_TEX_VIEW");
 
 
     vkn::BufferCreateInfo stagingBufCreateInfo = {};
@@ -836,14 +1161,77 @@ static void LoadScene(const fs::path& filepath, vkn::Buffer& vertBuffer, vkn::Bu
     }
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        VkBufferCopy region = {};
+        VkBufferCopy bufferRegion = {};
         
-        region.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), vertBuffer.Get(), 1, &region);
+        bufferRegion.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), vertBuffer.Get(), 1, &bufferRegion);
 
-        region.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &region);
+        bufferRegion.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), indexBuffer.Get(), 1, &bufferRegion);
+
+        for (size_t i = 0; i < s_sceneImages.size(); ++i) {
+            CmdPipelineImageBarrier(
+                cmdBuffer,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_2_NONE,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_NONE,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                s_sceneImages[i].Get(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            VkCopyBufferToImageInfo2 copyInfo = {};
+
+            copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+            copyInfo.srcBuffer = stagingSceneImageBuffers[i].Get();
+            copyInfo.dstImage = s_sceneImages[i].Get();
+            copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            copyInfo.regionCount = 1;
+
+            VkBufferImageCopy2 texRegion = {};
+
+            texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+            texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            texRegion.imageSubresource.mipLevel = 0;
+            texRegion.imageSubresource.baseArrayLayer = 0;
+            texRegion.imageSubresource.layerCount = 1;
+            texRegion.imageExtent = s_sceneImages[i].GetExtent();
+
+            copyInfo.pRegions = &texRegion;
+
+            vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+
+            CmdPipelineImageBarrier(
+                cmdBuffer,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT,
+                s_sceneImages[i].Get(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+        }
+    
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            s_sceneDefaultImage.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
     });
+
+    for (vkn::Buffer& buffer : stagingSceneImageBuffers) {
+        buffer.Destroy();
+    }
 
     stagingVertBuffer.Destroy();
     stagingIndexBuffer.Destroy();
@@ -913,8 +1301,8 @@ void UpdateTimings(Window* pWnd, Timer& cpuTimer)
         
     const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
 
-    pWnd->SetTitle("%s | %s | CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s", 
-        APP_NAME, BUILD_TYPE_STR, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF");
+    pWnd->SetTitle("%s | %s | CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s | Texture Idx: %u", 
+        APP_NAME, BUILD_TYPE_STR, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF", s_currTexIdx);
 }
 
 
@@ -1017,6 +1405,14 @@ void ProcessWndEvents(const WndEvent& event)
             s_flyCameraMode = !s_flyCameraMode;
             
             ShowCursor(!s_flyCameraMode);
+        }
+
+        if (keyEvent.IsPressed() || keyEvent.IsHold()) {
+            if (keyEvent.key == WndKey::KEY_LEFT) {
+                s_currTexIdx = s_currTexIdx >= 1 ? s_currTexIdx - 1 : 0;
+            } else if (keyEvent.key == WndKey::KEY_RIGHT) {
+                s_currTexIdx = glm::clamp(s_currTexIdx + 1, 0U, (uint32_t)s_sceneImageViews.size() - 1);
+            }
         }
     }
 
@@ -1138,6 +1534,9 @@ int main(int argc, char* argv[])
 
     vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
     vkPhysDeviceFeturesReq.independentBlend = true;
+    vkPhysDeviceFeturesReq.descriptorBindingPartiallyBound = true;
+    vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
+    vkPhysDeviceFeturesReq.samplerAnisotropy = true;
 
     vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
     vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -1184,6 +1583,7 @@ int main(int argc, char* argv[])
     VkPhysicalDeviceFeatures2 features2 = {};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     features2.pNext = &features11;
+    features2.features.samplerAnisotropy = VK_TRUE;
 
     vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
     vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
@@ -1267,12 +1667,7 @@ int main(int argc, char* argv[])
         s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
         CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
 
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        char vkObjDbgName[64] = {'\0'};
-
-        sprintf_s(vkObjDbgName, "RND_FINISH_SEMAPHORE_%zu", i);
-        s_vkRenderingFinishedSemaphores[i].SetDebugName(vkObjDbgName);
-    #endif
+        s_vkRenderingFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
     }
 
     s_vkPresentFinishedSemaphore.Create(&s_vkDevice);
@@ -1327,20 +1722,30 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
     s_commonConstBuffer.SetDebugName("COMMON_CB");
 
-    VkDescriptorBufferInfo bufferInfo = {};
-    bufferInfo.buffer = s_commonConstBuffer.Get();
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(COMMON_CB_DATA);
 
-    VkWriteDescriptorSet descWrite = {};
-    descWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descWrite.dstSet = s_vkDescriptorSet;
-    descWrite.dstBinding = 0;
-    descWrite.dstArrayElement = 0;
-    descWrite.descriptorCount = 1;
-    descWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descWrite.pBufferInfo = &bufferInfo;
-    vkUpdateDescriptorSets(s_vkDevice.Get(), 1, &descWrite, 0, nullptr);
+    vkn::SamplerCreateInfo commonSamplerCreateInfo = {};
+    commonSamplerCreateInfo.pDevice = &s_vkDevice;
+    commonSamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+    commonSamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+    commonSamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    commonSamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    commonSamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    commonSamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    commonSamplerCreateInfo.mipLodBias = 0.f;
+    commonSamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    commonSamplerCreateInfo.maxAnisotropy = 16.f;
+    commonSamplerCreateInfo.compareEnable = VK_FALSE;
+    commonSamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    commonSamplerCreateInfo.minLod = 0.f;
+    commonSamplerCreateInfo.maxLod = VK_LOD_CLAMP_NONE;
+    commonSamplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    commonSamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+
+    s_commonSampler.Create(commonSamplerCreateInfo);
+    CORE_ASSERT(s_commonSampler.IsCreated());
+    s_commonSampler.SetDebugName("COMMON_SAMPLER");
+
+    WriteDescriptorSet();
 
     s_pWnd->SetVisible(true);
 
@@ -1358,6 +1763,19 @@ int main(int argc, char* argv[])
 
     s_vkDepthImageView.Destroy();
     s_vkDepthImage.Destroy();
+
+    for (vkn::ImageView& view : s_sceneImageViews) {
+        view.Destroy();
+    }
+
+    for (vkn::Image& image : s_sceneImages) {
+        image.Destroy();
+    }
+
+    s_sceneDefaultImageView.Destroy();
+    s_sceneDefaultImage.Destroy();
+
+    s_commonSampler.Destroy();
 
     s_vkImmediateSubmitFinishedFence.Destroy();
     

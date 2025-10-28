@@ -1,12 +1,5 @@
 __exported import "half_utils.fx";
-
-
-struct TEST_BINDLESS_REGISTRY
-{
-    uint4* VERTEX_DATA;
-};
-
-[[vk::push_constant]] TEST_BINDLESS_REGISTRY TEST_REGISTRY;
+__exported import "registers_test.fx";
 
 
 struct TEST_INPUT_DATA

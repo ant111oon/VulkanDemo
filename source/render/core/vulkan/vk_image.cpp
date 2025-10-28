@@ -268,14 +268,107 @@ namespace vkn
     }
 
 
-    void Image::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(*m_pDevice, (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pName);
-    }
-
-
     const char* Image::GetDebugName() const
     { 
         return Object::GetDebugName("Image");
+    }
+
+
+    Sampler::Sampler(const SamplerCreateInfo& info)
+        : Object()
+    {
+        Create(info);
+    }
+
+
+    Sampler::Sampler(Sampler&& sampler) noexcept
+    {
+        *this = std::move(sampler);
+    }
+
+
+    Sampler& Sampler::operator=(Sampler&& sampler) noexcept
+    {
+        if (this == &sampler) {
+            return *this;
+        }
+
+        if (IsCreated()) {
+            Destroy();
+        }
+        
+        std::swap(m_sampler, sampler.m_sampler);
+        std::swap(m_pDevice, sampler.m_pDevice);
+
+        Object::operator=(std::move(sampler));
+
+        return *this;
+    }
+
+
+    bool Sampler::Create(const SamplerCreateInfo& info)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Image %s is already created", GetDebugName());
+            return false;
+        }
+
+        VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+
+        VkDevice vkDevice = info.pDevice->Get();
+
+        VkSamplerCreateInfo createInfo = {};
+
+        createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        createInfo.magFilter = info.magFilter;
+        createInfo.minFilter = info.minFilter;
+        createInfo.mipmapMode = info.mipmapMode;
+        createInfo.addressModeU = info.addressModeU;
+        createInfo.addressModeV = info.addressModeV;
+        createInfo.addressModeW = info.addressModeW;
+        createInfo.mipLodBias = info.mipLodBias;
+        createInfo.anisotropyEnable = info.anisotropyEnable;
+        createInfo.maxAnisotropy = info.maxAnisotropy;
+        createInfo.compareEnable = info.compareEnable;
+        createInfo.compareOp = info.compareOp;
+        createInfo.minLod = info.minLod;
+        createInfo.maxLod = info.maxLod;
+        createInfo.borderColor = info.borderColor;
+        createInfo.unnormalizedCoordinates = info.unnormalizedCoordinates;
+
+        m_sampler = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateSampler(vkDevice, &createInfo, nullptr, &m_sampler));
+
+        const bool isCreated = m_sampler != VK_NULL_HANDLE;
+        VK_ASSERT(m_sampler);
+
+        SetCreated(isCreated);
+
+        m_pDevice = info.pDevice;
+
+        return isCreated;
+    }
+
+
+    void Sampler::Destroy()
+    {
+        if (!IsCreated()) {
+            return;
+        }
+
+        VkDevice vkDevice = m_pDevice->Get();
+
+        vkDestroySampler(vkDevice, m_sampler, nullptr);
+        m_sampler = VK_NULL_HANDLE;
+
+        m_pDevice = nullptr;
+
+        Object::Destroy();
+    }
+
+
+    const char* Sampler::GetDebugName() const
+    {
+        return Object::GetDebugName("Sampler");
     }
 }

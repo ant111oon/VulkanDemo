@@ -124,7 +124,7 @@ private:
         WND_STATE_IS_MAXIMIZED,
     };
 
-    static inline constexpr size_t MAX_WND_NAME_LENGTH = 96; 
+    static inline constexpr size_t MAX_WND_NAME_LENGTH = 256; 
 
 private:
     WndEventQueue m_eventQueue;

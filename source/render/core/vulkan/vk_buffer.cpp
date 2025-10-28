@@ -29,8 +29,6 @@ namespace vkn
             Destroy();
         }
 
-        Object::operator=(std::move(buffer));
-
         std::swap(m_pDevice, buffer.m_pDevice);
 
         std::swap(m_buffer, buffer.m_buffer);
@@ -43,6 +41,8 @@ namespace vkn
         std::swap(m_memAllocFlags, buffer.m_memAllocFlags);
 
         std::swap(m_state, buffer.m_state);
+
+        Object::operator=(std::move(buffer));
 
         return *this; 
     }
@@ -178,12 +178,6 @@ namespace vkn
         vkUnmapMemory(m_pDevice->Get(), m_memory);
 
         m_state.set(BIT_IS_MAPPED, false);
-    }
-
-
-    void Buffer::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(*m_pDevice, (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pName);
     }
 
 
