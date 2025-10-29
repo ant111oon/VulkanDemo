@@ -2,5 +2,5 @@
 
 build
 
-assets
-shaders/bin
+assets/*
+!assets/**/Sponza/

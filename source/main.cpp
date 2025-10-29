@@ -44,7 +44,15 @@ struct Mesh
     uint32_t firstIndex;
     uint32_t indexCount;
 
+    uint32_t mtlIdx; // TODO: Remove
+};
+
+
+struct RenderObject
+{
+    uint32_t meshIdx;
     uint32_t mtlIdx;
+    uint32_t trsIdx;
 };
 
 
@@ -94,7 +102,15 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 10.f;
+static constexpr float CAMERA_SPEED = 15.f;
+
+static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
+    "ALBEDO",
+    "NORMAL",
+    "MR",
+    "AO",
+    "EMISSIVE"
+};
 
 static Window* s_pWnd = nullptr;
 
@@ -134,7 +150,10 @@ static vkn::Buffer s_commonMaterialsBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<Mesh> s_sceneMeshes;
+static std::vector<RenderObject>    s_sceneRenderObjects;
+static std::vector<Mesh>            s_sceneMeshes;
+static std::vector<glm::mat4x4>     s_sceneTransforms;
+static std::vector<COMMON_MATERIAL> s_sceneMaterials;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
@@ -148,17 +167,118 @@ static eng::Camera s_camera;
 
 static uint32_t s_dbgTexIdx = 0;
 
-static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
-    "ALBEDO",
-    "NORMAL",
-    "MR",
-    "AO",
-    "EMISSIVE"
-};
-
 static size_t s_frameNumber = 0;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
+
+
+namespace tinygltf
+{
+    static constexpr VkFormat GetImageVkFormatR(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat  GetImageVkFormatRG(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGB(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGBA(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
+    {
+        switch (component) {
+            case 1: return GetImageVkFormatR(pixelType, isSRGB);
+            case 2: return GetImageVkFormatRG(pixelType, isSRGB);
+            case 3: return GetImageVkFormatRGB(pixelType, isSRGB);
+            case 4: return GetImageVkFormatRGBA(pixelType, isSRGB);
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
+        return VK_FORMAT_UNDEFINED;
+    }
+}
 
 
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
@@ -226,112 +346,6 @@ static constexpr VkIndexType GetVkIndexType()
     } else {
         return VK_INDEX_TYPE_UINT32;
     }
-}
-
-
-static constexpr VkFormat GetImageFormatR(uint32_t pixelType, bool isSRGB)
-{
-    if (isSRGB) {
-        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-            "If texture is in sRGB, it must be 8-bit per component");
-    }
-
-    switch (pixelType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
-        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
-        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
-    }
-
-    CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
-    return VK_FORMAT_UNDEFINED;
-}
-
-
-static constexpr VkFormat  GetImageFormatRG(uint32_t pixelType, bool isSRGB)
-{
-    if (isSRGB) {
-        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-            "If texture is in sRGB, it must be 8-bit per component");
-    }
-
-    switch (pixelType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
-        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
-        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
-    }
-
-    CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
-    return VK_FORMAT_UNDEFINED;
-}
-
-
-static constexpr VkFormat GetImageFormatRGB(uint32_t pixelType, bool isSRGB)
-{
-    if (isSRGB) {
-        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-            "If texture is in sRGB, it must be 8-bit per component");
-    }
-
-    switch (pixelType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
-        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
-        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
-    }
-
-    CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
-    return VK_FORMAT_UNDEFINED;
-}
-
-
-static constexpr VkFormat GetImageFormatRGBA(uint32_t pixelType, bool isSRGB)
-{
-    if (isSRGB) {
-        CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-            "If texture is in sRGB, it must be 8-bit per component");
-    }
-
-    switch (pixelType) {
-        case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
-        case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
-        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
-        case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
-        case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
-    }
-
-    CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
-    return VK_FORMAT_UNDEFINED;
-}
-
-
-static constexpr VkFormat GetImageFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
-{
-    switch (component) {
-        case 1: return GetImageFormatR(pixelType, isSRGB);
-        case 2: return GetImageFormatRG(pixelType, isSRGB);
-        case 3: return GetImageFormatRGB(pixelType, isSRGB);
-        case 4: return GetImageFormatRGBA(pixelType, isSRGB);
-    }
-
-    CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
-    return VK_FORMAT_UNDEFINED;
 }
 
 
@@ -919,12 +933,13 @@ static void LoadSceneMaterials(const gltf::Model& model)
     ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMaterials", 225, 0, 225, 255);
     CORE_LOG_TRACE("LoadSceneMaterials");
 
-    std::vector<COMMON_MATERIAL> cpuCommonMaterialsBuffer(model.materials.size());
-    cpuCommonMaterialsBuffer.clear();
+    s_sceneMaterials.resize(model.materials.size());
+    s_sceneMaterials.clear();
 
-    std::vector<vkn::Buffer> stagingSceneImageBuffers(model.images.size());
     s_sceneImages.resize(model.images.size());
     s_sceneImageViews.resize(model.images.size());
+
+    std::vector<vkn::Buffer> stagingSceneImageBuffers(model.images.size());
 
     auto AddGLTFMaterialTexture = [&stagingSceneImageBuffers, &model](int32_t texIdx, bool isSRGB = false) -> void
     {
@@ -932,13 +947,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
             return;
         }
 
-        const tinygltf::Texture& gltfTexture = model.textures[texIdx];
-        
-        if (gltfTexture.source == -1) {
-            return;
-        }
-
-        const tinygltf::Image& gltfImage = model.images[gltfTexture.source];
+        const tinygltf::Image& gltfImage = model.images[texIdx];
 
         vkn::BufferCreateInfo stagingTexBufCreateInfo = {};
         stagingTexBufCreateInfo.pDevice = &s_vkDevice;
@@ -962,7 +971,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
         info.extent.width = gltfImage.width;
         info.extent.height = gltfImage.height;
         info.extent.depth = 1;
-        info.format = GetImageFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
+        info.format = tinygltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
         info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         info.mipLevels = 1;
@@ -999,13 +1008,20 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
     for (const tinygltf::Material& mtl : model.materials) {
         COMMON_MATERIAL material = {};
-        material.albedoTexIdx            = mtl.pbrMetallicRoughness.baseColorTexture.index;
-        material.normalTexIdx            = mtl.normalTexture.index;
-        material.metallicRoughnessTexIdx = mtl.pbrMetallicRoughness.metallicRoughnessTexture.index;
-        material.aoTexIdx                = mtl.occlusionTexture.index;
-        material.emissiveTexIdx          = mtl.emissiveTexture.index;
+
+        const int32_t albedoTexIdx            = mtl.pbrMetallicRoughness.baseColorTexture.index;
+        const int32_t normalTexIdx            = mtl.normalTexture.index;
+        const int32_t metallicRoughnessTexIdx = mtl.pbrMetallicRoughness.metallicRoughnessTexture.index;
+        const int32_t aoTexIdx                = mtl.occlusionTexture.index;
+        const int32_t emissiveTexIdx          = mtl.emissiveTexture.index;
+
+        material.albedoTexIdx            = albedoTexIdx >= 0 ? model.textures[albedoTexIdx].source : -1;
+        material.normalTexIdx            = normalTexIdx >= 0 ? model.textures[normalTexIdx].source : -1;
+        material.metallicRoughnessTexIdx = metallicRoughnessTexIdx >= 0 ? model.textures[metallicRoughnessTexIdx].source : -1;
+        material.aoTexIdx                = aoTexIdx >= 0 ? model.textures[aoTexIdx].source : -1;
+        material.emissiveTexIdx          = emissiveTexIdx >= 0 ? model.textures[emissiveTexIdx].source : -1;
     
-        cpuCommonMaterialsBuffer.emplace_back(material);
+        s_sceneMaterials.emplace_back(material);
 
         AddGLTFMaterialTexture(material.albedoTexIdx, true);
         AddGLTFMaterialTexture(material.normalTexIdx);
@@ -1016,7 +1032,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
     vkn::BufferCreateInfo commonMtlBuffCreateInfo = {};
     commonMtlBuffCreateInfo.pDevice = &s_vkDevice;
-    commonMtlBuffCreateInfo.size = cpuCommonMaterialsBuffer.size() * sizeof(COMMON_MATERIAL);
+    commonMtlBuffCreateInfo.size = s_sceneMaterials.size() * sizeof(COMMON_MATERIAL);
     commonMtlBuffCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     commonMtlBuffCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
@@ -1025,7 +1041,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
     s_commonMaterialsBuffer.SetDebugName("COMMON_MATERIALS");
 
     void* pCommonMaterialsData = s_commonMaterialsBuffer.Map(0, VK_WHOLE_SIZE, 0);
-    memcpy(pCommonMaterialsData, cpuCommonMaterialsBuffer.data(), cpuCommonMaterialsBuffer.size() * sizeof(COMMON_MATERIAL));
+    memcpy(pCommonMaterialsData, s_sceneMaterials.data(), s_sceneMaterials.size() * sizeof(COMMON_MATERIAL));
     s_commonMaterialsBuffer.Unmap();
 
     vkn::ImageCreateInfo defTexInfo = {};
