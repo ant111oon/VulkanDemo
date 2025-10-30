@@ -43,16 +43,6 @@ struct Mesh
     uint32_t vertexCount;
     uint32_t firstIndex;
     uint32_t indexCount;
-
-    uint32_t mtlIdx; // TODO: Remove
-};
-
-
-struct RenderObject
-{
-    uint32_t meshIdx;
-    uint32_t mtlIdx;
-    uint32_t trsIdx;
 };
 
 
@@ -65,13 +55,31 @@ struct Vertex
 };
 
 
+struct TEST_BINDLESS_REGISTRY
+{
+    VkDeviceAddress VERTEX_DATA;
+
+    glm::uint RENDER_INFO_IDX;
+    glm::uint PADDING;
+};
+
+
+struct COMMON_RENDER_INFO
+{
+    glm::uint MESH_IDX;
+    glm::uint MATERIAL_IDX;
+    glm::uint TRANSFORM_IDX;
+    glm::uint PADDING;
+};
+
+
 struct COMMON_MATERIAL
 {
-    int32_t albedoTexIdx = -1;
-    int32_t normalTexIdx = -1;
-    int32_t metallicRoughnessTexIdx = -1;
-    int32_t aoTexIdx = -1;
-    int32_t emissiveTexIdx = -1;
+    int ALBEDO_TEX_IDX = -1;
+    int NORMAL_TEX_IDX = -1;
+    int MR_TEX_IDX = -1;
+    int AO_TEX_IDX = -1;
+    int EMISSIVE_TEX_IDX = -1;
 };
 
 
@@ -80,16 +88,90 @@ struct COMMON_CB_DATA
     glm::mat4x4 COMMON_VIEW_MATRIX;
     glm::mat4x4 COMMON_PROJ_MATRIX;
     glm::mat4x4 COMMON_VIEW_PROJ_MATRIX;
+
+    glm::uint  COMMON_FLAGS;
+    glm::uint  COMMON_DBG_FLAGS;
+    glm::uvec2 PADDING;
 };
 
 
-struct TEST_BINDLESS_REGISTRY
+enum class COMMON_DBG_FLAG_MASKS
 {
-    VkDeviceAddress VERTEX_DATA;
-
-    glm::uint DRAW_MTL_IDX;
-    glm::uint DBG_TEX_IDX;
+    OUTPUT_COMMON_MTL_ALBEDO_TEX = 0x1,
+    OUTPUT_COMMON_MTL_NORMAL_TEX = 0x2,
+    OUTPUT_COMMON_MTL_MR_TEX = 0x4,
+    OUTPUT_COMMON_MTL_AO_TEX = 0x8,
+    OUTPUT_COMMON_MTL_EMISSIVE_TEX = 0x10,
 };
+
+
+enum class COMMON_SAMPLER_IDX : glm::uint
+{
+    NEAREST_REPEAT,
+    NEAREST_MIRRORED_REPEAT,
+    NEAREST_CLAMP_TO_EDGE,
+    NEAREST_CLAMP_TO_BORDER,
+    NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    LINEAR_REPEAT,
+    LINEAR_MIRRORED_REPEAT,
+    LINEAR_CLAMP_TO_EDGE,
+    LINEAR_CLAMP_TO_BORDER,
+    LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_2X_NEAREST_REPEAT,
+    ANISO_2X_NEAREST_MIRRORED_REPEAT,
+    ANISO_2X_NEAREST_CLAMP_TO_EDGE,
+    ANISO_2X_NEAREST_CLAMP_TO_BORDER,
+    ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_2X_LINEAR_REPEAT,
+    ANISO_2X_LINEAR_MIRRORED_REPEAT,
+    ANISO_2X_LINEAR_CLAMP_TO_EDGE,
+    ANISO_2X_LINEAR_CLAMP_TO_BORDER,
+    ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_4X_NEAREST_REPEAT,
+    ANISO_4X_NEAREST_MIRRORED_REPEAT,
+    ANISO_4X_NEAREST_CLAMP_TO_EDGE,
+    ANISO_4X_NEAREST_CLAMP_TO_BORDER,
+    ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_4X_LINEAR_REPEAT,
+    ANISO_4X_LINEAR_MIRRORED_REPEAT,
+    ANISO_4X_LINEAR_CLAMP_TO_EDGE,
+    ANISO_4X_LINEAR_CLAMP_TO_BORDER,
+    ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_8X_NEAREST_REPEAT,
+    ANISO_8X_NEAREST_MIRRORED_REPEAT,
+    ANISO_8X_NEAREST_CLAMP_TO_EDGE,
+    ANISO_8X_NEAREST_CLAMP_TO_BORDER,
+    ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_8X_LINEAR_REPEAT,
+    ANISO_8X_LINEAR_MIRRORED_REPEAT,
+    ANISO_8X_LINEAR_CLAMP_TO_EDGE,
+    ANISO_8X_LINEAR_CLAMP_TO_BORDER,
+    ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_16X_NEAREST_REPEAT,
+    ANISO_16X_NEAREST_MIRRORED_REPEAT,
+    ANISO_16X_NEAREST_CLAMP_TO_EDGE,
+    ANISO_16X_NEAREST_CLAMP_TO_BORDER,
+    ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    ANISO_16X_LINEAR_REPEAT,
+    ANISO_16X_LINEAR_MIRRORED_REPEAT,
+    ANISO_16X_LINEAR_CLAMP_TO_EDGE,
+    ANISO_16X_LINEAR_CLAMP_TO_BORDER,
+    ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    COUNT
+};
+
+
+static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
 
 static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
@@ -102,7 +184,7 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 15.f;
+static constexpr float CAMERA_SPEED = 0.1f;
 
 static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "ALBEDO",
@@ -110,6 +192,68 @@ static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "MR",
     "AO",
     "EMISSIVE"
+};
+
+static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
+    "NEAREST_REPEAT",
+    "NEAREST_MIRRORED_REPEAT",
+    "NEAREST_CLAMP_TO_EDGE",
+    "NEAREST_CLAMP_TO_BORDER",
+    "NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "LINEAR_REPEAT",
+    "LINEAR_MIRRORED_REPEAT",
+    "LINEAR_CLAMP_TO_EDGE",
+    "LINEAR_CLAMP_TO_BORDER",
+    "LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_2X_NEAREST_REPEAT",
+    "ANISO_2X_NEAREST_MIRRORED_REPEAT",
+    "ANISO_2X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_2X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_2X_LINEAR_REPEAT",
+    "ANISO_2X_LINEAR_MIRRORED_REPEAT",
+    "ANISO_2X_LINEAR_CLAMP_TO_EDGE",
+    "ANISO_2X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_4X_NEAREST_REPEAT",
+    "ANISO_4X_NEAREST_MIRRORED_REPEAT",
+    "ANISO_4X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_4X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_4X_LINEAR_REPEAT",
+    "ANISO_4X_LINEAR_MIRRORED_REPEAT",
+    "ANISO_4X_LINEAR_CLAMP_TO_EDGE",
+    "ANISO_4X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_8X_NEAREST_REPEAT",
+    "ANISO_8X_NEAREST_MIRRORED_REPEAT",
+    "ANISO_8X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_8X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_8X_LINEAR_REPEAT",
+    "ANISO_8X_LINEAR_MIRRORED_REPEAT",
+    "ANISO_8X_LINEAR_CLAMP_TO_EDGE",
+    "ANISO_8X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_16X_NEAREST_REPEAT",
+    "ANISO_16X_NEAREST_MIRRORED_REPEAT",
+    "ANISO_16X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_16X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_16X_LINEAR_REPEAT",
+    "ANISO_16X_LINEAR_MIRRORED_REPEAT",
+    "ANISO_16X_LINEAR_CLAMP_TO_EDGE",
+    "ANISO_16X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE",
 };
 
 static Window* s_pWnd = nullptr;
@@ -145,23 +289,26 @@ static vkn::ImageView s_vkDepthImageView;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
+
 static vkn::Buffer s_commonConstBuffer;
+
+static vkn::Buffer s_commonRenderInfoBuffer;
 static vkn::Buffer s_commonMaterialsBuffer;
+static vkn::Buffer s_commonTransformsBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<RenderObject>    s_sceneRenderObjects;
-static std::vector<Mesh>            s_sceneMeshes;
-static std::vector<glm::mat4x4>     s_sceneTransforms;
-static std::vector<COMMON_MATERIAL> s_sceneMaterials;
+static std::vector<COMMON_RENDER_INFO>  s_sceneRenderInfos;
+static std::vector<COMMON_MATERIAL>     s_sceneMaterials;
+static std::vector<Mesh>                s_sceneMeshes;
+static std::vector<glm::mat4x4>         s_sceneTransforms;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
+static std::vector<vkn::Sampler>   s_commonSamplers;
 
 static vkn::Image     s_sceneDefaultImage;
 static vkn::ImageView s_sceneDefaultImageView;
-
-static vkn::Sampler s_commonSampler;
 
 static eng::Camera s_camera;
 
@@ -392,9 +539,9 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
         
     builder
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 128);
+        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3)
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
     
     VkDescriptorPool vkPool = builder.Build(vkDevice);
 
@@ -412,10 +559,12 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
 
     builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 128, VK_SHADER_STAGE_ALL)
-        .AddBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL);
+        .AddBinding(0, VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL)
+        .AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(5, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
@@ -519,13 +668,275 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 }
 
 
+static void CreateCommonSamplers()
+{
+    ENG_PROFILE_SCOPED_MARKER_C("CreateCommonSamplers", 225, 0, 225, 255);
+    CORE_LOG_TRACE("CreateCommonSamplers");
+
+    s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
+
+    std::vector<vkn::SamplerCreateInfo> smpCreateInfos((uint32_t)COMMON_SAMPLER_IDX::COUNT);
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].pDevice = &s_vkDevice;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].magFilter = VK_FILTER_NEAREST;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minFilter = VK_FILTER_NEAREST;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipLodBias = 0.f;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].anisotropyEnable = VK_FALSE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].compareEnable = VK_FALSE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minLod = 0.f;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].magFilter = VK_FILTER_LINEAR;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+
+    for (size_t i = 0; i < smpCreateInfos.size(); ++i) {
+        s_commonSamplers[i].Create(smpCreateInfos[i]);
+        CORE_ASSERT(s_commonSamplers[i].IsCreated());
+        s_commonSamplers[i].SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
+    }
+}
+
+
 static void WriteDescriptorSet()
 {
-    std::vector<VkWriteDescriptorSet> descWrites(s_sceneImageViews.size() + 2);
-    descWrites.clear();
+    std::vector<VkWriteDescriptorSet> descWrites;
 
-    std::vector<VkDescriptorImageInfo> imageInfos(s_sceneImageViews.size());
-    imageInfos.clear();
+    std::vector<VkDescriptorImageInfo> samplerInfos(s_commonSamplers.size());
+    samplerInfos.clear();
+
+    for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
+        VkDescriptorImageInfo commonSamplerInfo = {};
+        commonSamplerInfo.sampler = s_commonSamplers[i].Get();
+        commonSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        samplerInfos.emplace_back(commonSamplerInfo);
+    
+        VkWriteDescriptorSet commonSamplerWrite = {};
+        commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        commonSamplerWrite.dstSet = s_vkDescriptorSet;
+        commonSamplerWrite.dstBinding = 0;
+        commonSamplerWrite.dstArrayElement = i;
+        commonSamplerWrite.descriptorCount = 1;
+        commonSamplerWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        commonSamplerWrite.pImageInfo = &samplerInfos.back();
+    
+        descWrites.emplace_back(commonSamplerWrite);
+    }
+
 
     VkDescriptorBufferInfo commonConstBufferInfo = {};
     commonConstBufferInfo.buffer = s_commonConstBuffer.Get();
@@ -535,7 +946,7 @@ static void WriteDescriptorSet()
     VkWriteDescriptorSet commonConstBufWrite = {};
     commonConstBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     commonConstBufWrite.dstSet = s_vkDescriptorSet;
-    commonConstBufWrite.dstBinding = 0;
+    commonConstBufWrite.dstBinding = 1;
     commonConstBufWrite.dstArrayElement = 0;
     commonConstBufWrite.descriptorCount = 1;
     commonConstBufWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -544,58 +955,22 @@ static void WriteDescriptorSet()
     descWrites.emplace_back(commonConstBufWrite);
 
 
-    VkDescriptorImageInfo commonSamplerInfo = {};
-    commonSamplerInfo.sampler = s_commonSampler.Get();
-    commonSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkDescriptorBufferInfo commonRenderInfoBufferInfo = {};
+    commonRenderInfoBufferInfo.buffer = s_commonRenderInfoBuffer.Get();
+    commonRenderInfoBufferInfo.offset = 0;
+    commonRenderInfoBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonSamplerWrite = {};
-    commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonSamplerWrite.dstSet = s_vkDescriptorSet;
-    commonSamplerWrite.dstBinding = 1;
-    commonSamplerWrite.dstArrayElement = 0;
-    commonSamplerWrite.descriptorCount = 1;
-    commonSamplerWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    commonSamplerWrite.pImageInfo = &commonSamplerInfo;
+    VkWriteDescriptorSet commonRenderInfoBufferWrite = {};
+    commonRenderInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonRenderInfoBufferWrite.dstSet = s_vkDescriptorSet;
+    commonRenderInfoBufferWrite.dstBinding = 2;
+    commonRenderInfoBufferWrite.dstArrayElement = 0;
+    commonRenderInfoBufferWrite.descriptorCount = 1;
+    commonRenderInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonRenderInfoBufferWrite.pBufferInfo = &commonRenderInfoBufferInfo;
 
-    descWrites.emplace_back(commonSamplerWrite);
+    descWrites.emplace_back(commonRenderInfoBufferWrite);
 
-
-    for (size_t i = 0; i < s_sceneImageViews.size(); ++i) {
-        VkDescriptorImageInfo imageInfo = {};
-        imageInfo.imageView = s_sceneImageViews[i].Get();
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        imageInfos.emplace_back(imageInfo);
-
-        VkWriteDescriptorSet texWrite = {};
-        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkDescriptorSet;
-        texWrite.dstBinding = 2;
-        texWrite.dstArrayElement = i;
-        texWrite.descriptorCount = 1;
-        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        texWrite.pImageInfo = &imageInfos.back();
-
-        descWrites.emplace_back(texWrite);
-    }
-
-    for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
-        VkDescriptorImageInfo emptyTexInfo = {};
-        emptyTexInfo.imageView = s_sceneDefaultImageView.Get();
-        emptyTexInfo.sampler = VK_NULL_HANDLE;
-        emptyTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkWriteDescriptorSet texWrite = {};
-        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkDescriptorSet;
-        texWrite.dstBinding = 2;
-        texWrite.dstArrayElement = i;
-        texWrite.descriptorCount = 1;
-        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        texWrite.pImageInfo = &emptyTexInfo;
-
-        descWrites.emplace_back(texWrite);
-    }
 
     VkDescriptorBufferInfo commonMaterialsBufferInfo = {};
     commonMaterialsBufferInfo.buffer = s_commonMaterialsBuffer.Get();
@@ -612,6 +987,64 @@ static void WriteDescriptorSet()
     commonMaterialsBufferWrite.pBufferInfo = &commonMaterialsBufferInfo;
 
     descWrites.emplace_back(commonMaterialsBufferWrite);
+
+
+    VkDescriptorBufferInfo commonTrsBufferInfo = {};
+    commonTrsBufferInfo.buffer = s_commonTransformsBuffer.Get();
+    commonTrsBufferInfo.offset = 0;
+    commonTrsBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet commonTrsBufferWrite = {};
+    commonTrsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonTrsBufferWrite.dstSet = s_vkDescriptorSet;
+    commonTrsBufferWrite.dstBinding = 4;
+    commonTrsBufferWrite.dstArrayElement = 0;
+    commonTrsBufferWrite.descriptorCount = 1;
+    commonTrsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonTrsBufferWrite.pBufferInfo = &commonTrsBufferInfo;
+
+    descWrites.emplace_back(commonTrsBufferWrite);
+
+
+    std::vector<VkDescriptorImageInfo> imageInfos(s_sceneImageViews.size());
+    imageInfos.clear();
+
+    for (size_t i = 0; i < s_sceneImageViews.size(); ++i) {
+        VkDescriptorImageInfo imageInfo = {};
+        imageInfo.imageView = s_sceneImageViews[i].Get();
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        imageInfos.emplace_back(imageInfo);
+
+        VkWriteDescriptorSet texWrite = {};
+        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstBinding = 5;
+        texWrite.dstArrayElement = i;
+        texWrite.descriptorCount = 1;
+        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        texWrite.pImageInfo = &imageInfos.back();
+
+        descWrites.emplace_back(texWrite);
+    }
+
+    VkDescriptorImageInfo emptyTexInfo = {};
+    emptyTexInfo.imageView = s_sceneDefaultImageView.Get();
+    emptyTexInfo.sampler = VK_NULL_HANDLE;
+    emptyTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
+        VkWriteDescriptorSet texWrite = {};
+        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstBinding = 5;
+        texWrite.dstArrayElement = i;
+        texWrite.descriptorCount = 1;
+        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        texWrite.pImageInfo = &emptyTexInfo;
+
+        descWrites.emplace_back(texWrite);
+    }
     
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -741,6 +1174,31 @@ void UpdateCommonConstBuffer(Window* pWnd)
     pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
     pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
     pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
+    
+    uint32_t dbgFlags = 0;
+    
+    switch(s_dbgTexIdx) {
+        case 0:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_ALBEDO_TEX;
+            break;
+        case 1:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_NORMAL_TEX;
+            break;
+        case 2:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_MR_TEX;
+            break;
+        case 3:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_AO_TEX;
+            break;
+        case 4:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_EMISSIVE_TEX;
+            break;
+        default:
+            CORE_ASSERT_FAIL("Invalid material debug texture viewer index: %u", s_dbgTexIdx);
+            break;
+    }
+    
+    pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
 
     s_commonConstBuffer.Unmap();
 }
@@ -863,13 +1321,14 @@ void RenderScene()
 
             cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
-            for (const Mesh& mesh : s_sceneMeshes) {
+            for (uint32_t rndInfoIdx = 0; rndInfoIdx < s_sceneRenderInfos.size(); ++rndInfoIdx) {
                 TEST_BINDLESS_REGISTRY registry = {};
                 registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
-                registry.DRAW_MTL_IDX = mesh.mtlIdx;
-                registry.DBG_TEX_IDX = s_dbgTexIdx;
+                registry.RENDER_INFO_IDX = rndInfoIdx;
 
                 vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
+
+                const Mesh& mesh = s_sceneMeshes[s_sceneRenderInfos[rndInfoIdx].MESH_IDX];
 
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
@@ -941,13 +1400,13 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
     std::vector<vkn::Buffer> stagingSceneImageBuffers(model.images.size());
 
-    auto AddGLTFMaterialTexture = [&stagingSceneImageBuffers, &model](int32_t texIdx, bool isSRGB = false) -> void
+    auto AddGltfMaterialTexture = [&stagingSceneImageBuffers, &model](int32_t texIdx, bool isSRGB = false) -> void
     {
         if (texIdx == -1 || s_sceneImages[texIdx].IsCreated()) {
             return;
         }
 
-        const tinygltf::Image& gltfImage = model.images[texIdx];
+        const gltf::Image& gltfImage = model.images[texIdx];
 
         vkn::BufferCreateInfo stagingTexBufCreateInfo = {};
         stagingTexBufCreateInfo.pDevice = &s_vkDevice;
@@ -971,7 +1430,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
         info.extent.width = gltfImage.width;
         info.extent.height = gltfImage.height;
         info.extent.depth = 1;
-        info.format = tinygltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
+        info.format = gltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
         info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         info.mipLevels = 1;
@@ -1006,28 +1465,28 @@ static void LoadSceneMaterials(const gltf::Model& model)
         view.SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", texIdx);
     };
 
-    for (const tinygltf::Material& mtl : model.materials) {
+    for (const gltf::Material& mtl : model.materials) {
         COMMON_MATERIAL material = {};
 
-        const int32_t albedoTexIdx            = mtl.pbrMetallicRoughness.baseColorTexture.index;
-        const int32_t normalTexIdx            = mtl.normalTexture.index;
-        const int32_t metallicRoughnessTexIdx = mtl.pbrMetallicRoughness.metallicRoughnessTexture.index;
-        const int32_t aoTexIdx                = mtl.occlusionTexture.index;
-        const int32_t emissiveTexIdx          = mtl.emissiveTexture.index;
+        const int32_t albedoTexIdx   = mtl.pbrMetallicRoughness.baseColorTexture.index;
+        const int32_t normalTexIdx   = mtl.normalTexture.index;
+        const int32_t mrTexIdx       = mtl.pbrMetallicRoughness.metallicRoughnessTexture.index;
+        const int32_t aoTexIdx       = mtl.occlusionTexture.index;
+        const int32_t emissiveTexIdx = mtl.emissiveTexture.index;
 
-        material.albedoTexIdx            = albedoTexIdx >= 0 ? model.textures[albedoTexIdx].source : -1;
-        material.normalTexIdx            = normalTexIdx >= 0 ? model.textures[normalTexIdx].source : -1;
-        material.metallicRoughnessTexIdx = metallicRoughnessTexIdx >= 0 ? model.textures[metallicRoughnessTexIdx].source : -1;
-        material.aoTexIdx                = aoTexIdx >= 0 ? model.textures[aoTexIdx].source : -1;
-        material.emissiveTexIdx          = emissiveTexIdx >= 0 ? model.textures[emissiveTexIdx].source : -1;
+        material.ALBEDO_TEX_IDX   = albedoTexIdx >= 0 ? model.textures[albedoTexIdx].source : -1;
+        material.NORMAL_TEX_IDX   = normalTexIdx >= 0 ? model.textures[normalTexIdx].source : -1;
+        material.MR_TEX_IDX       = mrTexIdx >= 0 ? model.textures[mrTexIdx].source : -1;
+        material.AO_TEX_IDX       = aoTexIdx >= 0 ? model.textures[aoTexIdx].source : -1;
+        material.EMISSIVE_TEX_IDX = emissiveTexIdx >= 0 ? model.textures[emissiveTexIdx].source : -1;
     
         s_sceneMaterials.emplace_back(material);
 
-        AddGLTFMaterialTexture(material.albedoTexIdx, true);
-        AddGLTFMaterialTexture(material.normalTexIdx);
-        AddGLTFMaterialTexture(material.metallicRoughnessTexIdx);
-        AddGLTFMaterialTexture(material.aoTexIdx);
-        AddGLTFMaterialTexture(material.emissiveTexIdx);
+        AddGltfMaterialTexture(material.ALBEDO_TEX_IDX, true);
+        AddGltfMaterialTexture(material.NORMAL_TEX_IDX);
+        AddGltfMaterialTexture(material.MR_TEX_IDX);
+        AddGltfMaterialTexture(material.AO_TEX_IDX);
+        AddGltfMaterialTexture(material.EMISSIVE_TEX_IDX, true);
     }
 
     vkn::BufferCreateInfo commonMtlBuffCreateInfo = {};
@@ -1154,10 +1613,10 @@ static void LoadSceneMaterials(const gltf::Model& model)
 }
 
 
-static void LoadSceneMesh(const gltf::Model& model)
+static void LoadSceneMeshes(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMesh", 225, 0, 225, 255);
-    CORE_LOG_TRACE("LoadSceneMesh");
+    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMeshes", 225, 0, 225, 255);
+    CORE_LOG_TRACE("LoadSceneMeshes");
 
     size_t vertexCount = 0;
     std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
@@ -1191,16 +1650,22 @@ static void LoadSceneMesh(const gltf::Model& model)
     std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
+    s_sceneRenderInfos.reserve(model.meshes.size());
+    s_sceneRenderInfos.clear();
+
     s_sceneMeshes.reserve(model.meshes.size());
     s_sceneMeshes.clear();
 
-    for (const gltf::Mesh& mesh : model.meshes) {
-        for (const gltf::Primitive& primitive : mesh.primitives) {
-            Mesh internalMesh = {};
+    for (const gltf::Mesh& m : model.meshes) {
+        for (const gltf::Primitive& primitive : m.primitives) {
+            COMMON_RENDER_INFO renderInfo = {};
+            renderInfo.MESH_IDX = s_sceneMeshes.size();
+            renderInfo.MATERIAL_IDX = primitive.material;
 
-            internalMesh.mtlIdx = primitive.material;
-            internalMesh.firstVertex = cpuVertBuffer.size();
-            internalMesh.firstIndex = cpuIndexBuffer.size();
+            Mesh mesh = {};
+
+            mesh.firstVertex = cpuVertBuffer.size();
+            mesh.firstIndex = cpuIndexBuffer.size();
 
             const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
 
@@ -1231,7 +1696,7 @@ static void LoadSceneMesh(const gltf::Model& model)
 
             const uint8_t* pTexcoordData = texcoordBuffer.data.data() + texcoordBufferView.byteOffset + texcoordAccessor.byteOffset;
 
-            internalMesh.vertexCount += positionAccessor.count;
+            mesh.vertexCount += positionAccessor.count;
 
             for (size_t i = 0; i < positionAccessor.count; ++i) {
                 const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * positionAccessor.ByteStride(positionBufferView));
@@ -1256,7 +1721,7 @@ static void LoadSceneMesh(const gltf::Model& model)
 
             const uint8_t* pIndexData = indexBuffer.data.data() + indexBufferView.byteOffset + indexAccessor.byteOffset;
 
-            internalMesh.indexCount += indexAccessor.count;
+            mesh.indexCount += indexAccessor.count;
 
             for (size_t i = 0; i < indexAccessor.count; ++i) {
                 uint32_t index = UINT32_MAX;
@@ -1282,7 +1747,8 @@ static void LoadSceneMesh(const gltf::Model& model)
                 cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
             }
 
-            s_sceneMeshes.emplace_back(internalMesh);
+            s_sceneMeshes.emplace_back(mesh);
+            s_sceneRenderInfos.emplace_back(renderInfo);
         }
     }
 
@@ -1355,6 +1821,70 @@ static void LoadSceneMesh(const gltf::Model& model)
 }
 
 
+static void LoadTransforms(const gltf::Model& model)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("LoadTransforms", 225, 0, 225, 255);
+    CORE_LOG_TRACE("LoadTransforms");
+
+    s_sceneTransforms.resize(model.nodes.size());
+
+    for (size_t i = 0; i < s_sceneTransforms.size(); ++i) {
+        const gltf::Node& node = model.nodes[i];
+
+        glm::mat4x4 transform(1.f);
+
+        if (!node.matrix.empty()) {
+            for (size_t rawIdx = 0; rawIdx < 4; ++rawIdx) {
+                for (size_t colIdx = 0; colIdx < 4; ++colIdx) {
+                    transform[rawIdx][colIdx] = node.matrix[rawIdx * 4 + colIdx];
+                }
+            }
+        } else {
+            const glm::quat rotation = node.rotation.empty() ? glm::identity<glm::quat>()
+                : glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
+
+            const glm::vec3 scale = node.scale.empty() ? glm::vec3(1.f)
+                : glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+                
+            const glm::vec3 translation = node.translation.empty() ? glm::vec3(0.f)
+                : glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+
+            transform = glm::translate(transform, translation);
+            transform = transform * glm::mat4_cast(rotation);
+            transform = transform * glm::scale(glm::mat4x4(1.0f), scale);
+            transform = glm::transpose(transform);
+        }
+
+        s_sceneTransforms[i] = transform;
+    }
+
+    size_t renderInfoIdx = 0;
+
+    for (size_t meshGroupIdx = 0; meshGroupIdx < model.meshes.size(); ++meshGroupIdx) {
+        const gltf::Mesh& mesh = model.meshes[meshGroupIdx];
+
+        for (size_t meshIdx = 0; meshIdx < mesh.primitives.size(); ++meshIdx) {
+            s_sceneRenderInfos[renderInfoIdx].TRANSFORM_IDX = meshGroupIdx;
+            ++renderInfoIdx;
+        }
+    }
+
+    vkn::BufferCreateInfo commonTrsCreateInfo = {};
+    commonTrsCreateInfo.pDevice = &s_vkDevice;
+    commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(glm::mat4x4);
+    commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    commonTrsCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    s_commonTransformsBuffer.Create(commonTrsCreateInfo);
+    CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
+    s_commonTransformsBuffer.SetDebugName("COMMON_TRANSFORMS");
+
+    void* pCommonRenderInfoData = s_commonTransformsBuffer.Map(0, VK_WHOLE_SIZE, 0);
+    memcpy(pCommonRenderInfoData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(glm::mat4x4));
+    s_commonTransformsBuffer.Unmap();
+}
+
+
 static void LoadScene(const fs::path& filepath)
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
@@ -1377,8 +1907,25 @@ static void LoadScene(const fs::path& filepath)
     }
     CORE_ASSERT_MSG(isModelLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
 
+
     LoadSceneMaterials(model);
-    LoadSceneMesh(model);
+    LoadSceneMeshes(model);
+    LoadTransforms(model);
+
+
+    vkn::BufferCreateInfo commonRenderInfoCreateInfo = {};
+    commonRenderInfoCreateInfo.pDevice = &s_vkDevice;
+    commonRenderInfoCreateInfo.size = s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO);
+    commonRenderInfoCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    commonRenderInfoCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    s_commonRenderInfoBuffer.Create(commonRenderInfoCreateInfo);
+    CORE_ASSERT(s_commonRenderInfoBuffer.IsCreated());
+    s_commonRenderInfoBuffer.SetDebugName("COMMON_RENDER_INFOS");
+
+    void* pCommonRenderInfoData = s_commonRenderInfoBuffer.Map(0, VK_WHOLE_SIZE, 0);
+    memcpy(pCommonRenderInfoData, s_sceneRenderInfos.data(), s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO));
+    s_commonRenderInfoBuffer.Unmap();
 }
 
 
@@ -1607,7 +2154,7 @@ void ProcessFrame()
 int main(int argc, char* argv[])
 {
     s_camera.velocity = glm::vec3(0.f);
-	s_camera.position = glm::vec3(0.f, 200.f, 5.f);
+	s_camera.position = glm::vec3(0.f, 2.f, 0.f);
     s_camera.pitch = 0.f;
     s_camera.yaw = glm::radians(90.f);
 
@@ -1681,6 +2228,7 @@ int main(int argc, char* argv[])
     vkPhysDeviceFeturesReq.descriptorBindingPartiallyBound = true;
     vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
     vkPhysDeviceFeturesReq.samplerAnisotropy = true;
+    vkPhysDeviceFeturesReq.samplerMirrorClampToEdge = true;
 
     vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
     vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -1709,6 +2257,7 @@ int main(int argc, char* argv[])
     VK_ASSERT(s_vkPhysDevice.GetFeatures12().bufferDeviceAddress);
     VK_ASSERT(s_vkPhysDevice.GetFeatures12().descriptorBindingPartiallyBound);
     VK_ASSERT(s_vkPhysDevice.GetFeatures12().runtimeDescriptorArray);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().samplerMirrorClampToEdge);
 
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -1716,6 +2265,7 @@ int main(int argc, char* argv[])
     features12.bufferDeviceAddress = VK_TRUE;
     features12.descriptorBindingPartiallyBound = VK_TRUE;
     features12.runtimeDescriptorArray = VK_TRUE;
+    features12.samplerMirrorClampToEdge = VK_TRUE;
 
     VK_ASSERT(s_vkPhysDevice.GetFeatures11().shaderDrawParameters);
 
@@ -1828,8 +2378,7 @@ int main(int argc, char* argv[])
 
     CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
 
-    const fs::path filepath = argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf";
-    LoadScene(filepath);
+    CreateCommonSamplers();
 
     vkn::BufferCreateInfo commonConstBufCreateInfo = {};
     commonConstBufCreateInfo.pDevice = &s_vkDevice;
@@ -1842,28 +2391,8 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
     s_commonConstBuffer.SetDebugName("COMMON_CB");
 
-
-    vkn::SamplerCreateInfo commonSamplerCreateInfo = {};
-    commonSamplerCreateInfo.pDevice = &s_vkDevice;
-    commonSamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
-    commonSamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
-    commonSamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    commonSamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    commonSamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    commonSamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    commonSamplerCreateInfo.mipLodBias = 0.f;
-    commonSamplerCreateInfo.anisotropyEnable = VK_TRUE;
-    commonSamplerCreateInfo.maxAnisotropy = 16.f;
-    commonSamplerCreateInfo.compareEnable = VK_FALSE;
-    commonSamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    commonSamplerCreateInfo.minLod = 0.f;
-    commonSamplerCreateInfo.maxLod = VK_LOD_CLAMP_NONE;
-    commonSamplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-    commonSamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-
-    s_commonSampler.Create(commonSamplerCreateInfo);
-    CORE_ASSERT(s_commonSampler.IsCreated());
-    s_commonSampler.SetDebugName("COMMON_SAMPLER");
+    const fs::path filepath = argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf";
+    LoadScene(filepath);
 
     WriteDescriptorSet();
 
@@ -1877,6 +2406,8 @@ int main(int argc, char* argv[])
 
     s_vkQueryPool.Destroy();
 
+    s_commonTransformsBuffer.Destroy();
+    s_commonRenderInfoBuffer.Destroy();
     s_commonMaterialsBuffer.Destroy();
     s_commonConstBuffer.Destroy();
     s_indexBuffer.Destroy();
@@ -1884,6 +2415,10 @@ int main(int argc, char* argv[])
 
     s_vkDepthImageView.Destroy();
     s_vkDepthImage.Destroy();
+
+    for (vkn::Sampler& sampler : s_commonSamplers) {
+        sampler.Destroy();
+    }
 
     for (vkn::ImageView& view : s_sceneImageViews) {
         view.Destroy();
@@ -1895,8 +2430,6 @@ int main(int argc, char* argv[])
 
     s_sceneDefaultImageView.Destroy();
     s_sceneDefaultImage.Destroy();
-
-    s_commonSampler.Destroy();
 
     s_vkImmediateSubmitFinishedFence.Destroy();
     

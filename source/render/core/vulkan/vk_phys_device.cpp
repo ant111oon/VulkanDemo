@@ -37,6 +37,10 @@ namespace vkn
             return false;
         }
 
+        if (featuresReq.samplerMirrorClampToEdge && featuresReq.samplerMirrorClampToEdge != pFeatures12->samplerMirrorClampToEdge) {
+            return false;
+        }
+
         vkGetPhysicalDeviceProperties(vkPhysDevice, &outDeviceProps);
 
         if (propsReq.deviceType != outDeviceProps.deviceType) {

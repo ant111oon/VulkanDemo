@@ -12,6 +12,7 @@ namespace vkn
         bool descriptorBindingPartiallyBound;
         bool runtimeDescriptorArray;
         bool samplerAnisotropy;
+        bool samplerMirrorClampToEdge;
     };
 
 

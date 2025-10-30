@@ -15,22 +15,33 @@ TEST_PS_OUTPUT main(TEST_VS_OUTPUT input)
 {
     TEST_PS_OUTPUT result = (TEST_PS_OUTPUT)0;
 
-    const COMMON_MATERIAL material = COMMON_MATERIALS[TEST_REGISTRY.DRAW_MTL_IDX];
-
-    const int texIndices[5] = { 
-        material.albedoTexIdx, 
-        material.normalTexIdx, 
-        material.metallicRoughnessTexIdx, 
-        material.aoTexIdx, 
-        material.emissiveTexIdx
-    };
-
-    const int texIdx = texIndices[TEST_REGISTRY.DBG_TEX_IDX];
+    const COMMON_RENDER_INFO renderInfo = COMMON_RENDER_INFOS[TEST_REGISTRY.RENDER_INFO_IDX];
+    const COMMON_MATERIAL material = COMMON_MATERIALS[renderInfo.MATERIAL_IDX];
 
     result.color = float4(0.f, 0.f, 0.f, 1.f);
 
-    if (texIdx != -1) {
-        result.color = COMMON_MTL_TEXTURES[texIdx].Sample(COMMON_SAMPLER, input.texCoord);
+    const SamplerState smp = COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT)];
+
+    if ((COMMON_CB.COMMON_DBG_FLAGS & COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_ALBEDO_TEX) != 0) {
+        if (material.ALBEDO_TEX_IDX >= 0) {
+            result.color = COMMON_MTL_TEXTURES[material.ALBEDO_TEX_IDX].Sample(smp, input.texCoord);
+        }
+    } else if ((COMMON_CB.COMMON_DBG_FLAGS & COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_NORMAL_TEX) != 0) {
+        if (material.NORMAL_TEX_IDX >= 0) {
+            result.color = float4(COMMON_MTL_TEXTURES[material.NORMAL_TEX_IDX].Sample(smp, input.texCoord).rgb, 1.f);
+        }
+    } else if ((COMMON_CB.COMMON_DBG_FLAGS & COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_MR_TEX) != 0) {
+        if (material.MR_TEX_IDX >= 0) {
+            result.color = float4(0.f, COMMON_MTL_TEXTURES[material.MR_TEX_IDX].Sample(smp, input.texCoord).gb, 1.f);
+        }
+    } else if ((COMMON_CB.COMMON_DBG_FLAGS & COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_AO_TEX) != 0) {
+        if (material.AO_TEX_IDX >= 0) {
+            result.color = float4(COMMON_MTL_TEXTURES[material.AO_TEX_IDX].Sample(smp, input.texCoord).rrr, 1.f);
+        }
+    } else if ((COMMON_CB.COMMON_DBG_FLAGS & COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_EMISSIVE_TEX) != 0) {
+        if (material.EMISSIVE_TEX_IDX >= 0) {
+            result.color = COMMON_MTL_TEXTURES[material.EMISSIVE_TEX_IDX].Sample(smp, input.texCoord);
+        }
     }
 
     if (result.color.a <= 0.0001f) {
