@@ -83,6 +83,12 @@ struct COMMON_MATERIAL
 };
 
 
+struct COMMON_TRANSFORM
+{
+    glm::vec4 MATR[3];
+};
+
+
 struct COMMON_CB_DATA
 {
     glm::mat4x4 COMMON_VIEW_MATRIX;
@@ -184,7 +190,7 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 0.1f;
+static constexpr float CAMERA_SPEED = 0.05f;
 
 static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "ALBEDO",
@@ -301,7 +307,7 @@ static vkn::QueryPool s_vkQueryPool;
 static std::vector<COMMON_RENDER_INFO>  s_sceneRenderInfos;
 static std::vector<COMMON_MATERIAL>     s_sceneMaterials;
 static std::vector<Mesh>                s_sceneMeshes;
-static std::vector<glm::mat4x4>         s_sceneTransforms;
+static std::vector<COMMON_TRANSFORM>    s_sceneTransforms;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
@@ -545,7 +551,7 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
     
     VkDescriptorPool vkPool = builder.Build(vkDevice);
 
-    VK_LOG_INFO("VkDescriptorPool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("VkDescriptorPool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkPool;
 }
@@ -568,7 +574,7 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
-    VK_LOG_INFO("VkDescriptorSetLayout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("VkDescriptorSetLayout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkLayout;
 }
@@ -587,7 +593,7 @@ static VkDescriptorSet CreateVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool
         .AddLayout(vkDescriptorSetLayout)
         .Allocate(vkDevice, vkDescriptorSets);
 
-    VK_LOG_INFO("VkDescriptorSet allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("VkDescriptorSet allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkDescriptorSets[0];
 }
@@ -604,7 +610,7 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    VK_LOG_INFO("VkPipelineLayout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("VkPipelineLayout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkLayout;
 }
@@ -662,7 +668,7 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
         shader = VK_NULL_HANDLE;
     }
 
-    VK_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkPipeline;
 }
@@ -671,7 +677,8 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 static void CreateCommonSamplers()
 {
     ENG_PROFILE_SCOPED_MARKER_C("CreateCommonSamplers", 225, 0, 225, 255);
-    CORE_LOG_TRACE("CreateCommonSamplers");
+
+    Timer timer;
 
     s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
@@ -908,6 +915,8 @@ static void CreateCommonSamplers()
         CORE_ASSERT(s_commonSamplers[i].IsCreated());
         s_commonSamplers[i].SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
+
+    CORE_LOG_INFO("Common samplers initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -1159,7 +1168,7 @@ void UpdateCommonConstBuffer(Window* pWnd)
 {
     ENG_PROFILE_SCOPED_MARKER_C("UpdateCommonConstBuffer", 200, 200, 0, 255);
 
-    const glm::mat4x4 viewMat = glm::transpose(s_camera.GetViewMatrix());
+    const glm::mat4x4 viewMat = s_camera.GetViewMatrix();
     
     #ifdef ENG_REVERSED_Z
         glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
@@ -1167,13 +1176,12 @@ void UpdateCommonConstBuffer(Window* pWnd)
         glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100'000.f);
     #endif
     projMat[1][1] *= -1.f;
-    projMat = glm::transpose(projMat);
 
     COMMON_CB_DATA* pCommonConstBufferData = static_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map(0, VK_WHOLE_SIZE, 0));
 
     pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
     pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
-    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = viewMat * projMat;
+    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = projMat * viewMat;
     
     uint32_t dbgFlags = 0;
     
@@ -1390,7 +1398,8 @@ void RenderScene()
 static void LoadSceneMaterials(const gltf::Model& model)
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMaterials", 225, 0, 225, 255);
-    CORE_LOG_TRACE("LoadSceneMaterials");
+
+    Timer timer;
 
     s_sceneMaterials.resize(model.materials.size());
     s_sceneMaterials.clear();
@@ -1610,13 +1619,16 @@ static void LoadSceneMaterials(const gltf::Model& model)
     for (vkn::Buffer& buffer : stagingSceneImageBuffers) {
         buffer.Destroy();
     }
+
+    CORE_LOG_INFO("Materials loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
 static void LoadSceneMeshes(const gltf::Model& model)
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMeshes", 225, 0, 225, 255);
-    CORE_LOG_TRACE("LoadSceneMeshes");
+    
+    Timer timer;
 
     size_t vertexCount = 0;
     std::for_each(model.meshes.cbegin(), model.meshes.cend(), [&model, &vertexCount](const gltf::Mesh& mesh){
@@ -1818,18 +1830,21 @@ static void LoadSceneMeshes(const gltf::Model& model)
 
     stagingVertBuffer.Destroy();
     stagingIndexBuffer.Destroy();
+
+    CORE_LOG_INFO("Mesh loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
 static void LoadTransforms(const gltf::Model& model)
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadTransforms", 225, 0, 225, 255);
-    CORE_LOG_TRACE("LoadTransforms");
+    
+    Timer timer;
 
     s_sceneTransforms.resize(model.nodes.size());
 
-    for (size_t i = 0; i < s_sceneTransforms.size(); ++i) {
-        const gltf::Node& node = model.nodes[i];
+    for (size_t trsIdx = 0; trsIdx < s_sceneTransforms.size(); ++trsIdx) {
+        const gltf::Node& node = model.nodes[trsIdx];
 
         glm::mat4x4 transform(1.f);
 
@@ -1855,7 +1870,9 @@ static void LoadTransforms(const gltf::Model& model)
             transform = glm::transpose(transform);
         }
 
-        s_sceneTransforms[i] = transform;
+        for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
+            s_sceneTransforms[trsIdx].MATR[i] = transform[i];
+        }
     }
 
     size_t renderInfoIdx = 0;
@@ -1871,7 +1888,7 @@ static void LoadTransforms(const gltf::Model& model)
 
     vkn::BufferCreateInfo commonTrsCreateInfo = {};
     commonTrsCreateInfo.pDevice = &s_vkDevice;
-    commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(glm::mat4x4);
+    commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
     commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     commonTrsCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
@@ -1880,8 +1897,10 @@ static void LoadTransforms(const gltf::Model& model)
     s_commonTransformsBuffer.SetDebugName("COMMON_TRANSFORMS");
 
     void* pCommonRenderInfoData = s_commonTransformsBuffer.Map(0, VK_WHOLE_SIZE, 0);
-    memcpy(pCommonRenderInfoData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(glm::mat4x4));
+    memcpy(pCommonRenderInfoData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM));
     s_commonTransformsBuffer.Unmap();
+
+    CORE_LOG_INFO("Transforms loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -1889,10 +1908,12 @@ static void LoadScene(const fs::path& filepath)
 {
     ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
 
+    Timer timer;
+
     const fs::path dirPath = filepath.parent_path();
 
     const std::string pathS = filepath.string();
-    CORE_LOG_TRACE("Loading %s...", pathS.c_str());
+    CORE_LOG_TRACE("Loading \"%s\"...", pathS.c_str());
 
     gltf::TinyGLTF modelLoader;
     gltf::Model model;
@@ -1926,6 +1947,8 @@ static void LoadScene(const fs::path& filepath)
     void* pCommonRenderInfoData = s_commonRenderInfoBuffer.Map(0, VK_WHOLE_SIZE, 0);
     memcpy(pCommonRenderInfoData, s_sceneRenderInfos.data(), s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO));
     s_commonRenderInfoBuffer.Unmap();
+
+    CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -2019,23 +2042,25 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
         const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
 
         if (keyEvent.IsPressed() || keyEvent.IsHold()) {
+            const float finalSpeed = CAMERA_SPEED;
+
             if (keyEvent.key == WndKey::KEY_W) { 
-                camera.velocity.z = -CAMERA_SPEED;
+                camera.velocity.z = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_S) {
-                camera.velocity.z = CAMERA_SPEED;
+                camera.velocity.z = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_A) {
-                camera.velocity.x = -CAMERA_SPEED;
+                camera.velocity.x = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_D) {
-                camera.velocity.x = CAMERA_SPEED;
+                camera.velocity.x = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_E) {
-                camera.velocity.y = CAMERA_SPEED;
+                camera.velocity.y = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_Q) {
-                camera.velocity.y = -CAMERA_SPEED;
+                camera.velocity.y = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_F5) {
                 firstEvent = true;

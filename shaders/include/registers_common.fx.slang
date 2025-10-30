@@ -17,6 +17,12 @@ struct COMMON_MATERIAL
 };
 
 
+struct COMMON_TRANSFORM
+{
+    float4 MATR[3];
+};
+
+
 struct COMMON_CB_DATA
 {
     float4x4 COMMON_VIEW_MATRIX;
@@ -112,7 +118,7 @@ static const uint COMMON_MTL_TEXTURES_COUNT = 128;
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 [vk::binding(2, 0)] StructuredBuffer<COMMON_RENDER_INFO> COMMON_RENDER_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<COMMON_MATERIAL> COMMON_MATERIALS;
-[vk::binding(4, 0)] StructuredBuffer<float4x4> COMMON_TRANSFORMS;
+[vk::binding(3, 0)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
+[vk::binding(4, 0)] StructuredBuffer<COMMON_TRANSFORM>   COMMON_TRANSFORMS;
 [vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
 

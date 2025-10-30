@@ -7,8 +7,7 @@ namespace eng
 {
     void Camera::Update()
     {
-        glm::mat4 cameraRotation = GetRotationMatrix();
-        position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f));
+        position += glm::vec3(GetRotationMatrix() * glm::vec4(velocity, 0.f));
     }
     
     
