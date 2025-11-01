@@ -32,6 +32,8 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Device);
         ENG_DECL_CLASS_NO_MOVABLE(Device);
 
+        ~Device();
+
         bool Create(const DeviceCreateInfo& info);
         void Destroy();
 

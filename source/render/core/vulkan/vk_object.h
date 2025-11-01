@@ -14,6 +14,7 @@ namespace vkn
     {
     public:
         Object() = default;
+        ~Object();
 
         Object(const Object& obj) = default;
         Object& operator=(const Object& obj) = default;

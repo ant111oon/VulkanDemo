@@ -53,6 +53,12 @@ namespace vkn
     }
 
 
+    PhysicalDevice::~PhysicalDevice()
+    {
+        Destroy();
+    }
+
+
     bool PhysicalDevice::Create(const PhysicalDeviceCreateInfo& info)
     {
         if (IsCreated()) {

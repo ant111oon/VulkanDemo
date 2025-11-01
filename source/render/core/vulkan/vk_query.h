@@ -26,6 +26,8 @@ namespace vkn
         QueryPool() = default;
         QueryPool(const QueryCreateInfo& info);
 
+        ~QueryPool();
+
         QueryPool(QueryPool&& pool) noexcept;
         QueryPool& operator=(QueryPool&& pool) noexcept;
 

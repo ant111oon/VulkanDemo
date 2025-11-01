@@ -5,6 +5,12 @@
 
 namespace vkn
 {
+    QueryPool::~QueryPool()
+    {
+        Destroy();
+    }
+
+
     QueryPool::QueryPool(const QueryCreateInfo& info)
         : Object()
     {

@@ -8,7 +8,7 @@ namespace vkn
 {
     Profiler::~Profiler()
     {
-        CORE_ASSERT_MSG(!IsCreated(), "Need to destroy vkn::Profiler manually");
+        Destroy();
     }
 
 

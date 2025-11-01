@@ -8,6 +8,12 @@
 
 namespace vkn
 {
+    Object::~Object()
+    {
+        Destroy();
+    }
+
+    
     Object::Object(Object&& obj) noexcept
     {
         *this = std::move(obj);

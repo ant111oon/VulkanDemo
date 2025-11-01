@@ -117,6 +117,12 @@ namespace vkn
     }
 
 
+    Swapchain::~Swapchain()
+    {
+        Destroy();
+    }
+
+
     bool Swapchain::Create(const SwapchainCreateInfo& info)
     {
         if (IsCreated()) {

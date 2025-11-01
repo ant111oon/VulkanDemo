@@ -19,6 +19,7 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Semaphore);
 
         Semaphore() = default;
+        ~Semaphore();
 
         Semaphore(const SemaphoreCreateInfo& info);
         Semaphore(Device* pDevice, VkSemaphoreCreateFlags flags = 0);

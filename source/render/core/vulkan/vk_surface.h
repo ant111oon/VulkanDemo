@@ -21,6 +21,8 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Surface);
         ENG_DECL_CLASS_NO_MOVABLE(Surface);
 
+        ~Surface();
+
         bool Create(const SurfaceCreateInfo& info);
         void Destroy();
 

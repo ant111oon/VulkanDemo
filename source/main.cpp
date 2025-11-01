@@ -2427,57 +2427,10 @@ int main(int argc, char* argv[])
 
     s_vkDevice.WaitIdle();
 
-    s_vkQueryPool.Destroy();
-
-    s_commonTransformsBuffer.Destroy();
-    s_commonRenderInfoBuffer.Destroy();
-    s_commonMaterialsBuffer.Destroy();
-    s_commonConstBuffer.Destroy();
-    s_indexBuffer.Destroy();
-    s_vertexBuffer.Destroy();
-
-    s_vkDepthImageView.Destroy();
-    s_vkDepthImage.Destroy();
-
-    for (vkn::Sampler& sampler : s_commonSamplers) {
-        sampler.Destroy();
-    }
-
-    for (vkn::ImageView& view : s_sceneImageViews) {
-        view.Destroy();
-    }
-
-    for (vkn::Image& image : s_sceneImages) {
-        image.Destroy();
-    }
-
-    s_sceneDefaultImageView.Destroy();
-    s_sceneDefaultImage.Destroy();
-
-    s_vkImmediateSubmitFinishedFence.Destroy();
-    
-    for (size_t i = 0; i < s_vkSwapchain.GetImageCount(); ++i) {
-        s_vkRenderingFinishedSemaphores[i].Destroy();
-    }
-
-    s_vkPresentFinishedSemaphore.Destroy();
-    s_vkRenderingFinishedFence.Destroy();
-
     vkDestroyPipeline(s_vkDevice.Get(), s_vkPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkPipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkDescriptorPool, nullptr);
-
-    s_vkCmdPool.Destroy();
-    
-    s_vkSwapchain.Destroy();
-
-#ifdef ENG_PROFILING_ENABLED
-    vkn::GetProfiler().Destroy();
-#endif
-    s_vkDevice.Destroy();
-    s_vkSurface.Destroy();
-    s_vkInstance.Destroy();
 
     s_pWnd->Destroy();
     wndSysTerminate();

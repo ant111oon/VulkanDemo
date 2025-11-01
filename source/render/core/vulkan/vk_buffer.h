@@ -25,6 +25,8 @@ namespace vkn
         Buffer() = default;
         Buffer(const BufferCreateInfo& info);
 
+        ~Buffer();
+
         Buffer(Buffer&& buffer) noexcept;
         Buffer& operator=(Buffer&& buffer) noexcept;
 

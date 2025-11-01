@@ -6,6 +6,12 @@
 
 namespace vkn
 {
+    Semaphore::~Semaphore()
+    {
+        Destroy();
+    }
+
+
     Semaphore::Semaphore(const SemaphoreCreateInfo& info)
     {
         Create(info);

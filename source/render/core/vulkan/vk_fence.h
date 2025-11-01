@@ -19,6 +19,7 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Fence);
 
         Fence() = default;
+        ~Fence();
 
         Fence(const FenceCreateInfo& info);
         Fence(Device* pDevice, VkFenceCreateFlags flags = VK_FENCE_CREATE_SIGNALED_BIT);

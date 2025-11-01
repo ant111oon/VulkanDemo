@@ -27,6 +27,12 @@ namespace vkn
     }
 
 
+    Device::~Device()
+    {
+        Destroy();
+    }
+
+
     bool Device::Create(const DeviceCreateInfo& info)
     {
         if (IsCreated()) {

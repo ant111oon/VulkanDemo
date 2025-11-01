@@ -32,6 +32,12 @@ namespace vkn
     }
 
 
+    ImageView::~ImageView()
+    {
+        Destroy();
+    }
+
+
     ImageView::ImageView(ImageView&& view) noexcept
     {
         *this = std::move(view);
@@ -134,6 +140,12 @@ namespace vkn
     Image::Image(Image&& image) noexcept
     {
         *this = std::move(image);
+    }
+
+
+    Image::~Image()
+    {
+        Destroy();
     }
 
 
@@ -284,6 +296,12 @@ namespace vkn
     Sampler::Sampler(Sampler&& sampler) noexcept
     {
         *this = std::move(sampler);
+    }
+
+
+    Sampler::~Sampler()
+    {
+        Destroy();
     }
 
 

@@ -36,6 +36,8 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Swapchain);
         ENG_DECL_CLASS_NO_MOVABLE(Swapchain);
 
+        ~Swapchain();
+
         bool Create(const SwapchainCreateInfo& info);
         void Destroy();
 

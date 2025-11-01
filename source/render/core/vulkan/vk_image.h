@@ -28,6 +28,8 @@ namespace vkn
         ImageView() = default;
         ImageView(const ImageViewCreateInfo& info);
 
+        ~ImageView();
+
         ImageView(ImageView&& view) noexcept;
         ImageView& operator=(ImageView&& view) noexcept;
 
@@ -129,6 +131,8 @@ namespace vkn
         Image() = default;
         Image(const ImageCreateInfo& info);
 
+        ~Image();
+
         Image(Image&& image) noexcept;
         Image& operator=(Image&& image) noexcept;
 
@@ -221,6 +225,8 @@ namespace vkn
 
         Sampler() = default;
         Sampler(const SamplerCreateInfo& info);
+
+        ~Sampler();
 
         Sampler(Sampler&& sampler) noexcept;
         Sampler& operator=(Sampler&& sampler) noexcept;

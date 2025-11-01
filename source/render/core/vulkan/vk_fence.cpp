@@ -6,6 +6,12 @@
 
 namespace vkn
 {
+    Fence::~Fence()
+    {
+        Destroy();
+    }
+
+    
     Fence::Fence(const FenceCreateInfo& info)
     {
         Create(info);

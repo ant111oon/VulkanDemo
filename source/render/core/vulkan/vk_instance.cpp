@@ -94,6 +94,12 @@ namespace vkn
     }
 
 
+    Instance::~Instance()
+    {
+        Destroy();
+    }
+
+
     bool Instance::Create(const InstanceCreateInfo& info)
     {
         if (IsCreated()) {

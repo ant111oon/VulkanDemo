@@ -27,6 +27,12 @@ namespace vkn
     }
 
 
+    CmdBuffer::~CmdBuffer()
+    {
+        Destroy();
+    }
+
+
     CmdBuffer& CmdBuffer::operator=(CmdBuffer&& cmdBuffer) noexcept
     {
         if (this == &cmdBuffer) {
@@ -270,6 +276,12 @@ namespace vkn
     CmdPool::CmdPool(CmdPool&& pool) noexcept
     {
         *this = std::move(pool);
+    }
+
+
+    CmdPool::~CmdPool()
+    {
+        Destroy();
     }
 
 

@@ -40,6 +40,8 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Instance);
         ENG_DECL_CLASS_NO_MOVABLE(Instance);
 
+        ~Instance();
+
         bool Create(const InstanceCreateInfo& info);
         void Destroy();
 

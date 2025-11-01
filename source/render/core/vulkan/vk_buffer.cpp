@@ -19,6 +19,12 @@ namespace vkn
     }
 
 
+    Buffer::~Buffer()
+    {
+        Destroy();
+    }
+
+
     Buffer& Buffer::operator=(Buffer&& buffer) noexcept
     {
         if (this == &buffer) {

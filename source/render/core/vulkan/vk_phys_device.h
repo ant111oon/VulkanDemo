@@ -38,6 +38,8 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(PhysicalDevice);
         ENG_DECL_CLASS_NO_MOVABLE(PhysicalDevice);
 
+        ~PhysicalDevice();
+
         bool Create(const PhysicalDeviceCreateInfo& info);
         void Destroy();
 

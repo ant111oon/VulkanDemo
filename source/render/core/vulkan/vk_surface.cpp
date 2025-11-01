@@ -5,6 +5,12 @@
 
 namespace vkn
 {
+    Surface::~Surface()
+    {
+        Destroy();
+    }
+
+
     bool Surface::Create(const SurfaceCreateInfo& info)
     {
         if (IsCreated()) {

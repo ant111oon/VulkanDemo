@@ -19,6 +19,7 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(CmdBuffer);
 
         CmdBuffer() = default;
+        ~CmdBuffer();
     
         CmdBuffer(CmdBuffer&& cmdBuffer) noexcept;
         CmdBuffer& operator=(CmdBuffer&& cmdBuffer) noexcept;
@@ -119,6 +120,8 @@ namespace vkn
 
         CmdPool() = default;
         CmdPool(const CmdPoolCreateInfo& info);
+
+        ~CmdPool();
 
         CmdPool(CmdPool&& pool) noexcept;
         CmdPool& operator=(CmdPool&& pool) noexcept;
