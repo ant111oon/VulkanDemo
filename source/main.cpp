@@ -500,6 +500,147 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
+static void CreateVkInstance()
+{
+#ifdef ENG_VK_DEBUG_UTILS_ENABLED
+    vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCreateInfo = {};
+    vkDbgMessengerCreateInfo.messageType = 
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    vkDbgMessengerCreateInfo.messageSeverity = 
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    vkDbgMessengerCreateInfo.pMessageCallback = DbgVkMessageCallback;
+
+    constexpr std::array vkInstLayers = {
+        "VK_LAYER_KHRONOS_validation",
+    };
+#endif
+
+    constexpr std::array vkInstExtensions = {
+    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+    #endif
+
+        VK_KHR_SURFACE_EXTENSION_NAME,
+    #ifdef ENG_OS_WINDOWS
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+    #endif
+    };
+
+    vkn::InstanceCreateInfo vkInstCreateInfo = {};
+    vkInstCreateInfo.pApplicationName = APP_NAME;
+    vkInstCreateInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    vkInstCreateInfo.pEngineName = "VkEngine";
+    vkInstCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    vkInstCreateInfo.apiVersion = VK_API_VERSION_1_3;
+    vkInstCreateInfo.extensions = vkInstExtensions;
+#ifdef ENG_VK_DEBUG_UTILS_ENABLED
+    vkInstCreateInfo.layers = vkInstLayers;
+    vkInstCreateInfo.pDbgMessengerCreateInfo = &vkDbgMessengerCreateInfo;
+#endif
+
+    s_vkInstance.Create(vkInstCreateInfo); 
+    CORE_ASSERT(s_vkInstance.IsCreated());
+}
+
+
+static void CreateVkSwapchain()
+{
+    vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
+    vkSwapchainCreateInfo.pDevice = &s_vkDevice;
+    vkSwapchainCreateInfo.pSurface = &s_vkSurface;
+
+    vkSwapchainCreateInfo.width = s_pWnd->GetWidth();
+    vkSwapchainCreateInfo.height = s_pWnd->GetHeight();
+
+    vkSwapchainCreateInfo.minImageCount    = 2;
+    vkSwapchainCreateInfo.imageFormat      = VK_FORMAT_B8G8R8A8_SRGB;
+    vkSwapchainCreateInfo.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    vkSwapchainCreateInfo.imageArrayLayers = 1u;
+    vkSwapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    vkSwapchainCreateInfo.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    vkSwapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    vkSwapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+
+    s_vkSwapchain.Create(vkSwapchainCreateInfo);
+    CORE_ASSERT(s_vkSwapchain.IsCreated());
+}
+
+
+static void CreateVkPhysAndLogicalDevices()
+{
+    vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
+    vkPhysDeviceFeturesReq.independentBlend = true;
+    vkPhysDeviceFeturesReq.descriptorBindingPartiallyBound = true;
+    vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
+    vkPhysDeviceFeturesReq.samplerAnisotropy = true;
+    vkPhysDeviceFeturesReq.samplerMirrorClampToEdge = true;
+
+    vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
+    vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+
+    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCreateInfo = {};
+    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance;
+    vkPhysDeviceCreateInfo.pPropertiesRequirenments = &vkPhysDevicePropsReq;
+    vkPhysDeviceCreateInfo.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
+
+    s_vkPhysDevice.Create(vkPhysDeviceCreateInfo);
+    CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
+
+
+    constexpr std::array vkDeviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    };
+
+    VK_ASSERT(s_vkPhysDevice.GetFeatures13().dynamicRendering);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures13().synchronization2);
+
+    VkPhysicalDeviceVulkan13Features features13 = {};
+    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features13.dynamicRendering = VK_TRUE;
+    features13.synchronization2 = VK_TRUE;
+
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().bufferDeviceAddress);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().descriptorBindingPartiallyBound);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().runtimeDescriptorArray);
+    VK_ASSERT(s_vkPhysDevice.GetFeatures12().samplerMirrorClampToEdge);
+
+    VkPhysicalDeviceVulkan12Features features12 = {};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features12.pNext = &features13;
+    features12.bufferDeviceAddress = VK_TRUE;
+    features12.descriptorBindingPartiallyBound = VK_TRUE;
+    features12.runtimeDescriptorArray = VK_TRUE;
+    features12.samplerMirrorClampToEdge = VK_TRUE;
+
+    VK_ASSERT(s_vkPhysDevice.GetFeatures11().shaderDrawParameters);
+
+    VkPhysicalDeviceVulkan11Features features11 = {};
+    features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    features11.pNext = &features12;
+    features11.shaderDrawParameters = VK_TRUE; // Enables slang internal shader variables like "SV_VertexID" etc.
+
+    VkPhysicalDeviceFeatures2 features2 = {};
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.pNext = &features11;
+    features2.features.samplerAnisotropy = VK_TRUE;
+
+    vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
+    vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
+    vkDeviceCreateInfo.pSurface = &s_vkSurface;
+    vkDeviceCreateInfo.queuePriority = 1.f;
+    vkDeviceCreateInfo.extensions = vkDeviceExtensions;
+    vkDeviceCreateInfo.pFeatures2 = &features2;
+
+    s_vkDevice.Create(vkDeviceCreateInfo);
+    CORE_ASSERT(s_vkDevice.IsCreated());
+}
+
+
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
     Timer timer;
@@ -1946,12 +2087,28 @@ static void LoadScene(const fs::path& filepath)
     memcpy(pCommonRenderInfoData, s_sceneRenderInfos.data(), s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO));
     s_commonRenderInfoBuffer.Unmap();
 
+    
+    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
+    commonConstBufCreateInfo.pDevice = &s_vkDevice;
+    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
+    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commonConstBufCreateInfo.memAllocFlags = 0;
+
+    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
+    CORE_ASSERT(s_commonConstBuffer.IsCreated());
+    s_commonConstBuffer.SetDebugName("COMMON_CB");
+
+
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
 
-static void CreateDepthImage(vkn::Image& depthImage, vkn::ImageView& depthImageView)
+static void CreateDepthImage()
 {
+    vkn::Image& depthImage = s_vkDepthImage;
+    vkn::ImageView& depthImageView = s_vkDepthImageView;
+
     if (depthImageView.IsCreated()) {
         depthImageView.Destroy();
     }
@@ -2159,7 +2316,7 @@ void ProcessFrame()
         }
 
         s_vkDevice.WaitIdle();
-        CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
+        CreateDepthImage();
     }
 
     s_camera.Update();
@@ -2193,50 +2350,7 @@ int main(int argc, char* argv[])
     s_pWnd->Create(wndInitInfo);
     ENG_ASSERT(s_pWnd->IsInitialized());
 
-#ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCreateInfo = {};
-    vkDbgMessengerCreateInfo.messageType = 
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    vkDbgMessengerCreateInfo.messageSeverity = 
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    vkDbgMessengerCreateInfo.pMessageCallback = DbgVkMessageCallback;
-
-    constexpr std::array vkInstLayers = {
-        "VK_LAYER_KHRONOS_validation",
-    };
-#endif
-
-    constexpr std::array vkInstExtensions = {
-    #ifdef ENG_VK_DEBUG_UTILS_ENABLED
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-    #endif
-
-        VK_KHR_SURFACE_EXTENSION_NAME,
-    #ifdef ENG_OS_WINDOWS
-        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-    #endif
-    };
-
-    vkn::InstanceCreateInfo vkInstCreateInfo = {};
-    vkInstCreateInfo.pApplicationName = APP_NAME;
-    vkInstCreateInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCreateInfo.pEngineName = "VkEngine";
-    vkInstCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCreateInfo.apiVersion = VK_API_VERSION_1_3;
-    vkInstCreateInfo.extensions = vkInstExtensions;
-#ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkInstCreateInfo.layers = vkInstLayers;
-    vkInstCreateInfo.pDbgMessengerCreateInfo = &vkDbgMessengerCreateInfo;
-#endif
-
-    s_vkInstance.Create(vkInstCreateInfo); 
-    CORE_ASSERT(s_vkInstance.IsCreated()); 
-    
+    CreateVkInstance();    
 
     vkn::SurfaceCreateInfo vkSurfCreateInfo = {};
     vkSurfCreateInfo.pInstance = &s_vkInstance;
@@ -2245,99 +2359,14 @@ int main(int argc, char* argv[])
     s_vkSurface.Create(vkSurfCreateInfo);
     CORE_ASSERT(s_vkSurface.IsCreated());
 
-
-    vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
-    vkPhysDeviceFeturesReq.independentBlend = true;
-    vkPhysDeviceFeturesReq.descriptorBindingPartiallyBound = true;
-    vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
-    vkPhysDeviceFeturesReq.samplerAnisotropy = true;
-    vkPhysDeviceFeturesReq.samplerMirrorClampToEdge = true;
-
-    vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
-    vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-
-    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCreateInfo = {};
-    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance;
-    vkPhysDeviceCreateInfo.pPropertiesRequirenments = &vkPhysDevicePropsReq;
-    vkPhysDeviceCreateInfo.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
-
-    s_vkPhysDevice.Create(vkPhysDeviceCreateInfo);
-    CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
-
-
-    constexpr std::array vkDeviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    };
-
-    VK_ASSERT(s_vkPhysDevice.GetFeatures13().dynamicRendering);
-    VK_ASSERT(s_vkPhysDevice.GetFeatures13().synchronization2);
-
-    VkPhysicalDeviceVulkan13Features features13 = {};
-    features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    features13.dynamicRendering = VK_TRUE;
-    features13.synchronization2 = VK_TRUE;
-
-    VK_ASSERT(s_vkPhysDevice.GetFeatures12().bufferDeviceAddress);
-    VK_ASSERT(s_vkPhysDevice.GetFeatures12().descriptorBindingPartiallyBound);
-    VK_ASSERT(s_vkPhysDevice.GetFeatures12().runtimeDescriptorArray);
-    VK_ASSERT(s_vkPhysDevice.GetFeatures12().samplerMirrorClampToEdge);
-
-    VkPhysicalDeviceVulkan12Features features12 = {};
-    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    features12.pNext = &features13;
-    features12.bufferDeviceAddress = VK_TRUE;
-    features12.descriptorBindingPartiallyBound = VK_TRUE;
-    features12.runtimeDescriptorArray = VK_TRUE;
-    features12.samplerMirrorClampToEdge = VK_TRUE;
-
-    VK_ASSERT(s_vkPhysDevice.GetFeatures11().shaderDrawParameters);
-
-    VkPhysicalDeviceVulkan11Features features11 = {};
-    features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-    features11.pNext = &features12;
-    features11.shaderDrawParameters = VK_TRUE; // Enables slang internal shader variables like "SV_VertexID" etc.
-
-    VkPhysicalDeviceFeatures2 features2 = {};
-    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    features2.pNext = &features11;
-    features2.features.samplerAnisotropy = VK_TRUE;
-
-    vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
-    vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
-    vkDeviceCreateInfo.pSurface = &s_vkSurface;
-    vkDeviceCreateInfo.queuePriority = 1.f;
-    vkDeviceCreateInfo.extensions = vkDeviceExtensions;
-    vkDeviceCreateInfo.pFeatures2 = &features2;
-
-    s_vkDevice.Create(vkDeviceCreateInfo);
-    CORE_ASSERT(s_vkDevice.IsCreated());
-
+    CreateVkPhysAndLogicalDevices();
 
 #ifdef ENG_PROFILING_ENABLED
     vkn::GetProfiler().Create(&s_vkDevice);
     CORE_ASSERT(vkn::GetProfiler().IsCreated());
 #endif
 
-
-    vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
-    vkSwapchainCreateInfo.pDevice = &s_vkDevice;
-    vkSwapchainCreateInfo.pSurface = &s_vkSurface;
-
-    vkSwapchainCreateInfo.width = s_pWnd->GetWidth();
-    vkSwapchainCreateInfo.height = s_pWnd->GetHeight();
-
-    vkSwapchainCreateInfo.minImageCount = 2;
-    vkSwapchainCreateInfo.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
-    vkSwapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    vkSwapchainCreateInfo.imageArrayLayers = 1u;
-    vkSwapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    vkSwapchainCreateInfo.transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    vkSwapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    vkSwapchainCreateInfo.presentMode = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-
-    s_vkSwapchain.Create(vkSwapchainCreateInfo);
-    CORE_ASSERT(s_vkSwapchain.IsCreated());
-
+    CreateVkSwapchain();
 
     vkn::CmdPoolCreateInfo vkCmdPoolCreateInfo = {};
     vkCmdPoolCreateInfo.pDevice = &s_vkDevice;
@@ -2352,9 +2381,7 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkImmediateSubmitCmdBuffer.IsCreated());
     s_vkImmediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
 
-
     s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
-
 
     vkn::QueryCreateInfo queryCreateInfo = {};
     queryCreateInfo.pDevice = &s_vkDevice;
@@ -2368,7 +2395,6 @@ int main(int argc, char* argv[])
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdResetQueryPool(s_vkQueryPool);
     });
-
 
     s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice.Get());
     s_vkDescriptorSetLayout = CreateVkDescriptorSetLayout(s_vkDevice.Get());
@@ -2399,23 +2425,10 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkRenderCmdBuffer.IsCreated());
     s_vkRenderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
-    CreateDepthImage(s_vkDepthImage, s_vkDepthImageView);
-
+    CreateDepthImage();
     CreateCommonSamplers();
 
-    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
-    commonConstBufCreateInfo.pDevice = &s_vkDevice;
-    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
-    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    commonConstBufCreateInfo.memAllocFlags = 0;
-
-    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
-    CORE_ASSERT(s_commonConstBuffer.IsCreated());
-    s_commonConstBuffer.SetDebugName("COMMON_CB");
-
-    const fs::path filepath = argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf";
-    LoadScene(filepath);
+    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
 
     WriteDescriptorSet();
 
