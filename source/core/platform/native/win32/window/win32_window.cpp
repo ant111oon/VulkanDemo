@@ -53,8 +53,6 @@ static WndKey win32VirtualKeyToWndKey(WORD vk) noexcept
         case '7': return WndKey::KEY_7;
         case '8': return WndKey::KEY_8;
         case '9': return WndKey::KEY_9;
-        case VK_OEM_1: return WndKey::KEY_SEMICOLON;
-        case VK_OEM_PLUS: return WndKey::KEY_EQUAL;
         case 'A': return WndKey::KEY_A;
         case 'B': return WndKey::KEY_B;
         case 'C': return WndKey::KEY_C;
@@ -81,10 +79,12 @@ static WndKey win32VirtualKeyToWndKey(WORD vk) noexcept
         case 'X': return WndKey::KEY_X;
         case 'Y': return WndKey::KEY_Y;
         case 'Z': return WndKey::KEY_Z;
+        case VK_OEM_1: return WndKey::KEY_SEMICOLON;
+        case VK_OEM_3: return WndKey::KEY_GRAVE_ACCENT;
         case VK_OEM_4: return WndKey::KEY_LEFT_BRACKET;
         case VK_OEM_5: return WndKey::KEY_BACKSLASH;
         case VK_OEM_6: return WndKey::KEY_RIGHT_BRACKET;
-        case VK_OEM_3: return WndKey::KEY_GRAVE_ACCENT;
+        case VK_OEM_PLUS: return WndKey::KEY_EQUAL;
         case VK_ESCAPE: return WndKey::KEY_ESCAPE;
         case VK_RETURN: return WndKey::KEY_ENTER;
         case VK_TAB: return WndKey::KEY_TAB;

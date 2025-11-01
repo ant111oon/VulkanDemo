@@ -13,6 +13,7 @@ if (NOT WIN32)
     message(FATAL_ERROR "Currently, only Windows is supported")
 endif()
 
+
 if(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Use Debug/RelWithDebInfo (Profile)/Release")
 else()
@@ -22,6 +23,15 @@ else()
         message(STATUS "${ENGINE_PROJ_NAME}: BUILD TYPE: PROFILE")
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         message(STATUS "${ENGINE_PROJ_NAME}: BUILD TYPE: RELEASE")
+    endif()
+endif()
+
+
+if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+    if (CMAKE_CONFIGURATION_TYPES)
+        set(ENG_ENABLE_TRACY ON)
+    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(ENG_ENABLE_TRACY ON)
     endif()
 endif()
 
@@ -45,15 +55,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(imgui)
 
 
-if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
-    if (CMAKE_CONFIGURATION_TYPES)
-        set(ENG_ENABLE_TRACY ON)
-    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(ENG_ENABLE_TRACY ON)
-    endif()
-endif()
-
-
 if (ENG_ENABLE_TRACY)
     FetchContent_Declare(
         tracy
@@ -66,12 +67,12 @@ if (ENG_ENABLE_TRACY)
 endif()
 
 
-FetchContent_Declare(
-    meshoptimizer
-    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-    GIT_TAG        v0.25
-)
-FetchContent_MakeAvailable(meshoptimizer)
+# FetchContent_Declare(
+#     meshoptimizer
+#     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+#     GIT_TAG        v0.25
+# )
+# FetchContent_MakeAvailable(meshoptimizer)
 
 
 FetchContent_Declare(
@@ -137,7 +138,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE glm 
     PRIVATE imgui
     PRIVATE tinygltf
-    PRIVATE meshoptimizer
+    # PRIVATE meshoptimizer
     
     PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient>
 
