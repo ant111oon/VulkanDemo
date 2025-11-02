@@ -1,5 +1,10 @@
 #include "core/engine/wnd_system/wnd_system.h"
 
+#ifdef ENG_OS_WINDOWS
+    #include "core/platform/native/win32/window/win32_window.h"
+#endif
+
+
 #include "core/platform/file/file.h"
 #include "core/utils/timer.h"
 
@@ -27,6 +32,11 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define TINYGLTF_NOEXCEPTION
 #include <tiny_gltf.h>
+
+
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+#include <backends/imgui_impl_win32.h>
 
 
 namespace fs = std::filesystem;
@@ -288,8 +298,8 @@ static vkn::CmdBuffer s_vkRenderCmdBuffer;
 
 static vkn::Fence s_vkImmediateSubmitFinishedFence;
 
-static vkn::Image s_vkDepthImage;
-static vkn::ImageView s_vkDepthImageView;
+static vkn::Image       s_vkDepthImage;
+static vkn::ImageView   s_vkDepthImageView;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -319,8 +329,12 @@ static eng::Camera s_camera;
 static uint32_t s_dbgTexIdx = 0;
 
 static size_t s_frameNumber = 0;
+static float s_frameTime = 0.f;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
+
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 namespace tinygltf
@@ -428,6 +442,138 @@ namespace tinygltf
     
         CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
         return VK_FORMAT_UNDEFINED;
+    }
+}
+
+
+namespace DbgUI
+{
+    static void Init()
+    {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; 
+
+    #ifdef ENG_OS_WINDOWS
+        if (!ImGui_ImplWin32_Init(s_pWnd->GetNativeHandle())) {
+            CORE_ASSERT_FAIL("Failed to initialize ImGui Win32 part");
+        }
+
+        ImGui::GetPlatformIO().Platform_CreateVkSurface = [](ImGuiViewport* viewport, ImU64 vkInstance, const void* vkAllocator, ImU64* outVkSurface)
+        {
+            VkWin32SurfaceCreateInfoKHR createInfo = {};
+            createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+            createInfo.hwnd = (HWND)viewport->PlatformHandleRaw;
+            createInfo.hinstance = ::GetModuleHandle(nullptr);
+            return (int)vkCreateWin32SurfaceKHR((VkInstance)vkInstance, &createInfo, (VkAllocationCallbacks*)vkAllocator, (VkSurfaceKHR*)outVkSurface);
+        };
+    #endif
+
+        ImGui_ImplVulkan_InitInfo imGuiVkInitInfo = {};
+        imGuiVkInitInfo.ApiVersion = s_vkInstance.GetApiVersion();
+        imGuiVkInitInfo.Instance = s_vkInstance.Get();
+        imGuiVkInitInfo.PhysicalDevice = s_vkPhysDevice.Get();
+        imGuiVkInitInfo.Device = s_vkDevice.Get();
+        imGuiVkInitInfo.QueueFamily = s_vkDevice.GetQueueFamilyIndex();
+        imGuiVkInitInfo.Queue = s_vkDevice.GetQueue();
+        imGuiVkInitInfo.DescriptorPoolSize = 1000;
+        imGuiVkInitInfo.MinImageCount = 2;
+        imGuiVkInitInfo.ImageCount = s_vkSwapchain.GetImageCount();
+        imGuiVkInitInfo.PipelineCache = VK_NULL_HANDLE;
+
+        imGuiVkInitInfo.UseDynamicRendering = true;
+        imGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;               // 0 defaults to VK_SAMPLE_COUNT_1_BIT
+    #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+        
+        const VkFormat swapchainFormat = s_vkSwapchain.GetImageFormat();
+        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainFormat;
+    #else
+        #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
+    #endif
+        imGuiVkInitInfo.CheckVkResultFn = [](VkResult error) { VK_CHECK(error); };
+        imGuiVkInitInfo.MinAllocationSize = 1024 * 1024;
+
+        if (!ImGui_ImplVulkan_Init(&imGuiVkInitInfo)) {
+            CORE_ASSERT_FAIL("Failed to initialize ImGui Vulkan part");
+        }
+
+    #ifdef ENG_OS_WINDOWS
+        dynamic_cast<Win32Window*>(s_pWnd)->AddEventCallback([](HWND wHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
+        {
+            return ::ImGui_ImplWin32_WndProcHandler(wHwnd, uMsg, wParam, lParam);
+        });
+    #endif
+    }
+
+
+    static void Terminate()
+    {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+    }
+
+
+    static void BeginFrame()
+    {
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+    }
+
+
+    static void EndFrame()
+    {
+        ImGui::EndFrame();
+    }
+
+
+    static void FillData()
+    {
+        if (ImGui::Begin("Settings")) {
+        #if defined(ENG_BUILD_DEBUG)
+            constexpr const char* BUILD_TYPE_STR = "DEBUG";
+        #elif defined(ENG_BUILD_PROFILE)
+            constexpr const char* BUILD_TYPE_STR = "PROFILE";
+        #else
+            constexpr const char* BUILD_TYPE_STR = "RELEASE";
+        #endif            
+
+            ImGui::Text("Build Type: %s", BUILD_TYPE_STR);
+            ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
+
+            ImGui::Separator();
+            
+            ImGui::NewLine();
+            ImGui::Text("Fly Camera Mode (F5):");
+            ImGui::SameLine(); 
+            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
+            
+            ImGui::Separator();
+
+            ImGui::NewLine();
+            ImGui::Text("Material Debug Texture: %s", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
+            if (ImGui::IsItemHovered()) {
+                if (ImGui::BeginTooltip()) {
+                    ImGui::Text("Use <-/-> arrows to switch");
+                }
+                ImGui::EndTooltip();
+            }
+        } ImGui::End();
+    }
+
+
+    static void Render(vkn::CmdBuffer& cmdBuffer)
+    {   
+        ImGui::Render();
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
     }
 }
 
@@ -666,7 +812,7 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCreateInfo, nullptr, &vkShaderModule));
     VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
 
-    VK_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 
     return vkShaderModule;
 }
@@ -1351,6 +1497,13 @@ void UpdateCommonConstBuffer(Window* pWnd)
 }
 
 
+void UpdateScene()
+{
+    DbgUI::BeginFrame();
+    s_camera.Update();
+}
+
+
 void RenderScene()
 {
     ENG_PROFILE_SCOPED_MARKER_C("RenderScene", 255, 255, 0, 255);
@@ -1359,6 +1512,7 @@ void RenderScene()
 
     const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (fenceStatus == VK_NOT_READY) {
+        DbgUI::EndFrame();
         return;
     } else {
         renderingFinishedFence.Reset();
@@ -1375,6 +1529,7 @@ void RenderScene()
         VK_CHECK(acquireResult);
     } else {
         s_swapchainRecreateRequired = true;
+        DbgUI::EndFrame();
         return;
     }
 
@@ -1479,6 +1634,11 @@ void RenderScene()
 
                 cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
             }
+
+            DbgUI::FillData();
+            DbgUI::EndFrame();
+
+            DbgUI::Render(cmdBuffer);
         cmdBuffer.CmdEndRendering();
         ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
@@ -2104,7 +2264,7 @@ static void LoadScene(const fs::path& filepath)
 }
 
 
-static void CreateDepthImage()
+static void CreateDepthRT()
 {
     vkn::Image& depthImage = s_vkDepthImage;
     vkn::ImageView& depthImageView = s_vkDepthImageView;
@@ -2155,23 +2315,6 @@ static void CreateDepthImage()
     depthImageView.Create(depthImageViewCreateInfo);
     CORE_ASSERT(depthImageView.IsValid());
     depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
-}
-
-
-void UpdateTimings(Window* pWnd, Timer& cpuTimer)
-{
-#if defined(ENG_BUILD_DEBUG)
-    constexpr const char* BUILD_TYPE_STR = "DEBUG";
-#elif defined(ENG_BUILD_PROFILE)
-    constexpr const char* BUILD_TYPE_STR = "PROFILE";
-#else
-    constexpr const char* BUILD_TYPE_STR = "RELEASE";
-#endif
-        
-    const float cpuFrameTime = cpuTimer.End().GetDuration<float, std::milli>();
-
-    pWnd->SetTitle("%s | %s | CPU: %.3f ms (%.1f FPS) | Fly Camera Mode (F5): %s | DBG TEX: %s", 
-        APP_NAME, BUILD_TYPE_STR, cpuFrameTime, 1000.f / cpuFrameTime, s_flyCameraMode ? "ON" : "OFF", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
 }
 
 
@@ -2242,9 +2385,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
                 camera.velocity.y = 0;
             }
         }
-    }
-
-    if (event.Is<WndCursorEvent>()) {
+    } else if (event.Is<WndCursorEvent>()) {
         const WndCursorEvent& cursorEvent = event.Get<WndCursorEvent>();
 
         static int16_t prevX = 0;
@@ -2263,7 +2404,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 }
 
 
-void ProcessWndEvents(const WndEvent& event)
+void ProcessWndEvent(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
         s_swapchainRecreateRequired = true;
@@ -2297,13 +2438,14 @@ void ProcessFrame()
 {
     ENG_PROFILE_BEGIN_FRAME("Frame");
 
-    Timer timer;
+    static Timer timer;
+    timer.End().GetDuration<float, std::milli>(s_frameTime).Reset();
 
     s_pWnd->ProcessEvents();
     
     WndEvent event;
     while(s_pWnd->PopEvent(event)) {
-        ProcessWndEvents(event);
+        ProcessWndEvent(event);
     }
 
     if (s_pWnd->IsMinimized()) {
@@ -2316,14 +2458,11 @@ void ProcessFrame()
         }
 
         s_vkDevice.WaitIdle();
-        CreateDepthImage();
+        CreateDepthRT();
     }
 
-    s_camera.Update();
-
+    UpdateScene();
     RenderScene();
-
-    UpdateTimings(s_pWnd, timer);
 
     ++s_frameNumber;
 
@@ -2367,6 +2506,8 @@ int main(int argc, char* argv[])
 #endif
 
     CreateVkSwapchain();
+
+    DbgUI::Init();
 
     vkn::CmdPoolCreateInfo vkCmdPoolCreateInfo = {};
     vkCmdPoolCreateInfo.pDevice = &s_vkDevice;
@@ -2425,7 +2566,7 @@ int main(int argc, char* argv[])
     CORE_ASSERT(s_vkRenderCmdBuffer.IsCreated());
     s_vkRenderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
-    CreateDepthImage();
+    CreateDepthRT();
     CreateCommonSamplers();
 
     LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
@@ -2445,7 +2586,10 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkDescriptorPool, nullptr);
 
+    DbgUI::Terminate();
+
     s_pWnd->Destroy();
+
     wndSysTerminate();
 
     return 0;

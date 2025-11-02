@@ -223,8 +223,18 @@ void Win32Window::FetchMouseEventCommonInfo(WPARAM wParam, LPARAM lParam, int16_
 }
 
 
+void Win32Window::HandleCustomMsgCallbacks(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    for (Win32WndEventCallback& callback : m_customEventCallbacks) {
+        callback(m_HWND, uMsg, wParam, lParam);
+    }
+}
+
+
 LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    HandleCustomMsgCallbacks(uMsg, wParam, lParam);
+
     switch (uMsg) {
         case WM_DESTROY:
             PostQuitMessage(0);
@@ -415,6 +425,7 @@ void Win32Window::Destroy()
     s_isWindowClassRegistered = false;
 
     m_HWND = nullptr;
+    ClearEventCallbacks();
 
     Window::Destroy();
 }
@@ -448,6 +459,39 @@ void Win32Window::SetVisible(bool visible)
 
     ShowWindow(m_HWND, visible ? SW_SHOW : SW_HIDE);
     SetVisibleState(visible);
+}
+
+
+size_t Win32Window::AddEventCallback(const Win32WndEventCallback& callback)
+{
+    WIN32_ASSERT(IsInitialized());
+    WIN32_ASSERT_MSG(callback, "Win32 custom callback is null");
+
+    m_customEventCallbacks.emplace_back(callback);
+    return m_customEventCallbacks.size() - 1;
+}
+
+
+void Win32Window::RemoveEventCallbackByIdx(size_t index)
+{
+    WIN32_ASSERT(IsInitialized());
+    WIN32_ASSERT(IsEventHandlerIdxValid(index));
+    
+    m_customEventCallbacks.erase(m_customEventCallbacks.begin() + index);
+}
+
+
+void Win32Window::ClearEventCallbacks()
+{
+    WIN32_ASSERT(IsInitialized());
+    m_customEventCallbacks.clear();
+}
+
+
+bool Win32Window::IsEventHandlerIdxValid(size_t index) const
+{
+    WIN32_ASSERT(IsInitialized());
+    return index < m_customEventCallbacks.size();
 }
 
 

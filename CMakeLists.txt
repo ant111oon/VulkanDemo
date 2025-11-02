@@ -43,6 +43,7 @@ FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG        1.0.1
+    GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(glm)
 
@@ -50,7 +51,8 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.91.9b
+    GIT_TAG        v1.92.4-docking
+    GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -60,8 +62,8 @@ if (ENG_ENABLE_TRACY)
         tracy
         GIT_REPOSITORY https://github.com/wolfpld/tracy.git
         GIT_TAG        v0.12.2
-        GIT_SHALLOW TRUE
-        GIT_PROGRESS TRUE
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
     )
     FetchContent_MakeAvailable(tracy)
 endif()
@@ -71,6 +73,7 @@ endif()
 #     meshoptimizer
 #     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
 #     GIT_TAG        v0.25
+#     GIT_PROGRESS   TRUE
 # )
 # FetchContent_MakeAvailable(meshoptimizer)
 
@@ -79,6 +82,7 @@ FetchContent_Declare(
     tinygltf
     GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
     GIT_TAG        v2.9.6
+    GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(tinygltf)
 
@@ -104,6 +108,7 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 #     vma
 #     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
 #     GIT_TAG        v3.3.0
+#     GIT_PROGRESS   TRUE
 # )
 # FetchContent_MakeAvailable(vma)
 

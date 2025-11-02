@@ -3,8 +3,13 @@
 #ifdef ENG_OS_WINDOWS
 
 #include "core/platform/window/window.h"
-
 #include "core/platform/native/win32/window/win32_window.h"
+
+#include <vector>
+#include <functional>
+
+
+using Win32WndEventCallback = std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)>;
 
 
 class Win32Window final : public Window
@@ -22,6 +27,13 @@ public:
 
     void SetVisible(bool visible) override;
 
+    size_t AddEventCallback(const Win32WndEventCallback& callback);
+    void RemoveEventCallbackByIdx(size_t index);
+
+    void ClearEventCallbacks();
+
+    bool IsEventHandlerIdxValid(size_t index) const;
+
 protected:
     void UpdateTitleInternal() override;
 
@@ -34,6 +46,8 @@ private:
     static void FetchMouseEventCommonInfo(WPARAM wParam, LPARAM lParam, int16_t& x, int16_t& y, bool& isCtrlDown, bool& isShiftDown, bool& isLButtonDown, bool& isMButtonDown, bool& isRButtonDown) noexcept;
 
 private:
+    void HandleCustomMsgCallbacks(UINT uMsg, WPARAM wParam, LPARAM lParam);
+
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     LRESULT OnCloseEvent();
@@ -62,6 +76,8 @@ private:
 
 private:
     HWND m_HWND = nullptr;
+
+    std::vector<Win32WndEventCallback> m_customEventCallbacks;
 };
 
 #endif
