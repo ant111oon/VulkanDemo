@@ -521,6 +521,12 @@ namespace DbgUI
     }
 
 
+    static bool IsAnyWindowFocused()
+    {
+        return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
+    }
+
+
     static void BeginFrame()
     {
         ImGui_ImplVulkan_NewFrame();
@@ -2408,6 +2414,10 @@ void ProcessWndEvent(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
         s_swapchainRecreateRequired = true;
+    }
+
+    if (DbgUI::IsAnyWindowFocused()) {
+        return;
     }
 
     if (event.Is<WndKeyEvent>()) {
