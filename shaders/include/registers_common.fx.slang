@@ -1,3 +1,6 @@
+__exported import "common_math.fx";
+
+
 struct COMMON_RENDER_INFO
 {
     uint MESH_IDX;
@@ -118,7 +121,8 @@ static const uint COMMON_MTL_TEXTURES_COUNT = 128;
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 [vk::binding(2, 0)] StructuredBuffer<COMMON_RENDER_INFO> COMMON_RENDER_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
-[vk::binding(4, 0)] StructuredBuffer<COMMON_TRANSFORM>   COMMON_TRANSFORMS;
+[vk::binding(3, 0)] StructuredBuffer<COMMON_TRANSFORM>   COMMON_TRANSFORMS;
+
+[vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
 [vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
 

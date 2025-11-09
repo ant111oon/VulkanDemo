@@ -189,6 +189,16 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+
+        vkCmdDrawIndexedIndirectCount(m_cmdBuffer, buffer.Get(), offset, countBuffer.Get(), countBufferOffset, maxDrawCount, stride);
+
+        return *this;
+    }
+
+
     void CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
         VK_ASSERT(IsValid());

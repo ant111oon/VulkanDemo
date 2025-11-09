@@ -41,6 +41,10 @@ namespace vkn
             return false;
         }
 
+        if (featuresReq.drawIndirectCount && featuresReq.drawIndirectCount != pFeatures12->drawIndirectCount) {
+            return false;
+        }
+
         vkGetPhysicalDeviceProperties(vkPhysDevice, &outDeviceProps);
 
         if (propsReq.deviceType != outDeviceProps.deviceType) {

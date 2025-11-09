@@ -13,6 +13,7 @@ namespace vkn
         bool runtimeDescriptorArray;
         bool samplerAnisotropy;
         bool samplerMirrorClampToEdge;
+        bool drawIndirectCount;
     };
 
 

@@ -1,4 +1,4 @@
-__exported import "half_utils.fx";
+__exported import "common_math.fx";
 __exported import "registers_test.fx";
 
 
@@ -11,12 +11,12 @@ struct TEST_INPUT_DATA
 
 
 
-TEST_INPUT_DATA PrepareInputData(uint vertIdx)
+TEST_INPUT_DATA PrepareInputData(uint vertID)
 {
     TEST_INPUT_DATA inputData;
 
     static const uint VERTEX_DATA_SIZE_UI4 = 1;
-    const uint offset = vertIdx * VERTEX_DATA_SIZE_UI4;
+    const uint offset = vertID * VERTEX_DATA_SIZE_UI4;
 
     inputData.position.xy = UnpackHalf2x16(TEST_REGISTRY.VERTEX_DATA[offset][0]);
     inputData.position.z  = UnpackHalf2x16(TEST_REGISTRY.VERTEX_DATA[offset][1]).x;

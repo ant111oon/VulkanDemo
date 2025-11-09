@@ -33,6 +33,18 @@ namespace vkn
         bool Create(const BufferCreateInfo& info);
         void Destroy();
 
+        template<typename T>
+        T* Map(VkMemoryMapFlags flags)
+        {
+            return static_cast<T*>(Map(0, VK_WHOLE_SIZE, flags));
+        }
+
+        template<typename T>
+        T* Map(size_t firstElement, size_t elemCount, VkMemoryMapFlags flags)
+        {            
+            return static_cast<T*>(Map(firstElement * sizeof(T), elemCount * sizeof(T), flags));
+        }
+
         void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
         void Unmap();
 
