@@ -7,7 +7,7 @@ struct TEST_VS_OUTPUT_INTERP
 
 struct TEST_VS_OUTPUT_NO_INTERP
 {
-    [[vk::location(2)]] uint renderInfoID;
+    [[vk::location(2)]] uint instInfoID;
 };
 
 

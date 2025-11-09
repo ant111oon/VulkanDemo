@@ -1,12 +1,9 @@
 __exported import "common_math.fx";
 
 
-struct COMMON_RENDER_INFO
+struct COMMON_TRANSFORM
 {
-    uint MESH_IDX;
-    uint MATERIAL_IDX;
-    uint TRANSFORM_IDX;
-    uint PADDING;
+    float4 MATR[3];
 };
 
 
@@ -20,9 +17,40 @@ struct COMMON_MATERIAL
 };
 
 
-struct COMMON_TRANSFORM
+struct COMMON_MESH_INFO
 {
-    float4 MATR[3];
+    uint FIRST_VERTEX;
+    uint VERTEX_COUNT;
+    uint FIRST_INDEX;
+    uint INDEX_COUNT;
+
+    float3 AABB_MIN;
+    uint PAD0;
+    float3 AABB_MAX;
+    uint PAD1;
+};
+
+
+struct COMMON_INST_INFO
+{
+    uint TRANSFORM_IDX;
+    uint MATERIAL_IDX;
+    uint MESH_IDX;
+    uint PAD0;
+};
+
+
+struct COMMON_INDIRECT_DRAW_CMD
+{
+    // NOTE: Don't change order of this variables!!!
+    uint INDEX_COUNT;
+    uint INSTANCE_COUNT;
+    uint FIRST_INDEX;
+    int  VERTEX_OFFSET;
+    uint FIRST_INSTANCE;
+    //
+
+    uint INSTANCE_INFO_IDX;
 };
 
 
@@ -45,6 +73,8 @@ enum COMMON_DBG_FLAG_MASKS
     OUTPUT_COMMON_MTL_MR_TEX = 0x4,
     OUTPUT_COMMON_MTL_AO_TEX = 0x8,
     OUTPUT_COMMON_MTL_EMISSIVE_TEX = 0x10,
+
+    USE_MESH_INDIRECT_DRAW = 0x20,
 };
 
 
@@ -120,9 +150,10 @@ static const uint COMMON_MTL_TEXTURES_COUNT = 128;
 
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
-[vk::binding(2, 0)] StructuredBuffer<COMMON_RENDER_INFO> COMMON_RENDER_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<COMMON_TRANSFORM>   COMMON_TRANSFORMS;
-
-[vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
+[vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
+[vk::binding(3, 0)] StructuredBuffer<COMMON_TRANSFORM> COMMON_TRANSFORMS;
+[vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
 [vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
+
+[vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 

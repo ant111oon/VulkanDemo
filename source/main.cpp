@@ -45,15 +45,6 @@ namespace gltf = tinygltf;
 using VertexIndexType = uint32_t;
 
 
-struct Mesh
-{
-    uint32_t firstVertex;
-    uint32_t vertexCount;
-    uint32_t firstIndex;
-    uint32_t indexCount;
-};
-
-
 struct Vertex
 {
     glm::uint posXY;
@@ -67,33 +58,61 @@ struct TEST_BINDLESS_REGISTRY
 {
     VkDeviceAddress VERTEX_DATA;
 
-    glm::uint RENDER_INFO_IDX;
+    glm::uint INST_INFO_IDX;
     glm::uint PADDING;
-};
-
-
-struct COMMON_RENDER_INFO
-{
-    glm::uint MESH_IDX;
-    glm::uint MATERIAL_IDX;
-    glm::uint TRANSFORM_IDX;
-    glm::uint PADDING;
-};
-
-
-struct COMMON_MATERIAL
-{
-    int ALBEDO_TEX_IDX = -1;
-    int NORMAL_TEX_IDX = -1;
-    int MR_TEX_IDX = -1;
-    int AO_TEX_IDX = -1;
-    int EMISSIVE_TEX_IDX = -1;
 };
 
 
 struct COMMON_TRANSFORM
 {
     glm::vec4 MATR[3];
+};
+
+
+struct COMMON_MATERIAL
+{
+    int32_t ALBEDO_TEX_IDX;
+    int32_t NORMAL_TEX_IDX;
+    int32_t MR_TEX_IDX;
+    int32_t AO_TEX_IDX;
+    int32_t EMISSIVE_TEX_IDX;
+};
+
+
+struct COMMON_MESH_INFO
+{
+    glm::uint FIRST_VERTEX;
+    glm::uint VERTEX_COUNT;
+    glm::uint FIRST_INDEX;
+    glm::uint INDEX_COUNT;
+
+    glm::vec3 AABB_MIN;
+    glm::uint PAD0;
+    glm::vec3 AABB_MAX;
+    glm::uint PAD1;
+};
+
+
+struct COMMON_INST_INFO
+{
+    glm::uint TRANSFORM_IDX;
+    glm::uint MATERIAL_IDX;
+    glm::uint MESH_IDX;
+    glm::uint PAD0;
+};
+
+
+struct COMMON_INDIRECT_DRAW_CMD
+{
+    // NOTE: Don't change order of this variables!!!
+    glm::uint INDEX_COUNT;
+    glm::uint INSTANCE_COUNT;
+    glm::uint FIRST_INDEX;
+      int32_t VERTEX_OFFSET;
+    glm::uint FIRST_INSTANCE;
+    //
+
+    glm::uint INSTANCE_INFO_IDX;
 };
 
 
@@ -116,6 +135,8 @@ enum class COMMON_DBG_FLAG_MASKS
     OUTPUT_COMMON_MTL_MR_TEX = 0x4,
     OUTPUT_COMMON_MTL_AO_TEX = 0x8,
     OUTPUT_COMMON_MTL_EMISSIVE_TEX = 0x10,
+
+    USE_MESH_INDIRECT_DRAW = 0x20,
 };
 
 
@@ -258,10 +279,11 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_RENDER_INFOS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
 static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
 
 static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
@@ -316,19 +338,20 @@ static vkn::Buffer s_indexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
 
-static vkn::Buffer s_commonRenderInfoBuffer;
+static vkn::Buffer s_commonMeshInfosBuffer;
 static vkn::Buffer s_commonMaterialsBuffer;
 static vkn::Buffer s_commonTransformsBuffer;
+static vkn::Buffer s_commonInstInfosBuffer;
 
 static vkn::Buffer s_drawIndirectCommandsBuffer;
 static vkn::Buffer s_drawIndirectCommandsCountBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<COMMON_RENDER_INFO>  s_sceneRenderInfos;
+static std::vector<COMMON_MESH_INFO>    s_sceneMeshInfos;
 static std::vector<COMMON_MATERIAL>     s_sceneMaterials;
-static std::vector<Mesh>                s_sceneMeshes;
 static std::vector<COMMON_TRANSFORM>    s_sceneTransforms;
+static std::vector<COMMON_INST_INFO>    s_sceneInstInfos;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
@@ -570,15 +593,6 @@ namespace DbgUI
             ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
 
             ImGui::Separator();
-            
-            ImGui::NewLine();
-            ImGui::Text("Fly Camera Mode (F5):");
-            ImGui::SameLine(); 
-            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
-            
-            ImGui::Checkbox("Use Indirect Draw", &s_useMeshIndirectDraw);
-
-            ImGui::Separator();
 
             ImGui::NewLine();
             ImGui::Text("Material Debug Texture: %s", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
@@ -588,6 +602,15 @@ namespace DbgUI
                 }
                 ImGui::EndTooltip();
             }
+
+            ImGui::Text("Fly Camera Mode (F5):");
+            ImGui::SameLine(); 
+            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
+            
+            ImGui::Separator();
+
+            ImGui::NewLine();
+            ImGui::Checkbox("Use Indirect Draw", &s_useMeshIndirectDraw);
         } ImGui::End();
     }
 
@@ -881,7 +904,7 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
         
     builder
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3)
+        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
     
@@ -903,9 +926,10 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(COMMON_SAMPLERS_DESCRIPTOR_SLOT,     VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_RENDER_INFOS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
@@ -1007,6 +1031,114 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
     CORE_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkPipeline;
+}
+
+
+void CreateVkIndirectDrawBuffers()
+{
+    Timer timer;
+
+    vkn::BufferCreateInfo commandsBufCreateInfo = {};
+    commandsBufCreateInfo.pDevice = &s_vkDevice;
+    commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    commandsBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commandsBufCreateInfo.memAllocFlags = 0;
+
+    s_drawIndirectCommandsBuffer.Create(commandsBufCreateInfo); 
+    CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
+    s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
+
+    {
+        CORE_ASSERT(s_sceneInstInfos.size() <= MAX_INDIRECT_DRAW_CMD_COUNT);
+
+        COMMON_INDIRECT_DRAW_CMD* pData = s_drawIndirectCommandsBuffer.Map<COMMON_INDIRECT_DRAW_CMD>(0);
+
+        for (size_t i = 0; i < s_sceneInstInfos.size(); ++i) {
+            const COMMON_INST_INFO& renderInfo = s_sceneInstInfos[i];
+            const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[renderInfo.MESH_IDX];
+            
+            pData[i].VERTEX_OFFSET = mesh.FIRST_VERTEX;
+            pData[i].FIRST_INDEX = mesh.FIRST_INDEX;
+            pData[i].INDEX_COUNT = mesh.INDEX_COUNT;
+            pData[i].FIRST_INSTANCE = 0;
+            pData[i].INSTANCE_COUNT = 1;
+
+            pData[i].INSTANCE_INFO_IDX = i;
+        }
+
+        s_drawIndirectCommandsBuffer.Unmap();
+    }
+
+
+    commandsBufCreateInfo.size = sizeof(glm::uint);
+
+    s_drawIndirectCommandsCountBuffer.Create(commandsBufCreateInfo); 
+    CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
+    s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
+
+    {
+        glm::uint* pData = s_drawIndirectCommandsCountBuffer.Map<glm::uint>(0);
+        *pData = s_sceneInstInfos.size();
+        s_drawIndirectCommandsCountBuffer.Unmap();
+    }
+
+
+    CORE_LOG_INFO("Vulkan draw indirect buffers creation finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void CreateDepthRT()
+{
+    vkn::Image& depthImage = s_vkDepthImage;
+    vkn::ImageView& depthImageView = s_vkDepthImageView;
+
+    if (depthImageView.IsCreated()) {
+        depthImageView.Destroy();
+    }
+
+    if (depthImage.IsCreated()) {
+        depthImage.Destroy();
+    }
+
+    vkn::ImageCreateInfo depthImageCreateInfo = {};
+    depthImageCreateInfo.pDevice = &s_vkDevice;
+
+    depthImageCreateInfo.type = VK_IMAGE_TYPE_2D;
+    depthImageCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
+    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthImageCreateInfo.flags = 0;
+    depthImageCreateInfo.mipLevels = 1;
+    depthImageCreateInfo.arrayLayers = 1;
+    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    
+    depthImageCreateInfo.memAllocInfo.flags = 0;
+    depthImageCreateInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    depthImage.Create(depthImageCreateInfo);
+    CORE_ASSERT(depthImage.IsCreated());
+    depthImage.SetDebugName("COMMON_DEPTH");
+
+    vkn::ImageViewCreateInfo depthImageViewCreateInfo = {};
+    depthImageViewCreateInfo.pOwner = &depthImage;
+    depthImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    depthImageViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    depthImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    depthImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    depthImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
+    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
+
+    depthImageView.Create(depthImageViewCreateInfo);
+    CORE_ASSERT(depthImageView.IsValid());
+    depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
 }
 
 
@@ -1300,21 +1432,38 @@ static void WriteDescriptorSet()
     descWrites.emplace_back(commonConstBufWrite);
 
 
-    VkDescriptorBufferInfo commonRenderInfoBufferInfo = {};
-    commonRenderInfoBufferInfo.buffer = s_commonRenderInfoBuffer.Get();
-    commonRenderInfoBufferInfo.offset = 0;
-    commonRenderInfoBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonMeshInfoBufferInfo = {};
+    commonMeshInfoBufferInfo.buffer = s_commonMeshInfosBuffer.Get();
+    commonMeshInfoBufferInfo.offset = 0;
+    commonMeshInfoBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonRenderInfoBufferWrite = {};
-    commonRenderInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonRenderInfoBufferWrite.dstSet = s_vkDescriptorSet;
-    commonRenderInfoBufferWrite.dstBinding = COMMON_RENDER_INFOS_DESCRIPTOR_SLOT;
-    commonRenderInfoBufferWrite.dstArrayElement = 0;
-    commonRenderInfoBufferWrite.descriptorCount = 1;
-    commonRenderInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonRenderInfoBufferWrite.pBufferInfo = &commonRenderInfoBufferInfo;
+    VkWriteDescriptorSet commonMeshInfoBufferWrite = {};
+    commonMeshInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonMeshInfoBufferWrite.dstSet = s_vkDescriptorSet;
+    commonMeshInfoBufferWrite.dstBinding = COMMON_MESH_INFOS_DESCRIPTOR_SLOT;
+    commonMeshInfoBufferWrite.dstArrayElement = 0;
+    commonMeshInfoBufferWrite.descriptorCount = 1;
+    commonMeshInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonMeshInfoBufferWrite.pBufferInfo = &commonMeshInfoBufferInfo;
 
-    descWrites.emplace_back(commonRenderInfoBufferWrite);
+    descWrites.emplace_back(commonMeshInfoBufferWrite);
+
+
+    VkDescriptorBufferInfo commonInstInfoBufferInfo = {};
+    commonInstInfoBufferInfo.buffer = s_commonInstInfosBuffer.Get();
+    commonInstInfoBufferInfo.offset = 0;
+    commonInstInfoBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet commonInstInfoBufferWrite = {};
+    commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonInstInfoBufferWrite.dstSet = s_vkDescriptorSet;
+    commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
+    commonInstInfoBufferWrite.dstArrayElement = 0;
+    commonInstInfoBufferWrite.descriptorCount = 1;
+    commonInstInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonInstInfoBufferWrite.pBufferInfo = &commonInstInfoBufferInfo;
+
+    descWrites.emplace_back(commonInstInfoBufferWrite);
 
 
     VkDescriptorBufferInfo commonTrsBufferInfo = {};
@@ -1693,17 +1842,13 @@ static void LoadSceneMaterials(const gltf::Model& model)
         );
     });
 
-    for (vkn::Buffer& buffer : stagingSceneImageBuffers) {
-        buffer.Destroy();
-    }
-
     CORE_LOG_INFO("Materials loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
-static void LoadSceneMeshes(const gltf::Model& model)
+static void LoadSceneMeshInfos(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMeshes", 225, 0, 225, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMeshInfos", 225, 0, 225, 255);
     
     Timer timer;
 
@@ -1739,65 +1884,67 @@ static void LoadSceneMeshes(const gltf::Model& model)
     std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
-    s_sceneRenderInfos.reserve(model.meshes.size());
-    s_sceneRenderInfos.clear();
+    s_sceneMeshInfos.reserve(model.meshes.size());
+    s_sceneMeshInfos.clear();
 
-    s_sceneMeshes.reserve(model.meshes.size());
-    s_sceneMeshes.clear();
+    auto GetAttribPtr = [](const gltf::Model& model, const gltf::Primitive& primitive, const char* pAttribName, size_t& count, size_t& stride) -> const uint8_t*
+    {
+        CORE_ASSERT(pAttribName != nullptr);
+        CORE_ASSERT(primitive.attributes.contains(pAttribName));
+        
+        const uint32_t accessorIndex = primitive.attributes.at(pAttribName);
+        const gltf::Accessor& accessor = model.accessors[accessorIndex];
+        
+        const auto& bufferView = model.bufferViews[accessor.bufferView];
+        const auto& buffer = model.buffers[bufferView.buffer];
+
+        count = accessor.count;
+        stride = accessor.ByteStride(bufferView);
+
+        return buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+    };
 
     for (const gltf::Mesh& m : model.meshes) {
         for (const gltf::Primitive& primitive : m.primitives) {
-            COMMON_RENDER_INFO renderInfo = {};
-            renderInfo.MESH_IDX = s_sceneMeshes.size();
-            renderInfo.MATERIAL_IDX = primitive.material;
+            COMMON_MESH_INFO mesh = {};
 
-            Mesh mesh = {};
+            mesh.FIRST_VERTEX = cpuVertBuffer.size();
+            mesh.FIRST_INDEX = cpuIndexBuffer.size();
 
-            mesh.firstVertex = cpuVertBuffer.size();
-            mesh.firstIndex = cpuIndexBuffer.size();
+            mesh.AABB_MIN = glm::vec3(FLT_MAX);
+            mesh.AABB_MAX = glm::vec3(-FLT_MAX);
 
             const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
 
-            CORE_ASSERT(primitive.attributes.contains("POSITION"));
-            const uint32_t positionAccessorIndex = primitive.attributes.at("POSITION");
-            const gltf::Accessor& positionAccessor  = model.accessors[positionAccessorIndex];
+            size_t positionsCount = 0; size_t posStride = 0;
+            const uint8_t* pPositionData = GetAttribPtr(model, primitive, "POSITION", positionsCount, posStride);
             
-            const auto& positionBufferView = model.bufferViews[positionAccessor.bufferView];
-            const auto& positionBuffer = model.buffers[positionBufferView.buffer];
+            size_t normalsCount = 0; size_t normalStride = 0;
+            const uint8_t* pNormalData = GetAttribPtr(model, primitive, "NORMAL", normalsCount, normalStride);
+            
+            size_t texcoordsCount = 0; size_t texcoordStride = 0;
+            const uint8_t* pTexcoordData = GetAttribPtr(model, primitive, "TEXCOORD_0", texcoordsCount, texcoordStride);
 
-            const uint8_t* pPositionData = positionBuffer.data.data() + positionBufferView.byteOffset + positionAccessor.byteOffset;
+            mesh.VERTEX_COUNT += positionsCount;
 
-            CORE_ASSERT(primitive.attributes.contains("NORMAL"));
-            const uint32_t normalAccessorIndex = primitive.attributes.at("NORMAL");
-            const gltf::Accessor& normalAccessor = model.accessors[normalAccessorIndex];
-
-            const auto& normalBufferView = model.bufferViews[normalAccessor.bufferView];
-            const auto& normalBuffer = model.buffers[normalBufferView.buffer];
-
-            const uint8_t* pNormalData = normalBuffer.data.data() + normalBufferView.byteOffset + normalAccessor.byteOffset;
-
-            CORE_ASSERT(primitive.attributes.contains("TEXCOORD_0"));
-            const uint32_t texcoordAccessorIndex = primitive.attributes.at("TEXCOORD_0");
-            const gltf::Accessor& texcoordAccessor = model.accessors[texcoordAccessorIndex];
-
-            const auto& texcoordBufferView = model.bufferViews[texcoordAccessor.bufferView];
-            const auto& texcoordBuffer = model.buffers[texcoordBufferView.buffer];
-
-            const uint8_t* pTexcoordData = texcoordBuffer.data.data() + texcoordBufferView.byteOffset + texcoordAccessor.byteOffset;
-
-            mesh.vertexCount += positionAccessor.count;
-
-            for (size_t i = 0; i < positionAccessor.count; ++i) {
-                const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * positionAccessor.ByteStride(positionBufferView));
-                const float* pNormal = reinterpret_cast<const float*>(pNormalData + i * normalAccessor.ByteStride(normalBufferView));
-                const float* pTexcoord = reinterpret_cast<const float*>(pTexcoordData + i * texcoordAccessor.ByteStride(texcoordBufferView));
+            for (size_t i = 0; i < positionsCount; ++i) {
+                const float* pPosition = reinterpret_cast<const float*>(pPositionData + i * posStride);
+                const float* pNormal = reinterpret_cast<const float*>(pNormalData + i * normalStride);
+                const float* pTexcoord = reinterpret_cast<const float*>(pTexcoordData + i * texcoordStride);
                 
+                const glm::vec3 position(pPosition[0], pPosition[1], pPosition[2]);
+                const glm::vec3 normal(pNormal[0], pNormal[1], pNormal[2]);
+                const glm::vec2 texcoord(pTexcoord[0], pTexcoord[1]);
+
+                mesh.AABB_MIN = glm::min(mesh.AABB_MIN, position);
+                mesh.AABB_MAX = glm::max(mesh.AABB_MAX, position);
+
                 Vertex vertex = {};
 
-                vertex.posXY = glm::packHalf2x16(glm::vec2(pPosition[0], pPosition[1]));
-                vertex.posZnormX = glm::packHalf2x16(glm::vec2(pPosition[2], pNormal[0]));
-                vertex.normYZ = glm::packHalf2x16(glm::vec2(pNormal[1], pNormal[2]));
-                vertex.texcoord = glm::packHalf2x16(glm::vec2(pTexcoord[0], pTexcoord[1]));
+                vertex.posXY = glm::packHalf2x16(glm::vec2(position.x, position.y));
+                vertex.posZnormX = glm::packHalf2x16(glm::vec2(position.z, normal.x));
+                vertex.normYZ = glm::packHalf2x16(glm::vec2(normal.y, normal.z));
+                vertex.texcoord = glm::packHalf2x16(texcoord);
 
                 cpuVertBuffer.emplace_back(vertex);
             }
@@ -1810,7 +1957,7 @@ static void LoadSceneMeshes(const gltf::Model& model)
 
             const uint8_t* pIndexData = indexBuffer.data.data() + indexBufferView.byteOffset + indexAccessor.byteOffset;
 
-            mesh.indexCount += indexAccessor.count;
+            mesh.INDEX_COUNT += indexAccessor.count;
 
             for (size_t i = 0; i < indexAccessor.count; ++i) {
                 uint32_t index = UINT32_MAX;
@@ -1836,8 +1983,7 @@ static void LoadSceneMeshes(const gltf::Model& model)
                 cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
             }
 
-            s_sceneMeshes.emplace_back(mesh);
-            s_sceneRenderInfos.emplace_back(renderInfo);
+            s_sceneMeshInfos.emplace_back(mesh);
         }
     }
 
@@ -1853,6 +1999,12 @@ static void LoadSceneMeshes(const gltf::Model& model)
     CORE_ASSERT(stagingVertBuffer.IsCreated());
     stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
 
+    {
+        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(Vertex));
+        stagingVertBuffer.Unmap();
+    }
+
     stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
 
     vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
@@ -1860,15 +2012,21 @@ static void LoadSceneMeshes(const gltf::Model& model)
     stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
 
     {
-        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]));
-        stagingVertBuffer.Unmap();
+        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(VertexIndexType));
+        stagingIndexBuffer.Unmap();
     }
 
+    stagingBufCreateInfo.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+
+    vkn::Buffer stagingMeshInfosBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingMeshInfosBuffer.IsCreated());
+    stagingMeshInfosBuffer.SetDebugName("STAGING_MESH_INFOS_BUFFER");
+
     {
-        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
-        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]));
-        stagingIndexBuffer.Unmap();
+        void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pMeshBufferData, s_sceneMeshInfos.data(), s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO));
+        stagingMeshInfosBuffer.Unmap();
     }
 
     vkn::BufferCreateInfo vertBufCreateInfo = {};
@@ -1895,26 +2053,38 @@ static void LoadSceneMeshes(const gltf::Model& model)
     s_indexBuffer.SetDebugName("COMMON_IB");
 
 
+    vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
+    meshInfosBufCreateInfo.pDevice = &s_vkDevice;
+    meshInfosBufCreateInfo.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    meshInfosBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    meshInfosBufCreateInfo.memAllocFlags = 0;
+    
+    s_commonMeshInfosBuffer.Create(meshInfosBufCreateInfo);
+    CORE_ASSERT(s_commonMeshInfosBuffer.IsCreated());
+    s_commonMeshInfosBuffer.SetDebugName("COMMON_MESH_INFOS");
+
+
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
         
-        bufferRegion.size = cpuVertBuffer.size() * sizeof(cpuVertBuffer[0]);
+        bufferRegion.size = cpuVertBuffer.size() * sizeof(Vertex);
         vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), s_vertexBuffer.Get(), 1, &bufferRegion);
 
-        bufferRegion.size = cpuIndexBuffer.size() * sizeof(cpuIndexBuffer[0]);
+        bufferRegion.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
         vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &bufferRegion);
+        
+        bufferRegion.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshInfosBuffer.Get(), 1, &bufferRegion);
     });
-
-    stagingVertBuffer.Destroy();
-    stagingIndexBuffer.Destroy();
 
     CORE_LOG_INFO("Mesh loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
-static void LoadTransforms(const gltf::Model& model)
+static void LoadSceneTransforms(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadTransforms", 225, 0, 225, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneTransforms", 225, 0, 225, 255);
     
     Timer timer;
 
@@ -1952,32 +2122,113 @@ static void LoadTransforms(const gltf::Model& model)
         }
     }
 
-    size_t renderInfoIdx = 0;
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    stagingBufCreateInfo.memAllocFlags = 0;
 
-    for (size_t meshGroupIdx = 0; meshGroupIdx < model.meshes.size(); ++meshGroupIdx) {
-        const gltf::Mesh& mesh = model.meshes[meshGroupIdx];
+    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingBuffer.IsCreated());
+    stagingBuffer.SetDebugName("STAGING_TRANSFORM_BUFFER");
 
-        for (size_t meshIdx = 0; meshIdx < mesh.primitives.size(); ++meshIdx) {
-            s_sceneRenderInfos[renderInfoIdx].TRANSFORM_IDX = meshGroupIdx;
-            ++renderInfoIdx;
-        }
+    {
+        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM));
+        stagingBuffer.Unmap();
     }
 
     vkn::BufferCreateInfo commonTrsCreateInfo = {};
     commonTrsCreateInfo.pDevice = &s_vkDevice;
     commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
-    commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    commonTrsCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonTrsCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     s_commonTransformsBuffer.Create(commonTrsCreateInfo);
     CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
     s_commonTransformsBuffer.SetDebugName("COMMON_TRANSFORMS");
 
-    void* pCommonRenderInfoData = s_commonTransformsBuffer.Map(0, VK_WHOLE_SIZE, 0);
-    memcpy(pCommonRenderInfoData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM));
-    s_commonTransformsBuffer.Unmap();
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy bufferRegion = {};
+        bufferRegion.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
+        
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonTransformsBuffer.Get(), 1, &bufferRegion);
+    });
 
     CORE_LOG_INFO("Transforms loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void LoadSceneInstInfos(const gltf::Model& model)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneInstInfos", 225, 0, 225, 255);
+    
+    Timer timer;
+
+    s_sceneInstInfos.reserve(model.meshes.size());
+    s_sceneInstInfos.clear();
+
+    uint32_t meshIdx = 0;
+
+    for (const gltf::Mesh& m : model.meshes) {
+        for (const gltf::Primitive& primitive : m.primitives) {
+            COMMON_INST_INFO instInfo = {};
+            
+            instInfo.MESH_IDX = meshIdx;
+            instInfo.MATERIAL_IDX = primitive.material;
+
+            s_sceneInstInfos.emplace_back(instInfo);
+            ++meshIdx;
+        }
+    }
+
+    size_t instInfoIdx = 0;
+
+    for (size_t meshGroupIndex = 0; meshGroupIndex < model.meshes.size(); ++meshGroupIndex) {
+        const gltf::Mesh& mesh = model.meshes[meshGroupIndex];
+
+        for (size_t meshIdx = 0; meshIdx < mesh.primitives.size(); ++meshIdx) {
+            s_sceneInstInfos[instInfoIdx].TRANSFORM_IDX = meshGroupIndex;
+            ++instInfoIdx;
+        }
+    }
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    stagingBufCreateInfo.memAllocFlags = 0;
+
+    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
+    CORE_ASSERT(stagingBuffer.IsCreated());
+    stagingBuffer.SetDebugName("STAGING_INST_INFOS_BUFFER");
+
+    {
+        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        memcpy(pData, s_sceneInstInfos.data(), s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO));
+        stagingBuffer.Unmap();
+    }
+
+    vkn::BufferCreateInfo instInfosBufferCreateInfo = {};
+    instInfosBufferCreateInfo.pDevice = &s_vkDevice;
+    instInfosBufferCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+    instInfosBufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    instInfosBufferCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    s_commonInstInfosBuffer.Create(instInfosBufferCreateInfo);
+    CORE_ASSERT(s_commonInstInfosBuffer.IsCreated());
+    s_commonInstInfosBuffer.SetDebugName("COMMON_INST_INFOS");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy bufferRegion = {};
+        bufferRegion.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+        
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstInfosBuffer.Get(), 1, &bufferRegion);
+    });
+
+    CORE_LOG_INFO("Instance infos loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -2007,23 +2258,9 @@ static void LoadScene(const fs::path& filepath)
 
 
     LoadSceneMaterials(model);
-    LoadSceneMeshes(model);
-    LoadTransforms(model);
-
-
-    vkn::BufferCreateInfo commonRenderInfoCreateInfo = {};
-    commonRenderInfoCreateInfo.pDevice = &s_vkDevice;
-    commonRenderInfoCreateInfo.size = s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO);
-    commonRenderInfoCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    commonRenderInfoCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    s_commonRenderInfoBuffer.Create(commonRenderInfoCreateInfo);
-    CORE_ASSERT(s_commonRenderInfoBuffer.IsCreated());
-    s_commonRenderInfoBuffer.SetDebugName("COMMON_RENDER_INFOS");
-
-    void* pCommonRenderInfoData = s_commonRenderInfoBuffer.Map(0, VK_WHOLE_SIZE, 0);
-    memcpy(pCommonRenderInfoData, s_sceneRenderInfos.data(), s_sceneRenderInfos.size() * sizeof(COMMON_RENDER_INFO));
-    s_commonRenderInfoBuffer.Unmap();
+    LoadSceneMeshInfos(model);
+    LoadSceneTransforms(model);
+    LoadSceneInstInfos(model);
 
     
     vkn::BufferCreateInfo commonConstBufCreateInfo = {};
@@ -2039,112 +2276,6 @@ static void LoadScene(const fs::path& filepath)
 
 
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
-}
-
-
-void CreateVkDrawIndirectBuffers()
-{
-    Timer timer;
-
-    vkn::BufferCreateInfo commandsBufCreateInfo = {};
-    commandsBufCreateInfo.pDevice = &s_vkDevice;
-    commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(VkDrawIndexedIndirectCommand);
-    commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    commandsBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    commandsBufCreateInfo.memAllocFlags = 0;
-
-    s_drawIndirectCommandsBuffer.Create(commandsBufCreateInfo); 
-    CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
-    s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
-
-    {
-        CORE_ASSERT(s_sceneRenderInfos.size() <= MAX_INDIRECT_DRAW_CMD_COUNT);
-
-        VkDrawIndexedIndirectCommand* pData = s_drawIndirectCommandsBuffer.Map<VkDrawIndexedIndirectCommand>(0);
-
-        for (size_t i = 0; i < s_sceneRenderInfos.size(); ++i) {
-            const COMMON_RENDER_INFO& renderInfo = s_sceneRenderInfos[i];
-            const Mesh& mesh = s_sceneMeshes[renderInfo.MESH_IDX];
-            
-            pData[i].vertexOffset = mesh.firstVertex;
-            pData[i].firstIndex = mesh.firstIndex;
-            pData[i].indexCount = mesh.indexCount;
-            pData[i].firstInstance = 0;
-            pData[i].instanceCount = 1;
-        }
-
-        s_drawIndirectCommandsBuffer.Unmap();
-    }
-
-
-    commandsBufCreateInfo.size = sizeof(glm::uint);
-
-    s_drawIndirectCommandsCountBuffer.Create(commandsBufCreateInfo); 
-    CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
-    s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
-
-    {
-        glm::uint* pData = s_drawIndirectCommandsCountBuffer.Map<glm::uint>(0);
-        *pData = s_sceneRenderInfos.size();
-        s_drawIndirectCommandsCountBuffer.Unmap();
-    }
-
-
-    CORE_LOG_INFO("Vulkan draw indirect buffers creation finished: %f ms", timer.End().GetDuration<float, std::milli>());
-}
-
-
-static void CreateDepthRT()
-{
-    vkn::Image& depthImage = s_vkDepthImage;
-    vkn::ImageView& depthImageView = s_vkDepthImageView;
-
-    if (depthImageView.IsCreated()) {
-        depthImageView.Destroy();
-    }
-
-    if (depthImage.IsCreated()) {
-        depthImage.Destroy();
-    }
-
-    vkn::ImageCreateInfo depthImageCreateInfo = {};
-    depthImageCreateInfo.pDevice = &s_vkDevice;
-
-    depthImageCreateInfo.type = VK_IMAGE_TYPE_2D;
-    depthImageCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
-    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthImageCreateInfo.flags = 0;
-    depthImageCreateInfo.mipLevels = 1;
-    depthImageCreateInfo.arrayLayers = 1;
-    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    
-    depthImageCreateInfo.memAllocInfo.flags = 0;
-    depthImageCreateInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-    depthImage.Create(depthImageCreateInfo);
-    CORE_ASSERT(depthImage.IsCreated());
-    depthImage.SetDebugName("COMMON_DEPTH");
-
-    vkn::ImageViewCreateInfo depthImageViewCreateInfo = {};
-    depthImageViewCreateInfo.pOwner = &depthImage;
-    depthImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    depthImageViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    depthImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    depthImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    depthImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
-    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
-
-    depthImageView.Create(depthImageViewCreateInfo);
-    CORE_ASSERT(depthImageView.IsValid());
-    depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
 }
 
 
@@ -2189,6 +2320,8 @@ void UpdateCommonConstBuffer(Window* pWnd)
             CORE_ASSERT_FAIL("Invalid material debug texture viewer index: %u", s_dbgTexIdx);
             break;
     }
+
+    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW : 0;
     
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
 
@@ -2200,6 +2333,32 @@ void UpdateScene()
 {
     DbgUI::BeginFrame();
     s_camera.Update();
+}
+
+
+void PresentImage(uint32_t imageIndex)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("Presenting", 200, 200, 0, 255);
+    
+    VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
+    VkSemaphore vkWaitSemaphore = s_vkRenderingFinishedSemaphores[imageIndex].Get();
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = nullptr;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &vkWaitSemaphore;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &vkSwapchain;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults = nullptr;
+    const VkResult presentResult = vkQueuePresentKHR(s_vkDevice.GetQueue(), &presentInfo);
+
+    if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
+        VK_CHECK(presentResult);
+    } else {
+        s_swapchainRecreateRequired = true;
+    }
 }
 
 
@@ -2328,15 +2487,16 @@ void RenderScene()
             if (s_useMeshIndirectDraw) {
                 vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
     
-                cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, s_sceneRenderInfos.size(), sizeof(VkDrawIndexedIndirectCommand));
+                cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, 
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             } else {
-                for (uint32_t rndInfoIdx = 0; rndInfoIdx < s_sceneRenderInfos.size(); ++rndInfoIdx) {
-                    registry.RENDER_INFO_IDX = rndInfoIdx;
+                for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
+                    registry.INST_INFO_IDX = i;
                     vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
         
-                    const Mesh& mesh = s_sceneMeshes[s_sceneRenderInfos[rndInfoIdx].MESH_IDX];
+                    const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
         
-                    cmdBuffer.CmdDrawIndexed(mesh.indexCount, 1, mesh.firstIndex, mesh.firstVertex, 0);
+                    cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, 0);
                 }
             }
 
@@ -2374,29 +2534,7 @@ void RenderScene()
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    {
-        ENG_PROFILE_SCOPED_MARKER_C("Presenting", 200, 200, 0, 255);
-        VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
-        VkSemaphore vkWaitSemaphore = renderingFinishedSemaphore.Get();
-    
-        VkPresentInfoKHR presentInfo = {};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.pNext = nullptr;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = &vkWaitSemaphore;
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = &vkSwapchain;
-        presentInfo.pImageIndices = &nextImageIdx;
-        presentInfo.pResults = nullptr;
-        const VkResult presentResult = vkQueuePresentKHR(s_vkDevice.GetQueue(), &presentInfo);
-    
-        if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
-            VK_CHECK(presentResult);
-        } else {
-            s_swapchainRecreateRequired = true;
-            return;
-        }
-    }
+    PresentImage(nextImageIdx);
 }
 
 
@@ -2657,7 +2795,7 @@ int main(int argc, char* argv[])
 
     LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
 
-    CreateVkDrawIndirectBuffers();
+    CreateVkIndirectDrawBuffers();
 
     WriteDescriptorSet();
 

@@ -2,7 +2,7 @@ struct TEST_BINDLESS_REGISTRY
 {
     uint4* VERTEX_DATA;
 
-    uint RENDER_INFO_IDX;
+    uint INST_INFO_IDX;
     uint PADDING;
 };
 
