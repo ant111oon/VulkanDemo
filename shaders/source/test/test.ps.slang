@@ -17,7 +17,7 @@ TEST_PS_OUTPUT main(TEST_VS_OUTPUT input)
 {
     TEST_PS_OUTPUT result = (TEST_PS_OUTPUT)0;
 
-    const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instInfoID];
+    const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
     result.color = float4(0.f, 0.f, 0.f, 1.f);

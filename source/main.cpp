@@ -58,8 +58,7 @@ struct TEST_BINDLESS_REGISTRY
 {
     VkDeviceAddress VERTEX_DATA;
 
-    glm::uint INST_INFO_IDX;
-    glm::uint PADDING;
+    glm::vec2 PADDING;
 };
 
 
@@ -111,8 +110,6 @@ struct COMMON_INDIRECT_DRAW_CMD
       int32_t VERTEX_OFFSET;
     glm::uint FIRST_INSTANCE;
     //
-
-    glm::uint INSTANCE_INFO_IDX;
 };
 
 
@@ -1061,10 +1058,8 @@ void CreateVkIndirectDrawBuffers()
             pData[i].VERTEX_OFFSET = mesh.FIRST_VERTEX;
             pData[i].FIRST_INDEX = mesh.FIRST_INDEX;
             pData[i].INDEX_COUNT = mesh.INDEX_COUNT;
-            pData[i].FIRST_INSTANCE = 0;
+            pData[i].FIRST_INSTANCE = i;
             pData[i].INSTANCE_COUNT = 1;
-
-            pData[i].INSTANCE_INFO_IDX = i;
         }
 
         s_drawIndirectCommandsBuffer.Unmap();
@@ -2484,19 +2479,16 @@ void RenderScene()
             TEST_BINDLESS_REGISTRY registry = {};
             registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
 
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
+
             if (s_useMeshIndirectDraw) {
-                vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
-    
                 cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, 
                     MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             } else {
                 for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
-                    registry.INST_INFO_IDX = i;
-                    vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
-        
                     const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
         
-                    cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, 0);
+                    cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
                 }
             }
 

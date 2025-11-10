@@ -49,8 +49,6 @@ struct COMMON_INDIRECT_DRAW_CMD
     int  VERTEX_OFFSET;
     uint FIRST_INSTANCE;
     //
-
-    uint INSTANCE_INFO_IDX;
 };
 
 
