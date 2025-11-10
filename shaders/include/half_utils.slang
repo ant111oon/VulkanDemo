@@ -17,7 +17,7 @@ float HalfBitsToFloat(uint packed)
         if (fraction == 0) {
             return sign == 0 ? float(1.f / 0.f) : float(-1.f / 0.f); // Infinity
         } else {
-            return asfloat(0x7FC00000); // NaN
+            return asfloat(0x7FC00000); // NaN 
         }
     }
 

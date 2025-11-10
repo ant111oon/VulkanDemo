@@ -1,8 +1,8 @@
-import "registers_common.fx";
-import "common_math.fx";
+import common_registers;
+import common_math;
 
-import "test_vsin.fx";
-import "test_vsout.fx";
+import test_vsin;
+import test_vsout;
 
 
 [shader("vertex")]

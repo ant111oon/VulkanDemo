@@ -1,4 +1,4 @@
-__exported import "common_math.fx";
+__exported import common_math;
 
 
 struct COMMON_TRANSFORM

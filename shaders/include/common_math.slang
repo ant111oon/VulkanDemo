@@ -1,4 +1,4 @@
-__exported import "half_utils.fx";
+__exported import half_utils;
 
 
 bool IsFlagSet(uint value, uint mask)

@@ -1,5 +1,5 @@
-__exported import "common_math.fx";
-__exported import "registers_test.fx";
+__exported import common_math;
+__exported import test_registers;
 
 
 struct TEST_INPUT_DATA

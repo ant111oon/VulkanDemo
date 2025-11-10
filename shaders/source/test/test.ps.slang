@@ -1,9 +1,9 @@
-import "test_vsout.fx";
+import test_vsout;
 
-import "registers_common.fx";
-import "registers_test.fx";
+import common_registers;
+import test_registers;
 
-import "common_math.fx";
+import common_math;
 
 
 struct TEST_PS_OUTPUT
