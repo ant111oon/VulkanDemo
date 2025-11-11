@@ -54,7 +54,7 @@ struct Vertex
 };
 
 
-struct TEST_BINDLESS_REGISTRY
+struct BASE_BINDLESS_REGISTRY
 {
     VkDeviceAddress VERTEX_DATA;
 
@@ -85,9 +85,9 @@ struct COMMON_MESH_INFO
     glm::uint FIRST_INDEX;
     glm::uint INDEX_COUNT;
 
-    glm::vec3 AABB_MIN;
+    glm::vec3 BOUNDS_MIN_LCS;
     glm::uint PAD0;
-    glm::vec3 AABB_MAX;
+    glm::vec3 BOUNDS_MAX_LCS;
     glm::uint PAD1;
 };
 
@@ -274,13 +274,13 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 };
 
 
-static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 20;
+static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 21;
+static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 22;
+static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 23;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 24;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 25;
+static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 26;
 
 static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
@@ -520,7 +520,7 @@ namespace DbgUI
         imGuiVkInitInfo.PipelineCache = VK_NULL_HANDLE;
 
         imGuiVkInitInfo.UseDynamicRendering = true;
-        imGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;               // 0 defaults to VK_SAMPLE_COUNT_1_BIT
+        imGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // 0 defaults to VK_SAMPLE_COUNT_1_BIT
     #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
         imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
@@ -963,7 +963,7 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
-        .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY))
+        .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
@@ -1906,8 +1906,8 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
             mesh.FIRST_VERTEX = cpuVertBuffer.size();
             mesh.FIRST_INDEX = cpuIndexBuffer.size();
 
-            mesh.AABB_MIN = glm::vec3(FLT_MAX);
-            mesh.AABB_MAX = glm::vec3(-FLT_MAX);
+            mesh.BOUNDS_MIN_LCS = glm::vec3(FLT_MAX);
+            mesh.BOUNDS_MAX_LCS = glm::vec3(-FLT_MAX);
 
             const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
 
@@ -1931,8 +1931,8 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
                 const glm::vec3 normal(pNormal[0], pNormal[1], pNormal[2]);
                 const glm::vec2 texcoord(pTexcoord[0], pTexcoord[1]);
 
-                mesh.AABB_MIN = glm::min(mesh.AABB_MIN, position);
-                mesh.AABB_MAX = glm::max(mesh.AABB_MAX, position);
+                mesh.BOUNDS_MIN_LCS = glm::min(mesh.BOUNDS_MIN_LCS, position);
+                mesh.BOUNDS_MAX_LCS = glm::max(mesh.BOUNDS_MAX_LCS, position);
 
                 Vertex vertex = {};
 
@@ -2252,9 +2252,9 @@ static void LoadScene(const fs::path& filepath)
     CORE_ASSERT_MSG(isModelLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
 
 
+    LoadSceneTransforms(model);
     LoadSceneMaterials(model);
     LoadSceneMeshInfos(model);
-    LoadSceneTransforms(model);
     LoadSceneInstInfos(model);
 
     
@@ -2476,10 +2476,10 @@ void RenderScene()
 
             cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
-            TEST_BINDLESS_REGISTRY registry = {};
+            BASE_BINDLESS_REGISTRY registry = {};
             registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
 
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(TEST_BINDLESS_REGISTRY), &registry);
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
 
             if (s_useMeshIndirectDraw) {
                 cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, 
@@ -2758,7 +2758,7 @@ int main(int argc, char* argv[])
     s_vkDescriptorSet = CreateVkDescriptorSet(s_vkDevice.Get(), s_vkDescriptorPool, s_vkDescriptorSetLayout);
 
     s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
-    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/test.vs.spv", "shaders/bin/test.ps.spv");
+    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 

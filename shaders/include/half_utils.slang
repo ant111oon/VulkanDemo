@@ -1,3 +1,7 @@
+#ifndef HALF_UTILS_H
+#define HALF_UTILS_H
+
+
 float HalfBitsToFloat(uint packed)
 {
     uint sign = (packed >> 15) & 0x1;
@@ -38,3 +42,5 @@ float2 UnpackHalf2x16(uint packed)
 
     return float2(HalfBitsToFloat(lowBits), HalfBitsToFloat(highBits));
 }
+
+#endif

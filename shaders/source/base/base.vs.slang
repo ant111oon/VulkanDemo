@@ -1,21 +1,21 @@
-import common_registers;
-import common_math;
+#include "common_registers.slang"
+#include "common_math.slang"
 
-import test_vsin;
-import test_vsout;
+#include "base_vsin.slang"
+#include "base_vsout.slang"
 
 
 [shader("vertex")]
-TEST_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceID)
+BASE_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceID)
 {
-    TEST_VS_OUTPUT result = (TEST_VS_OUTPUT)0;
+    BASE_VS_OUTPUT result = (BASE_VS_OUTPUT)0;
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[instID];
     const COMMON_TRANSFORM transform = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
     const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
 
-    TEST_INPUT_DATA inputData = PrepareInputData(vertID);
+    BASE_INPUT_DATA inputData = PrepareBaseVSInputData(vertID);
 
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f));
 

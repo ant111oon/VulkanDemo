@@ -1,8 +1,0 @@
-struct TEST_BINDLESS_REGISTRY
-{
-    uint4* VERTEX_DATA;
-    float2 PADDING;
-};
-
-
-[[vk::push_constant]] TEST_BINDLESS_REGISTRY TEST_REGISTRY;

@@ -1,21 +1,19 @@
-import test_vsout;
+#include "base_vsout.slang"
 
-import common_registers;
-import test_registers;
-
-import common_math;
+#include "common_registers.slang"
+#include "common_math.slang"
 
 
-struct TEST_PS_OUTPUT
+struct BASE_PS_OUTPUT
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-TEST_PS_OUTPUT main(TEST_VS_OUTPUT input)
+BASE_PS_OUTPUT main(BASE_VS_OUTPUT input)
 {
-    TEST_PS_OUTPUT result = (TEST_PS_OUTPUT)0;
+    BASE_PS_OUTPUT result = (BASE_PS_OUTPUT)0;
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];

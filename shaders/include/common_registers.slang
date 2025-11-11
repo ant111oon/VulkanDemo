@@ -1,4 +1,7 @@
-__exported import common_math;
+#ifndef COMMON_REGISTERS_H
+#define COMMON_REGISTERS_H
+
+#include "common_math.slang"
 
 
 struct COMMON_TRANSFORM
@@ -24,9 +27,9 @@ struct COMMON_MESH_INFO
     uint FIRST_INDEX;
     uint INDEX_COUNT;
 
-    float3 AABB_MIN;
+    float3 BOUNDS_MIN_LCS;
     uint PAD0;
-    float3 AABB_MAX;
+    float3 BOUNDS_MAX_LCS;
     uint PAD1;
 };
 
@@ -143,15 +146,17 @@ enum COMMON_SAMPLER_IDX
 
 static const uint COMMON_MTL_TEXTURES_COUNT = 128;
 
+// Bindings 0-19 are reserved for other passes
 
-[vk::binding(0, 0)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];
+[vk::binding(20, 0)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];
 
-[vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
+[vk::binding(21, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
-[vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<COMMON_TRANSFORM> COMMON_TRANSFORMS;
-[vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
-[vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
+[vk::binding(22, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
+[vk::binding(23, 0)] StructuredBuffer<COMMON_TRANSFORM> COMMON_TRANSFORMS;
+[vk::binding(24, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
+[vk::binding(25, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
 
-[vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
+[vk::binding(26, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 
+#endif

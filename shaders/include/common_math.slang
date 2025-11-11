@@ -1,4 +1,7 @@
-__exported import half_utils;
+#ifndef COMMON_MATH_H
+#define COMMON_MATH_H
+
+#include "half_utils.slang"
 
 
 bool IsFlagSet(uint value, uint mask)
@@ -11,3 +14,5 @@ bool IsBitSet(uint value, uint bit)
 {
     return IsFlagSet(value, uint(1) << bit);
 }
+
+#endif
