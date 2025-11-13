@@ -6,8 +6,9 @@
 
 struct BASE_BINDLESS_REGISTRY
 {
-    uint4 *VERTEX_DATA;
-    float2 PADDING;
+    uint4* VERTEX_DATA;
+    uint   INST_INFO_IDX;
+    uint   PAD0;
 };
 
 [[vk::push_constant]] BASE_BINDLESS_REGISTRY BASE_REGISTRY;

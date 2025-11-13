@@ -57,8 +57,15 @@ struct Vertex
 struct BASE_BINDLESS_REGISTRY
 {
     VkDeviceAddress VERTEX_DATA;
+    glm::uint INST_INFO_IDX;
+    glm::uint PAD0;
+};
 
-    glm::vec2 PADDING;
+
+struct BASE_CULLING_BINDLESS_REGISTRY
+{
+    glm::vec3 PAD0;
+    glm::uint INST_COUNT;
 };
 
 
@@ -101,15 +108,16 @@ struct COMMON_INST_INFO
 };
 
 
-struct COMMON_INDIRECT_DRAW_CMD
+struct BASE_INDIRECT_DRAW_CMD
 {
     // NOTE: Don't change order of this variables!!!
     glm::uint INDEX_COUNT;
     glm::uint INSTANCE_COUNT;
     glm::uint FIRST_INDEX;
-      int32_t VERTEX_OFFSET;
+    int32_t   VERTEX_OFFSET;
     glm::uint FIRST_INSTANCE;
-    //
+
+    glm::uint INSTANCE_INFO_IDX;
 };
 
 
@@ -121,7 +129,7 @@ struct COMMON_CB_DATA
 
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
-    glm::uvec2 PADDING;
+    glm::uvec2 PAD0;
 };
 
 
@@ -134,6 +142,7 @@ enum class COMMON_DBG_FLAG_MASKS
     OUTPUT_COMMON_MTL_EMISSIVE_TEX = 0x10,
 
     USE_MESH_INDIRECT_DRAW = 0x20,
+    USE_MESH_GPU_CULLING = 0x40
 };
 
 
@@ -274,13 +283,15 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 };
 
 
-static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 20;
-static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 21;
-static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 22;
-static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 23;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 24;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 25;
-static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 26;
+static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
+static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 7;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 8;
 
 static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
@@ -313,12 +324,15 @@ static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 static vkn::CmdPool   s_vkCmdPool;
 static vkn::CmdBuffer s_vkImmediateSubmitCmdBuffer;
 
-static VkDescriptorPool      s_vkDescriptorPool = VK_NULL_HANDLE;
-static VkDescriptorSet       s_vkDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_vkDescriptorSetLayout = VK_NULL_HANDLE;
+static VkDescriptorPool      s_vkCommonDescriptorPool = VK_NULL_HANDLE;
+static VkDescriptorSet       s_vkCommonDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_vkCommonDescriptorSetLayout = VK_NULL_HANDLE;
 
-static VkPipelineLayout      s_vkPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline            s_vkPipeline = VK_NULL_HANDLE;
+static VkPipelineLayout s_vkBasePipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_vkBasePipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_vkBaseCullingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_vkBaseCullingPipeline = VK_NULL_HANDLE;
 
 static std::vector<vkn::Semaphore> s_vkRenderingFinishedSemaphores;
 static vkn::Semaphore s_vkPresentFinishedSemaphore;
@@ -327,8 +341,8 @@ static vkn::CmdBuffer s_vkRenderCmdBuffer;
 
 static vkn::Fence s_vkImmediateSubmitFinishedFence;
 
-static vkn::Image       s_vkDepthImage;
-static vkn::ImageView   s_vkDepthImageView;
+static vkn::Image     s_vkDepthImage;
+static vkn::ImageView s_vkDepthImageView;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -345,10 +359,10 @@ static vkn::Buffer s_drawIndirectCommandsCountBuffer;
 
 static vkn::QueryPool s_vkQueryPool;
 
-static std::vector<COMMON_MESH_INFO>    s_sceneMeshInfos;
-static std::vector<COMMON_MATERIAL>     s_sceneMaterials;
-static std::vector<COMMON_TRANSFORM>    s_sceneTransforms;
-static std::vector<COMMON_INST_INFO>    s_sceneInstInfos;
+static std::vector<COMMON_MESH_INFO> s_sceneMeshInfos;
+static std::vector<COMMON_MATERIAL>  s_sceneMaterials;
+static std::vector<COMMON_TRANSFORM> s_sceneTransforms;
+static std::vector<COMMON_INST_INFO> s_sceneInstInfos;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
@@ -359,13 +373,21 @@ static vkn::ImageView s_sceneDefaultImageView;
 
 static eng::Camera s_camera;
 
+static glm::mat4x4 s_curViewMat = glm::mat4x4(1.f);
+static glm::mat4x4 s_curProjMat = glm::mat4x4(1.f);
+static glm::mat4x4 s_curViewProjMat = glm::mat4x4(1.f);
+
 static uint32_t s_dbgTexIdx = 0;
 
 static size_t s_frameNumber = 0;
 static float s_frameTime = 0.f;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
+
+#ifndef ENG_BUILD_RELEASE
 static bool s_useMeshIndirectDraw = true;
+static bool s_useMeshCulling = true;
+#endif
 
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -606,16 +628,23 @@ namespace DbgUI
             
             ImGui::Separator();
 
+        #ifndef ENG_BUILD_RELEASE
             ImGui::NewLine();
-            ImGui::Checkbox("Use Indirect Draw", &s_useMeshIndirectDraw);
+            ImGui::Checkbox("BasePass/Use Indirect Draw", &s_useMeshIndirectDraw);
+            ImGui::Checkbox("BasePass/Use Culling", &s_useMeshCulling);
+        #endif
         } ImGui::End();
     }
 
 
     static void Render(vkn::CmdBuffer& cmdBuffer)
     {   
+        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "Dbg_UI_Render_Pass", 255, 50, 50, 255);
+
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
+
+        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
     }
 }
 
@@ -795,6 +824,7 @@ static void CreateVkPhysAndLogicalDevices()
     vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
     vkPhysDeviceFeturesReq.samplerAnisotropy = true;
     vkPhysDeviceFeturesReq.samplerMirrorClampToEdge = true;
+    vkPhysDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
 
     vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
     vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -845,6 +875,7 @@ static void CreateVkPhysAndLogicalDevices()
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     features2.pNext = &features11;
     features2.features.samplerAnisotropy = VK_TRUE;
+    features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
 
     vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
     vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
@@ -889,7 +920,7 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
 }
 
 
-static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
+static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
 {
     Timer timer;
 
@@ -901,19 +932,19 @@ static VkDescriptorPool CreateVkDescriptorPool(VkDevice vkDevice)
         
     builder
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4)
+        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
     
     VkDescriptorPool vkPool = builder.Build(vkDevice);
 
-    CORE_LOG_INFO("VkDescriptorPool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("Common descriptor pool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkPool;
 }
 
 
-static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
+static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice)
 {
     Timer timer;
 
@@ -926,18 +957,20 @@ static VkDescriptorSetLayout CreateVkDescriptorSetLayout(VkDevice vkDevice)
         .AddBinding(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        .AddBinding(BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL);
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
-    CORE_LOG_INFO("VkDescriptorSetLayout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("Common descriptor set layout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkLayout;
 }
 
 
-static VkDescriptorSet CreateVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
+static VkDescriptorSet CreateVkCommonDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
     Timer timer;
 
@@ -950,13 +983,13 @@ static VkDescriptorSet CreateVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool
         .AddLayout(vkDescriptorSetLayout)
         .Allocate(vkDevice, vkDescriptorSets);
 
-    CORE_LOG_INFO("VkDescriptorSet allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("Common descriptor set allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkDescriptorSets[0];
 }
 
 
-static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
+static VkPipelineLayout CreateVkBasePipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
     Timer timer;
 
@@ -967,13 +1000,30 @@ static VkPipelineLayout CreateVkPipelineLayout(VkDevice vkDevice, VkDescriptorSe
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    CORE_LOG_INFO("VkPipelineLayout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("Base pipeline layout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 
     return vkLayout;
 }
 
 
-static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
+static VkPipelineLayout CreateVkBaseCullingPipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
+{
+    Timer timer;
+
+    vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    VkPipelineLayout vkLayout = plBuilder
+        .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY))
+        .AddDescriptorSetLayout(vkDescriptorSetLayout)
+        .Build(vkDevice);
+
+    CORE_LOG_INFO("Base culling pipeline layout  initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return vkLayout;
+}
+
+
+static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
 {
     Timer timer;
 
@@ -1031,53 +1081,49 @@ static VkPipeline CreateVkGraphicsPipeline(VkDevice vkDevice, VkPipelineLayout v
 }
 
 
+static VkPipeline CreateVkBaseCullingPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& csPath)
+{
+    Timer timer;
+
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule vkShaderModule = CreateVkShaderModule(vkDevice, csPath, &shaderCodeBuffer);
+
+    vkn::ComputePipelineBuilder builder;
+
+    VkPipeline vkPipeline = builder
+        .SetShader(vkShaderModule, "main")
+        .SetLayout(vkLayout)
+        .Build(vkDevice);
+    
+    vkDestroyShaderModule(vkDevice, vkShaderModule, nullptr);
+    vkShaderModule = VK_NULL_HANDLE;
+
+    CORE_LOG_INFO("Base culling pipeline initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    return vkPipeline;
+}
+
+
 void CreateVkIndirectDrawBuffers()
 {
     Timer timer;
 
     vkn::BufferCreateInfo commandsBufCreateInfo = {};
     commandsBufCreateInfo.pDevice = &s_vkDevice;
-    commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    commandsBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
+    commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    commandsBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     commandsBufCreateInfo.memAllocFlags = 0;
 
     s_drawIndirectCommandsBuffer.Create(commandsBufCreateInfo); 
     CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
     s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
 
-    {
-        CORE_ASSERT(s_sceneInstInfos.size() <= MAX_INDIRECT_DRAW_CMD_COUNT);
-
-        COMMON_INDIRECT_DRAW_CMD* pData = s_drawIndirectCommandsBuffer.Map<COMMON_INDIRECT_DRAW_CMD>(0);
-
-        for (size_t i = 0; i < s_sceneInstInfos.size(); ++i) {
-            const COMMON_INST_INFO& renderInfo = s_sceneInstInfos[i];
-            const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[renderInfo.MESH_IDX];
-            
-            pData[i].VERTEX_OFFSET = mesh.FIRST_VERTEX;
-            pData[i].FIRST_INDEX = mesh.FIRST_INDEX;
-            pData[i].INDEX_COUNT = mesh.INDEX_COUNT;
-            pData[i].FIRST_INSTANCE = i;
-            pData[i].INSTANCE_COUNT = 1;
-        }
-
-        s_drawIndirectCommandsBuffer.Unmap();
-    }
-
-
     commandsBufCreateInfo.size = sizeof(glm::uint);
 
     s_drawIndirectCommandsCountBuffer.Create(commandsBufCreateInfo); 
     CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
     s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
-
-    {
-        glm::uint* pData = s_drawIndirectCommandsCountBuffer.Map<glm::uint>(0);
-        *pData = s_sceneInstInfos.size();
-        s_drawIndirectCommandsCountBuffer.Unmap();
-    }
-
 
     CORE_LOG_INFO("Vulkan draw indirect buffers creation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -1139,8 +1185,6 @@ static void CreateDepthRT()
 
 static void CreateCommonSamplers()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("CreateCommonSamplers", 225, 0, 225, 255);
-
     Timer timer;
 
     s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
@@ -1399,7 +1443,7 @@ static void WriteDescriptorSet()
     
         VkWriteDescriptorSet commonSamplerWrite = {};
         commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        commonSamplerWrite.dstSet = s_vkDescriptorSet;
+        commonSamplerWrite.dstSet = s_vkCommonDescriptorSet;
         commonSamplerWrite.dstBinding = COMMON_SAMPLERS_DESCRIPTOR_SLOT;
         commonSamplerWrite.dstArrayElement = i;
         commonSamplerWrite.descriptorCount = 1;
@@ -1417,7 +1461,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonConstBufWrite = {};
     commonConstBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonConstBufWrite.dstSet = s_vkDescriptorSet;
+    commonConstBufWrite.dstSet = s_vkCommonDescriptorSet;
     commonConstBufWrite.dstBinding = COMMON_CONST_BUFFER_DESCRIPTOR_SLOT;
     commonConstBufWrite.dstArrayElement = 0;
     commonConstBufWrite.descriptorCount = 1;
@@ -1434,7 +1478,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonMeshInfoBufferWrite = {};
     commonMeshInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMeshInfoBufferWrite.dstSet = s_vkDescriptorSet;
+    commonMeshInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
     commonMeshInfoBufferWrite.dstBinding = COMMON_MESH_INFOS_DESCRIPTOR_SLOT;
     commonMeshInfoBufferWrite.dstArrayElement = 0;
     commonMeshInfoBufferWrite.descriptorCount = 1;
@@ -1451,7 +1495,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonInstInfoBufferWrite = {};
     commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonInstInfoBufferWrite.dstSet = s_vkDescriptorSet;
+    commonInstInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
     commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
     commonInstInfoBufferWrite.dstArrayElement = 0;
     commonInstInfoBufferWrite.descriptorCount = 1;
@@ -1468,7 +1512,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonTrsBufferWrite = {};
     commonTrsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonTrsBufferWrite.dstSet = s_vkDescriptorSet;
+    commonTrsBufferWrite.dstSet = s_vkCommonDescriptorSet;
     commonTrsBufferWrite.dstBinding = COMMON_TRANSFORMS_DESCRIPTOR_SLOT;
     commonTrsBufferWrite.dstArrayElement = 0;
     commonTrsBufferWrite.descriptorCount = 1;
@@ -1485,7 +1529,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonMaterialsBufferWrite = {};
     commonMaterialsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMaterialsBufferWrite.dstSet = s_vkDescriptorSet;
+    commonMaterialsBufferWrite.dstSet = s_vkCommonDescriptorSet;
     commonMaterialsBufferWrite.dstBinding = COMMON_MATERIALS_DESCRIPTOR_SLOT;
     commonMaterialsBufferWrite.dstArrayElement = 0;
     commonMaterialsBufferWrite.descriptorCount = 1;
@@ -1507,7 +1551,7 @@ static void WriteDescriptorSet()
 
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstSet = s_vkCommonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
@@ -1525,7 +1569,7 @@ static void WriteDescriptorSet()
     for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkDescriptorSet;
+        texWrite.dstSet = s_vkCommonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
@@ -1534,6 +1578,38 @@ static void WriteDescriptorSet()
 
         descWrites.emplace_back(texWrite);
     }
+
+    VkDescriptorBufferInfo drawIndirectCommandsBufferInfo = {};
+    drawIndirectCommandsBufferInfo.buffer = s_drawIndirectCommandsBuffer.Get();
+    drawIndirectCommandsBufferInfo.offset = 0;
+    drawIndirectCommandsBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
+    drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    drawIndirectCommandsBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    drawIndirectCommandsBufferWrite.dstArrayElement = 0;
+    drawIndirectCommandsBufferWrite.descriptorCount = 1;
+    drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    drawIndirectCommandsBufferWrite.pBufferInfo = &drawIndirectCommandsBufferInfo;
+
+    descWrites.emplace_back(drawIndirectCommandsBufferWrite);
+
+    VkDescriptorBufferInfo drawIndirectCommandsCountBufferInfo = {};
+    drawIndirectCommandsCountBufferInfo.buffer = s_drawIndirectCommandsCountBuffer.Get();
+    drawIndirectCommandsCountBufferInfo.offset = 0;
+    drawIndirectCommandsCountBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
+    drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    drawIndirectCommandsCountBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsCountBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
+    drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
+    drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    drawIndirectCommandsCountBufferWrite.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
+
+    descWrites.emplace_back(drawIndirectCommandsCountBufferWrite);
     
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -1571,6 +1647,37 @@ static void CmdPipelineImageBarrier(
     vkDependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     vkDependencyInfo.imageMemoryBarrierCount = 1;
     vkDependencyInfo.pImageMemoryBarriers = &imageBarrier2;
+
+    cmdBuffer.CmdPipelineBarrier2(vkDependencyInfo);
+}
+
+
+static void CmdPipelineBufferBarrier(
+    vkn::CmdBuffer& cmdBuffer,
+    VkPipelineStageFlags2 srcStageMask, 
+    VkPipelineStageFlags2 dstStageMask,
+    VkAccessFlags2 srcAccessMask, 
+    VkAccessFlags2 dstAccessMask,
+    VkBuffer buffer,
+    VkDeviceSize offset = 0,
+    VkDeviceSize size = VK_WHOLE_SIZE
+) {
+    VkBufferMemoryBarrier2 bufferBarrier2 = {};
+    bufferBarrier2.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+    bufferBarrier2.srcStageMask = srcStageMask;
+    bufferBarrier2.srcAccessMask = srcAccessMask;
+    bufferBarrier2.dstStageMask = dstStageMask;
+    bufferBarrier2.dstAccessMask = dstAccessMask;
+    bufferBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bufferBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    bufferBarrier2.buffer = buffer;
+    bufferBarrier2.offset = offset;
+    bufferBarrier2.size = size;
+
+    VkDependencyInfo vkDependencyInfo = {};
+    vkDependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    vkDependencyInfo.bufferMemoryBarrierCount = 1;
+    vkDependencyInfo.pBufferMemoryBarriers = &bufferBarrier2;
 
     cmdBuffer.CmdPipelineBarrier2(vkDependencyInfo);
 }
@@ -1618,8 +1725,6 @@ static void SubmitVkQueue(VkQueue vkQueue,
 
 static void LoadSceneMaterials(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMaterials", 225, 0, 225, 255);
-
     Timer timer;
 
     s_sceneMaterials.resize(model.materials.size());
@@ -1843,8 +1948,6 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
 static void LoadSceneMeshInfos(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneMeshInfos", 225, 0, 225, 255);
-    
     Timer timer;
 
     size_t vertexCount = 0;
@@ -2079,8 +2182,6 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
 static void LoadSceneTransforms(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneTransforms", 225, 0, 225, 255);
-    
     Timer timer;
 
     s_sceneTransforms.resize(model.nodes.size());
@@ -2157,8 +2258,6 @@ static void LoadSceneTransforms(const gltf::Model& model)
 
 static void LoadSceneInstInfos(const gltf::Model& model)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadSceneInstInfos", 225, 0, 225, 255);
-    
     Timer timer;
 
     s_sceneInstInfos.reserve(model.meshes.size());
@@ -2229,7 +2328,7 @@ static void LoadSceneInstInfos(const gltf::Model& model)
 
 static void LoadScene(const fs::path& filepath)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("LoadScene", 255, 0, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", 255, 50, 255, 255);
 
     Timer timer;
 
@@ -2276,22 +2375,24 @@ static void LoadScene(const fs::path& filepath)
 
 void UpdateCommonConstBuffer(Window* pWnd)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("UpdateCommonConstBuffer", 200, 200, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
 
-    const glm::mat4x4 viewMat = s_camera.GetViewMatrix();
+    s_curViewMat = s_camera.GetViewMatrix();
     
     #ifdef ENG_REVERSED_Z
-        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
+        s_curProjMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
     #else
-        glm::mat4x4 projMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100'000.f);
+        s_curProjMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100'000.f);
     #endif
-    projMat[1][1] *= -1.f;
+    s_curProjMat[1][1] *= -1.f;
+
+    s_curViewProjMat = s_curProjMat * s_curViewMat;
 
     COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>(0);
 
-    pCommonConstBufferData->COMMON_VIEW_MATRIX = viewMat;
-    pCommonConstBufferData->COMMON_PROJ_MATRIX = projMat;
-    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = projMat * viewMat;
+    pCommonConstBufferData->COMMON_VIEW_MATRIX = s_curViewMat;
+    pCommonConstBufferData->COMMON_PROJ_MATRIX = s_curProjMat;
+    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = s_curViewProjMat;
     
     uint32_t dbgFlags = 0;
     
@@ -2316,8 +2417,11 @@ void UpdateCommonConstBuffer(Window* pWnd)
             break;
     }
 
+#ifndef ENG_BUILD_RELEASE
     dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW : 0;
-    
+    dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING : 0;
+#endif
+
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
 
     s_commonConstBuffer.Unmap();
@@ -2333,7 +2437,7 @@ void UpdateScene()
 
 void PresentImage(uint32_t imageIndex)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Presenting", 200, 200, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", 50, 50, 255, 255);
     
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
     VkSemaphore vkWaitSemaphore = s_vkRenderingFinishedSemaphores[imageIndex].Get();
@@ -2357,9 +2461,142 @@ void PresentImage(uint32_t imageIndex)
 }
 
 
+void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipeline);
+    
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+
+    BASE_CULLING_BINDLESS_REGISTRY registry = {};
+    registry.INST_COUNT = s_sceneInstInfos.size();
+
+    vkCmdPushConstants(cmdBuffer.Get(), s_vkBaseCullingPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
+
+    vkCmdDispatch(cmdBuffer.Get(), (s_sceneInstInfos.size() + 63) / 64, 1, 1);
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+        VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        s_drawIndirectCommandsBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+        VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        s_drawIndirectCommandsCountBuffer.Get()
+    );
+
+    ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
+}
+
+
+static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
+
+    const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[instInfo.MESH_IDX];
+    
+    glm::vec3 aabbMin = mesh.BOUNDS_MIN_LCS;
+    glm::vec3 aabbMax = mesh.BOUNDS_MAX_LCS;
+
+    const COMMON_TRANSFORM& trs = s_sceneTransforms[instInfo.TRANSFORM_IDX];
+    const glm::mat3x4 wMatr = glm::mat3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
+
+    const glm::vec3 newMin(glm::vec4(aabbMin, 1.f) * wMatr);
+    const glm::vec3 newMax(glm::vec4(aabbMax, 1.f) * wMatr);
+
+    aabbMin = glm::min(newMin, newMax);
+    aabbMax = glm::max(newMin, newMax);
+
+    // TODO: Replace with correct Frustum-AABB intersection algorithm
+    const std::array corners = {
+        glm::vec3(aabbMin.x, aabbMin.y, aabbMin.z),
+        glm::vec3(aabbMax.x, aabbMin.y, aabbMin.z),
+        glm::vec3(aabbMin.x, aabbMax.y, aabbMin.z),
+        glm::vec3(aabbMax.x, aabbMax.y, aabbMin.z),
+        glm::vec3(aabbMin.x, aabbMin.y, aabbMax.z),
+        glm::vec3(aabbMax.x, aabbMin.y, aabbMax.z),
+        glm::vec3(aabbMin.x, aabbMax.y, aabbMax.z),
+        glm::vec3(aabbMax.x, aabbMax.y, aabbMax.z)
+    };
+
+    for (size_t i = 0; i < 8; ++i) {
+        glm::vec4 clipCoords = s_curViewProjMat * glm::vec4(corners[i], 1.f);
+        clipCoords /= clipCoords.w;
+
+        if (glm::abs(clipCoords.x) <= 1.f && glm::abs(clipCoords.y) <= 1.f && clipCoords.z >= 0.f && clipCoords.z <= 1.f) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
+{
+    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Render_Pass", 50, 255, 50, 255);
+
+    VkViewport viewport = {};
+    viewport.width = extent.width;
+    viewport.height = extent.height;
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    cmdBuffer.CmdSetViewport(0, 1, &viewport);
+
+    VkRect2D scissor = {};
+    scissor.extent = extent;
+    cmdBuffer.CmdSetScissor(0, 1, &scissor);
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipeline);
+    
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+
+    cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
+
+    BASE_BINDLESS_REGISTRY registry = {};
+    registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
+
+#ifndef ENG_BUILD_RELEASE
+    if (!s_useMeshIndirectDraw) {
+        ENG_PROFILE_SCOPED_MARKER_C("CPU_Frustum_Culling", 50, 255, 50, 255);
+
+        for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
+            if (s_useMeshCulling) {
+                if (!IsInstVisible(s_sceneInstInfos[i])) {
+                    continue;
+                }
+            }
+
+            registry.INST_INFO_IDX = i;
+            vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+
+            const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
+            cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
+        }
+    } else 
+#endif
+    {
+        vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+
+        cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(BASE_INDIRECT_DRAW_CMD));
+    }
+
+    ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
+}
+
+
 void RenderScene()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("RenderScene", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", 255, 255, 50, 255);
 
     vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
 
@@ -2398,7 +2635,9 @@ void RenderScene()
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
     cmdBuffer.Begin(cmdBeginInfo);
-        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BeginCmdBuffer", 255, 165, 0, 255);
+        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "CMD_Buffer_Frame", 255, 165, 0, 255);
+
+        BaseCullingPass(cmdBuffer);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -2456,48 +2695,15 @@ void RenderScene()
     #endif
 
         renderingInfo.pDepthAttachment = &depthAttachment;
-
-        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "Render", 200, 120, 0, 255);
-        cmdBuffer.CmdBeginRendering(renderingInfo);
-            VkViewport viewport = {};
-            viewport.width = renderingInfo.renderArea.extent.width;
-            viewport.height = renderingInfo.renderArea.extent.height;
-            viewport.minDepth = 0.f;
-            viewport.maxDepth = 1.f;
-            cmdBuffer.CmdSetViewport(0, 1, &viewport);
-
-            VkRect2D scissor = {};
-            scissor.extent = renderingInfo.renderArea.extent;
-            cmdBuffer.CmdSetScissor(0, 1, &scissor);
-
-            vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipeline);
-            
-            vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkPipelineLayout, 0, 1, &s_vkDescriptorSet, 0, nullptr);
-
-            cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
-
-            BASE_BINDLESS_REGISTRY registry = {};
-            registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
-
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
-
-            if (s_useMeshIndirectDraw) {
-                cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, 
-                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
-            } else {
-                for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
-                    const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
         
-                    cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
-                }
-            }
+        cmdBuffer.CmdBeginRendering(renderingInfo);
+            BaseRenderPass(cmdBuffer, renderingInfo.renderArea.extent);
 
             DbgUI::FillData();
             DbgUI::EndFrame();
-
+            
             DbgUI::Render(cmdBuffer);
         cmdBuffer.CmdEndRendering();
-        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -2753,12 +2959,15 @@ int main(int argc, char* argv[])
         cmdBuffer.CmdResetQueryPool(s_vkQueryPool);
     });
 
-    s_vkDescriptorPool = CreateVkDescriptorPool(s_vkDevice.Get());
-    s_vkDescriptorSetLayout = CreateVkDescriptorSetLayout(s_vkDevice.Get());
-    s_vkDescriptorSet = CreateVkDescriptorSet(s_vkDevice.Get(), s_vkDescriptorPool, s_vkDescriptorSetLayout);
+    s_vkCommonDescriptorPool = CreateVkCommonDescriptorPool(s_vkDevice.Get());
+    s_vkCommonDescriptorSetLayout = CreateVkCommonDescriptorSetLayout(s_vkDevice.Get());
+    s_vkCommonDescriptorSet = CreateVkCommonDescriptorSet(s_vkDevice.Get(), s_vkCommonDescriptorPool, s_vkCommonDescriptorSetLayout);
 
-    s_vkPipelineLayout = CreateVkPipelineLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout);
-    s_vkPipeline = CreateVkGraphicsPipeline(s_vkDevice.Get(), s_vkPipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
+    s_vkBasePipelineLayout = CreateVkBasePipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
+    s_vkBasePipeline = CreateVkBasePipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
+
+    s_vkBaseCullingPipelineLayout = CreateVkBaseCullingPipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
+    s_vkBaseCullingPipeline = CreateVkBaseCullingPipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base_culling.cs.spv");
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
@@ -2799,10 +3008,13 @@ int main(int argc, char* argv[])
 
     s_vkDevice.WaitIdle();
 
-    vkDestroyPipeline(s_vkDevice.Get(), s_vkPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkPipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkDescriptorPool, nullptr);
+    
+    vkDestroyPipeline(s_vkDevice.Get(), s_vkBaseCullingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBaseCullingPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_vkBasePipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBasePipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkCommonDescriptorPool, nullptr);
 
     DbgUI::Terminate();
 

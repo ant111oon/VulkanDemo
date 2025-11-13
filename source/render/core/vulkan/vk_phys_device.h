@@ -14,6 +14,7 @@ namespace vkn
         bool samplerAnisotropy;
         bool samplerMirrorClampToEdge;
         bool drawIndirectCount;
+        bool vertexPipelineStoresAndAtomics;
     };
 
 
