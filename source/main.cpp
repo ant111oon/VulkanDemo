@@ -307,7 +307,7 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 0.05f;
+static constexpr float CAMERA_SPEED = 0.0025f;
 
 
 static Window* s_pWnd = nullptr;
@@ -372,10 +372,7 @@ static vkn::Image     s_sceneDefaultImage;
 static vkn::ImageView s_sceneDefaultImageView;
 
 static eng::Camera s_camera;
-
-static glm::mat4x4 s_curViewMat = glm::mat4x4(1.f);
-static glm::mat4x4 s_curProjMat = glm::mat4x4(1.f);
-static glm::mat4x4 s_curViewProjMat = glm::mat4x4(1.f);
+static glm::vec3 s_cameraVel = M3D_ZEROF3;
 
 static uint32_t s_dbgTexIdx = 0;
 
@@ -2377,22 +2374,11 @@ void UpdateCommonConstBuffer(Window* pWnd)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
 
-    s_curViewMat = s_camera.GetViewMatrix();
-    
-    #ifdef ENG_REVERSED_Z
-        s_curProjMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 100'000.f, 0.01f);
-    #else
-        s_curProjMat = glm::perspective(glm::radians(90.f), (float)pWnd->GetWidth() / pWnd->GetHeight(), 0.01f, 100'000.f);
-    #endif
-    s_curProjMat[1][1] *= -1.f;
-
-    s_curViewProjMat = s_curProjMat * s_curViewMat;
-
     COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>(0);
 
-    pCommonConstBufferData->COMMON_VIEW_MATRIX = s_curViewMat;
-    pCommonConstBufferData->COMMON_PROJ_MATRIX = s_curProjMat;
-    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = s_curViewProjMat;
+    pCommonConstBufferData->COMMON_VIEW_MATRIX = s_camera.GetViewMatrix();
+    pCommonConstBufferData->COMMON_PROJ_MATRIX = s_camera.GetProjMatrix();
+    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = s_camera.GetViewProjMatrix();
     
     uint32_t dbgFlags = 0;
     
@@ -2431,6 +2417,14 @@ void UpdateCommonConstBuffer(Window* pWnd)
 void UpdateScene()
 {
     DbgUI::BeginFrame();
+
+    const float moveDist = glm::length(s_cameraVel);
+
+    if (!math::IsZero(moveDist)) {
+        const glm::vec3 moveDir = glm::normalize((s_cameraVel / moveDist) * s_camera.GetRotationQuat());
+        s_camera.MoveAlongDir(moveDir, moveDist);
+    }
+
     s_camera.Update();
 }
 
@@ -2529,7 +2523,7 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
     };
 
     for (size_t i = 0; i < 8; ++i) {
-        glm::vec4 clipCoords = s_curViewProjMat * glm::vec4(corners[i], 1.f);
+        glm::vec4 clipCoords = s_camera.GetViewProjMatrix() * glm::vec4(corners[i], 1.f);
         clipCoords /= clipCoords.w;
 
         if (glm::abs(clipCoords.x) <= 1.f && glm::abs(clipCoords.y) <= 1.f && clipCoords.z >= 0.f && clipCoords.z <= 1.f) {
@@ -2758,25 +2752,25 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
         const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
 
         if (keyEvent.IsPressed() || keyEvent.IsHold()) {
-            const float finalSpeed = CAMERA_SPEED;
+            const float finalSpeed = CAMERA_SPEED * s_frameTime;
 
             if (keyEvent.key == WndKey::KEY_W) { 
-                camera.velocity.z = -finalSpeed;
+                s_cameraVel.z = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_S) {
-                camera.velocity.z = finalSpeed;
+                s_cameraVel.z = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_A) {
-                camera.velocity.x = -finalSpeed;
+                s_cameraVel.x = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_D) {
-                camera.velocity.x = finalSpeed;
+                s_cameraVel.x = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_E) {
-                camera.velocity.y = finalSpeed;
+                s_cameraVel.y = finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_Q) {
-                camera.velocity.y = -finalSpeed;
+                s_cameraVel.y = -finalSpeed;
             }
             if (keyEvent.key == WndKey::KEY_F5) {
                 firstEvent = true;
@@ -2785,22 +2779,22 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 
         if (keyEvent.IsReleased()) {
             if (keyEvent.key == WndKey::KEY_W) {
-                camera.velocity.z = 0;
+                s_cameraVel.z = 0;
             }
             if (keyEvent.key == WndKey::KEY_S) {
-                camera.velocity.z = 0;
+                s_cameraVel.z = 0;
             }
             if (keyEvent.key == WndKey::KEY_A) {
-                camera.velocity.x = 0;
+                s_cameraVel.x = 0;
             }
             if (keyEvent.key == WndKey::KEY_D) {
-                camera.velocity.x = 0;
+                s_cameraVel.x = 0;
             }
             if (keyEvent.key == WndKey::KEY_E) {
-                camera.velocity.y = 0;
+                s_cameraVel.y = 0;
             }
             if (keyEvent.key == WndKey::KEY_Q) {
-                camera.velocity.y = 0;
+                s_cameraVel.y = 0;
             }
         }
     } else if (event.Is<WndCursorEvent>()) {
@@ -2812,12 +2806,20 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
         if (firstEvent) {
             firstEvent = false;
         } else {
-            camera.yaw += (float)(cursorEvent.x - prevX) / 200.f;
-            camera.pitch -= (float)(cursorEvent.y - prevY) / 200.f;
+            const float yaw = (cursorEvent.x - prevX) / 5.f;
+            const float pitch = (cursorEvent.y - prevY) / 5.f;
+            
+            camera.RotatePitchYawRoll(pitch, yaw);
         }
 
         prevX = cursorEvent.x;
         prevY = cursorEvent.y;
+    } else if (event.Is<WndResizeEvent>()) {
+        const WndResizeEvent& resizeEvent = event.Get<WndResizeEvent>();
+
+        if (!resizeEvent.IsMinimized() && resizeEvent.height != 0) {
+            camera.SetAspectRatio((float)resizeEvent.width / (float)resizeEvent.height);
+        }
     }
 }
 
@@ -2894,11 +2896,6 @@ void ProcessFrame()
 
 int main(int argc, char* argv[])
 {
-    s_camera.velocity = glm::vec3(0.f);
-	s_camera.position = glm::vec3(0.f, 2.f, 0.f);
-    s_camera.pitch = 0.f;
-    s_camera.yaw = glm::radians(90.f);
-
     wndSysInit();
     s_pWnd = wndSysGetMainWindow();
 
@@ -2999,6 +2996,10 @@ int main(int argc, char* argv[])
     CreateVkIndirectDrawBuffers();
 
     WriteDescriptorSet();
+
+    s_camera.SetPosition(glm::vec3(0.f, 2.f, 0.f));
+    s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_X, M3D_AXIS_Y));
+    s_camera.SetPerspProjection(90.f, (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 100'000.f);
 
     s_pWnd->SetVisible(true);
 
