@@ -121,11 +121,32 @@ struct BASE_INDIRECT_DRAW_CMD
 };
 
 
+struct FRUSTUM_PLANE
+{
+    glm::vec3 normal;
+    float distance;
+};
+
+
+static constexpr glm::uint COMMON_FRUSTUM_PLANES_COUNT = 6;
+
+
+struct FRUSTUM
+{
+    FRUSTUM_PLANE planes[COMMON_FRUSTUM_PLANES_COUNT];
+};
+
+
+static_assert(sizeof(FRUSTUM) == sizeof(math::Frustum));
+
+
 struct COMMON_CB_DATA
 {
     glm::mat4x4 COMMON_VIEW_MATRIX;
     glm::mat4x4 COMMON_PROJ_MATRIX;
     glm::mat4x4 COMMON_VIEW_PROJ_MATRIX;
+
+    FRUSTUM COMMON_CAMERA_FRUSTUM;
 
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
@@ -384,6 +405,9 @@ static bool s_flyCameraMode = false;
 #ifndef ENG_BUILD_RELEASE
 static bool s_useMeshIndirectDraw = true;
 static bool s_useMeshCulling = true;
+
+// Uses for debug purposes during CPU frustum culling
+static size_t s_dbgDrawnMeshCount = 0;
 #endif
 
 
@@ -629,6 +653,10 @@ namespace DbgUI
             ImGui::NewLine();
             ImGui::Checkbox("BasePass/Use Indirect Draw", &s_useMeshIndirectDraw);
             ImGui::Checkbox("BasePass/Use Culling", &s_useMeshCulling);
+            if (!s_useMeshIndirectDraw) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Mesh Count: %zu)", s_dbgDrawnMeshCount);
+            }
         #endif
         } ImGui::End();
     }
@@ -2379,6 +2407,8 @@ void UpdateCommonConstBuffer(Window* pWnd)
     pCommonConstBufferData->COMMON_VIEW_MATRIX = s_camera.GetViewMatrix();
     pCommonConstBufferData->COMMON_PROJ_MATRIX = s_camera.GetProjMatrix();
     pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = s_camera.GetViewProjMatrix();
+
+    memcpy(&pCommonConstBufferData->COMMON_CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
     uint32_t dbgFlags = 0;
     
@@ -2421,7 +2451,7 @@ void UpdateScene()
     const float moveDist = glm::length(s_cameraVel);
 
     if (!math::IsZero(moveDist)) {
-        const glm::vec3 moveDir = glm::normalize((s_cameraVel / moveDist) * s_camera.GetRotationQuat());
+        const glm::vec3 moveDir = glm::normalize(s_camera.GetRotationQuat() * (s_cameraVel / moveDist));
         s_camera.MoveAlongDir(moveDir, moveDist);
     }
 
@@ -2510,34 +2540,26 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
     aabbMin = glm::min(newMin, newMax);
     aabbMax = glm::max(newMin, newMax);
 
-    // TODO: Replace with correct Frustum-AABB intersection algorithm
-    const std::array corners = {
-        glm::vec3(aabbMin.x, aabbMin.y, aabbMin.z),
-        glm::vec3(aabbMax.x, aabbMin.y, aabbMin.z),
-        glm::vec3(aabbMin.x, aabbMax.y, aabbMin.z),
-        glm::vec3(aabbMax.x, aabbMax.y, aabbMin.z),
-        glm::vec3(aabbMin.x, aabbMin.y, aabbMax.z),
-        glm::vec3(aabbMax.x, aabbMin.y, aabbMax.z),
-        glm::vec3(aabbMin.x, aabbMax.y, aabbMax.z),
-        glm::vec3(aabbMax.x, aabbMax.y, aabbMax.z)
-    };
+    const math::Frustum& frustum = s_camera.GetFrustum();
 
-    for (size_t i = 0; i < 8; ++i) {
-        glm::vec4 clipCoords = s_camera.GetViewProjMatrix() * glm::vec4(corners[i], 1.f);
-        clipCoords /= clipCoords.w;
+    float minDot = FLT_MAX, maxDot = -FLT_MAX;
 
-        if (glm::abs(clipCoords.x) <= 1.f && glm::abs(clipCoords.y) <= 1.f && clipCoords.z >= 0.f && clipCoords.z <= 1.f) {
-            return true;
+    for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
+        minDot = glm::dot(aabbMin, frustum.planes[i].normal) + frustum.planes[i].distance;
+        maxDot = glm::dot(aabbMax, frustum.planes[i].normal) + frustum.planes[i].distance;
+
+        if (minDot < 0.f && maxDot < 0.f) {
+            return false;
         }
     }
 
-    return false;
+    return true;
 }
 
 
 void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 {
-    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Render_Pass", 50, 255, 50, 255);
+    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Render_Pass", 128, 128, 128, 255);
 
     VkViewport viewport = {};
     viewport.width = extent.width;
@@ -2563,12 +2585,16 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     if (!s_useMeshIndirectDraw) {
         ENG_PROFILE_SCOPED_MARKER_C("CPU_Frustum_Culling", 50, 255, 50, 255);
 
+        s_dbgDrawnMeshCount = 0;
+
         for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
             if (s_useMeshCulling) {
                 if (!IsInstVisible(s_sceneInstInfos[i])) {
                     continue;
                 }
             }
+
+            ++s_dbgDrawnMeshCount;
 
             registry.INST_INFO_IDX = i;
             vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
@@ -2998,7 +3024,7 @@ int main(int argc, char* argv[])
     WriteDescriptorSet();
 
     s_camera.SetPosition(glm::vec3(0.f, 2.f, 0.f));
-    s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_X, M3D_AXIS_Y));
+    s_camera.SetRotation(glm::quatLookAt(M3D_AXIS_X, M3D_AXIS_Y));
     s_camera.SetPerspProjection(90.f, (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 100'000.f);
 
     s_pWnd->SetVisible(true);

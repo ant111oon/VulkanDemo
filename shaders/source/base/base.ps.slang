@@ -1,7 +1,6 @@
 #include "base_vsout.slang"
 
 #include "common_registers.slang"
-#include "common_math.slang"
 
 
 struct BASE_PS_OUTPUT
@@ -18,7 +17,7 @@ BASE_PS_OUTPUT main(BASE_VS_OUTPUT input)
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
-    result.color = float4(0.f, 0.f, 0.f, 1.f);  
+    result.color = float4(0.f, 0.f, 0.f, 1.f);
 
     const SamplerState smp = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
 

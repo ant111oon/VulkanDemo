@@ -1,5 +1,4 @@
 #include "common_registers.slang"
-#include "common_math.slang"
 
 #include "base_vsin.slang"
 #include "base_vsout.slang"
@@ -23,7 +22,7 @@ BASE_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceID
 
     BASE_INPUT_DATA inputData = PrepareBaseVSInputData(vertID);
 
-    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f));
+    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)); 
 
     result.hpos = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
     result.data.lnorm = inputData.lnorm;

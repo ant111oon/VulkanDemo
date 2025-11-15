@@ -13,6 +13,18 @@
 #include <glm/gtx/quaternion.hpp>
 
 
+#include "core/utils/assert.h"
+
+
+#define MATH_LOG_TRACE(FMT, ...)        ENG_LOG_TRACE("MATH", FMT, __VA_ARGS__)
+#define MATH_LOG_INFO(FMT, ...)         ENG_LOG_INFO("MATH",  FMT, __VA_ARGS__)
+#define MATH_LOG_WARN(FMT, ...)         ENG_LOG_WARN("MATH",  FMT, __VA_ARGS__)
+#define MATH_LOG_ERROR(FMT, ...)        ENG_LOG_ERROR("MATH", FMT, __VA_ARGS__)
+#define MATH_ASSERT_MSG(COND, FMT, ...) ENG_ASSERT_MSG(COND, "MATH", FMT, __VA_ARGS__)
+#define MATH_ASSERT(COND)               MATH_ASSERT_MSG(COND, #COND)
+#define MATH_ASSERT_FAIL(FMT, ...)      MATH_ASSERT_MSG(false, FMT, __VA_ARGS__)
+
+
 constexpr inline float M3D_EPS     = 0.000001f;
 constexpr inline float M3D_2_EPS   = 2.f * M3D_EPS;
 constexpr inline float M3D_PI      = glm::pi<float>();

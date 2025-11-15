@@ -36,8 +36,6 @@ namespace eng
         void Move(const glm::vec3& offset) noexcept;
         void MoveAlongDir(const glm::vec3& dir, float distance) noexcept;
 
-        void Rotate(const glm::quat& rotation) noexcept;
-        void RotateAxis(const glm::vec3& axis, float degrees) noexcept;
         void RotatePitchYawRoll(float pitchDeg, float yawDeg, float rollDeg = 0.f) noexcept;
 
         void SetRotation(const glm::quat& rotation) noexcept;
@@ -53,11 +51,14 @@ namespace eng
         float GetOrthoTop() const noexcept { return m_top; }
         float GetOrthoBottom() const noexcept { return m_bottom; }
 
-        glm::vec3 GetXDir() const noexcept { return m_matView[0]; }
-        glm::vec3 GetYDir() const noexcept { return m_matView[1]; }
-        glm::vec3 GetZDir() const noexcept { return m_matView[2]; }
+        glm::vec3 GetXDir() const noexcept { return glm::vec3(m_matView[0]); }
+        glm::vec3 GetYDir() const noexcept { return glm::vec3(m_matView[1]); }
+        glm::vec3 GetZDir() const noexcept { return glm::vec3(m_matView[2]); }
 
-        glm::vec3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(glm::eulerAngles(m_rotation)); }
+        glm::vec3 GetForwardDir() const noexcept { return -GetZDir(); }
+
+        glm::vec3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_rotation); }
+        glm::vec3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(GetPitchYawRollRadians()); }
         
         const glm::quat& GetRotationQuat() const noexcept { return m_rotation; }
         const glm::vec3& GetPosition() const noexcept { return m_position; }

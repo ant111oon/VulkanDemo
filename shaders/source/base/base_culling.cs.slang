@@ -1,16 +1,6 @@
 #include "common_registers.slang"
 
 
-struct AABB
-{
-    float3 GetCenter() { return (minimum + maximum) * 0.5; }
-    float3 GetExtents() { return (maximum - minimum) * 0.5; }
-
-    float3 minimum;
-    float3 maximum;
-};
-
-
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
 {
     const COMMON_TRANSFORM trs = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
@@ -19,34 +9,13 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
     const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
     AABB aabb = { meshInfo.BOUNDS_MIN_LCS, meshInfo.BOUNDS_MAX_LCS };
 
-    const float3 newMin = mul(wMatr, float4(aabb.minimum, 1.f)).xyz;
-    const float3 newMax = mul(wMatr, float4(aabb.maximum, 1.f)).xyz;
+    const float3 newMin = mul(wMatr, float4(aabb.min, 1.f)).xyz;
+    const float3 newMax = mul(wMatr, float4(aabb.max, 1.f)).xyz;
 
-    aabb.minimum = min(newMin, newMax);
-    aabb.maximum = max(newMin, newMax);
+    aabb.min = min(newMin, newMax);
+    aabb.max = max(newMin, newMax);
 
-    // TODO: Replace with correct Frustum-AABB intersection algorithm
-    float3 corners[8] = {
-        float3(aabb.minimum.x, aabb.minimum.y, aabb.minimum.z),
-        float3(aabb.maximum.x, aabb.minimum.y, aabb.minimum.z),
-        float3(aabb.minimum.x, aabb.maximum.y, aabb.minimum.z),
-        float3(aabb.maximum.x, aabb.maximum.y, aabb.minimum.z),
-        float3(aabb.minimum.x, aabb.minimum.y, aabb.maximum.z),
-        float3(aabb.maximum.x, aabb.minimum.y, aabb.maximum.z),
-        float3(aabb.minimum.x, aabb.maximum.y, aabb.maximum.z),
-        float3(aabb.maximum.x, aabb.maximum.y, aabb.maximum.z)
-    };
-
-    for (uint i = 0; i < 8; ++i) {
-        const float4 clipCoords = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(corners[i], 1.f));
-        const float3 ndc = clipCoords.xyz / clipCoords.w;
-
-        if (abs(ndc.x) <= 1.f && abs(ndc.y) <= 1.f && ndc.z >= 0.f && ndc.z <= 1.f) {
-            return true;
-        }
-    }
-
-    return false;
+    return COMMON_CB.COMMON_CAMERA_FRUSTUM.IsIntersect(aabb); 
 }
 
 

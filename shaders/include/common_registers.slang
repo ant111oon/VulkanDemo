@@ -1,7 +1,8 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
-#include "common_math.slang"
+#include "frustum.slang"
+#include "bit_math.slang"
 
 
 struct COMMON_TRANSFORM
@@ -48,6 +49,8 @@ struct COMMON_CB_DATA
     float4x4 COMMON_VIEW_MATRIX;
     float4x4 COMMON_PROJ_MATRIX;
     float4x4 COMMON_VIEW_PROJ_MATRIX;
+
+    FRUSTUM COMMON_CAMERA_FRUSTUM;
 
     uint COMMON_FLAGS;
     uint COMMON_DBG_FLAGS;

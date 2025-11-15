@@ -1,7 +1,5 @@
-#ifndef COMMON_MATH_H
-#define COMMON_MATH_H
-
-#include "half_utils.slang"
+#ifndef BIT_MATH_H
+#define BIT_MATH_H
 
 
 bool IsFlagSet(uint value, uint mask)

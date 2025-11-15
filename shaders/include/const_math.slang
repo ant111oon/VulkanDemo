@@ -1,0 +1,31 @@
+#ifndef CONST_MATH_H
+#define CONST_MATH_H
+
+
+static const float M3D_EPS     = 0.000001f;
+static const float M3D_PI      = 3.14159265359f;
+static const float M3D_2_PI    = 2.0f * M3D_PI;
+static const float M3D_HALF_PI = 0.5f * M3D_PI;
+
+static const float M3D_FLT_MAX = 3.40282347e+37F;
+static const float M3D_FLT_MIN = 1.17549435e-37F;
+
+#define FLOAT2(x) float2(x, x)
+#define FLOAT3(x) float3(x, x, x)
+#define FLOAT4(x) float4(x, x, x, x)
+
+static const float2 M3D_ZEROF2 = FLOAT2(0.f);
+static const float3 M3D_ZEROF3 = FLOAT3(0.f);
+static const float4 M3D_ZEROF4 = FLOAT4(0.f);
+static const float2 M3D_ONEF2  = FLOAT2(1.f);
+static const float3 M3D_ONEF3  = FLOAT3(1.f);
+static const float4 M3D_ONEF4  = FLOAT4(1.f);
+
+static const float3 M3D_AXIS_X = float3(1.f, 0.f, 0.f);
+static const float3 M3D_AXIS_Y = float3(0.f, 1.f, 0.f);
+static const float3 M3D_AXIS_Z = float3(0.f, 0.f, 1.f);
+
+#define M3D_IS_ZERO(x)      (length(x) < M3D_EPS)
+#define M3D_IS_EQUAL(l, r)  (M3D_IS_ZERO((l) - (r)))
+
+#endif

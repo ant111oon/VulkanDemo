@@ -189,35 +189,15 @@ namespace eng
     }
 
 
-    void Camera::Rotate(const glm::quat& rotation) noexcept
-    {
-        if (!math::IsEqual(rotation, M3D_QUAT_IDENTITY)) {
-            CORE_ASSERT_MSG(math::IsNormalized(rotation), "Rotation quaternion must be normalized");
-
-            m_rotation = rotation * m_rotation;
-            RequestRecalcViewMatrix();
-        }
-    }
-
-
-    void Camera::RotateAxis(const glm::vec3& axis, float degrees) noexcept
-    {
-        if (!math::IsZero(degrees)) {
-            m_rotation = glm::normalize(glm::angleAxis(glm::radians(degrees), axis) * m_rotation);
-            RequestRecalcViewMatrix();
-        }
-    }
-
-
     void Camera::RotatePitchYawRoll(float pitchDeg, float yawDeg, float rollDeg) noexcept
     {
-        const glm::quat rotation(glm::radians(glm::vec3(pitchDeg, yawDeg, rollDeg)));
+        const glm::quat rotation = glm::inverse(glm::quat(glm::radians(glm::vec3(pitchDeg, yawDeg, rollDeg))));
 
         if (math::IsEqual(rotation, M3D_QUAT_IDENTITY)) {
             return;
         }
 
-        m_rotation = glm::normalize(rotation * m_rotation);
+        m_rotation = glm::normalize(m_rotation * rotation);
         RequestRecalcViewMatrix();
     }
 
@@ -291,7 +271,7 @@ namespace eng
 
     void Camera::RecalcViewMatrix() noexcept
     {
-        m_matView = glm::mat4_cast(m_rotation) * glm::translate(M3D_MAT4_IDENTITY, -m_position);
+        m_matView = glm::inverse(glm::mat4_cast(m_rotation)) * glm::translate(M3D_MAT4_IDENTITY, -m_position);
     }
 
 
@@ -303,5 +283,23 @@ namespace eng
 
     void Camera::RecalcFrustum() noexcept
     {
+        using namespace math;
+
+        const glm::vec3 farVec = GetForwardDir() * m_zFar;
+        const float halfH = m_zFar * glm::tan(glm::radians(m_fovDeg * 0.5f));
+        const float halfW = halfH * m_aspectRatio;
+
+        std::array<glm::vec3, Frustum::PLANE_COUNT> planeNormals = {};
+
+        planeNormals[Frustum::PLANE_IDX_LEFT] = glm::normalize(glm::cross(farVec - GetXDir() * halfW, GetYDir()));
+        planeNormals[Frustum::PLANE_IDX_TOP] = glm::normalize(glm::cross(farVec + GetYDir() * halfH, -GetXDir()));
+        planeNormals[Frustum::PLANE_IDX_RIGHT] = glm::normalize(glm::cross(farVec + GetXDir() * halfW, -GetYDir()));
+        planeNormals[Frustum::PLANE_IDX_BOTTOM] = glm::normalize(glm::cross(farVec - GetYDir() * halfH, GetXDir()));
+        planeNormals[Frustum::PLANE_IDX_NEAR] = GetForwardDir();
+        planeNormals[Frustum::PLANE_IDX_FAR] = -GetForwardDir();
+
+        for (size_t i = 0; i < Frustum::PLANE_COUNT; ++i) {
+            m_frustum.planes[Frustum::PLANE_IDX_LEFT] = Plane(planeNormals[i], -glm::dot(planeNormals[i], m_position));
+        }
     }
 }
