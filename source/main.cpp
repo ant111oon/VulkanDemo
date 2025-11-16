@@ -2398,7 +2398,7 @@ static void LoadScene(const fs::path& filepath)
 }
 
 
-void UpdateCommonConstBuffer(Window* pWnd)
+void UpdateCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
 
@@ -2628,7 +2628,7 @@ void RenderScene()
         renderingFinishedFence.Reset();
     }
 
-    UpdateCommonConstBuffer(s_pWnd);
+    UpdateCommonConstBuffer();
 
     vkn::Semaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphore;
 
@@ -3045,7 +3045,7 @@ int main(int argc, char* argv[])
 
     s_camera.SetPosition(glm::vec3(0.f, 2.f, 0.f));
     s_camera.SetRotation(glm::quatLookAt(M3D_AXIS_X, M3D_AXIS_Y));
-    s_camera.SetPerspProjection(90.f, (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 100'000.f);
+    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 100'000.f);
 
     s_pWnd->SetVisible(true);
 

@@ -6,9 +6,9 @@
 
 namespace eng
 {
-    constexpr inline bool IsFovDegValid(float degrees) noexcept
+    constexpr inline bool IsFovValid(float radians) noexcept
     {
-        return degrees > M3D_EPS && degrees < 180.f;
+        return radians > glm::radians(M3D_EPS) && radians < glm::radians(180.f);
     }
 
 
@@ -27,7 +27,7 @@ namespace eng
         m_rotation = M3D_QUAT_IDENTITY;
         m_position = M3D_ZEROF3;
         
-        m_fovDeg = 0.f;
+        m_fovY = 0.f;
         m_aspectRatio = 0.f;
         
         m_left = 0.f;
@@ -40,11 +40,11 @@ namespace eng
     }
 
 
-    void Camera::SetPerspProjection(float fovYDeg, float aspectRatio, float zNear, float zFar) noexcept
+    void Camera::SetPerspProjection(float fovY, float aspectRatio, float zNear, float zFar) noexcept
     {
         m_flags.set(FLAG_IS_ORTHO_PROJ, false);
 
-        SetFovY(fovYDeg);
+        SetFovY(fovY);
         SetAspectRatio(aspectRatio);
         SetZNear(zNear);
         SetZFar(zFar);
@@ -68,12 +68,12 @@ namespace eng
     }
 
 
-    void Camera::SetFovY(float degrees) noexcept
+    void Camera::SetFovY(float radians) noexcept
     {
-        if (!math::IsEqual(m_fovDeg, degrees)) {
-            CORE_ASSERT_MSG(IsFovDegValid(degrees), "Degress can't be multiple of PI or less than zero");
+        if (!math::IsEqual(m_fovY, radians)) {
+            CORE_ASSERT(IsFovValid(radians));
 
-            m_fovDeg = degrees;
+            m_fovY = radians;
             RequestRecalcProjMatrix();
         }
     }
@@ -245,7 +245,7 @@ namespace eng
     #endif
 
         if (IsPerspProj()) {
-            m_matProj = glm::perspective(glm::radians(m_fovDeg), m_aspectRatio, zNear, zFar);
+            m_matProj = glm::perspective(m_fovY, m_aspectRatio, zNear, zFar);
 
         #ifdef ENG_GFX_API_VULKAN
             m_matProj[1][1] *= -1.f;
@@ -273,7 +273,7 @@ namespace eng
         using namespace math;
 
         const glm::vec3 farVec = GetForwardDir() * m_zFar;
-        const float halfH = m_zFar * glm::tan(glm::radians(m_fovDeg * 0.5f));
+        const float halfH = m_zFar * glm::tan(m_fovY * 0.5f);
         const float halfW = halfH * m_aspectRatio;
 
         std::array<glm::vec3, Frustum::PLANE_COUNT> planeNormals = {};

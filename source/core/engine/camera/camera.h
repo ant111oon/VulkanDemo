@@ -19,10 +19,10 @@ namespace eng
 
         void Destroy() noexcept;
 
-        void SetPerspProjection(float fovYDeg, float aspectRatio, float zNear, float zFar) noexcept;
+        void SetPerspProjection(float fovY, float aspectRatio, float zNear, float zFar) noexcept;
         void SetOrthoProjection(float left, float right, float top, float bottom, float zNear, float zFar) noexcept;
 
-        void SetFovY(float degrees) noexcept;
+        void SetFovY(float radians) noexcept;
         void SetAspectRatio(float aspect) noexcept;
         void SetAspectRatio(uint32_t width, uint32_t height) noexcept;
         void SetZNear(float zNear) noexcept;
@@ -39,7 +39,7 @@ namespace eng
         void SetRotation(const glm::quat& rotation) noexcept;
         void SetPosition(const glm::vec3& position) noexcept;
 
-        float GetFovDeg() const noexcept { return m_fovDeg; }
+        float GetFovY() const noexcept  { return m_fovY; }
         float GetAspectRatio() const noexcept { return m_aspectRatio; }
         float GetZNear() const noexcept { return m_zNear; }
         float GetZFar() const noexcept { return m_zFar; }
@@ -125,8 +125,8 @@ namespace eng
         glm::vec3 m_position = M3D_ZEROF3;
 
         // perspective
-        float m_fovDeg = 0.f;
-        float m_aspectRatio = 1.f;
+        float m_fovY = 0.f;
+        float m_aspectRatio = 0.f;
 
         // ortho
         float m_left = 0.f;
