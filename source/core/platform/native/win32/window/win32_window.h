@@ -26,6 +26,9 @@ public:
     const void* GetNativeHandle() const override { return m_HWND; }
 
     void SetVisible(bool visible) override;
+    void SetCursorHidden(bool hidden) override;
+
+    void SetCursorRelativeMode(bool relative) override;
 
     size_t AddEventCallback(const Win32WndEventCallback& callback);
     void RemoveEventCallbackByIdx(size_t index);
@@ -47,6 +50,7 @@ private:
 
 private:
     void HandleCustomMsgCallbacks(UINT uMsg, WPARAM wParam, LPARAM lParam);
+    void SetCursorPosition(int16_t x, int16_t y);
 
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -61,6 +65,8 @@ private:
         bool isCtrlDown = false, isShiftDown = false, isLButtonDown = false, isMButtonDown = false, isRButtonDown = false;
 
         FetchMouseEventCommonInfo(wParam, lParam, x, y, isCtrlDown, isShiftDown, isLButtonDown, isMButtonDown, isRButtonDown);
+
+        SetCursorPosition(x, y);
 
         PushEvent<OnMouseEventType>(x, y, isCtrlDown, isShiftDown, isLButtonDown, isMButtonDown, isRButtonDown);
 

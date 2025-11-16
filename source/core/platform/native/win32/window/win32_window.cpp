@@ -231,6 +231,28 @@ void Win32Window::HandleCustomMsgCallbacks(UINT uMsg, WPARAM wParam, LPARAM lPar
 }
 
 
+void Win32Window::SetCursorPosition(int16_t x, int16_t y)
+{
+    if (IsCursorRelativeMode()) {
+        Window::SetPrevCursorXY(GetWidth() / 2, GetHeight() / 2);
+        Window::SetCursorXY(x, y);
+        
+        RECT rect;
+        GetClientRect(m_HWND, &rect);
+        const LONG centerX = rect.left + (rect.right - rect.left) / 2;
+        const LONG centerY = rect.top + (rect.bottom - rect.top) / 2;
+
+        POINT pt = { centerX, centerY };
+        ClientToScreen(m_HWND, &pt);
+
+        SetCursorPos(pt.x, pt.y);
+    } else {
+        Window::SetPrevCursorXY(GetCursorX(), GetCursorY());
+        Window::SetCursorXY(x, y);
+    }
+}
+
+
 LRESULT Win32Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     HandleCustomMsgCallbacks(uMsg, wParam, lParam);
@@ -459,6 +481,32 @@ void Win32Window::SetVisible(bool visible)
 
     ShowWindow(m_HWND, visible ? SW_SHOW : SW_HIDE);
     SetVisibleState(visible);
+}
+
+
+void Win32Window::SetCursorHidden(bool hidden)
+{
+    WIN32_ASSERT(IsInitialized());
+
+    if (hidden == IsCursorHidden()) {
+        return;
+    }
+
+    ShowCursor(hidden ? FALSE : TRUE);
+    SetCursorHiddenState(hidden);
+}
+
+
+void Win32Window::SetCursorRelativeMode(bool relative)
+{
+    WIN32_ASSERT(IsInitialized());
+
+    if (relative == IsCursorRelativeMode()) {
+        return;
+    }
+
+    SetCursorHidden(relative);
+    SetCursorRelativeModeState(relative);
 }
 
 

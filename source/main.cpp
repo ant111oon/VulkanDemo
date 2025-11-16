@@ -633,8 +633,16 @@ namespace DbgUI
             ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
 
             ImGui::Separator();
-
             ImGui::NewLine();
+
+            ImGui::Text("Cursor Position: [x: %d, y: %d]", s_pWnd->GetCursorX(), s_pWnd->GetCursorY());
+            ImGui::Text("Fly Camera Mode (F5):");
+            ImGui::SameLine(); 
+            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
+            
+            ImGui::Separator();
+            ImGui::NewLine();
+
             ImGui::Text("Material Debug Texture: %s", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
             if (ImGui::IsItemHovered()) {
                 if (ImGui::BeginTooltip()) {
@@ -643,14 +651,7 @@ namespace DbgUI
                 ImGui::EndTooltip();
             }
 
-            ImGui::Text("Fly Camera Mode (F5):");
-            ImGui::SameLine(); 
-            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
-            
-            ImGui::Separator();
-
         #ifndef ENG_BUILD_RELEASE
-            ImGui::NewLine();
             ImGui::Checkbox("BasePass/Use Indirect Draw", &s_useMeshIndirectDraw);
             ImGui::Checkbox("BasePass/Use Culling", &s_useMeshCulling);
             if (!s_useMeshIndirectDraw) {
@@ -2824,18 +2825,15 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
             }
         }
     } else if (event.Is<WndCursorEvent>()) {
-        const WndCursorEvent& cursorEvent = event.Get<WndCursorEvent>();
-
-        static int16_t prevX = 0;
-        static int16_t prevY = 0; 
+        CORE_ASSERT(s_pWnd->IsCursorRelativeMode());
 
         static glm::vec3 pitchYawRoll = s_camera.GetPitchYawRollDegrees();
 
         if (firstEvent) {
             firstEvent = false;
         } else {
-            const float yaw = (cursorEvent.x - prevX) / 5.f;
-            const float pitch = (cursorEvent.y - prevY) / 5.f;
+            const float yaw = s_pWnd->GetCursorDX() / 5.f;
+            const float pitch = s_pWnd->GetCursorDY() / 5.f;
             
             pitchYawRoll.x -= pitch;
             pitchYawRoll.y -= yaw;
@@ -2857,9 +2855,6 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 
             camera.SetRotation(newRotation);
         }
-
-        prevX = cursorEvent.x;
-        prevY = cursorEvent.y;
     } else if (event.Is<WndResizeEvent>()) {
         const WndResizeEvent& resizeEvent = event.Get<WndResizeEvent>();
 
@@ -2885,8 +2880,7 @@ void ProcessWndEvent(const WndEvent& event)
 
         if (keyEvent.key == WndKey::KEY_F5 && keyEvent.IsPressed()) {
             s_flyCameraMode = !s_flyCameraMode;
-            
-            ShowCursor(!s_flyCameraMode);
+            s_pWnd->SetCursorRelativeMode(s_flyCameraMode);
         }
 
         if (keyEvent.IsPressed() || keyEvent.IsHold()) {
