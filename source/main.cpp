@@ -2451,7 +2451,7 @@ void UpdateScene()
     const float moveDist = glm::length(s_cameraVel);
 
     if (!math::IsZero(moveDist)) {
-        const glm::vec3 moveDir = glm::normalize(s_camera.GetRotationQuat() * (s_cameraVel / moveDist));
+        const glm::vec3 moveDir = glm::normalize(s_camera.GetRotation() * (s_cameraVel / moveDist));
         s_camera.MoveAlongDir(moveDir, moveDist);
     }
 
@@ -2829,13 +2829,33 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
         static int16_t prevX = 0;
         static int16_t prevY = 0; 
 
+        static glm::vec3 pitchYawRoll = s_camera.GetPitchYawRollDegrees();
+
         if (firstEvent) {
             firstEvent = false;
         } else {
             const float yaw = (cursorEvent.x - prevX) / 5.f;
             const float pitch = (cursorEvent.y - prevY) / 5.f;
             
-            camera.RotatePitchYawRoll(pitch, yaw);
+            pitchYawRoll.x -= pitch;
+            pitchYawRoll.y -= yaw;
+            
+            pitchYawRoll.x = (pitchYawRoll.x > 89.0f) ? 89.0f : pitchYawRoll.x;
+            pitchYawRoll.x = (pitchYawRoll.x < -89.0f) ? -89.0f : pitchYawRoll.x;
+
+            pitchYawRoll.z = 0.f;
+
+            glm::vec3 cameraDir;
+            cameraDir.x = -glm::cos(glm::radians(pitchYawRoll.x)) * glm::sin(glm::radians(pitchYawRoll.y));
+            cameraDir.y =  glm::sin(glm::radians(pitchYawRoll.x));
+            cameraDir.z = -glm::cos(glm::radians(pitchYawRoll.x)) * glm::cos(glm::radians(pitchYawRoll.y));
+            cameraDir = glm::normalize(cameraDir);
+
+            const glm::vec3 cameraRight = glm::normalize(glm::cross(cameraDir, M3D_AXIS_Y));
+			const glm::vec3 cameraUp    = glm::cross(cameraRight, cameraDir);
+            const glm::quat newRotation = glm::quatLookAt(cameraDir, cameraUp);
+
+            camera.SetRotation(newRotation);
         }
 
         prevX = cursorEvent.x;

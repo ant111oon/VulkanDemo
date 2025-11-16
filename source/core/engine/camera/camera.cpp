@@ -189,19 +189,6 @@ namespace eng
     }
 
 
-    void Camera::RotatePitchYawRoll(float pitchDeg, float yawDeg, float rollDeg) noexcept
-    {
-        const glm::quat rotation = glm::inverse(glm::quat(glm::radians(glm::vec3(pitchDeg, yawDeg, rollDeg))));
-
-        if (math::IsEqual(rotation, M3D_QUAT_IDENTITY)) {
-            return;
-        }
-
-        m_rotation = glm::normalize(m_rotation * rotation);
-        RequestRecalcViewMatrix();
-    }
-
-
     void Camera::SetRotation(const glm::quat& rotation) noexcept
     {
         CORE_ASSERT_MSG(math::IsNormalized(rotation), "Rotation quaternion must be normalized");

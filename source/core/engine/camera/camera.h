@@ -36,8 +36,6 @@ namespace eng
         void Move(const glm::vec3& offset) noexcept;
         void MoveAlongDir(const glm::vec3& dir, float distance) noexcept;
 
-        void RotatePitchYawRoll(float pitchDeg, float yawDeg, float rollDeg = 0.f) noexcept;
-
         void SetRotation(const glm::quat& rotation) noexcept;
         void SetPosition(const glm::vec3& position) noexcept;
 
@@ -60,7 +58,7 @@ namespace eng
         glm::vec3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_rotation); }
         glm::vec3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(GetPitchYawRollRadians()); }
         
-        const glm::quat& GetRotationQuat() const noexcept { return m_rotation; }
+        const glm::quat& GetRotation() const noexcept { return m_rotation; }
         const glm::vec3& GetPosition() const noexcept { return m_position; }
 
         const glm::mat4x4& GetViewMatrix() const noexcept { return m_matView; }
