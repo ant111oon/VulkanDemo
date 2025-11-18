@@ -38,13 +38,10 @@ namespace vkn
         std::swap(m_pDevice, buffer.m_pDevice);
 
         std::swap(m_buffer, buffer.m_buffer);
-        std::swap(m_memory, buffer.m_memory);
+        std::swap(m_allocation, buffer.m_allocation);
+        std::swap(m_allocInfo, buffer.m_allocInfo);
+        
         std::swap(m_deviceAddress, buffer.m_deviceAddress);
-
-        std::swap(m_size, buffer.m_size);
-        std::swap(m_usage, buffer.m_usage);
-        std::swap(m_properties, buffer.m_properties);
-        std::swap(m_memAllocFlags, buffer.m_memAllocFlags);
 
         std::swap(m_state, buffer.m_state);
 
@@ -62,6 +59,8 @@ namespace vkn
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+        VK_ASSERT(GetAllocator().IsCreated());
+        VK_ASSERT(info.pAllocInfo);
 
         VkDevice vkDevice = info.pDevice->Get();
 
@@ -71,61 +70,32 @@ namespace vkn
         bufferCreateInfo.usage = info.usage;
         bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: fix
 
+        VmaAllocationCreateInfo allocCreateInfo = {};
+        allocCreateInfo.usage = info.pAllocInfo->usage;
+        allocCreateInfo.flags = info.pAllocInfo->flags;
+
         m_buffer = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateBuffer(vkDevice, &bufferCreateInfo, nullptr, &m_buffer));
+        m_allocation = VK_NULL_HANDLE;
+        VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &bufferCreateInfo, &allocCreateInfo, &m_buffer, &m_allocation, &m_allocInfo));
+
+        // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
 
         const bool isBufferCreated = m_buffer != VK_NULL_HANDLE;
+        const bool isMemoryAllocated = m_allocation != VK_NULL_HANDLE;
         VK_ASSERT(isBufferCreated);
-
-        VkBufferMemoryRequirementsInfo2 memRequirementsInfo = {};
-        memRequirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
-        memRequirementsInfo.buffer = m_buffer;
-
-        VkMemoryRequirements2 memRequirements = {};
-        memRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-        vkGetBufferMemoryRequirements2(vkDevice, &memRequirementsInfo, &memRequirements);
-
-        VkMemoryAllocateFlagsInfo memAllocFlagsInfo = {};
-        memAllocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-        memAllocFlagsInfo.flags = info.memAllocFlags;
-
-        VkMemoryAllocateInfo memAllocInfo = {};
-        memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memAllocInfo.pNext = &memAllocFlagsInfo;
-        memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
-        memAllocInfo.memoryTypeIndex = utils::FindMemoryType(*info.pDevice->GetPhysDevice(),
-            memRequirements.memoryRequirements.memoryTypeBits, info.properties);
-        VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
-
-        m_memory = VK_NULL_HANDLE;
-        VK_CHECK(vkAllocateMemory(vkDevice, &memAllocInfo, nullptr, &m_memory));
-
-        const bool isMemoryAllocated = m_memory != VK_NULL_HANDLE;
         VK_ASSERT(isMemoryAllocated);
 
-        VkBindBufferMemoryInfo bindInfo = {};
-        bindInfo.sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO;
-        bindInfo.buffer = m_buffer;
-        bindInfo.memory = m_memory;
+        const bool isCreated = isBufferCreated && isMemoryAllocated;
+        VK_ASSERT(isCreated);
 
-        VK_CHECK(vkBindBufferMemory2(vkDevice, 1, &bindInfo));
-
-        if (info.memAllocFlags & VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT) {
+        if ((info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
             VkBufferDeviceAddressInfo addressInfo = {};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = m_buffer;
             m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
         }
 
-        const bool isCreated = isBufferCreated && isMemoryAllocated;
-        VK_ASSERT(isCreated);
-
         m_pDevice = info.pDevice;
-
-        m_size = memRequirements.memoryRequirements.size;
-        m_usage = info.usage;
-        m_properties = info.properties;
-        m_memAllocFlags = info.memAllocFlags;
 
         SetCreated(isCreated);
 
@@ -139,40 +109,35 @@ namespace vkn
             return;
         }
 
-        VkDevice vkDevice = m_pDevice->Get();
-
-        vkFreeMemory(vkDevice, m_memory, nullptr);
-        m_memory = VK_NULL_HANDLE;
-        
-        vkDestroyBuffer(vkDevice, m_buffer, nullptr);
+        vmaDestroyBuffer(GetAllocator().Get(), m_buffer, m_allocation);
+        m_allocation = VK_NULL_HANDLE;
         m_buffer = VK_NULL_HANDLE;
 
-        m_pDevice = nullptr;
+        m_allocInfo = {};
 
         m_deviceAddress = 0;
-        m_size = 0;
 
-        m_usage = {};
-        m_properties = {};
-        m_memAllocFlags = {};
-
+        m_pDevice = nullptr;
         m_state.reset();
 
         Object::Destroy();
     }
 
 
-    void* Buffer::Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags)
+    void* Buffer::Map(VkDeviceSize offset, VkDeviceSize size)
     {
         VK_ASSERT(IsCreated());
         VK_ASSERT(!IsMapped());
 
+        size = size == VK_WHOLE_SIZE ? GetSize() : size;
+        VK_ASSERT(offset + size <= GetSize());
+
         void* pData = nullptr;
-        VK_CHECK(vkMapMemory(m_pDevice->Get(), m_memory, offset, size, flags, &pData));
+        VK_CHECK(vmaMapMemory(GetAllocator().Get(), m_allocation, &pData));
 
         m_state.set(BIT_IS_MAPPED, pData != nullptr);
 
-        return pData;
+        return (void*)((uint8_t*)(pData) + offset);
     }
 
 
@@ -181,7 +146,7 @@ namespace vkn
         VK_ASSERT(IsCreated());
         VK_ASSERT(IsMapped());
 
-        vkUnmapMemory(m_pDevice->Get(), m_memory);
+        vmaUnmapMemory(GetAllocator().Get(), m_allocation);
 
         m_state.set(BIT_IS_MAPPED, false);
     }

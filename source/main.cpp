@@ -21,6 +21,8 @@
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
+#include "render/core/vulkan/vk_memory.h"
+
 #include "core/engine/camera/camera.h"
 
 #include "core/profiler/cpu_profiler.h"
@@ -337,8 +339,9 @@ static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
 
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
+static vkn::Device&         s_vkDevice = vkn::GetDevice();
 
-static vkn::Device& s_vkDevice = vkn::GetDevice();
+static vkn::Allocator&      s_vkAllocator = vkn::GetAllocator();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
@@ -1134,12 +1137,15 @@ void CreateVkIndirectDrawBuffers()
 {
     Timer timer;
 
+    vkn::AllocationInfo commandsBufAllocInfo = {};
+    commandsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    commandsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
     vkn::BufferCreateInfo commandsBufCreateInfo = {};
     commandsBufCreateInfo.pDevice = &s_vkDevice;
     commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
     commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    commandsBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    commandsBufCreateInfo.memAllocFlags = 0;
+    commandsBufCreateInfo.pAllocInfo = &commandsBufAllocInfo;
 
     s_drawIndirectCommandsBuffer.Create(commandsBufCreateInfo); 
     CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
@@ -1769,18 +1775,21 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
         const gltf::Image& gltfImage = model.images[texIdx];
 
+        vkn::AllocationInfo stagingTexBufAllocInfo = {};
+        stagingTexBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingTexBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
         vkn::BufferCreateInfo stagingTexBufCreateInfo = {};
         stagingTexBufCreateInfo.pDevice = &s_vkDevice;
         stagingTexBufCreateInfo.size = gltfImage.image.size() * sizeof(gltfImage.image[0]);
         stagingTexBufCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        stagingTexBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        stagingTexBufCreateInfo.memAllocFlags = 0;
+        stagingTexBufCreateInfo.pAllocInfo = &stagingTexBufAllocInfo;
 
         vkn::Buffer& stagingTexBuffer = stagingSceneImageBuffers[texIdx];
         stagingTexBuffer.Create(stagingTexBufCreateInfo);
         CORE_ASSERT(stagingTexBuffer.IsCreated());
 
-        void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pImageData, gltfImage.image.data(), stagingTexBufCreateInfo.size);
         stagingTexBuffer.Unmap();
 
@@ -1850,17 +1859,21 @@ static void LoadSceneMaterials(const gltf::Model& model)
         AddGltfMaterialTexture(material.EMISSIVE_TEX_IDX, true);
     }
 
+    vkn::AllocationInfo commonMtlBuffAllocInfo = {};
+    commonMtlBuffAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    commonMtlBuffAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
     vkn::BufferCreateInfo commonMtlBuffCreateInfo = {};
     commonMtlBuffCreateInfo.pDevice = &s_vkDevice;
     commonMtlBuffCreateInfo.size = s_sceneMaterials.size() * sizeof(COMMON_MATERIAL);
     commonMtlBuffCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    commonMtlBuffCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    commonMtlBuffCreateInfo.pAllocInfo = &commonMtlBuffAllocInfo;
 
     s_commonMaterialsBuffer.Create(commonMtlBuffCreateInfo);
     CORE_ASSERT(s_commonMaterialsBuffer.IsCreated());
     s_commonMaterialsBuffer.SetDebugName("COMMON_MATERIALS");
 
-    void* pCommonMaterialsData = s_commonMaterialsBuffer.Map(0, VK_WHOLE_SIZE, 0);
+    void* pCommonMaterialsData = s_commonMaterialsBuffer.Map(0, VK_WHOLE_SIZE);
     memcpy(pCommonMaterialsData, s_sceneMaterials.data(), s_sceneMaterials.size() * sizeof(COMMON_MATERIAL));
     s_commonMaterialsBuffer.Unmap();
 
@@ -2111,20 +2124,22 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         }
     }
 
+    vkn::AllocationInfo stagingBufAllocInfo = {};
+    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
     vkn::BufferCreateInfo stagingBufCreateInfo = {};
     stagingBufCreateInfo.pDevice = &s_vkDevice;
     stagingBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    stagingBufCreateInfo.memAllocFlags = 0;
+    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     vkn::Buffer stagingVertBuffer(stagingBufCreateInfo);
     CORE_ASSERT(stagingVertBuffer.IsCreated());
     stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
 
     {
-        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(Vertex));
         stagingVertBuffer.Unmap();
     }
@@ -2136,7 +2151,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
     stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
 
     {
-        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(VertexIndexType));
         stagingIndexBuffer.Unmap();
     }
@@ -2148,41 +2163,48 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
     stagingMeshInfosBuffer.SetDebugName("STAGING_MESH_INFOS_BUFFER");
 
     {
-        void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pMeshBufferData, s_sceneMeshInfos.data(), s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO));
         stagingMeshInfosBuffer.Unmap();
     }
 
+    vkn::AllocationInfo vertBufAllocInfo = {};
+    vertBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    vertBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
     vkn::BufferCreateInfo vertBufCreateInfo = {};
     vertBufCreateInfo.pDevice = &s_vkDevice;
     vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
-    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    vertBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    vertBufCreateInfo.memAllocFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
     s_vertexBuffer.Create(vertBufCreateInfo);
     CORE_ASSERT(s_vertexBuffer.IsCreated());
     s_vertexBuffer.SetDebugName("COMMON_VB");
 
+    vkn::AllocationInfo idxBufAllocInfo = {};
+    idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    idxBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
     vkn::BufferCreateInfo idxBufCreateInfo = {};
     idxBufCreateInfo.pDevice = &s_vkDevice;
     idxBufCreateInfo.size = INDEX_BUFFER_SIZE_BYTES;
     idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    idxBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    idxBufCreateInfo.memAllocFlags = 0;
+    idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
     s_indexBuffer.Create(idxBufCreateInfo);
     CORE_ASSERT(s_indexBuffer.IsCreated());
     s_indexBuffer.SetDebugName("COMMON_IB");
 
+    vkn::AllocationInfo meshInfosBufAllocInfo = {};
+    meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    meshInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
     vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
     meshInfosBufCreateInfo.pDevice = &s_vkDevice;
     meshInfosBufCreateInfo.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
     meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    meshInfosBufCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    meshInfosBufCreateInfo.memAllocFlags = 0;
+    meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
     s_commonMeshInfosBuffer.Create(meshInfosBufCreateInfo);
     CORE_ASSERT(s_commonMeshInfosBuffer.IsCreated());
@@ -2244,28 +2266,35 @@ static void LoadSceneTransforms(const gltf::Model& model)
         }
     }
 
+    vkn::AllocationInfo stagingBufAllocInfo = {};
+    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
     vkn::BufferCreateInfo stagingBufCreateInfo = {};
     stagingBufCreateInfo.pDevice = &s_vkDevice;
     stagingBufCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    stagingBufCreateInfo.memAllocFlags = 0;
+    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     vkn::Buffer stagingBuffer(stagingBufCreateInfo);
     CORE_ASSERT(stagingBuffer.IsCreated());
     stagingBuffer.SetDebugName("STAGING_TRANSFORM_BUFFER");
 
     {
-        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM));
         stagingBuffer.Unmap();
     }
+
+    vkn::AllocationInfo commonTrsBufAllocInfo = {};
+    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
     vkn::BufferCreateInfo commonTrsCreateInfo = {};
     commonTrsCreateInfo.pDevice = &s_vkDevice;
     commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
     commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonTrsCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    commonTrsCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
 
     s_commonTransformsBuffer.Create(commonTrsCreateInfo);
     CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
@@ -2314,30 +2343,37 @@ static void LoadSceneInstInfos(const gltf::Model& model)
         }
     }
 
+    vkn::AllocationInfo stagingBufAllocInfo = {};
+    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
     vkn::BufferCreateInfo stagingBufCreateInfo = {};
     stagingBufCreateInfo.pDevice = &s_vkDevice;
     stagingBufCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    stagingBufCreateInfo.memAllocFlags = 0;
+    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     vkn::Buffer stagingBuffer(stagingBufCreateInfo);
     CORE_ASSERT(stagingBuffer.IsCreated());
     stagingBuffer.SetDebugName("STAGING_INST_INFOS_BUFFER");
 
     {
-        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE, 0);
+        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
         memcpy(pData, s_sceneInstInfos.data(), s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO));
         stagingBuffer.Unmap();
     }
 
-    vkn::BufferCreateInfo instInfosBufferCreateInfo = {};
-    instInfosBufferCreateInfo.pDevice = &s_vkDevice;
-    instInfosBufferCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
-    instInfosBufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    instInfosBufferCreateInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vkn::AllocationInfo instInfosBufAllocInfo = {};
+    instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    instInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    s_commonInstInfosBuffer.Create(instInfosBufferCreateInfo);
+    vkn::BufferCreateInfo instInfosBufCreateInfo = {};
+    instInfosBufCreateInfo.pDevice = &s_vkDevice;
+    instInfosBufCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
+
+    s_commonInstInfosBuffer.Create(instInfosBufCreateInfo);
     CORE_ASSERT(s_commonInstInfosBuffer.IsCreated());
     s_commonInstInfosBuffer.SetDebugName("COMMON_INST_INFOS");
 
@@ -2376,24 +2412,24 @@ static void LoadScene(const fs::path& filepath)
     }
     CORE_ASSERT_MSG(isModelLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
 
-
     LoadSceneTransforms(model);
     LoadSceneMaterials(model);
     LoadSceneMeshInfos(model);
     LoadSceneInstInfos(model);
 
+    vkn::AllocationInfo commonConstBufAllocInfo = {};
+    commonConstBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    commonConstBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
     vkn::BufferCreateInfo commonConstBufCreateInfo = {};
     commonConstBufCreateInfo.pDevice = &s_vkDevice;
     commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
     commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonConstBufCreateInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    commonConstBufCreateInfo.memAllocFlags = 0;
+    commonConstBufCreateInfo.pAllocInfo = &commonConstBufAllocInfo;
 
     s_commonConstBuffer.Create(commonConstBufCreateInfo); 
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
     s_commonConstBuffer.SetDebugName("COMMON_CB");
-
 
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 }
@@ -2403,7 +2439,7 @@ void UpdateCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
 
-    COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>(0);
+    COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>();
 
     pCommonConstBufferData->COMMON_VIEW_MATRIX = s_camera.GetViewMatrix();
     pCommonConstBufferData->COMMON_PROJ_MATRIX = s_camera.GetProjMatrix();
@@ -2963,6 +2999,13 @@ int main(int argc, char* argv[])
     vkn::GetProfiler().Create(&s_vkDevice);
     CORE_ASSERT(vkn::GetProfiler().IsCreated());
 #endif
+
+    vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
+    vkAllocatorCreateInfo.pDevice = &s_vkDevice;
+    vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    s_vkAllocator.Create(vkAllocatorCreateInfo);
+    CORE_ASSERT(s_vkAllocator.IsCreated());
 
     CreateVkSwapchain();
 

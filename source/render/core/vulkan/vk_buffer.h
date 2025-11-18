@@ -2,6 +2,7 @@
 
 #include "vk_object.h"
 #include "vk_device.h"
+#include "vk_memory.h"
 
 
 namespace vkn
@@ -12,8 +13,8 @@ namespace vkn
 
         VkDeviceSize size;
         VkBufferUsageFlags usage;
-        VkMemoryPropertyFlags properties;
-        VkMemoryAllocateFlags memAllocFlags;
+
+        const AllocationInfo* pAllocInfo;
     };
 
 
@@ -34,18 +35,12 @@ namespace vkn
         void Destroy();
 
         template<typename T>
-        T* Map(VkMemoryMapFlags flags)
+        T* Map()
         {
-            return static_cast<T*>(Map(0, VK_WHOLE_SIZE, flags));
+            return static_cast<T*>(Map(0, VK_WHOLE_SIZE));
         }
 
-        template<typename T>
-        T* Map(size_t firstElement, size_t elemCount, VkMemoryMapFlags flags)
-        {            
-            return static_cast<T*>(Map(firstElement * sizeof(T), elemCount * sizeof(T), flags));
-        }
-
-        void* Map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags);
+        void* Map(VkDeviceSize offset, VkDeviceSize size);
         void Unmap();
 
         template <typename... Args>
@@ -71,7 +66,7 @@ namespace vkn
         VkDeviceMemory GetMemory() const
         {
             VK_ASSERT(IsCreated());
-            return m_memory;
+            return m_allocInfo.deviceMemory;
         }
 
         VkDeviceAddress GetDeviceAddress() const
@@ -83,19 +78,7 @@ namespace vkn
         VkDeviceSize GetSize() const
         {
             VK_ASSERT(IsCreated());
-            return m_size;
-        }
-
-        bool TestProperties(VkMemoryPropertyFlags properties)
-        {
-            VK_ASSERT(IsCreated());
-            return (m_properties & properties) == properties;
-        }
-
-        bool TestMemoryAllocFlags(VkMemoryAllocateFlags memoryAllocFlags)
-        {
-            VK_ASSERT(IsCreated());
-            return (m_memAllocFlags & memoryAllocFlags) == memoryAllocFlags;
+            return m_allocInfo.size;
         }
 
         bool IsMapped() const
@@ -115,13 +98,11 @@ namespace vkn
         Device* m_pDevice = nullptr;
 
         VkBuffer m_buffer = VK_NULL_HANDLE;
-        VkDeviceMemory m_memory = VK_NULL_HANDLE;
-        VkDeviceAddress m_deviceAddress = 0;
+        VmaAllocation m_allocation = VK_NULL_HANDLE;
 
-        VkDeviceSize m_size = 0;
-        VkBufferUsageFlags m_usage = {};
-        VkMemoryPropertyFlags m_properties = {};
-        VkMemoryAllocateFlags m_memAllocFlags = {};
+        VkDeviceAddress m_deviceAddress = 0;
+        
+        VmaAllocationInfo m_allocInfo = {};
 
         std::bitset<BIT_COUNT> m_state = {};
     };
