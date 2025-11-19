@@ -127,16 +127,11 @@ namespace vkn
     }
     
 
-    GpuMarker::GpuMarker(CmdBuffer& cmd, const GpuMarkerLocation* pLocation, uint8_t r, uint8_t g, uint8_t b, uint8_t a, bool isActive)
-        : m_tracyScope(GetProfiler().GetTracyContext(), pLocation, cmd.Get(), isActive)
-        , m_cmdBuf(cmd)
+    GpuMarker::GpuMarker(CmdBuffer& cmd, std::string_view name, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+        : m_cmdBuf(cmd)
     {
-        VK_ASSERT_MSG(m_cmdBuf.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
-        VK_ASSERT(pLocation->name);
-        VK_ASSERT(pLocation->function);
-        VK_ASSERT(pLocation->file);
-
-        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, pLocation->name, r, g, b, a);
+        VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
+        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, name.data(), r, g, b, a);
     }
 
 
