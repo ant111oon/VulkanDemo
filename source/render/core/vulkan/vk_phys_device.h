@@ -15,6 +15,8 @@ namespace vkn
         bool samplerMirrorClampToEdge;
         bool drawIndirectCount;
         bool vertexPipelineStoresAndAtomics;
+        bool bufferDeviceAddress;
+        bool bufferDeviceAddressCaptureReplay;
     };
 
 

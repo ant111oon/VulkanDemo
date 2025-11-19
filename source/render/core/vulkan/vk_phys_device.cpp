@@ -37,6 +37,14 @@ namespace vkn
             return false;
         }
 
+        if (featuresReq.bufferDeviceAddress && featuresReq.bufferDeviceAddress != pFeatures12->bufferDeviceAddress) {
+            return false;
+        }
+
+        if (featuresReq.bufferDeviceAddressCaptureReplay && featuresReq.bufferDeviceAddressCaptureReplay != pFeatures12->bufferDeviceAddressCaptureReplay) {
+            return false;
+        }
+
         if (featuresReq.runtimeDescriptorArray && featuresReq.runtimeDescriptorArray != pFeatures12->runtimeDescriptorArray) {
             return false;
         }
