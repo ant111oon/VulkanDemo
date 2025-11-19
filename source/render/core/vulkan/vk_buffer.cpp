@@ -64,19 +64,19 @@ namespace vkn
 
         VkDevice vkDevice = info.pDevice->Get();
 
-        VkBufferCreateInfo bufferCreateInfo = {};
-        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferCreateInfo.size = info.size;
-        bufferCreateInfo.usage = info.usage;
-        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: fix
+        VkBufferCreateInfo ci = {};
+        ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        ci.size = info.size;
+        ci.usage = info.usage;
+        ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: fix
 
-        VmaAllocationCreateInfo allocCreateInfo = {};
-        allocCreateInfo.usage = info.pAllocInfo->usage;
-        allocCreateInfo.flags = info.pAllocInfo->flags;
+        VmaAllocationCreateInfo allocCI = {};
+        allocCI.usage = info.pAllocInfo->usage;
+        allocCI.flags = info.pAllocInfo->flags;
 
         m_buffer = VK_NULL_HANDLE;
         m_allocation = VK_NULL_HANDLE;
-        VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &bufferCreateInfo, &allocCreateInfo, &m_buffer, &m_allocation, &m_allocInfo));
+        VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &ci, &allocCI, &m_buffer, &m_allocation, &m_allocInfo));
 
         // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
 
@@ -129,8 +129,8 @@ namespace vkn
         VK_ASSERT(IsCreated());
         VK_ASSERT(!IsMapped());
 
-        size = size == VK_WHOLE_SIZE ? GetSize() : size;
-        VK_ASSERT(offset + size <= GetSize());
+        size = size == VK_WHOLE_SIZE ? GetMemorySize() : size;
+        VK_ASSERT(offset + size <= GetMemorySize());
 
         void* pData = nullptr;
         VK_CHECK(vmaMapMemory(GetAllocator().Get(), m_allocation, &pData));

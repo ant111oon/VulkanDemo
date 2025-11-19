@@ -321,10 +321,6 @@ static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 2048;
 
 static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
-static constexpr size_t VERTEX_BUFFER_SIZE_BYTES = MAX_VERTEX_COUNT * sizeof(Vertex);
-
-static constexpr size_t MAX_INDEX_COUNT = 2'000'000;
-static constexpr size_t INDEX_BUFFER_SIZE_BYTES = MAX_INDEX_COUNT * sizeof(VertexIndexType);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -752,11 +748,11 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
     s_vkImmediateSubmitFinishedFence.Reset();
     s_vkImmediateSubmitCmdBuffer.Reset();
 
-    VkCommandBufferBeginInfo cmdBeginInfo = {};
-    cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferBeginInfo cmdBI = {};
+    cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    s_vkImmediateSubmitCmdBuffer.Begin(cmdBeginInfo);
+    s_vkImmediateSubmitCmdBuffer.Begin(cmdBI);
         func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
     s_vkImmediateSubmitCmdBuffer.End();
 
@@ -777,17 +773,17 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 static void CreateVkInstance()
 {
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCreateInfo = {};
-    vkDbgMessengerCreateInfo.messageType = 
+    vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCI = {};
+    vkDbgMessengerCI.messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    vkDbgMessengerCreateInfo.messageSeverity = 
+    vkDbgMessengerCI.messageSeverity = 
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    vkDbgMessengerCreateInfo.pMessageCallback = DbgVkMessageCallback;
+    vkDbgMessengerCI.pMessageCallback = DbgVkMessageCallback;
 
     constexpr std::array vkInstLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -805,42 +801,42 @@ static void CreateVkInstance()
     #endif
     };
 
-    vkn::InstanceCreateInfo vkInstCreateInfo = {};
-    vkInstCreateInfo.pApplicationName = APP_NAME;
-    vkInstCreateInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCreateInfo.pEngineName = "VkEngine";
-    vkInstCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCreateInfo.apiVersion = VK_API_VERSION_1_3;
-    vkInstCreateInfo.extensions = vkInstExtensions;
+    vkn::InstanceCreateInfo vkInstCI = {};
+    vkInstCI.pApplicationName = APP_NAME;
+    vkInstCI.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    vkInstCI.pEngineName = "VkEngine";
+    vkInstCI.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    vkInstCI.apiVersion = VK_API_VERSION_1_3;
+    vkInstCI.extensions = vkInstExtensions;
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkInstCreateInfo.layers = vkInstLayers;
-    vkInstCreateInfo.pDbgMessengerCreateInfo = &vkDbgMessengerCreateInfo;
+    vkInstCI.layers = vkInstLayers;
+    vkInstCI.pDbgMessengerCreateInfo = &vkDbgMessengerCI;
 #endif
 
-    s_vkInstance.Create(vkInstCreateInfo); 
+    s_vkInstance.Create(vkInstCI); 
     CORE_ASSERT(s_vkInstance.IsCreated());
 }
 
 
 static void CreateVkSwapchain()
 {
-    vkn::SwapchainCreateInfo vkSwapchainCreateInfo = {};
-    vkSwapchainCreateInfo.pDevice = &s_vkDevice;
-    vkSwapchainCreateInfo.pSurface = &s_vkSurface;
+    vkn::SwapchainCreateInfo vkSwapchainCI = {};
+    vkSwapchainCI.pDevice = &s_vkDevice;
+    vkSwapchainCI.pSurface = &s_vkSurface;
 
-    vkSwapchainCreateInfo.width = s_pWnd->GetWidth();
-    vkSwapchainCreateInfo.height = s_pWnd->GetHeight();
+    vkSwapchainCI.width = s_pWnd->GetWidth();
+    vkSwapchainCI.height = s_pWnd->GetHeight();
 
-    vkSwapchainCreateInfo.minImageCount    = 2;
-    vkSwapchainCreateInfo.imageFormat      = VK_FORMAT_B8G8R8A8_SRGB;
-    vkSwapchainCreateInfo.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    vkSwapchainCreateInfo.imageArrayLayers = 1u;
-    vkSwapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    vkSwapchainCreateInfo.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    vkSwapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    vkSwapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    vkSwapchainCI.minImageCount    = 2;
+    vkSwapchainCI.imageFormat      = VK_FORMAT_B8G8R8A8_SRGB;
+    vkSwapchainCI.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    vkSwapchainCI.imageArrayLayers = 1u;
+    vkSwapchainCI.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    vkSwapchainCI.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    vkSwapchainCI.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    vkSwapchainCI.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
-    s_vkSwapchain.Create(vkSwapchainCreateInfo);
+    s_vkSwapchain.Create(vkSwapchainCI);
     CORE_ASSERT(s_vkSwapchain.IsCreated());
 }
 
@@ -858,12 +854,12 @@ static void CreateVkPhysAndLogicalDevices()
     vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
     vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 
-    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCreateInfo = {};
-    vkPhysDeviceCreateInfo.pInstance = &s_vkInstance;
-    vkPhysDeviceCreateInfo.pPropertiesRequirenments = &vkPhysDevicePropsReq;
-    vkPhysDeviceCreateInfo.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
+    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCI = {};
+    vkPhysDeviceCI.pInstance = &s_vkInstance;
+    vkPhysDeviceCI.pPropertiesRequirenments = &vkPhysDevicePropsReq;
+    vkPhysDeviceCI.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
 
-    s_vkPhysDevice.Create(vkPhysDeviceCreateInfo);
+    s_vkPhysDevice.Create(vkPhysDeviceCI);
     CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
 
 
@@ -906,14 +902,14 @@ static void CreateVkPhysAndLogicalDevices()
     features2.features.samplerAnisotropy = VK_TRUE;
     features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
 
-    vkn::DeviceCreateInfo vkDeviceCreateInfo = {};
-    vkDeviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
-    vkDeviceCreateInfo.pSurface = &s_vkSurface;
-    vkDeviceCreateInfo.queuePriority = 1.f;
-    vkDeviceCreateInfo.extensions = vkDeviceExtensions;
-    vkDeviceCreateInfo.pFeatures2 = &features2;
+    vkn::DeviceCreateInfo vkDeviceCI = {};
+    vkDeviceCI.pPhysDevice = &s_vkPhysDevice;
+    vkDeviceCI.pSurface = &s_vkSurface;
+    vkDeviceCI.queuePriority = 1.f;
+    vkDeviceCI.extensions = vkDeviceExtensions;
+    vkDeviceCI.pFeatures2 = &features2;
 
-    s_vkDevice.Create(vkDeviceCreateInfo);
+    s_vkDevice.Create(vkDeviceCI);
     CORE_ASSERT(s_vkDevice.IsCreated());
 }
 
@@ -934,13 +930,13 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     }
     VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
 
-    VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-    shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shaderModuleCreateInfo.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
-    shaderModuleCreateInfo.codeSize = pShaderData->size();
+    VkShaderModuleCreateInfo shaderModuleCI = {};
+    shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
+    shaderModuleCI.codeSize = pShaderData->size();
 
     VkShaderModule vkShaderModule = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCreateInfo, nullptr, &vkShaderModule));
+    VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &vkShaderModule));
     VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
 
     CORE_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
@@ -1137,23 +1133,23 @@ void CreateVkIndirectDrawBuffers()
 {
     Timer timer;
 
-    vkn::AllocationInfo commandsBufAllocInfo = {};
-    commandsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    commandsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo ai = {};
+    ai.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    ai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo commandsBufCreateInfo = {};
-    commandsBufCreateInfo.pDevice = &s_vkDevice;
-    commandsBufCreateInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
-    commandsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    commandsBufCreateInfo.pAllocInfo = &commandsBufAllocInfo;
+    vkn::BufferCreateInfo ci = {};
+    ci.pDevice = &s_vkDevice;
+    ci.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
+    ci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    ci.pAllocInfo = &ai;
 
-    s_drawIndirectCommandsBuffer.Create(commandsBufCreateInfo); 
+    s_drawIndirectCommandsBuffer.Create(ci); 
     CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
     s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
 
-    commandsBufCreateInfo.size = sizeof(glm::uint);
+    ci.size = sizeof(glm::uint);
 
-    s_drawIndirectCommandsCountBuffer.Create(commandsBufCreateInfo); 
+    s_drawIndirectCommandsCountBuffer.Create(ci); 
     CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
     s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
 
@@ -1174,42 +1170,44 @@ static void CreateDepthRT()
         depthImage.Destroy();
     }
 
-    vkn::ImageCreateInfo depthImageCreateInfo = {};
-    depthImageCreateInfo.pDevice = &s_vkDevice;
+    vkn::AllocationInfo depthImageAI = {};
+    depthImageAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    depthImageAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    depthImageCreateInfo.type = VK_IMAGE_TYPE_2D;
-    depthImageCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    depthImageCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
-    depthImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthImageCreateInfo.flags = 0;
-    depthImageCreateInfo.mipLevels = 1;
-    depthImageCreateInfo.arrayLayers = 1;
-    depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    
-    depthImageCreateInfo.memAllocInfo.flags = 0;
-    depthImageCreateInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vkn::ImageCreateInfo depthImageCI = {};
+    depthImageCI.pDevice = &s_vkDevice;
 
-    depthImage.Create(depthImageCreateInfo);
+    depthImageCI.type = VK_IMAGE_TYPE_2D;
+    depthImageCI.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    depthImageCI.format = VK_FORMAT_D32_SFLOAT;
+    depthImageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
+    depthImageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthImageCI.flags = 0;
+    depthImageCI.mipLevels = 1;
+    depthImageCI.arrayLayers = 1;
+    depthImageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthImageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+    depthImageCI.pAllocInfo = &depthImageAI;
+
+    depthImage.Create(depthImageCI);
     CORE_ASSERT(depthImage.IsCreated());
     depthImage.SetDebugName("COMMON_DEPTH");
 
-    vkn::ImageViewCreateInfo depthImageViewCreateInfo = {};
-    depthImageViewCreateInfo.pOwner = &depthImage;
-    depthImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    depthImageViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    depthImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    depthImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    depthImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    depthImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    depthImageViewCreateInfo.subresourceRange.levelCount = 1;
-    depthImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    depthImageViewCreateInfo.subresourceRange.layerCount = 1;
+    vkn::ImageViewCreateInfo depthImageViewCI = {};
+    depthImageViewCI.pOwner = &depthImage;
+    depthImageViewCI.type = VK_IMAGE_VIEW_TYPE_2D;
+    depthImageViewCI.format = VK_FORMAT_D32_SFLOAT;
+    depthImageViewCI.components.r = VK_COMPONENT_SWIZZLE_R;
+    depthImageViewCI.components.g = VK_COMPONENT_SWIZZLE_G;
+    depthImageViewCI.components.b = VK_COMPONENT_SWIZZLE_B;
+    depthImageViewCI.components.a = VK_COMPONENT_SWIZZLE_A;
+    depthImageViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthImageViewCI.subresourceRange.baseMipLevel = 0;
+    depthImageViewCI.subresourceRange.levelCount = 1;
+    depthImageViewCI.subresourceRange.baseArrayLayer = 0;
+    depthImageViewCI.subresourceRange.layerCount = 1;
 
-    depthImageView.Create(depthImageViewCreateInfo);
+    depthImageView.Create(depthImageViewCI);
     CORE_ASSERT(depthImageView.IsValid());
     depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
 }
@@ -1221,236 +1219,236 @@ static void CreateCommonSamplers()
 
     s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
-    std::vector<vkn::SamplerCreateInfo> smpCreateInfos((uint32_t)COMMON_SAMPLER_IDX::COUNT);
+    std::vector<vkn::SamplerCreateInfo> smpCIs((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].pDevice = &s_vkDevice;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].magFilter = VK_FILTER_NEAREST;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minFilter = VK_FILTER_NEAREST;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipLodBias = 0.f;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].anisotropyEnable = VK_FALSE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].compareEnable = VK_FALSE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minLod = 0.f;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].pDevice = &s_vkDevice;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].magFilter = VK_FILTER_NEAREST;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minFilter = VK_FILTER_NEAREST;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipLodBias = 0.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].anisotropyEnable = VK_FALSE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].compareEnable = VK_FALSE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minLod = 0.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].magFilter = VK_FILTER_LINEAR;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].magFilter = VK_FILTER_LINEAR;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
 
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
 
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
 
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
     
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCreateInfos[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
 
-    for (size_t i = 0; i < smpCreateInfos.size(); ++i) {
-        s_commonSamplers[i].Create(smpCreateInfos[i]);
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
+
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
+
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+
+    for (size_t i = 0; i < smpCIs.size(); ++i) {
+        s_commonSamplers[i].Create(smpCIs[i]);
         CORE_ASSERT(s_commonSamplers[i].IsCreated());
         s_commonSamplers[i].SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
@@ -1775,62 +1773,66 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
         const gltf::Image& gltfImage = model.images[texIdx];
 
-        vkn::AllocationInfo stagingTexBufAllocInfo = {};
-        stagingTexBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        stagingTexBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        vkn::AllocationInfo stagingTexBufAI = {};
+        stagingTexBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingTexBufAI.usage = VMA_MEMORY_USAGE_AUTO;
 
-        vkn::BufferCreateInfo stagingTexBufCreateInfo = {};
-        stagingTexBufCreateInfo.pDevice = &s_vkDevice;
-        stagingTexBufCreateInfo.size = gltfImage.image.size() * sizeof(gltfImage.image[0]);
-        stagingTexBufCreateInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        stagingTexBufCreateInfo.pAllocInfo = &stagingTexBufAllocInfo;
+        vkn::BufferCreateInfo stagingTexBufCI = {};
+        stagingTexBufCI.pDevice = &s_vkDevice;
+        stagingTexBufCI.size = gltfImage.image.size() * sizeof(gltfImage.image[0]);
+        stagingTexBufCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        stagingTexBufCI.pAllocInfo = &stagingTexBufAI;
 
         vkn::Buffer& stagingTexBuffer = stagingSceneImageBuffers[texIdx];
-        stagingTexBuffer.Create(stagingTexBufCreateInfo);
+        stagingTexBuffer.Create(stagingTexBufCI);
         CORE_ASSERT(stagingTexBuffer.IsCreated());
 
         void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pImageData, gltfImage.image.data(), stagingTexBufCreateInfo.size);
+        memcpy(pImageData, gltfImage.image.data(), stagingTexBufCI.size);
         stagingTexBuffer.Unmap();
 
-        vkn::ImageCreateInfo info = {};
+        vkn::AllocationInfo imageAI = {};
+        imageAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+        imageAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-        info.pDevice = &s_vkDevice;
-        info.type = VK_IMAGE_TYPE_2D;
-        info.extent.width = gltfImage.width;
-        info.extent.height = gltfImage.height;
-        info.extent.depth = 1;
-        info.format = gltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
-        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        info.mipLevels = 1;
-        info.arrayLayers = 1;
-        info.samples = VK_SAMPLE_COUNT_1_BIT;
-        info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        info.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        vkn::ImageCreateInfo imageCI = {};
+
+        imageCI.pDevice = &s_vkDevice;
+        imageCI.type = VK_IMAGE_TYPE_2D;
+        imageCI.extent.width = gltfImage.width;
+        imageCI.extent.height = gltfImage.height;
+        imageCI.extent.depth = 1;
+        imageCI.format = gltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
+        imageCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCI.mipLevels = 1;
+        imageCI.arrayLayers = 1;
+        imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageCI.pAllocInfo = &imageAI;
 
         vkn::Image& sceneImage = s_sceneImages[texIdx];
-        sceneImage.Create(info);
+        sceneImage.Create(imageCI);
         CORE_ASSERT(sceneImage.IsCreated());
         sceneImage.SetDebugName("COMMON_MTL_TEXTURE_%zu", texIdx);
 
-        vkn::ImageViewCreateInfo viewInfo = {};
+        vkn::ImageViewCreateInfo viewCI = {};
 
-        viewInfo.pOwner = &sceneImage;
-        viewInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = info.format;
-        viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-        viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-        viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-        viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        viewInfo.subresourceRange.baseMipLevel = 0;
-        viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-        viewInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        viewCI.pOwner = &sceneImage;
+        viewCI.type = VK_IMAGE_VIEW_TYPE_2D;
+        viewCI.format = imageCI.format;
+        viewCI.components.r = VK_COMPONENT_SWIZZLE_R;
+        viewCI.components.g = VK_COMPONENT_SWIZZLE_G;
+        viewCI.components.b = VK_COMPONENT_SWIZZLE_B;
+        viewCI.components.a = VK_COMPONENT_SWIZZLE_A;
+        viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCI.subresourceRange.baseMipLevel = 0;
+        viewCI.subresourceRange.baseArrayLayer = 0;
+        viewCI.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCI.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
         vkn::ImageView& view = s_sceneImageViews[texIdx];
-        view.Create(viewInfo);
+        view.Create(viewCI);
         CORE_ASSERT(view.IsCreated());
         view.SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", texIdx);
     };
@@ -1859,17 +1861,17 @@ static void LoadSceneMaterials(const gltf::Model& model)
         AddGltfMaterialTexture(material.EMISSIVE_TEX_IDX, true);
     }
 
-    vkn::AllocationInfo commonMtlBuffAllocInfo = {};
-    commonMtlBuffAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    commonMtlBuffAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo commonMtlBuffAI = {};
+    commonMtlBuffAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    commonMtlBuffAI.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vkn::BufferCreateInfo commonMtlBuffCreateInfo = {};
-    commonMtlBuffCreateInfo.pDevice = &s_vkDevice;
-    commonMtlBuffCreateInfo.size = s_sceneMaterials.size() * sizeof(COMMON_MATERIAL);
-    commonMtlBuffCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    commonMtlBuffCreateInfo.pAllocInfo = &commonMtlBuffAllocInfo;
+    vkn::BufferCreateInfo commonMtlBuffCI = {};
+    commonMtlBuffCI.pDevice = &s_vkDevice;
+    commonMtlBuffCI.size = s_sceneMaterials.size() * sizeof(COMMON_MATERIAL);
+    commonMtlBuffCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    commonMtlBuffCI.pAllocInfo = &commonMtlBuffAI;
 
-    s_commonMaterialsBuffer.Create(commonMtlBuffCreateInfo);
+    s_commonMaterialsBuffer.Create(commonMtlBuffCI);
     CORE_ASSERT(s_commonMaterialsBuffer.IsCreated());
     s_commonMaterialsBuffer.SetDebugName("COMMON_MATERIALS");
 
@@ -1877,42 +1879,46 @@ static void LoadSceneMaterials(const gltf::Model& model)
     memcpy(pCommonMaterialsData, s_sceneMaterials.data(), s_sceneMaterials.size() * sizeof(COMMON_MATERIAL));
     s_commonMaterialsBuffer.Unmap();
 
-    vkn::ImageCreateInfo defTexInfo = {};
+    vkn::AllocationInfo defTexAI = {};
+    defTexAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    defTexAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    defTexInfo.pDevice = &s_vkDevice;
-    defTexInfo.type = VK_IMAGE_TYPE_2D;
-    defTexInfo.extent.width = 1;
-    defTexInfo.extent.height = 1;
-    defTexInfo.extent.depth = 1;
-    defTexInfo.format = VK_FORMAT_R8_UNORM;
-    defTexInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    defTexInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    defTexInfo.mipLevels = 1;
-    defTexInfo.arrayLayers = 1;
-    defTexInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    defTexInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    defTexInfo.memAllocInfo.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vkn::ImageCreateInfo defTexCI = {};
 
-    s_sceneDefaultImage.Create(defTexInfo);
+    defTexCI.pDevice = &s_vkDevice;
+    defTexCI.type = VK_IMAGE_TYPE_2D;
+    defTexCI.extent.width = 1;
+    defTexCI.extent.height = 1;
+    defTexCI.extent.depth = 1;
+    defTexCI.format = VK_FORMAT_R8_UNORM;
+    defTexCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    defTexCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    defTexCI.mipLevels = 1;
+    defTexCI.arrayLayers = 1;
+    defTexCI.samples = VK_SAMPLE_COUNT_1_BIT;
+    defTexCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+    defTexCI.pAllocInfo = &defTexAI;
+
+    s_sceneDefaultImage.Create(defTexCI);
     CORE_ASSERT(s_sceneDefaultImage.IsCreated());
     s_sceneDefaultImage.SetDebugName("DEFAULT_TEX");
 
-    vkn::ImageViewCreateInfo defTexViewInfo = {};
+    vkn::ImageViewCreateInfo defTexViewCI = {};
 
-    defTexViewInfo.pOwner = &s_sceneDefaultImage;
-    defTexViewInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    defTexViewInfo.format = defTexInfo.format;
-    defTexViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    defTexViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    defTexViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    defTexViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    defTexViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    defTexViewInfo.subresourceRange.baseMipLevel = 0;
-    defTexViewInfo.subresourceRange.baseArrayLayer = 0;
-    defTexViewInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    defTexViewInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    defTexViewCI.pOwner = &s_sceneDefaultImage;
+    defTexViewCI.type = VK_IMAGE_VIEW_TYPE_2D;
+    defTexViewCI.format = defTexCI.format;
+    defTexViewCI.components.r = VK_COMPONENT_SWIZZLE_R;
+    defTexViewCI.components.g = VK_COMPONENT_SWIZZLE_G;
+    defTexViewCI.components.b = VK_COMPONENT_SWIZZLE_B;
+    defTexViewCI.components.a = VK_COMPONENT_SWIZZLE_A;
+    defTexViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    defTexViewCI.subresourceRange.baseMipLevel = 0;
+    defTexViewCI.subresourceRange.baseArrayLayer = 0;
+    defTexViewCI.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    defTexViewCI.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_sceneDefaultImageView.Create(defTexViewInfo);
+    s_sceneDefaultImageView.Create(defTexViewCI);
     CORE_ASSERT(s_sceneDefaultImageView.IsCreated());
     s_sceneDefaultImageView.SetDebugName("DEFAULT_TEX_VIEW");
 
@@ -1949,7 +1955,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
             texRegion.imageSubresource.mipLevel = 0;
             texRegion.imageSubresource.baseArrayLayer = 0;
             texRegion.imageSubresource.layerCount = 1;
-            texRegion.imageExtent = s_sceneImages[i].GetExtent();
+            texRegion.imageExtent = s_sceneImages[i].GetSize();
 
             copyInfo.pRegions = &texRegion;
 
@@ -2015,8 +2021,6 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
             }
         });
     });
-
-    CORE_ASSERT_MSG(indexCount < MAX_INDEX_COUNT, "Index buffer overflow: %zu, max index count: %zu", indexCount, MAX_INDEX_COUNT);
 
     std::vector<VertexIndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
@@ -2124,17 +2128,17 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         }
     }
 
-    vkn::AllocationInfo stagingBufAllocInfo = {};
-    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo stagingBufAI = {};
+    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vkn::BufferCreateInfo stagingBufCreateInfo = {};
-    stagingBufCreateInfo.pDevice = &s_vkDevice;
-    stagingBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
+    vkn::BufferCreateInfo stagingBufCI = {};
+    stagingBufCI.pDevice = &s_vkDevice;
+    stagingBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
+    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCI.pAllocInfo = &stagingBufAI;
 
-    vkn::Buffer stagingVertBuffer(stagingBufCreateInfo);
+    vkn::Buffer stagingVertBuffer(stagingBufCI);
     CORE_ASSERT(stagingVertBuffer.IsCreated());
     stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
 
@@ -2144,9 +2148,9 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         stagingVertBuffer.Unmap();
     }
 
-    stagingBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+    stagingBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
 
-    vkn::Buffer stagingIndexBuffer(stagingBufCreateInfo);
+    vkn::Buffer stagingIndexBuffer(stagingBufCI);
     CORE_ASSERT(stagingIndexBuffer.IsCreated());
     stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
 
@@ -2156,9 +2160,9 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         stagingIndexBuffer.Unmap();
     }
 
-    stagingBufCreateInfo.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+    stagingBufCI.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
 
-    vkn::Buffer stagingMeshInfosBuffer(stagingBufCreateInfo);
+    vkn::Buffer stagingMeshInfosBuffer(stagingBufCI);
     CORE_ASSERT(stagingMeshInfosBuffer.IsCreated());
     stagingMeshInfosBuffer.SetDebugName("STAGING_MESH_INFOS_BUFFER");
 
@@ -2168,45 +2172,45 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         stagingMeshInfosBuffer.Unmap();
     }
 
-    vkn::AllocationInfo vertBufAllocInfo = {};
-    vertBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    vertBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo vertBufAI = {};
+    vertBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    vertBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo vertBufCreateInfo = {};
-    vertBufCreateInfo.pDevice = &s_vkDevice;
-    vertBufCreateInfo.size = VERTEX_BUFFER_SIZE_BYTES;
-    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
+    vkn::BufferCreateInfo vertBufCI = {};
+    vertBufCI.pDevice = &s_vkDevice;
+    vertBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
+    vertBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    vertBufCI.pAllocInfo = &vertBufAI;
 
-    s_vertexBuffer.Create(vertBufCreateInfo);
+    s_vertexBuffer.Create(vertBufCI);
     CORE_ASSERT(s_vertexBuffer.IsCreated());
     s_vertexBuffer.SetDebugName("COMMON_VB");
 
-    vkn::AllocationInfo idxBufAllocInfo = {};
-    idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    idxBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo idxBufAI = {};
+    idxBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    idxBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo idxBufCreateInfo = {};
-    idxBufCreateInfo.pDevice = &s_vkDevice;
-    idxBufCreateInfo.size = INDEX_BUFFER_SIZE_BYTES;
-    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
+    vkn::BufferCreateInfo idxBufCI = {};
+    idxBufCI.pDevice = &s_vkDevice;
+    idxBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+    idxBufCI.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    idxBufCI.pAllocInfo = &idxBufAI;
 
-    s_indexBuffer.Create(idxBufCreateInfo);
+    s_indexBuffer.Create(idxBufCI);
     CORE_ASSERT(s_indexBuffer.IsCreated());
     s_indexBuffer.SetDebugName("COMMON_IB");
 
-    vkn::AllocationInfo meshInfosBufAllocInfo = {};
-    meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    meshInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo meshInfosBufAI = {};
+    meshInfosBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    meshInfosBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
-    meshInfosBufCreateInfo.pDevice = &s_vkDevice;
-    meshInfosBufCreateInfo.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
-    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
+    vkn::BufferCreateInfo meshInfosBufCI = {};
+    meshInfosBufCI.pDevice = &s_vkDevice;
+    meshInfosBufCI.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+    meshInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    meshInfosBufCI.pAllocInfo = &meshInfosBufAI;
     
-    s_commonMeshInfosBuffer.Create(meshInfosBufCreateInfo);
+    s_commonMeshInfosBuffer.Create(meshInfosBufCI);
     CORE_ASSERT(s_commonMeshInfosBuffer.IsCreated());
     s_commonMeshInfosBuffer.SetDebugName("COMMON_MESH_INFOS");
 
@@ -2266,17 +2270,17 @@ static void LoadSceneTransforms(const gltf::Model& model)
         }
     }
 
-    vkn::AllocationInfo stagingBufAllocInfo = {};
-    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo stagingBufAI = {};
+    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vkn::BufferCreateInfo stagingBufCreateInfo = {};
-    stagingBufCreateInfo.pDevice = &s_vkDevice;
-    stagingBufCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
+    vkn::BufferCreateInfo stagingBufCI = {};
+    stagingBufCI.pDevice = &s_vkDevice;
+    stagingBufCI.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
+    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCI.pAllocInfo = &stagingBufAI;
 
-    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
+    vkn::Buffer stagingBuffer(stagingBufCI);
     CORE_ASSERT(stagingBuffer.IsCreated());
     stagingBuffer.SetDebugName("STAGING_TRANSFORM_BUFFER");
 
@@ -2286,17 +2290,17 @@ static void LoadSceneTransforms(const gltf::Model& model)
         stagingBuffer.Unmap();
     }
 
-    vkn::AllocationInfo commonTrsBufAllocInfo = {};
-    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo commonTrsBufAI = {};
+    commonTrsBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    commonTrsBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo commonTrsCreateInfo = {};
-    commonTrsCreateInfo.pDevice = &s_vkDevice;
-    commonTrsCreateInfo.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
-    commonTrsCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonTrsCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
+    vkn::BufferCreateInfo commonTrsCI = {};
+    commonTrsCI.pDevice = &s_vkDevice;
+    commonTrsCI.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
+    commonTrsCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonTrsCI.pAllocInfo = &commonTrsBufAI;
 
-    s_commonTransformsBuffer.Create(commonTrsCreateInfo);
+    s_commonTransformsBuffer.Create(commonTrsCI);
     CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
     s_commonTransformsBuffer.SetDebugName("COMMON_TRANSFORMS");
 
@@ -2343,17 +2347,17 @@ static void LoadSceneInstInfos(const gltf::Model& model)
         }
     }
 
-    vkn::AllocationInfo stagingBufAllocInfo = {};
-    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo stagingBufAI = {};
+    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vkn::BufferCreateInfo stagingBufCreateInfo = {};
-    stagingBufCreateInfo.pDevice = &s_vkDevice;
-    stagingBufCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
+    vkn::BufferCreateInfo stagingBufCI = {};
+    stagingBufCI.pDevice = &s_vkDevice;
+    stagingBufCI.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCI.pAllocInfo = &stagingBufAI;
 
-    vkn::Buffer stagingBuffer(stagingBufCreateInfo);
+    vkn::Buffer stagingBuffer(stagingBufCI);
     CORE_ASSERT(stagingBuffer.IsCreated());
     stagingBuffer.SetDebugName("STAGING_INST_INFOS_BUFFER");
 
@@ -2363,17 +2367,17 @@ static void LoadSceneInstInfos(const gltf::Model& model)
         stagingBuffer.Unmap();
     }
 
-    vkn::AllocationInfo instInfosBufAllocInfo = {};
-    instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    instInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo instInfosBufAI = {};
+    instInfosBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    instInfosBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo instInfosBufCreateInfo = {};
-    instInfosBufCreateInfo.pDevice = &s_vkDevice;
-    instInfosBufCreateInfo.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
-    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
+    vkn::BufferCreateInfo instInfosBufCI = {};
+    instInfosBufCI.pDevice = &s_vkDevice;
+    instInfosBufCI.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+    instInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    instInfosBufCI.pAllocInfo = &instInfosBufAI;
 
-    s_commonInstInfosBuffer.Create(instInfosBufCreateInfo);
+    s_commonInstInfosBuffer.Create(instInfosBufCI);
     CORE_ASSERT(s_commonInstInfosBuffer.IsCreated());
     s_commonInstInfosBuffer.SetDebugName("COMMON_INST_INFOS");
 
@@ -2417,17 +2421,17 @@ static void LoadScene(const fs::path& filepath)
     LoadSceneMeshInfos(model);
     LoadSceneInstInfos(model);
 
-    vkn::AllocationInfo commonConstBufAllocInfo = {};
-    commonConstBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    commonConstBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo commonConstBufAI = {};
+    commonConstBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    commonConstBufAI.usage = VMA_MEMORY_USAGE_AUTO;
     
-    vkn::BufferCreateInfo commonConstBufCreateInfo = {};
-    commonConstBufCreateInfo.pDevice = &s_vkDevice;
-    commonConstBufCreateInfo.size = sizeof(COMMON_CB_DATA);
-    commonConstBufCreateInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonConstBufCreateInfo.pAllocInfo = &commonConstBufAllocInfo;
+    vkn::BufferCreateInfo commonConstBufCI = {};
+    commonConstBufCI.pDevice = &s_vkDevice;
+    commonConstBufCI.size = sizeof(COMMON_CB_DATA);
+    commonConstBufCI.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonConstBufCI.pAllocInfo = &commonConstBufAI;
 
-    s_commonConstBuffer.Create(commonConstBufCreateInfo); 
+    s_commonConstBuffer.Create(commonConstBufCI); 
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
     s_commonConstBuffer.SetDebugName("COMMON_CB");
 
@@ -2986,11 +2990,11 @@ int main(int argc, char* argv[])
 
     CreateVkInstance();    
 
-    vkn::SurfaceCreateInfo vkSurfCreateInfo = {};
-    vkSurfCreateInfo.pInstance = &s_vkInstance;
-    vkSurfCreateInfo.pWndHandle = s_pWnd->GetNativeHandle();
+    vkn::SurfaceCreateInfo vkSurfCI = {};
+    vkSurfCI.pInstance = &s_vkInstance;
+    vkSurfCI.pWndHandle = s_pWnd->GetNativeHandle();
 
-    s_vkSurface.Create(vkSurfCreateInfo);
+    s_vkSurface.Create(vkSurfCI);
     CORE_ASSERT(s_vkSurface.IsCreated());
 
     CreateVkPhysAndLogicalDevices();
@@ -3000,23 +3004,23 @@ int main(int argc, char* argv[])
     CORE_ASSERT(vkn::GetProfiler().IsCreated());
 #endif
 
-    vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
-    vkAllocatorCreateInfo.pDevice = &s_vkDevice;
-    vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    vkn::AllocatorCreateInfo vkAllocatorCI = {}; 
+    vkAllocatorCI.pDevice = &s_vkDevice;
+    vkAllocatorCI.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    s_vkAllocator.Create(vkAllocatorCreateInfo);
+    s_vkAllocator.Create(vkAllocatorCI);
     CORE_ASSERT(s_vkAllocator.IsCreated());
 
     CreateVkSwapchain();
 
     DbgUI::Init();
 
-    vkn::CmdPoolCreateInfo vkCmdPoolCreateInfo = {};
-    vkCmdPoolCreateInfo.pDevice = &s_vkDevice;
-    vkCmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
-    vkCmdPoolCreateInfo.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    vkn::CmdPoolCreateInfo vkCmdPoolCI = {};
+    vkCmdPoolCI.pDevice = &s_vkDevice;
+    vkCmdPoolCI.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
+    vkCmdPoolCI.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
-    s_vkCmdPool.Create(vkCmdPoolCreateInfo);
+    s_vkCmdPool.Create(vkCmdPoolCI);
     CORE_ASSERT(s_vkCmdPool.IsCreated());
     s_vkCmdPool.SetDebugName("COMMON_CMD_POOL");
     
@@ -3026,12 +3030,12 @@ int main(int argc, char* argv[])
 
     s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
 
-    vkn::QueryCreateInfo queryCreateInfo = {};
-    queryCreateInfo.pDevice = &s_vkDevice;
-    queryCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryCreateInfo.queryCount = 128;
+    vkn::QueryCreateInfo queryCI = {};
+    queryCI.pDevice = &s_vkDevice;
+    queryCI.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryCI.queryCount = 128;
 
-    s_vkQueryPool.Create(queryCreateInfo);
+    s_vkQueryPool.Create(queryCI);
     CORE_ASSERT(s_vkQueryPool.IsCreated());
     s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
 

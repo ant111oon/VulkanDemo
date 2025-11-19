@@ -75,7 +75,7 @@ namespace vkn
             return m_deviceAddress;
         }
 
-        VkDeviceSize GetSize() const
+        VkDeviceSize GetMemorySize() const
         {
             VK_ASSERT(IsCreated());
             return m_allocInfo.size;
@@ -98,11 +98,11 @@ namespace vkn
         Device* m_pDevice = nullptr;
 
         VkBuffer m_buffer = VK_NULL_HANDLE;
+
         VmaAllocation m_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo m_allocInfo = {};
 
         VkDeviceAddress m_deviceAddress = 0;
-        
-        VmaAllocationInfo m_allocInfo = {};
 
         std::bitset<BIT_COUNT> m_state = {};
     };

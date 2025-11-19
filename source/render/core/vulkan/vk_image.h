@@ -2,6 +2,7 @@
 
 #include "vk_object.h"
 #include "vk_device.h"
+#include "vk_memory.h"
 
 
 namespace vkn
@@ -97,13 +98,6 @@ namespace vkn
     };
 
 
-    struct ImageMemoryAllocateInfo
-    {
-        VkMemoryAllocateFlags flags;
-        VkMemoryPropertyFlags properties;
-    };
-
-
     struct ImageCreateInfo
     {
         Device* pDevice;
@@ -119,7 +113,7 @@ namespace vkn
         VkSampleCountFlagBits samples;
         VkImageTiling         tiling;
         
-        ImageMemoryAllocateInfo memAllocInfo;
+        const AllocationInfo* pAllocInfo;
     };
 
 
@@ -139,12 +133,6 @@ namespace vkn
         bool Create(const ImageCreateInfo& info);
         void Destroy();
 
-        template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
-        }
-
         const char* GetDebugName() const;
 
         Device* GetDevice() const
@@ -162,7 +150,13 @@ namespace vkn
         VkDeviceMemory GetMemory() const
         {
             VK_ASSERT(IsCreated());
-            return m_memory;
+            return m_allocInfo.deviceMemory;
+        }
+
+        VkDeviceSize GetMemorySize() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_allocInfo.size;
         }
 
         VkImageType GetType() const
@@ -171,23 +165,35 @@ namespace vkn
             return m_type;
         }
 
-        const VkExtent3D& GetExtent() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_extent;    
-        }
-
         VkFormat GetFormat() const
         {
             VK_ASSERT(IsCreated());
             return m_format;    
         }
 
+        const VkExtent3D& GetSize() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_extent;    
+        }
+
+        const uint32_t GetSizeX() const { return GetSize().width; }
+        const uint32_t GetSizeY() const { return GetSize().height; }
+        const uint32_t GetSizeZ() const { return GetSize().depth; }
+
+        template <typename... Args>
+        void SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+        }
+
     private:
         Device* m_pDevice = nullptr;
 
-        VkImage        m_image = VK_NULL_HANDLE;
-        VkDeviceMemory m_memory = VK_NULL_HANDLE;
+        VkImage m_image = VK_NULL_HANDLE;
+        
+        VmaAllocation     m_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo m_allocInfo = {};
 
         VkImageType m_type = {};
         VkExtent3D m_extent = {};

@@ -24,20 +24,4 @@ namespace vkn::utils
 
         VK_CHECK(vkSetDebugUtilsObjectName(device.Get(), &dbgUtilsObjNameInfo));
     }
-
-
-    uint32_t FindMemoryType(const PhysicalDevice& physDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
-    {
-        const VkPhysicalDeviceMemoryProperties memProps = physDevice.GetMemoryProperties();
-
-        for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
-            const VkMemoryPropertyFlags propertyFlags = memProps.memoryTypes[i].propertyFlags;
-            
-            if ((typeFilter & (1 << i)) && (propertyFlags & properties) == properties) {
-                return i;
-            }
-        }
-
-        return UINT32_MAX;
-    }
 }

@@ -160,7 +160,9 @@ namespace vkn
         }
         
         std::swap(m_image, image.m_image);
-        std::swap(m_memory, image.m_memory);
+        
+        std::swap(m_allocation, image.m_allocation);
+        std::swap(m_allocInfo, image.m_allocInfo);
         
         std::swap(m_type, image.m_type);
         std::swap(m_extent, image.m_extent);
@@ -182,69 +184,39 @@ namespace vkn
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+        VK_ASSERT(GetAllocator().IsCreated());
+        VK_ASSERT(info.pAllocInfo);
 
         VkDevice vkDevice = info.pDevice->Get();
 
-        VkImageCreateInfo imageCreateInfo = {};
-        imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageCreateInfo.flags = info.flags;
-        imageCreateInfo.imageType = info.type;
-        imageCreateInfo.format = info.format;
-        imageCreateInfo.extent = info.extent;
-        imageCreateInfo.mipLevels = info.mipLevels;
-        imageCreateInfo.arrayLayers = info.arrayLayers;
-        imageCreateInfo.samples = info.samples;
-        imageCreateInfo.tiling = info.tiling;
-        imageCreateInfo.usage = info.usage;
-        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        imageCreateInfo.queueFamilyIndexCount = 0;
-        imageCreateInfo.pQueueFamilyIndices = nullptr;
-        imageCreateInfo.initialLayout = info.initialLayout;
+        VkImageCreateInfo ci = {};
+        ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        ci.flags = info.flags;
+        ci.imageType = info.type;
+        ci.format = info.format;
+        ci.extent = info.extent;
+        ci.mipLevels = info.mipLevels;
+        ci.arrayLayers = info.arrayLayers;
+        ci.samples = info.samples;
+        ci.tiling = info.tiling;
+        ci.usage = info.usage;
+        ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        ci.queueFamilyIndexCount = 0;
+        ci.pQueueFamilyIndices = nullptr;
+        ci.initialLayout = info.initialLayout;
+
+        VmaAllocationCreateInfo allocCI = {};
+        allocCI.usage = info.pAllocInfo->usage;
+        allocCI.flags = info.pAllocInfo->flags;
 
         m_image = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateImage(vkDevice, &imageCreateInfo, nullptr, &m_image));
+        m_allocation = VK_NULL_HANDLE;
+        VK_CHECK(vmaCreateImage(GetAllocator().Get(), &ci, &allocCI, &m_image, &m_allocation, &m_allocInfo));
         
-        const bool isImageCreated = m_image != VK_NULL_HANDLE;
-        VK_ASSERT(isImageCreated);
-
-        VkImageMemoryRequirementsInfo2 memRequirementsInfo = {};
-        memRequirementsInfo.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
-        memRequirementsInfo.image = m_image;
-
-        VkMemoryRequirements2 memRequirements = {};
-        memRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-        vkGetImageMemoryRequirements2(vkDevice, &memRequirementsInfo, &memRequirements);
-
-        VkMemoryAllocateFlagsInfo memAllocFlagsInfo = {};
-        memAllocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-        memAllocFlagsInfo.flags = info.memAllocInfo.flags;
-
-        VkMemoryAllocateInfo memAllocInfo = {};
-        memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memAllocInfo.pNext = &memAllocFlagsInfo;
-        memAllocInfo.allocationSize = memRequirements.memoryRequirements.size;
-        memAllocInfo.memoryTypeIndex = utils::FindMemoryType(*info.pDevice->GetPhysDevice(),
-            memRequirements.memoryRequirements.memoryTypeBits, info.memAllocInfo.properties);
-        
-        VK_ASSERT_MSG(memAllocInfo.memoryTypeIndex != UINT32_MAX, "Failed to find required memory type index");
-
-        m_memory = VK_NULL_HANDLE;
-        VK_CHECK(vkAllocateMemory(vkDevice, &memAllocInfo, nullptr, &m_memory));
-
-        const bool isMemoryAllocated = m_memory != VK_NULL_HANDLE;
-        VK_ASSERT(isMemoryAllocated);
-
-        VkBindImageMemoryInfo bindInfo = {};
-        bindInfo.sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO;
-        bindInfo.image = m_image;
-        bindInfo.memory = m_memory;
-
-        VK_CHECK(vkBindImageMemory2(vkDevice, 1, &bindInfo));
-
-        const bool isCreated = isImageCreated && isMemoryAllocated;
+        const bool isCreated = m_image != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE;
         VK_ASSERT(isCreated);
 
-        SetCreated(isMemoryAllocated);
+        SetCreated(isCreated);
 
         m_pDevice = info.pDevice;
 
@@ -262,13 +234,11 @@ namespace vkn
             return;
         }
 
-        VkDevice vkDevice = m_pDevice->Get();
-
-        vkFreeMemory(vkDevice, m_memory, nullptr);
-        m_memory = VK_NULL_HANDLE;
-
-        vkDestroyImage(vkDevice, m_image, nullptr);
+        vmaDestroyImage(GetAllocator().Get(), m_image, m_allocation);
+        m_allocation = VK_NULL_HANDLE;
         m_image = VK_NULL_HANDLE;
+
+        m_allocInfo = {};
 
         m_pDevice = nullptr;
 
