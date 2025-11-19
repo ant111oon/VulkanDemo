@@ -4,6 +4,7 @@
 
 #ifdef ENG_PROFILING_ENABLED
 
+
 namespace vkn
 {
     Profiler::~Profiler()
@@ -14,7 +15,6 @@ namespace vkn
 
     bool Profiler::Create(Device* pDevice)
     {
-    #ifdef ENG_PROFILING_ENABLED
         if (IsCreated()) {
             CORE_LOG_WARN("Vulkan profiler is already created");
             return false;
@@ -51,16 +51,11 @@ namespace vkn
         SetCreated(isCreated);
 
         return isCreated;
-    #else
-        SetCreated(true);
-        return true;
-    #endif
     }
 
 
     void Profiler::Destroy()
     {
-    #ifdef ENG_PROFILING_ENABLED
         if (!IsCreated()) {
             return;
         }
@@ -76,24 +71,22 @@ namespace vkn
         m_vkCmdBeginDebugUtilsLabelFunc = nullptr;
         m_vkCmdEndDebugUtilsLabelFunc = nullptr;
 
-        Object::Destroy();        
-    #endif
+        Object::Destroy();
     }
 
 
-    void Profiler::BeginCmdGroup(CmdBuffer& buffer, const char* pGroupName) const
+    void Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const
     {
-        BeginCmdGroup(buffer, pGroupName, 168, 168, 168, 255);
+        BeginCmdGroup(cmd, pGroupName, 168, 168, 168, 255);
     }
 
 
-    void Profiler::BeginCmdGroup(CmdBuffer& buffer, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const
+    void Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const
     {
-    #ifdef ENG_PROFILING_ENABLED
         CORE_ASSERT(IsCreated());
         CORE_ASSERT(pGroupName != nullptr);
 
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(buffer, "Attempt to begin GPU command group within not started command buffer: %s", buffer.GetDebugName());
+        VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU command group within not started command buffer: %s", cmd.GetDebugName());
 
         VkDebugUtilsLabelEXT dbgLabel = {};
         dbgLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
@@ -103,23 +96,27 @@ namespace vkn
         dbgLabel.color[2] = static_cast<float>(b) / 255.f;
         dbgLabel.color[3] = static_cast<float>(a) / 255.f;
 
-        m_vkCmdBeginDebugUtilsLabelFunc(buffer.Get(), &dbgLabel);
-    #endif
+        m_vkCmdBeginDebugUtilsLabelFunc(cmd.Get(), &dbgLabel);
     }
 
 
-    void Profiler::EndCmdGroup(CmdBuffer& buffer) const
+    void Profiler::EndCmdGroup(CmdBuffer& cmd) const
     {
-    #ifdef ENG_PROFILING_ENABLED
         CORE_ASSERT(IsCreated());
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(buffer, "Attempt to end GPU command group within not started command buffer: %s", buffer.GetDebugName());
+        VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to end GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
     
-        m_vkCmdEndDebugUtilsLabelFunc(buffer.Get());
-    #endif
+        m_vkCmdEndDebugUtilsLabelFunc(cmd.Get());
     }
 
 
-    TracyVkCtx Profiler::Get()
+    void Profiler::CollectCmdStats(CmdBuffer& cmd) const
+    {
+        VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to collect tracy GPU timings within not started/ended command buffer: %s", cmd.GetDebugName());
+        TracyVkCollect(GetProfiler().GetTracyContext(), cmd.Get());
+    }
+
+
+    TracyVkCtx Profiler::GetTracyContext() const
     {
     #ifdef ENG_PROFILING_ENABLED
         CORE_ASSERT(IsCreated());
@@ -127,6 +124,25 @@ namespace vkn
     #else
         return nullptr;
     #endif
+    }
+    
+
+    GpuMarker::GpuMarker(CmdBuffer& cmd, const GpuMarkerLocation* pLocation, uint8_t r, uint8_t g, uint8_t b, uint8_t a, bool isActive)
+        : m_tracyScope(GetProfiler().GetTracyContext(), pLocation, cmd.Get(), isActive)
+        , m_cmdBuf(cmd)
+    {
+        VK_ASSERT_MSG(m_cmdBuf.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
+        VK_ASSERT(pLocation->name);
+        VK_ASSERT(pLocation->function);
+        VK_ASSERT(pLocation->file);
+
+        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, pLocation->name, r, g, b, a);
+    }
+
+
+    GpuMarker::~GpuMarker()
+    {
+        vkn::GetProfiler().EndCmdGroup(m_cmdBuf);
     }
 }
 

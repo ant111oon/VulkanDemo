@@ -25,12 +25,14 @@ namespace vkn
         bool Create(Device* pDevice);
         void Destroy();
 
-        void BeginCmdGroup(CmdBuffer& buffer, const char* pGroupName) const;
-        void BeginCmdGroup(CmdBuffer& buffer, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const;
+        void BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const;
+        void BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) const;
 
-        void EndCmdGroup(CmdBuffer& buffer) const;
+        void EndCmdGroup(CmdBuffer& cmd) const;
 
-        TracyVkCtx Get();
+        void CollectCmdStats(CmdBuffer& cmd) const;
+
+        TracyVkCtx GetTracyContext() const;
 
     private:
         Profiler() = default;
@@ -53,66 +55,36 @@ namespace vkn
         static Profiler profiler;
         return profiler;
     }
+
+
+    using GpuMarkerLocation = tracy::SourceLocationData;
+
+    class GpuMarker
+    {
+    public:
+        GpuMarker(CmdBuffer& cmd, const GpuMarkerLocation* pLocation, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255, bool isActive = true);
+        ~GpuMarker();
+
+    private:
+        tracy::VkCtxScope m_tracyScope;
+        CmdBuffer& m_cmdBuf;
+    };
 }
 
+     
+#define ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, R8, G8, B8, A8)   static vkn::GpuMarkerLocation _ENG_PROFILE_CONCAT(_vkn_gpu_marker_location, NAME){LABEL, __FUNCTION__, __FILE__, __LINE__, _ENG_PROFILE_MAKE_COLOR_U32(R8, G8, B8, A8)}; vkn::GpuMarker NAME(CMD_BUFFER, &_ENG_PROFILE_CONCAT(_vkn_gpu_marker_location, NAME), uint8_t(R8), uint8_t(G8), uint8_t(B8), uint8_t(A8))
+#define ENG_PROFILE_GPU_SCOPED_MARKER_N(CMD_BUFFER, NAME, LABEL)                    ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, 255, 255, 255, 255)
 
-#define _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, MSG, ...) VK_ASSERT_MSG(CMD_BUFFER.IsStarted(), MSG, __VA_ARGS__) 
+#define ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, R8, G8, B8, A8)          ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, _ENG_PROFILE_CONCAT(_vkn_gpu_marker_, __LINE__), LABEL, R8, G8, B8, A8)
+#define ENG_PROFILE_GPU_SCOPED_MARKER(CMD_BUFFER, LABEL)                            ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, 255, 255, 255, 255)
 
+#define ENG_PROFILE_GPU_COLLECT_STATS(CMD_BUFFER)                                   vkn::GetProfiler().CollectCmdStats(CMD_BUFFER)
+#else  
+#define ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, R8, G8, B8, A8)
+#define ENG_PROFILE_GPU_SCOPED_MARKER_N(CMD_BUFFER, NAME, LABEL)                 
 
-#define ENG_PROFILE_BEGIN_GPU_MARKER_N_SCOPE(CMD_BUFFER, NAME, LABEL) \
-    {                                                                 \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to begin GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkNamedZone(vkn::GetProfiler().Get(), NAME, CMD_BUFFER.Get(), LABEL, true); \
-        vkn::GetProfiler().BeginCmdGroup(CMD_BUFFER, LABEL)
+#define ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, R8, G8, B8, A8)
+#define ENG_PROFILE_GPU_SCOPED_MARKER(CMD_BUFFER, LABEL)
 
-#define ENG_PROFILE_BEGIN_GPU_MARKER_NC_SCOPE(CMD_BUFFER, NAME, LABEL, R8, G8, B8, A8) \
-    {                                                                                  \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to begin GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkNamedZoneC(vkn::GetProfiler().Get(), NAME, CMD_BUFFER.Get(), LABEL, _ENG_PROFILE_MAKE_COLOR_U32(R8, G8, B8, A8), true); \
-        vkn::GetProfiler().BeginCmdGroup(CMD_BUFFER, LABEL, R8, G8, B8, A8)
-
-#define ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(CMD_BUFFER, LABEL) \
-    {                                                         \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to begin GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkZone(vkn::GetProfiler().Get(), CMD_BUFFER.Get(), LABEL); \
-        vkn::GetProfiler().BeginCmdGroup(CMD_BUFFER, LABEL)
-
-#define ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(CMD_BUFFER, LABEL, R8, G8, B8, A8) \
-    {                                                                           \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to begin GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkZoneC(vkn::GetProfiler().Get(), CMD_BUFFER.Get(), LABEL, _ENG_PROFILE_MAKE_COLOR_U32(R8, G8, B8, A8)); \
-        vkn::GetProfiler().BeginCmdGroup(CMD_BUFFER, LABEL, R8, G8, B8, A8)
-
-// For very short-lived events that is called frequently
-#define ENG_PROFILE_BEGIN_GPU_TRANSIENT_MARKER_SCOPE(CMD_BUFFER, NAME, LABEL) \
-    {                                                                         \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to begin GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkZoneTransient(vkn::GetProfiler().Get(), NAME, CMD_BUFFER.Get(), LABEL, true); \
-        vkn::GetProfiler().BeginCmdGroup(CMD_BUFFER, LABEL)
-
-#define ENG_PROFILE_END_GPU_MARKER_SCOPE(CMD_BUFFER)    \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to end GPU marker scope within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        vkn::GetProfiler().EndCmdGroup(CMD_BUFFER);     \
-    }
-
-#define ENG_PROFILE_GPU_COLLECT_STATS(CMD_BUFFER)                                                                         \
-    {                                                                                                                     \
-        _ENG_PROFILE_GPU_ASSERT_CMD_BUFFER(CMD_BUFFER, "Attempt to collect tracy GPU timings within not started command buffer: %s", \
-            CMD_BUFFER.GetDebugName()); \
-        TracyVkCollect(vkn::GetProfiler().Get(), CMD_BUFFER.Get()); \
-    }
-#else
-#define ENG_PROFILE_BEGIN_GPU_MARKER_N_SCOPE(CMD_BUFFER, NAME, LABEL);
-#define ENG_PROFILE_BEGIN_GPU_MARKER_NC_SCOPE(CMD_BUFFER, NAME, LABEL, R8, G8, B8, A8);
-#define ENG_PROFILE_BEGIN_GPU_MARKER_SCOPE(CMD_BUFFER, LABEL)
-#define ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(CMD_BUFFER, LABEL, R8, G8, B8, A8)
-#define ENG_PROFILE_BEGIN_GPU_TRANSIENT_MARKER_SCOPE(CMD_BUFFER, NAME, LABEL)
-#define ENG_PROFILE_END_GPU_MARKER_SCOPE(CMD_BUFFER)
 #define ENG_PROFILE_GPU_COLLECT_STATS(CMD_BUFFER)
 #endif

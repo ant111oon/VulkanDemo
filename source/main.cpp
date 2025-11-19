@@ -664,12 +664,10 @@ namespace DbgUI
 
     static void Render(vkn::CmdBuffer& cmdBuffer)
     {   
-        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "Dbg_UI_Render_Pass", 255, 50, 50, 255);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 255, 50, 50, 255);
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
-
-        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
     }
 }
 
@@ -2528,7 +2526,7 @@ void PresentImage(uint32_t imageIndex)
 
 void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipeline);
     
@@ -2558,8 +2556,6 @@ void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
         VK_ACCESS_2_MEMORY_READ_BIT,
         s_drawIndirectCommandsCountBuffer.Get()
     );
-
-    ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 }
 
 
@@ -2600,7 +2596,7 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 
 void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 {
-    ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "BaseMesh_Render_Pass", 128, 128, 128, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Render_Pass", 128, 128, 128, 255);
 
     VkViewport viewport = {};
     viewport.width = extent.width;
@@ -2650,8 +2646,6 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 
         cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(BASE_INDIRECT_DRAW_CMD));
     }
-
-    ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
 }
 
 
@@ -2696,7 +2690,8 @@ void RenderScene()
     VkImage rndImage = s_vkSwapchain.GetImage(nextImageIdx);
 
     cmdBuffer.Begin(cmdBeginInfo);
-        ENG_PROFILE_BEGIN_GPU_MARKER_C_SCOPE(cmdBuffer, "CMD_Buffer_Frame", 255, 165, 0, 255);
+    {
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "CMD_Buffer_Frame", 255, 165, 0, 255);
 
         BaseCullingPass(cmdBuffer);
 
@@ -2778,9 +2773,8 @@ void RenderScene()
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
-        ENG_PROFILE_END_GPU_MARKER_SCOPE(cmdBuffer);
-
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
+    }
     cmdBuffer.End();
 
     SubmitVkQueue(
