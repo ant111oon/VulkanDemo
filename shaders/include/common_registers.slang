@@ -172,8 +172,9 @@ static const uint COMMON_MTL_TEXTURES_COUNT = 128;
 [vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[COMMON_MTL_TEXTURES_COUNT];
 
 [vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
+[vk::binding(7, 0)] StructuredBuffer<uint4> COMMON_VERTEX_DATA;
 
-[vk::binding(7, 0)] RWStructuredBuffer<BASE_INDIRECT_DRAW_CMD> BASE_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(8, 0)] RWStructuredBuffer<uint>                   BASE_INDIRECT_DRAW_CMDS_COUNT;
+[vk::binding(8, 0)] RWStructuredBuffer<BASE_INDIRECT_DRAW_CMD> BASE_INDIRECT_DRAW_CMDS_UAV;
+[vk::binding(9, 0)] RWStructuredBuffer<uint>                   BASE_INDIRECT_DRAW_CMDS_COUNT;
 
 #endif

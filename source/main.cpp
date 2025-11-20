@@ -58,9 +58,8 @@ struct Vertex
 
 struct BASE_BINDLESS_REGISTRY
 {
-    VkDeviceAddress VERTEX_DATA;
+    glm::vec3 PAD0;
     glm::uint INST_INFO_IDX;
-    glm::uint PAD0;
 };
 
 
@@ -313,8 +312,9 @@ static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
 static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
-static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 7;
-static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 8;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 9;
 
 static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
@@ -337,7 +337,7 @@ static vkn::Surface& s_vkSurface = vkn::GetSurface();
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
 static vkn::Device&         s_vkDevice = vkn::GetDevice();
 
-static vkn::Allocator&      s_vkAllocator = vkn::GetAllocator();
+static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
@@ -948,7 +948,7 @@ static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
         
     builder
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6)
+        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
     
@@ -975,6 +975,7 @@ static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice
         .AddBinding(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
+        .AddBinding(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT)
         .AddBinding(BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL);
 
@@ -1509,23 +1510,6 @@ static void WriteDescriptorSet()
     descWrites.emplace_back(commonMeshInfoBufferWrite);
 
 
-    VkDescriptorBufferInfo commonInstInfoBufferInfo = {};
-    commonInstInfoBufferInfo.buffer = s_commonInstInfosBuffer.Get();
-    commonInstInfoBufferInfo.offset = 0;
-    commonInstInfoBufferInfo.range = VK_WHOLE_SIZE;
-
-    VkWriteDescriptorSet commonInstInfoBufferWrite = {};
-    commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonInstInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
-    commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
-    commonInstInfoBufferWrite.dstArrayElement = 0;
-    commonInstInfoBufferWrite.descriptorCount = 1;
-    commonInstInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonInstInfoBufferWrite.pBufferInfo = &commonInstInfoBufferInfo;
-
-    descWrites.emplace_back(commonInstInfoBufferWrite);
-
-
     VkDescriptorBufferInfo commonTrsBufferInfo = {};
     commonTrsBufferInfo.buffer = s_commonTransformsBuffer.Get();
     commonTrsBufferInfo.offset = 0;
@@ -1599,6 +1583,41 @@ static void WriteDescriptorSet()
 
         descWrites.emplace_back(texWrite);
     }
+
+
+    VkDescriptorBufferInfo commonInstInfoBufferInfo = {};
+    commonInstInfoBufferInfo.buffer = s_commonInstInfosBuffer.Get();
+    commonInstInfoBufferInfo.offset = 0;
+    commonInstInfoBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet commonInstInfoBufferWrite = {};
+    commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonInstInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
+    commonInstInfoBufferWrite.dstArrayElement = 0;
+    commonInstInfoBufferWrite.descriptorCount = 1;
+    commonInstInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonInstInfoBufferWrite.pBufferInfo = &commonInstInfoBufferInfo;
+
+    descWrites.emplace_back(commonInstInfoBufferWrite);
+
+
+    VkDescriptorBufferInfo commonVertDataBufferInfo = {};
+    commonVertDataBufferInfo.buffer = s_vertexBuffer.Get();
+    commonVertDataBufferInfo.offset = 0;
+    commonVertDataBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet commonVertDataBufferWrite = {};
+    commonVertDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonVertDataBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonVertDataBufferWrite.dstBinding = COMMON_VERTEX_DATA_DESCRIPTOR_SLOT;
+    commonVertDataBufferWrite.dstArrayElement = 0;
+    commonVertDataBufferWrite.descriptorCount = 1;
+    commonVertDataBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonVertDataBufferWrite.pBufferInfo = &commonVertDataBufferInfo;
+
+    descWrites.emplace_back(commonVertDataBufferWrite);
+
 
     VkDescriptorBufferInfo drawIndirectCommandsBufferInfo = {};
     drawIndirectCommandsBufferInfo.buffer = s_drawIndirectCommandsBuffer.Get();
@@ -2170,7 +2189,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
     vkn::BufferCreateInfo vertBufCI = {};
     vertBufCI.pDevice = &s_vkDevice;
     vertBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
-    vertBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    vertBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     vertBufCI.pAllocInfo = &vertBufAI;
 
     s_vertexBuffer.Create(vertBufCI);
@@ -2609,7 +2628,6 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
     BASE_BINDLESS_REGISTRY registry = {};
-    registry.VERTEX_DATA = s_vertexBuffer.GetDeviceAddress();
 
 #ifndef ENG_BUILD_RELEASE
     if (!s_useMeshIndirectDraw) {
@@ -2993,7 +3011,8 @@ int main(int argc, char* argv[])
 
     vkn::AllocatorCreateInfo vkAllocatorCI = {}; 
     vkAllocatorCI.pDevice = &s_vkDevice;
-    vkAllocatorCI.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    // RenderDoc doesn't work with buffer device address if you use VMA :(
+    // vkAllocatorCI.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
     s_vkAllocator.Create(vkAllocatorCI);
     CORE_ASSERT(s_vkAllocator.IsCreated());
