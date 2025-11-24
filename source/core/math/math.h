@@ -45,9 +45,10 @@ constexpr inline glm::vec3 M3D_AXIS_Y = glm::vec3(0.f, 1.f, 0.f);
 constexpr inline glm::vec3 M3D_AXIS_Z = glm::vec3(0.f, 0.f, 1.f);
 
 
-constexpr inline glm::mat3 M3D_MAT3_IDENTITY = glm::identity<glm::mat3>();
-constexpr inline glm::mat4 M3D_MAT4_IDENTITY = glm::identity<glm::mat4>();
-constexpr inline glm::quat M3D_QUAT_IDENTITY = glm::identity<glm::quat>();
+constexpr inline glm::mat3x3 M3D_MAT3X3_IDENTITY = glm::identity<glm::mat3x3>();
+constexpr inline glm::mat3x4 M3D_MAT3X4_IDENTITY = glm::identity<glm::mat3x4>();
+constexpr inline glm::mat4x4 M3D_MAT4X4_IDENTITY = glm::identity<glm::mat4x4>();
+constexpr inline glm::quat M3D_QUAT_IDENTITY     = glm::identity<glm::quat>();
 
 
 namespace math

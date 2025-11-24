@@ -117,9 +117,9 @@ namespace eng
 
         math::Frustum m_frustum;
 
-        glm::mat4x4 m_matViewProj = M3D_MAT4_IDENTITY;
-        glm::mat4x4 m_matProj     = M3D_MAT4_IDENTITY;
-        glm::mat4x4 m_matView     = M3D_MAT4_IDENTITY;
+        glm::mat4x4 m_matViewProj = M3D_MAT4X4_IDENTITY;
+        glm::mat4x4 m_matProj     = M3D_MAT4X4_IDENTITY;
+        glm::mat4x4 m_matView     = M3D_MAT4X4_IDENTITY;
 
         glm::quat m_rotation = M3D_QUAT_IDENTITY;
         glm::vec3 m_position = M3D_ZEROF3;

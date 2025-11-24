@@ -20,9 +20,9 @@ namespace eng
 
     void Camera::Destroy() noexcept
     {
-        m_matViewProj = M3D_MAT4_IDENTITY;
-        m_matProj     = M3D_MAT4_IDENTITY;
-        m_matView      = M3D_MAT4_IDENTITY;
+        m_matViewProj = M3D_MAT4X4_IDENTITY;
+        m_matProj     = M3D_MAT4X4_IDENTITY;
+        m_matView     = M3D_MAT4X4_IDENTITY;
         
         m_rotation = M3D_QUAT_IDENTITY;
         m_position = M3D_ZEROF3;
@@ -258,7 +258,7 @@ namespace eng
 
     void Camera::RecalcViewMatrix() noexcept
     {
-        m_matView = glm::inverse(glm::mat4_cast(m_rotation)) * glm::translate(M3D_MAT4_IDENTITY, -m_position);
+        m_matView = glm::inverse(glm::mat4_cast(m_rotation)) * glm::translate(M3D_MAT4X4_IDENTITY, -m_position);
     }
 
 
