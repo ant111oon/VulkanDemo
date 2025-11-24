@@ -2,6 +2,8 @@ cmake_minimum_required (VERSION 3.8)
 
 project (VkEngine LANGUAGES CXX)
 
+include(FetchContent)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -38,7 +40,22 @@ endif()
 
 find_package(Vulkan REQUIRED)
 
-include(FetchContent)
+
+FetchContent_Declare(
+    vma
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+    GIT_TAG        v3.3.0
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(vma)
+
+add_library(vma INTERFACE)
+target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
+
+# vma generates a lot of warnings, so disable it
+target_compile_options(vma INTERFACE -w)
+
+
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -46,15 +63,6 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(glm)
-
-
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.92.4-docking
-    GIT_PROGRESS   TRUE
-)
-FetchContent_MakeAvailable(imgui)
 
 
 if (ENG_ENABLE_TRACY)
@@ -69,13 +77,13 @@ if (ENG_ENABLE_TRACY)
 endif()
 
 
-# FetchContent_Declare(
-#     meshoptimizer
-#     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-#     GIT_TAG        v0.25
-#     GIT_PROGRESS   TRUE
-# )
-# FetchContent_MakeAvailable(meshoptimizer)
+FetchContent_Declare(
+    fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf.git
+    GIT_TAG        v0.9.0
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(fastgltf)
 
 
 FetchContent_Declare(
@@ -89,7 +97,27 @@ FetchContent_MakeAvailable(tinygltf)
 target_compile_options(tinygltf PRIVATE -w)
 
 
-add_library(imgui STATIC
+FetchContent_Declare(
+    FreeImage
+    GIT_REPOSITORY https://github.com/danoli3/FreeImage.git
+    GIT_TAG        "HEAD"
+    CMAKE_ARGS     -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/_install
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(FreeImage)
+
+target_compile_options(FreeImage PRIVATE -w -msse4.1)
+
+
+FetchContent_Declare(
+    ImGui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.4-docking
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(ImGui)
+
+add_library(ImGui STATIC
     ${imgui_SOURCE_DIR}/imgui.h
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -100,23 +128,8 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
 )
 
-target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
-
-
-FetchContent_Declare(
-    vma
-    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG        v3.3.0
-    GIT_PROGRESS   TRUE
-)
-FetchContent_MakeAvailable(vma)
-
-add_library(vma INTERFACE)
-target_include_directories(vma INTERFACE ${vma_SOURCE_DIR}/include)
-
-# VMA generates a lot of warnings, so disable it
-target_compile_options(vma INTERFACE -w)
+target_include_directories(ImGui PUBLIC ${imgui_SOURCE_DIR})
+target_link_libraries(ImGui PUBLIC Vulkan::Vulkan)
 
 
 set(ENGINE_CXX_SOURCE_DIR ${PROJECT_SOURCE_DIR}/source)
@@ -140,11 +153,12 @@ target_precompile_headers(${ENGINE_PROJ_NAME}
 
 target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE Vulkan::Vulkan
-    PRIVATE glm 
-    PRIVATE imgui
-    PRIVATE tinygltf
     PRIVATE vma
-    # PRIVATE meshoptimizer
+    PRIVATE glm 
+    PRIVATE ImGui
+    PRIVATE tinygltf
+    PRIVATE fastgltf
+    PRIVATE FreeImage
     
     PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient>
 
@@ -154,6 +168,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
 target_include_directories(${ENGINE_PROJ_NAME} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
+    PRIVATE ${FreeImage_SOURCE_DIR}/Source
 )
 
 target_compile_options(${ENGINE_PROJ_NAME}

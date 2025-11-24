@@ -28,33 +28,37 @@
 #include "core/profiler/cpu_profiler.h"
 #include "render/core/vulkan/vk_profiler.h"
 
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+#include <backends/imgui_impl_win32.h>
 
+#define USE_FASTGLTF
+
+#ifdef USE_FASTGLTF
+#define FREEIMAGE_LIB
+#include <FreeImage.h>
+
+#include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
+#include <fastgltf/glm_element_traits.hpp>
+
+namespace gltf = fastgltf;
+#else
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define TINYGLTF_NOEXCEPTION
 #include <tiny_gltf.h>
 
-
-#include <imgui.h>
-#include <backends/imgui_impl_vulkan.h>
-#include <backends/imgui_impl_win32.h>
+namespace gltf = tinygltf;
+#endif
 
 
 namespace fs = std::filesystem;
-namespace gltf = tinygltf;
-
-using VertexIndexType = uint32_t;
+using IndexType = uint32_t;
 
 
-struct Vertex
-{
-    glm::uint posXY;
-    glm::uint posZnormX;
-    glm::uint normYZ;
-    glm::uint texcoord;
-};
-
+// GPU structures
 
 struct BASE_BINDLESS_REGISTRY
 {
@@ -234,6 +238,248 @@ enum class COMMON_SAMPLER_IDX : glm::uint
 };
 
 
+// CPU structures
+
+struct TextureLoadData
+{
+    ~TextureLoadData()
+    {
+        if (pBitmap) {
+            FreeImage_Unload(pBitmap);
+            pBitmap = nullptr;
+        }
+
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        name.fill('\0');
+    #endif
+        format = VK_FORMAT_UNDEFINED;
+    }
+
+    uint32_t GetWidth() const { return FreeImage_GetWidth(pBitmap); }
+    uint32_t GetHeight() const { return FreeImage_GetHeight(pBitmap); }
+    uint32_t GetBitsPerPixel() const { return FreeImage_GetBPP(pBitmap); }
+    
+    uint32_t GetTexSize() const { return GetWidth() * GetHeight() * (GetBitsPerPixel() / 8); }
+
+    const void* GetData() const { return FreeImage_GetBits(pBitmap); } 
+
+#ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+    std::array<char, vkn::Object::MAX_OBJ_DBG_NAME_LENGTH> name = {};
+#endif
+    FIBITMAP* pBitmap = nullptr;
+    VkFormat format;
+};
+
+
+struct Material
+{
+    int32_t albedoTexIdx     = -1;
+    int32_t normalTexIdx     = -1;
+    int32_t metalRoughTexIdx = -1;
+    int32_t aoTexIdx         = -1;
+    int32_t emissiveTexIdx   = -1;
+};
+
+
+static constexpr uint32_t VERTEX_DATA_SIZE_UI4 = 1;
+
+struct Vertex
+{
+    void Pack(const glm::vec3& lpos, const glm::vec3& lnorm, glm::vec2 uv)
+    {
+        data[0].x = glm::packHalf2x16(glm::vec2(lpos.x, lpos.y));
+        data[0].y = glm::packHalf2x16(glm::vec2(lpos.z, lnorm.x));
+        data[0].z = glm::packHalf2x16(glm::vec2(lnorm.y, lnorm.z));
+        data[0].w = glm::packHalf2x16(uv);
+    }
+
+    void Unpack(glm::vec3& outLPos, glm::vec3& outLNorm, glm::vec2& outUv)
+    {
+        outLPos = GetLPos();
+        outLNorm = GetLNorm();
+        outUv = GetUV();
+    }
+
+    glm::vec3 GetLPos() const
+    {
+        return glm::vec3(glm::unpackHalf2x16(data[0].x), glm::unpackHalf2x16(data[0].y).x);
+    }
+
+    glm::vec3 GetLNorm() const
+    {
+        return glm::vec3(glm::unpackHalf2x16(data[0].y).y, glm::unpackHalf2x16(data[0].z));
+    }
+
+    glm::vec2 GetUV() const
+    {
+        return glm::unpackHalf2x16(data[0].w);
+    }
+
+    glm::u32vec4 data[VERTEX_DATA_SIZE_UI4] = {};
+};
+
+
+struct AABB
+{
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
+
+struct Mesh
+{
+    uint32_t firstVertex;
+    uint32_t vertexCount;
+    uint32_t firstIndex;
+    uint32_t indexCount;
+
+    AABB bounds;
+};
+
+
+struct DIP
+{
+    uint32_t meshIdx;
+    int32_t mtlIdx = -1;
+};
+
+
+struct DIPGroup
+{
+    uint32_t firstDIP;
+    uint32_t dipCount;
+};
+
+
+struct SceneNode
+{
+    std::vector<uint32_t> childrenNodes;
+    std::string name;
+
+    int32_t trsIdx;
+    int32_t dipGroupIdx = -1;
+};
+
+
+static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
+static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 8;
+static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 9;
+
+static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
+
+static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
+
+static constexpr const char* APP_NAME = "Vulkan Demo";
+
+static constexpr bool VSYNC_ENABLED = false;
+
+static constexpr float CAMERA_SPEED = 0.0025f;
+
+static constexpr size_t TEXTURE_RGBA8_MAX_SIZE = 4096 * 4096 * 4 * sizeof(uint32_t);
+static constexpr size_t STAGING_BUFFER_SIZE = TEXTURE_RGBA8_MAX_SIZE;
+static constexpr size_t STAGING_BUFFER_COUNT = 2;
+
+
+static Window* s_pWnd = nullptr;
+
+static vkn::Instance& s_vkInstance = vkn::GetInstance();
+static vkn::Surface& s_vkSurface = vkn::GetSurface();
+
+static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
+static vkn::Device&         s_vkDevice = vkn::GetDevice();
+
+static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
+
+static vkn::QueryPool s_queryPool;
+
+static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
+static vkn::Image      s_depthRT;
+static vkn::ImageView  s_depthRTView;
+
+static vkn::CmdPool   s_cmdPool;
+static vkn::CmdBuffer s_immediateSubmitCmdBuffer;
+
+static vkn::Fence s_immediateSubmitFinishedFence;
+
+static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
+
+static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
+static vkn::Semaphore              s_presentFinishedSemaphore;
+static vkn::Fence                  s_renderFinishedFence;
+static vkn::CmdBuffer              s_renderCmdBuffer;
+
+static VkDescriptorPool      s_commonDescriptorPool = VK_NULL_HANDLE;
+static VkDescriptorSet       s_commonDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_commonDescriptorSetLayout = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_basePipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_basePipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_baseCullingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_baseCullingPipeline = VK_NULL_HANDLE;
+
+static vkn::Buffer s_vertexBuffer;
+static vkn::Buffer s_indexBuffer;
+
+static vkn::Buffer s_commonConstBuffer;
+
+static vkn::Buffer s_commonMeshDataBuffer;
+static vkn::Buffer s_commonMaterialsBuffer;
+static vkn::Buffer s_commonTransformsBuffer;
+static vkn::Buffer s_commonInstDataBuffer;
+
+static vkn::Buffer s_drawIndirectCommandsBuffer;
+static vkn::Buffer s_drawIndirectCommandsCountBuffer;
+
+static std::vector<vkn::Image>     s_sceneImages;
+static std::vector<vkn::ImageView> s_sceneImageViews;
+static std::vector<vkn::Sampler>   s_commonSamplers;
+
+static vkn::Image     s_sceneDefaultImage;
+static vkn::ImageView s_sceneDefaultImageView;
+
+
+static std::vector<glm::mat3x4> s_cpuTransforms;
+
+static std::vector<Vertex> s_cpuVertexBuffer;
+static std::vector<IndexType> s_cpuIndexBuffer;
+
+static std::vector<Mesh> s_cpuMeshes;
+static std::vector<DIP> s_cpuDIPs;
+static std::vector<DIPGroup> s_cpuDIPGroups;
+
+static std::vector<Material> s_cpuMaterials;
+static std::vector<TextureLoadData> s_cpuTexturesData;
+
+static std::vector<SceneNode> s_cpuSceneNodes;
+
+
+static eng::Camera s_camera;
+static glm::vec3 s_cameraVel = M3D_ZEROF3;
+
+static uint32_t s_dbgTexIdx = 0;
+
+static size_t s_frameNumber = 0;
+static float s_frameTime = 0.f;
+static bool s_swapchainRecreateRequired = false;
+static bool s_flyCameraMode = false;
+
+#ifndef ENG_BUILD_RELEASE
+static bool s_useMeshIndirectDraw = true;
+static bool s_useMeshCulling = true;
+
+// Uses for debug purposes during CPU frustum culling
+static size_t s_dbgDrawnMeshCount = 0;
+#endif
+
+
 static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "ALBEDO",
     "NORMAL",
@@ -305,221 +551,7 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 };
 
 
-static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
-static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
-static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 8;
-static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 9;
-
-static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
-
-static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 2048;
-
-static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
-
-static constexpr const char* APP_NAME = "Vulkan Demo";
-
-static constexpr bool VSYNC_ENABLED = false;
-
-static constexpr float CAMERA_SPEED = 0.0025f;
-
-
-static Window* s_pWnd = nullptr;
-
-static vkn::Instance& s_vkInstance = vkn::GetInstance();
-static vkn::Surface& s_vkSurface = vkn::GetSurface();
-
-static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
-static vkn::Device&         s_vkDevice = vkn::GetDevice();
-
-static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
-
-static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
-
-static vkn::CmdPool   s_vkCmdPool;
-static vkn::CmdBuffer s_vkImmediateSubmitCmdBuffer;
-
-static VkDescriptorPool      s_vkCommonDescriptorPool = VK_NULL_HANDLE;
-static VkDescriptorSet       s_vkCommonDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_vkCommonDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkPipelineLayout s_vkBasePipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_vkBasePipeline = VK_NULL_HANDLE;
-
-static VkPipelineLayout s_vkBaseCullingPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_vkBaseCullingPipeline = VK_NULL_HANDLE;
-
-static std::vector<vkn::Semaphore> s_vkRenderingFinishedSemaphores;
-static vkn::Semaphore s_vkPresentFinishedSemaphore;
-static vkn::Fence     s_vkRenderingFinishedFence;
-static vkn::CmdBuffer s_vkRenderCmdBuffer;
-
-static vkn::Fence s_vkImmediateSubmitFinishedFence;
-
-static vkn::Image     s_vkDepthImage;
-static vkn::ImageView s_vkDepthImageView;
-
-static vkn::Buffer s_vertexBuffer;
-static vkn::Buffer s_indexBuffer;
-
-static vkn::Buffer s_commonConstBuffer;
-
-static vkn::Buffer s_commonMeshInfosBuffer;
-static vkn::Buffer s_commonMaterialsBuffer;
-static vkn::Buffer s_commonTransformsBuffer;
-static vkn::Buffer s_commonInstInfosBuffer;
-
-static vkn::Buffer s_drawIndirectCommandsBuffer;
-static vkn::Buffer s_drawIndirectCommandsCountBuffer;
-
-static vkn::QueryPool s_vkQueryPool;
-
-static std::vector<COMMON_MESH_INFO> s_sceneMeshInfos;
-static std::vector<COMMON_MATERIAL>  s_sceneMaterials;
-static std::vector<COMMON_TRANSFORM> s_sceneTransforms;
-static std::vector<COMMON_INST_INFO> s_sceneInstInfos;
-
-static std::vector<vkn::Image>     s_sceneImages;
-static std::vector<vkn::ImageView> s_sceneImageViews;
-static std::vector<vkn::Sampler>   s_commonSamplers;
-
-static vkn::Image     s_sceneDefaultImage;
-static vkn::ImageView s_sceneDefaultImageView;
-
-static eng::Camera s_camera;
-static glm::vec3 s_cameraVel = M3D_ZEROF3;
-
-static uint32_t s_dbgTexIdx = 0;
-
-static size_t s_frameNumber = 0;
-static float s_frameTime = 0.f;
-static bool s_swapchainRecreateRequired = false;
-static bool s_flyCameraMode = false;
-
-#ifndef ENG_BUILD_RELEASE
-static bool s_useMeshIndirectDraw = true;
-static bool s_useMeshCulling = true;
-
-// Uses for debug purposes during CPU frustum culling
-static size_t s_dbgDrawnMeshCount = 0;
-#endif
-
-
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-
-namespace tinygltf
-{
-    static constexpr VkFormat GetImageVkFormatR(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat  GetImageVkFormatRG(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormatRGB(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormatRGBA(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
-    {
-        switch (component) {
-            case 1: return GetImageVkFormatR(pixelType, isSRGB);
-            case 2: return GetImageVkFormatRG(pixelType, isSRGB);
-            case 3: return GetImageVkFormatRGB(pixelType, isSRGB);
-            case 4: return GetImageVkFormatRGBA(pixelType, isSRGB);
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
-        return VK_FORMAT_UNDEFINED;
-    }
-}
 
 
 namespace DbgUI
@@ -728,11 +760,11 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 
 static constexpr VkIndexType GetVkIndexType()
 {
-    static_assert(std::is_same_v<VertexIndexType, uint8_t> || std::is_same_v<VertexIndexType, uint16_t> || std::is_same_v<VertexIndexType, uint32_t>);
+    static_assert(std::is_same_v<IndexType, uint8_t> || std::is_same_v<IndexType, uint16_t> || std::is_same_v<IndexType, uint32_t>);
 
-    if constexpr (std::is_same_v<VertexIndexType, uint8_t>) {
+    if constexpr (std::is_same_v<IndexType, uint8_t>) {
         return VK_INDEX_TYPE_UINT8;
-    } else if constexpr (std::is_same_v<VertexIndexType, uint16_t>) {
+    } else if constexpr (std::is_same_v<IndexType, uint16_t>) {
         return VK_INDEX_TYPE_UINT16;
     } else {
         return VK_INDEX_TYPE_UINT32;
@@ -743,28 +775,28 @@ static constexpr VkIndexType GetVkIndexType()
 template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 {   
-    s_vkImmediateSubmitFinishedFence.Reset();
-    s_vkImmediateSubmitCmdBuffer.Reset();
+    s_immediateSubmitFinishedFence.Reset();
+    s_immediateSubmitCmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBI = {};
     cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    s_vkImmediateSubmitCmdBuffer.Begin(cmdBI);
-        func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    s_vkImmediateSubmitCmdBuffer.End();
+    s_immediateSubmitCmdBuffer.Begin(cmdBI);
+        func(s_immediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    s_immediateSubmitCmdBuffer.End();
 
     SubmitVkQueue(
         vkQueue, 
-        s_vkImmediateSubmitCmdBuffer.Get(), 
-        s_vkImmediateSubmitFinishedFence.Get(), 
+        s_immediateSubmitCmdBuffer.Get(), 
+        s_immediateSubmitFinishedFence.Get(), 
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE,
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    s_vkImmediateSubmitFinishedFence.WaitFor(10'000'000'000);
+    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
 }
 
 
@@ -905,21 +937,41 @@ static void CreateVkPhysAndLogicalDevices()
 }
 
 
+static void CreateCommonStagingBuffers()
+{
+    vkn::AllocationInfo stagingBufAllocInfo = {};
+    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = STAGING_BUFFER_SIZE;
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
+
+    for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
+        vkn::Buffer& buffer = s_commonStagingBuffers[i];
+        
+        buffer.Create(stagingBufCreateInfo);
+        CORE_ASSERT_MSG(buffer.IsCreated(), "Failed to create staging buffer %zu", i);
+        buffer.SetDebugName("STAGING_BUFFER_%zu", i);
+    }
+}
+
+
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
-    Timer timer;
-
     std::vector<uint8_t>* pShaderData = nullptr;
     std::vector<uint8_t> localBuffer;
     
     pShaderData = pExternalBuffer ? pExternalBuffer : &localBuffer;
 
-    const std::string pathS = shaderSpirVPath.string();
+    const std::string strPath = shaderSpirVPath.string();
 
     if (!ReadFile(*pShaderData, shaderSpirVPath)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", pathS.c_str());
+        VK_ASSERT_FAIL("Failed to load shader: %s", strPath.c_str());
     }
-    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
+    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", strPath.c_str(), sizeof(uint32_t));
 
     VkShaderModuleCreateInfo shaderModuleCI = {};
     shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -930,16 +982,12 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &vkShaderModule));
     VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
 
-    CORE_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
-
     return vkShaderModule;
 }
 
 
 static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
 {
-    Timer timer;
-
     vkn::DescriptorPoolBuilder builder;
 
     builder
@@ -954,16 +1002,12 @@ static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
     
     VkDescriptorPool vkPool = builder.Build(vkDevice);
 
-    CORE_LOG_INFO("Common descriptor pool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkPool;
 }
 
 
 static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice)
 {
-    Timer timer;
-
     vkn::DescriptorSetLayoutBuilder builder;
 
     builder
@@ -981,16 +1025,12 @@ static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice
 
     VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
 
-    CORE_LOG_INFO("Common descriptor set layout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkLayout;
 }
 
 
 static VkDescriptorSet CreateVkCommonDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::DescriptorSetAllocator allocator;
 
     VkDescriptorSet vkDescriptorSets[] = { VK_NULL_HANDLE };
@@ -1000,16 +1040,12 @@ static VkDescriptorSet CreateVkCommonDescriptorSet(VkDevice vkDevice, VkDescript
         .AddLayout(vkDescriptorSetLayout)
         .Allocate(vkDevice, vkDescriptorSets);
 
-    CORE_LOG_INFO("Common descriptor set allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkDescriptorSets[0];
 }
 
 
 static VkPipelineLayout CreateVkBasePipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
@@ -1017,16 +1053,12 @@ static VkPipelineLayout CreateVkBasePipelineLayout(VkDevice vkDevice, VkDescript
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    CORE_LOG_INFO("Base pipeline layout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkLayout;
 }
 
 
 static VkPipelineLayout CreateVkBaseCullingPipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     VkPipelineLayout vkLayout = plBuilder
@@ -1034,16 +1066,12 @@ static VkPipelineLayout CreateVkBaseCullingPipelineLayout(VkDevice vkDevice, VkD
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    CORE_LOG_INFO("Base culling pipeline layout  initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkLayout;
 }
 
 
 static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
 {
-    Timer timer;
-
     std::vector<uint8_t> shaderCodeBuffer;
     std::array vkShaderModules = {
         CreateVkShaderModule(vkDevice, vsPath, &shaderCodeBuffer),
@@ -1092,16 +1120,12 @@ static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLay
         shader = VK_NULL_HANDLE;
     }
 
-    CORE_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkPipeline;
 }
 
 
 static VkPipeline CreateVkBaseCullingPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& csPath)
 {
-    Timer timer;
-
     std::vector<uint8_t> shaderCodeBuffer;
     VkShaderModule vkShaderModule = CreateVkShaderModule(vkDevice, csPath, &shaderCodeBuffer);
 
@@ -1115,16 +1139,12 @@ static VkPipeline CreateVkBaseCullingPipeline(VkDevice vkDevice, VkPipelineLayou
     vkDestroyShaderModule(vkDevice, vkShaderModule, nullptr);
     vkShaderModule = VK_NULL_HANDLE;
 
-    CORE_LOG_INFO("Base culling pipeline initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
     return vkPipeline;
 }
 
 
 void CreateVkIndirectDrawBuffers()
 {
-    Timer timer;
-
     vkn::AllocationInfo ai = {};
     ai.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     ai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -1144,15 +1164,13 @@ void CreateVkIndirectDrawBuffers()
     s_drawIndirectCommandsCountBuffer.Create(ci); 
     CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
     s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
-
-    CORE_LOG_INFO("Vulkan draw indirect buffers creation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
 static void CreateDepthRT()
 {
-    vkn::Image& depthImage = s_vkDepthImage;
-    vkn::ImageView& depthImageView = s_vkDepthImageView;
+    vkn::Image& depthImage = s_depthRT;
+    vkn::ImageView& depthImageView = s_depthRTView;
 
     if (depthImageView.IsCreated()) {
         depthImageView.Destroy();
@@ -1207,8 +1225,6 @@ static void CreateDepthRT()
 
 static void CreateCommonSamplers()
 {
-    Timer timer;
-
     s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
     std::vector<vkn::SamplerCreateInfo> smpCIs((uint32_t)COMMON_SAMPLER_IDX::COUNT);
@@ -1444,8 +1460,6 @@ static void CreateCommonSamplers()
         CORE_ASSERT(s_commonSamplers[i].IsCreated());
         s_commonSamplers[i].SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
-
-    CORE_LOG_INFO("Common samplers initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -1465,7 +1479,7 @@ static void WriteDescriptorSet()
     
         VkWriteDescriptorSet commonSamplerWrite = {};
         commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        commonSamplerWrite.dstSet = s_vkCommonDescriptorSet;
+        commonSamplerWrite.dstSet = s_commonDescriptorSet;
         commonSamplerWrite.dstBinding = COMMON_SAMPLERS_DESCRIPTOR_SLOT;
         commonSamplerWrite.dstArrayElement = i;
         commonSamplerWrite.descriptorCount = 1;
@@ -1483,7 +1497,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonConstBufWrite = {};
     commonConstBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonConstBufWrite.dstSet = s_vkCommonDescriptorSet;
+    commonConstBufWrite.dstSet = s_commonDescriptorSet;
     commonConstBufWrite.dstBinding = COMMON_CONST_BUFFER_DESCRIPTOR_SLOT;
     commonConstBufWrite.dstArrayElement = 0;
     commonConstBufWrite.descriptorCount = 1;
@@ -1494,13 +1508,13 @@ static void WriteDescriptorSet()
 
 
     VkDescriptorBufferInfo commonMeshInfoBufferInfo = {};
-    commonMeshInfoBufferInfo.buffer = s_commonMeshInfosBuffer.Get();
+    commonMeshInfoBufferInfo.buffer = s_commonMeshDataBuffer.Get();
     commonMeshInfoBufferInfo.offset = 0;
     commonMeshInfoBufferInfo.range = VK_WHOLE_SIZE;
 
     VkWriteDescriptorSet commonMeshInfoBufferWrite = {};
     commonMeshInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMeshInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonMeshInfoBufferWrite.dstSet = s_commonDescriptorSet;
     commonMeshInfoBufferWrite.dstBinding = COMMON_MESH_INFOS_DESCRIPTOR_SLOT;
     commonMeshInfoBufferWrite.dstArrayElement = 0;
     commonMeshInfoBufferWrite.descriptorCount = 1;
@@ -1517,7 +1531,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonTrsBufferWrite = {};
     commonTrsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonTrsBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonTrsBufferWrite.dstSet = s_commonDescriptorSet;
     commonTrsBufferWrite.dstBinding = COMMON_TRANSFORMS_DESCRIPTOR_SLOT;
     commonTrsBufferWrite.dstArrayElement = 0;
     commonTrsBufferWrite.descriptorCount = 1;
@@ -1534,7 +1548,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonMaterialsBufferWrite = {};
     commonMaterialsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMaterialsBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonMaterialsBufferWrite.dstSet = s_commonDescriptorSet;
     commonMaterialsBufferWrite.dstBinding = COMMON_MATERIALS_DESCRIPTOR_SLOT;
     commonMaterialsBufferWrite.dstArrayElement = 0;
     commonMaterialsBufferWrite.descriptorCount = 1;
@@ -1556,7 +1570,7 @@ static void WriteDescriptorSet()
 
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkCommonDescriptorSet;
+        texWrite.dstSet = s_commonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
@@ -1574,7 +1588,7 @@ static void WriteDescriptorSet()
     for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkCommonDescriptorSet;
+        texWrite.dstSet = s_commonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
@@ -1586,13 +1600,13 @@ static void WriteDescriptorSet()
 
 
     VkDescriptorBufferInfo commonInstInfoBufferInfo = {};
-    commonInstInfoBufferInfo.buffer = s_commonInstInfosBuffer.Get();
+    commonInstInfoBufferInfo.buffer = s_commonInstDataBuffer.Get();
     commonInstInfoBufferInfo.offset = 0;
     commonInstInfoBufferInfo.range = VK_WHOLE_SIZE;
 
     VkWriteDescriptorSet commonInstInfoBufferWrite = {};
     commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonInstInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonInstInfoBufferWrite.dstSet = s_commonDescriptorSet;
     commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
     commonInstInfoBufferWrite.dstArrayElement = 0;
     commonInstInfoBufferWrite.descriptorCount = 1;
@@ -1609,7 +1623,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonVertDataBufferWrite = {};
     commonVertDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonVertDataBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonVertDataBufferWrite.dstSet = s_commonDescriptorSet;
     commonVertDataBufferWrite.dstBinding = COMMON_VERTEX_DATA_DESCRIPTOR_SLOT;
     commonVertDataBufferWrite.dstArrayElement = 0;
     commonVertDataBufferWrite.descriptorCount = 1;
@@ -1626,7 +1640,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
     drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsBufferWrite.dstSet = s_commonDescriptorSet;
     drawIndirectCommandsBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsBufferWrite.descriptorCount = 1;
@@ -1642,7 +1656,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsCountBufferWrite.dstSet = s_commonDescriptorSet;
     drawIndirectCommandsCountBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
@@ -1760,6 +1774,116 @@ static void SubmitVkQueue(VkQueue vkQueue,
     submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
 
     VK_CHECK(vkQueueSubmit2(vkQueue, 1, &submitInfo2, vkFinishFence));
+}
+
+
+#ifndef USE_FASTGLTF
+namespace tinygltf
+{
+    static constexpr VkFormat GetImageVkFormatR(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat  GetImageVkFormatRG(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGB(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGBA(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
+    {
+        switch (component) {
+            case 1: return GetImageVkFormatR(pixelType, isSRGB);
+            case 2: return GetImageVkFormatRG(pixelType, isSRGB);
+            case 3: return GetImageVkFormatRGB(pixelType, isSRGB);
+            case 4: return GetImageVkFormatRGBA(pixelType, isSRGB);
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
+        return VK_FORMAT_UNDEFINED;
+    }
 }
 
 
@@ -2016,9 +2140,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         });
     });
 
-    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "Vertex buffer overflow: %zu, max vertex count: %zu", vertexCount, MAX_VERTEX_COUNT);
-
-    std::vector<Vertex> cpuVertBuffer;
+    std::vector<VertexPacked> cpuVertBuffer;
     cpuVertBuffer.reserve(vertexCount);
 
     size_t indexCount = 0;
@@ -2032,7 +2154,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         });
     });
 
-    std::vector<VertexIndexType> cpuIndexBuffer;
+    std::vector<IndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
     s_sceneMeshInfos.reserve(model.meshes.size());
@@ -2065,7 +2187,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
             mesh.BOUNDS_MIN_LCS = glm::vec3(FLT_MAX);
             mesh.BOUNDS_MAX_LCS = glm::vec3(-FLT_MAX);
 
-            const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
+            const IndexType primitiveStartIndex = cpuVertBuffer.size();
 
             size_t positionsCount = 0; size_t posStride = 0;
             const uint8_t* pPositionData = GetAttribPtr(model, primitive, "POSITION", positionsCount, posStride);
@@ -2090,7 +2212,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
                 mesh.BOUNDS_MIN_LCS = glm::min(mesh.BOUNDS_MIN_LCS, position);
                 mesh.BOUNDS_MAX_LCS = glm::max(mesh.BOUNDS_MAX_LCS, position);
 
-                Vertex vertex = {};
+                VertexPacked vertex = {};
 
                 vertex.posXY = glm::packHalf2x16(glm::vec2(position.x, position.y));
                 vertex.posZnormX = glm::packHalf2x16(glm::vec2(position.z, normal.x));
@@ -2130,8 +2252,8 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
                 index = primitiveStartIndex + index;
 
-                CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
-                cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
+                CORE_ASSERT_MSG(index < std::numeric_limits<IndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<IndexType>::max());
+                cpuIndexBuffer.push_back(static_cast<IndexType>(index));
             }
 
             s_sceneMeshInfos.emplace_back(mesh);
@@ -2144,7 +2266,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
     vkn::BufferCreateInfo stagingBufCI = {};
     stagingBufCI.pDevice = &s_vkDevice;
-    stagingBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
+    stagingBufCI.size = cpuVertBuffer.size() * sizeof(VertexPacked);
     stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     stagingBufCI.pAllocInfo = &stagingBufAI;
 
@@ -2154,11 +2276,11 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
     {
         void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(Vertex));
+        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(VertexPacked));
         stagingVertBuffer.Unmap();
     }
 
-    stagingBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+    stagingBufCI.size = cpuIndexBuffer.size() * sizeof(IndexType);
 
     vkn::Buffer stagingIndexBuffer(stagingBufCI);
     CORE_ASSERT(stagingIndexBuffer.IsCreated());
@@ -2166,7 +2288,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
     {
         void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(VertexIndexType));
+        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(IndexType));
         stagingIndexBuffer.Unmap();
     }
 
@@ -2188,7 +2310,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
     vkn::BufferCreateInfo vertBufCI = {};
     vertBufCI.pDevice = &s_vkDevice;
-    vertBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
+    vertBufCI.size = cpuVertBuffer.size() * sizeof(VertexPacked);
     vertBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     vertBufCI.pAllocInfo = &vertBufAI;
 
@@ -2202,7 +2324,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
     vkn::BufferCreateInfo idxBufCI = {};
     idxBufCI.pDevice = &s_vkDevice;
-    idxBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+    idxBufCI.size = cpuIndexBuffer.size() * sizeof(IndexType);
     idxBufCI.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     idxBufCI.pAllocInfo = &idxBufAI;
 
@@ -2220,22 +2342,22 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
     meshInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     meshInfosBufCI.pAllocInfo = &meshInfosBufAI;
     
-    s_commonMeshInfosBuffer.Create(meshInfosBufCI);
-    CORE_ASSERT(s_commonMeshInfosBuffer.IsCreated());
-    s_commonMeshInfosBuffer.SetDebugName("COMMON_MESH_INFOS");
+    s_commonMeshDataBuffer.Create(meshInfosBufCI);
+    CORE_ASSERT(s_commonMeshDataBuffer.IsCreated());
+    s_commonMeshDataBuffer.SetDebugName("COMMON_MESH_INFOS");
 
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
         
-        bufferRegion.size = cpuVertBuffer.size() * sizeof(Vertex);
+        bufferRegion.size = cpuVertBuffer.size() * sizeof(VertexPacked);
         vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), s_vertexBuffer.Get(), 1, &bufferRegion);
 
-        bufferRegion.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
+        bufferRegion.size = cpuIndexBuffer.size() * sizeof(IndexType);
         vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &bufferRegion);
         
         bufferRegion.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshInfosBuffer.Get(), 1, &bufferRegion);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshDataBuffer.Get(), 1, &bufferRegion);
     });
 
     CORE_LOG_INFO("Mesh loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2387,15 +2509,15 @@ static void LoadSceneInstInfos(const gltf::Model& model)
     instInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     instInfosBufCI.pAllocInfo = &instInfosBufAI;
 
-    s_commonInstInfosBuffer.Create(instInfosBufCI);
-    CORE_ASSERT(s_commonInstInfosBuffer.IsCreated());
-    s_commonInstInfosBuffer.SetDebugName("COMMON_INST_INFOS");
+    s_commonInstDataBuffer.Create(instInfosBufCI);
+    CORE_ASSERT(s_commonInstDataBuffer.IsCreated());
+    s_commonInstDataBuffer.SetDebugName("COMMON_INST_INFOS");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
         bufferRegion.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
         
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstInfosBuffer.Get(), 1, &bufferRegion);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstDataBuffer.Get(), 1, &bufferRegion);
     });
 
     CORE_LOG_INFO("Instance infos loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2404,49 +2526,801 @@ static void LoadSceneInstInfos(const gltf::Model& model)
 
 static void LoadScene(const fs::path& filepath)
 {
+    const std::string strPath = filepath.string();
+
+    if (!fs::exists(filepath)) {
+		CORE_ASSERT_FAIL("Unknown scene path: %s", strPath.c_str());
+		return;
+	}
+
     ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", 255, 50, 255, 255);
+    
+    CORE_LOG_TRACE("Loading \"%s\"...", strPath.c_str());
 
     Timer timer;
-
-    const fs::path dirPath = filepath.parent_path();
-
-    const std::string pathS = filepath.string();
-    CORE_LOG_TRACE("Loading \"%s\"...", pathS.c_str());
 
     gltf::TinyGLTF modelLoader;
     gltf::Model model;
     std::string error, warning;
 
     const bool isModelLoaded = filepath.extension() == ".gltf" ? 
-        modelLoader.LoadASCIIFromFile(&model, &error, &warning, pathS) :
-        modelLoader.LoadBinaryFromFile(&model, &error, &warning, pathS);
+        modelLoader.LoadASCIIFromFile(&model, &error, &warning, strPath) :
+        modelLoader.LoadBinaryFromFile(&model, &error, &warning, strPath);
 
     if (!warning.empty()) {
-        CORE_LOG_WARN("Warning during %s model loading: %s", pathS.c_str(), warning.c_str());
+        CORE_LOG_WARN("Warning during %s model loading: %s", strPath.c_str(), warning.c_str());
     }
-    CORE_ASSERT_MSG(isModelLoaded && error.empty(), "Failed to load %s model: %s", pathS.c_str(), error.c_str());
+    CORE_ASSERT_MSG(isModelLoaded && error.empty(), "Failed to load %s model: %s", strPath.c_str(), error.c_str());
 
     LoadSceneTransforms(model);
     LoadSceneMaterials(model);
     LoadSceneMeshInfos(model);
     LoadSceneInstInfos(model);
 
-    vkn::AllocationInfo commonConstBufAI = {};
-    commonConstBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    commonConstBufAI.usage = VMA_MEMORY_USAGE_AUTO;
-    
-    vkn::BufferCreateInfo commonConstBufCI = {};
-    commonConstBufCI.pDevice = &s_vkDevice;
-    commonConstBufCI.size = sizeof(COMMON_CB_DATA);
-    commonConstBufCI.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonConstBufCI.pAllocInfo = &commonConstBufAI;
-
-    s_commonConstBuffer.Create(commonConstBufCI); 
-    CORE_ASSERT(s_commonConstBuffer.IsCreated());
-    s_commonConstBuffer.SetDebugName("COMMON_CB");
-
-    CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("\"%s\" loading finished: %f ms", strPath.c_str(), timer.End().GetDuration<float, std::milli>());
 }
+#else
+static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& fileDir)
+{
+    Timer timer;
+
+    s_cpuTexturesData.reserve(asset.images.size());
+    s_cpuTexturesData.clear();
+
+    struct FreeImageLoadInfo
+    {
+        FreeImageLoadInfo(const fs::path& fileDir, const gltf::sources::URI& filePath)
+        {
+            const fs::path path = filePath.uri.isLocalPath() ? fs::absolute(fileDir / filePath.uri.fspath()) : filePath.uri.fspath();
+            const fs::path extension = path.extension();
+            
+            filepath = path.string();
+
+            if (extension == ".png") {
+                fmt = FIF_PNG;
+                flags = PNG_DEFAULT;
+            } else if (extension == ".jpeg" || extension == ".jpg") {
+                fmt = FIF_JPEG;
+                flags = JPEG_DEFAULT;
+            } else if (extension == ".hdr") {
+                fmt = FIF_HDR;
+                flags = HDR_DEFAULT;
+            } else {
+                CORE_ASSERT_FAIL("Unsupported texture extension: %s", extension.string().c_str());
+            }
+        }
+
+        std::string filepath;
+        FREE_IMAGE_FORMAT fmt = FIF_UNKNOWN;
+        int32_t flags = 0;
+    };
+
+    auto LoadImageFromMemory = [](TextureLoadData& outTexData, const void* pData, size_t dataSize)
+    {
+        FIMEMORY data = { (void*)(pData) };
+
+        FREE_IMAGE_FORMAT fmt = FreeImage_GetFileTypeFromMemory(&data, static_cast<int>(dataSize));
+        CORE_ASSERT_MSG(fmt != FIF_UNKNOWN, "Failed to detect image format");
+
+        outTexData.pBitmap = FreeImage_LoadFromMemory(fmt, &data, static_cast<int>(dataSize));
+        CORE_ASSERT_MSG(outTexData.pBitmap, "Failed to load image from memory");
+    };
+
+    for (const gltf::Image& image : asset.images) {
+        TextureLoadData texData = {};
+        
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        memcpy_s(texData.name.data(), texData.name.size() - 1, image.name.c_str(), image.name.size());
+    #endif
+        
+        std::visit(
+            gltf::visitor {
+                [](const auto& arg){},
+                [&](const gltf::sources::URI& filePath) {    
+                    FreeImageLoadInfo loadInfo(fileDir, filePath);
+
+                    texData.pBitmap = FreeImage_Load(loadInfo.fmt, loadInfo.filepath.c_str(), loadInfo.flags);
+                    CORE_ASSERT_MSG(texData.pBitmap, "Failed to load %s texture data", loadInfo.filepath.c_str());
+
+                    s_cpuTexturesData.emplace_back(std::move(texData));
+                },
+                [&](const gltf::sources::Vector& vector) {
+                    LoadImageFromMemory(texData, vector.bytes.data(), vector.bytes.size());
+                    s_cpuTexturesData.emplace_back(std::move(texData));
+                },
+                [&](const gltf::sources::BufferView& view) {
+                    const gltf::BufferView& bufferView = asset.bufferViews[view.bufferViewIndex];
+                    const gltf::Buffer& buffer = asset.buffers[bufferView.bufferIndex];
+    
+                    std::visit(gltf::visitor {
+                        [](const auto& arg){},
+                        [&](const gltf::sources::Vector& vector) {
+                            LoadImageFromMemory(texData, vector.bytes.data(), vector.bytes.size());
+                            s_cpuTexturesData.emplace_back(std::move(texData));
+                        }
+                    },
+                    buffer.data);
+                },
+            },
+        image.data);
+    }
+
+    CORE_LOG_INFO("FastGLTF: Textures data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void LoadSceneMaterials(const gltf::Asset& asset)
+{
+    Timer timer;
+
+    s_cpuMaterials.reserve(asset.materials.size());
+    s_cpuMaterials.clear();
+
+    for (const gltf::Material& material : asset.materials) {
+        Material mtl = {};
+
+        if (material.pbrData.baseColorTexture.has_value()) {
+            mtl.albedoTexIdx = material.pbrData.baseColorTexture.value().textureIndex;
+        }
+
+        if (material.normalTexture.has_value()) {
+            mtl.normalTexIdx = material.normalTexture.value().textureIndex;
+        }
+        
+        if (material.pbrData.metallicRoughnessTexture.has_value()) {
+            mtl.metalRoughTexIdx = material.pbrData.metallicRoughnessTexture.value().textureIndex;
+        }
+        
+        if (material.occlusionTexture.has_value()) {
+            mtl.aoTexIdx = material.occlusionTexture.value().textureIndex;
+        }
+
+        if (material.emissiveTexture.has_value()) {
+            mtl.emissiveTexIdx = material.emissiveTexture.value().textureIndex;
+        }
+
+        s_cpuMaterials.emplace_back(mtl);
+    }
+
+    CORE_LOG_INFO("FastGLTF: Materials data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void LoadSceneMeshData(const gltf::Asset& asset)
+{
+    Timer timer;
+
+    size_t vertexCount = 0;
+    size_t indexCount = 0;
+    size_t meshesCount = 0;
+    size_t dipCount = 0;
+
+    const size_t dipGroupCount = asset.meshes.size();
+
+    auto GetVertexAttribAccessor = [](const gltf::Asset& asset, const gltf::Primitive& primitive, std::string_view name) -> const gltf::Accessor*
+    {
+        const fastgltf::Attribute* pAttrib = primitive.findAttribute(name); 
+        return pAttrib != primitive.attributes.cend() ? &asset.accessors[pAttrib->accessorIndex] : nullptr;
+    };
+
+    for (const gltf::Mesh& mesh : asset.meshes) {
+        const size_t submeshCount = mesh.primitives.size();
+
+        meshesCount += submeshCount;
+        dipCount += submeshCount;
+
+        for (size_t primIdx = 0; primIdx < submeshCount; ++primIdx) {
+            const gltf::Primitive& primitive = mesh.primitives[primIdx];
+
+            const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
+            CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+            
+            vertexCount += pPosAccessor->count;
+
+            CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
+            
+            const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
+            indexCount += indexAccessor.count;
+        }
+    }
+
+    s_cpuVertexBuffer.reserve(vertexCount);
+    s_cpuVertexBuffer.clear();
+
+    s_cpuIndexBuffer.reserve(indexCount);
+    s_cpuIndexBuffer.clear();
+
+    s_cpuMeshes.reserve(meshesCount);
+    s_cpuMeshes.clear();
+
+    s_cpuDIPGroups.reserve(dipGroupCount);
+    s_cpuDIPGroups.clear();
+
+    s_cpuDIPs.reserve(meshesCount);
+    s_cpuDIPs.clear();
+
+    size_t sceneIdx = 0;
+
+    gltf::iterateSceneNodes(asset, sceneIdx, gltf::math::fmat4x4(), 
+        [&](auto&& node, auto&& nodeTrs) {            
+            if (!node.meshIndex.has_value()) {
+                return;
+            }
+
+            const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
+
+            DIPGroup dipGroup = {};
+            dipGroup.firstDIP = s_cpuDIPs.size();
+
+            for (size_t primIdx = 0; primIdx < mesh.primitives.size(); ++primIdx) {
+                const gltf::Primitive& primitive = mesh.primitives[primIdx];
+                
+                const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
+                CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+
+                const gltf::Accessor* pNormAccessor = GetVertexAttribAccessor(asset, primitive, "NORMAL");
+                CORE_ASSERT_MSG(pNormAccessor != nullptr, "Failed to find NORMAL vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+                
+                const gltf::Accessor* pUvAccessor = GetVertexAttribAccessor(asset, primitive, "TEXCOORD_0");
+                CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+
+                CORE_ASSERT(pPosAccessor->count == pNormAccessor->count && pPosAccessor->count == pUvAccessor->count);
+
+                Mesh cpuMesh = {};
+
+                cpuMesh.firstVertex = s_cpuVertexBuffer.size();
+                cpuMesh.vertexCount = pPosAccessor->count;
+
+                for (size_t vertIdx = 0; vertIdx < pPosAccessor->count; ++vertIdx) {
+                    const glm::vec3 lpos = gltf::getAccessorElement<glm::vec3>(asset, *pPosAccessor, vertIdx);
+                    const glm::vec3 lnorm = gltf::getAccessorElement<glm::vec3>(asset, *pNormAccessor, vertIdx);
+                    const glm::vec2 uv = gltf::getAccessorElement<glm::vec2>(asset, *pUvAccessor, vertIdx);
+                    
+                    Vertex vertex = {};
+                    vertex.Pack(lpos, lnorm, uv);
+
+                    s_cpuVertexBuffer.emplace_back(vertex);
+                }
+
+                CORE_ASSERT(pPosAccessor->min.has_value());
+                const auto& aabbLCSMin = pPosAccessor->min.value();
+                CORE_ASSERT(aabbLCSMin.size() == 3);
+
+                CORE_ASSERT(pPosAccessor->max.has_value());
+                const auto& aabbLCSMax = pPosAccessor->max.value();
+                CORE_ASSERT(aabbLCSMax.size() == 3);
+
+                cpuMesh.bounds = {};
+                if (aabbLCSMin.isType<std::int64_t>()) {
+                    cpuMesh.bounds.min = glm::vec3(aabbLCSMin.get<std::int64_t>(0), aabbLCSMin.get<std::int64_t>(1), aabbLCSMin.get<std::int64_t>(2));
+                } else {
+                    cpuMesh.bounds.min = glm::vec3(aabbLCSMin.get<double>(0), aabbLCSMin.get<double>(1), aabbLCSMin.get<double>(2));
+                }
+                
+                if (aabbLCSMax.isType<std::int64_t>()) {
+                    cpuMesh.bounds.max = glm::vec3(aabbLCSMax.get<std::int64_t>(0), aabbLCSMax.get<std::int64_t>(1), aabbLCSMax.get<std::int64_t>(2));
+                } else {
+                    cpuMesh.bounds.max = glm::vec3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
+                }
+
+                CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
+                const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
+
+                CORE_ASSERT_MSG(indexAccessor.type == fastgltf::AccessorType::Scalar, "%zu primitive of %s mesh has invalid index accessor type", primIdx, mesh.name.c_str());
+                
+                cpuMesh.firstIndex = s_cpuIndexBuffer.size();
+                cpuMesh.indexCount = indexAccessor.count;
+                
+                if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
+                    gltf::iterateAccessor<uint16_t>(asset, indexAccessor, 
+                        [&](uint16_t index) {
+                            s_cpuIndexBuffer.emplace_back(index);
+                        }
+                    );
+                } else if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedInt) {
+                    gltf::iterateAccessor<uint32_t>(asset, indexAccessor, 
+                        [&](uint32_t index) {
+                            s_cpuIndexBuffer.emplace_back(index);
+                        }
+                    );
+                }
+
+                s_cpuMeshes.emplace_back(cpuMesh);
+
+                DIP dip = {};
+                dip.meshIdx = s_cpuMeshes.size() - 1;
+                dip.mtlIdx = primitive.materialIndex.has_value() ? primitive.materialIndex.value() : -1;
+
+                s_cpuDIPs.emplace_back(dip);
+
+                ++dipGroup.dipCount;
+            }
+
+            s_cpuDIPGroups.emplace_back(dipGroup);
+        }
+    );
+
+    CORE_LOG_INFO("FastGLTF: Mesh loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void LoadSceneNodes(const gltf::Asset& asset)
+{
+    Timer timer;
+
+    s_cpuSceneNodes.reserve(asset.nodes.size());
+    s_cpuSceneNodes.clear();
+
+    s_cpuTransforms.reserve(asset.nodes.size());
+    s_cpuTransforms.clear();
+
+    size_t sceneIdx = 0;
+    CORE_ASSERT_MSG(asset.scenes.size() == 1, "Only one scene per glTF file is allowed for now");
+
+    gltf::iterateSceneNodes(asset, sceneIdx, fastgltf::math::fmat4x4(), 
+        [&](auto&& node, auto&& nodeTrs) {
+            glm::mat4x4 transform(
+                nodeTrs[0][0], nodeTrs[0][1], nodeTrs[0][2], nodeTrs[0][3],
+                nodeTrs[1][0], nodeTrs[1][1], nodeTrs[1][2], nodeTrs[1][3],
+                nodeTrs[2][0], nodeTrs[2][1], nodeTrs[2][2], nodeTrs[2][3],
+                nodeTrs[3][0], nodeTrs[3][1], nodeTrs[3][2], nodeTrs[3][3]
+            );
+            transform = glm::transpose(transform);
+
+            s_cpuTransforms.emplace_back(glm::mat3x4(transform[0], transform[1], transform[2]));
+
+            SceneNode scnNode = {};
+
+            scnNode.childrenNodes.reserve(node.children.size());
+            std::for_each(node.children.cbegin(), node.children.cend(), [&](size_t index) {
+                scnNode.childrenNodes.emplace_back(index);
+            });
+            
+            scnNode.name = node.name;
+            scnNode.trsIdx = s_cpuTransforms.size() - 1;
+
+            if (node.meshIndex.has_value()) {
+                scnNode.dipGroupIdx = node.meshIndex.value();
+            }
+
+            s_cpuSceneNodes.emplace_back(std::move(scnNode));
+        }
+    );
+
+    CORE_LOG_INFO("FastGLTF: Nodes data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void UploadGPUMeshData()
+{
+    vkn::Buffer& vertStagingBuf = s_commonStagingBuffers[0];
+    vkn::Buffer& idxStagingBuf = s_commonStagingBuffers[1];
+
+    void* pVertData = vertStagingBuf.Map(0, VK_WHOLE_SIZE);
+
+    const size_t vertBufSize = s_cpuVertexBuffer.size() * sizeof(Vertex);
+    CORE_ASSERT(vertBufSize <= vertStagingBuf.GetMemorySize());
+    memcpy(pVertData, s_cpuVertexBuffer.data(), vertBufSize);
+
+    vertStagingBuf.Unmap();
+
+    void* pIndexData = idxStagingBuf.Map(0, VK_WHOLE_SIZE);
+
+    const size_t idxBufSize = s_cpuIndexBuffer.size() * sizeof(IndexType);
+    CORE_ASSERT(idxBufSize <= idxStagingBuf.GetMemorySize());
+    memcpy(pIndexData, s_cpuIndexBuffer.data(), idxBufSize);
+
+    idxStagingBuf.Unmap();
+
+    vkn::AllocationInfo bufAllocInfo = {};
+    bufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    bufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo bufCreateInfo = {};
+    bufCreateInfo.pDevice = &s_vkDevice;
+    bufCreateInfo.size = vertBufSize;
+    bufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufCreateInfo.pAllocInfo = &bufAllocInfo;
+
+    s_vertexBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_vertexBuffer.IsCreated());
+    s_vertexBuffer.SetDebugName("COMMON_VB");
+
+    bufCreateInfo.size = idxBufSize;
+
+    s_indexBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_indexBuffer.IsCreated());
+    s_indexBuffer.SetDebugName("COMMON_IB");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy copyRegion = {};
+        
+        copyRegion.size = vertBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), vertStagingBuf.Get(), s_vertexBuffer.Get(), 1, &copyRegion);
+
+        copyRegion.size = idxBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), idxStagingBuf.Get(), s_indexBuffer.Get(), 1, &copyRegion);
+    });
+
+    vkn::Buffer& meshDataStagingBuf = s_commonStagingBuffers[0];
+
+    COMMON_MESH_INFO* pMeshData = meshDataStagingBuf.Map<COMMON_MESH_INFO>();
+
+    const size_t meshDataBufSize = s_cpuMeshes.size() * sizeof(COMMON_MESH_INFO);
+    CORE_ASSERT(meshDataBufSize <= meshDataStagingBuf.GetMemorySize());
+    
+    for (size_t i = 0; i < s_cpuMeshes.size(); ++i) {
+        const Mesh& cpuMesh = s_cpuMeshes[i];
+
+        pMeshData[i].FIRST_VERTEX = cpuMesh.firstVertex;
+        pMeshData[i].VERTEX_COUNT = cpuMesh.vertexCount;
+        pMeshData[i].FIRST_INDEX  = cpuMesh.firstIndex;
+        pMeshData[i].INDEX_COUNT  = cpuMesh.indexCount;
+        pMeshData[i].BOUNDS_MIN_LCS  = cpuMesh.bounds.min;
+        pMeshData[i].BOUNDS_MAX_LCS  = cpuMesh.bounds.max;
+    }
+
+    meshDataStagingBuf.Unmap();
+
+    bufCreateInfo.size = meshDataBufSize;
+
+    s_commonMeshDataBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_commonMeshDataBuffer.IsCreated());
+    s_commonMeshDataBuffer.SetDebugName("COMMON_MESH_DATA");
+    
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy copyRegion = {};
+        
+        copyRegion.size = meshDataBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), meshDataStagingBuf.Get(), s_commonMeshDataBuffer.Get(), 1, &copyRegion);
+    });
+}
+
+
+static void UploadGPUMaterialData()
+{
+    vkn::Buffer& mtlDataStagingBuf = s_commonStagingBuffers[0];
+
+    COMMON_MATERIAL* pMtlData = mtlDataStagingBuf.Map<COMMON_MATERIAL>();
+
+    const size_t mtlDataBufSize = s_cpuMaterials.size() * sizeof(COMMON_MATERIAL);
+    CORE_ASSERT(mtlDataBufSize <= mtlDataStagingBuf.GetMemorySize());
+
+    for (size_t i = 0; i < s_cpuMaterials.size(); ++i) {
+        pMtlData[i].ALBEDO_TEX_IDX = s_cpuMaterials[i].albedoTexIdx;
+        pMtlData[i].NORMAL_TEX_IDX = s_cpuMaterials[i].normalTexIdx;
+        pMtlData[i].MR_TEX_IDX = s_cpuMaterials[i].metalRoughTexIdx;
+        pMtlData[i].AO_TEX_IDX = s_cpuMaterials[i].aoTexIdx;
+        pMtlData[i].EMISSIVE_TEX_IDX = s_cpuMaterials[i].emissiveTexIdx;
+    }
+
+    mtlDataStagingBuf.Unmap();
+
+    vkn::AllocationInfo bufAllocInfo = {};
+    bufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    bufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo bufCreateInfo = {};
+    bufCreateInfo.pDevice = &s_vkDevice;
+    bufCreateInfo.size = mtlDataBufSize;
+    bufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufCreateInfo.pAllocInfo = &bufAllocInfo;
+
+    s_commonMaterialsBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_commonMaterialsBuffer.IsCreated());
+    s_commonMaterialsBuffer.SetDebugName("COMMON_MTL_DATA");
+    
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy copyRegion = {};
+
+        copyRegion.size = mtlDataBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), mtlDataStagingBuf.Get(), s_commonMaterialsBuffer.Get(), 1, &copyRegion);
+    });
+
+
+    vkn::AllocationInfo texAllocInfo = {};
+    texAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    texAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::ImageCreateInfo texCreateInfo = {};
+
+    texCreateInfo.pDevice = &s_vkDevice;
+    texCreateInfo.type = VK_IMAGE_TYPE_2D;
+    texCreateInfo.extent.width = 1;
+    texCreateInfo.extent.height = 1;
+    texCreateInfo.extent.depth = 1;
+    texCreateInfo.format = VK_FORMAT_R8_UNORM;
+    texCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    texCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    texCreateInfo.mipLevels = 1;
+    texCreateInfo.arrayLayers = 1;
+    texCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    texCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    texCreateInfo.pAllocInfo = &texAllocInfo;
+
+    s_sceneDefaultImage.Create(texCreateInfo);
+    CORE_ASSERT(s_sceneDefaultImage.IsCreated());
+    s_sceneDefaultImage.SetDebugName("DEFAULT_TEX");
+
+    vkn::ImageViewCreateInfo texViewCreateInfo = {};
+
+    texViewCreateInfo.pOwner = &s_sceneDefaultImage;
+    texViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    texViewCreateInfo.format = texCreateInfo.format;
+    texViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    texViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    texViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    texViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    texViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    texViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    texViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    texViewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    texViewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    s_sceneDefaultImageView.Create(texViewCreateInfo);
+    CORE_ASSERT(s_sceneDefaultImageView.IsCreated());
+    s_sceneDefaultImageView.SetDebugName("DEFAULT_TEX_VIEW");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            s_sceneDefaultImage.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    });
+
+    s_sceneImages.resize(s_cpuTexturesData.size());
+    s_sceneImageViews.resize(s_cpuTexturesData.size());
+
+    for (size_t i = 0; i < s_cpuTexturesData.size(); i += 2) {
+        for (size_t j = 0; j < 2; ++j) {
+            const size_t index = i + j;
+
+            const TextureLoadData& cpuTexData = s_cpuTexturesData[index];
+            texCreateInfo.extent.width = cpuTexData.GetWidth();
+            texCreateInfo.extent.height = cpuTexData.GetHeight();
+            texCreateInfo.extent.depth = 1;
+            texCreateInfo.format = cpuTexData.format;
+
+            s_sceneImages[index].Create(texCreateInfo);
+            CORE_ASSERT(s_sceneImages[index].IsCreated());
+        #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+            s_sceneImages[index].SetDebugName(cpuTexData.name.data());
+        #endif
+
+            vkn::Buffer& texStagingBuffer = s_commonStagingBuffers[j];
+
+            void* pTexData = texStagingBuffer.Map(0, VK_WHOLE_SIZE);
+
+            const size_t texDataSize = cpuTexData.GetTexSize();
+            CORE_ASSERT(texDataSize <= texStagingBuffer.GetMemorySize());
+
+            memcpy(pTexData, cpuTexData.GetData(), texDataSize);
+
+            texStagingBuffer.Unmap();
+        }
+
+        ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+            for (size_t j = 0; j < 2; ++j) {
+                const size_t index = i + j;
+
+                CmdPipelineImageBarrier(
+                    cmdBuffer,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_NONE,
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_NONE,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    s_sceneImages[index].Get(),
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                );
+
+                VkCopyBufferToImageInfo2 copyInfo = {};
+
+                copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+                copyInfo.srcBuffer = s_commonStagingBuffers[j].Get();
+                copyInfo.dstImage = s_sceneImages[index].Get();
+                copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                copyInfo.regionCount = 1;
+
+                VkBufferImageCopy2 texRegion = {};
+
+                texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+                texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                texRegion.imageSubresource.mipLevel = 0;
+                texRegion.imageSubresource.baseArrayLayer = 0;
+                texRegion.imageSubresource.layerCount = 1;
+                texRegion.imageExtent = s_sceneImages[index].GetSize();
+
+                copyInfo.pRegions = &texRegion;
+
+                vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+
+                CmdPipelineImageBarrier(
+                    cmdBuffer,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_2_SHADER_READ_BIT,
+                    s_sceneImages[index].Get(),
+                    VK_IMAGE_ASPECT_COLOR_BIT
+                );
+            }
+        });
+    }
+}
+
+
+static void UploadGPUTransformData()
+{
+    vkn::Buffer& trsDataStagingBuf = s_commonStagingBuffers[0];
+
+    COMMON_TRANSFORM* pTrsData = trsDataStagingBuf.Map<COMMON_TRANSFORM>();
+
+    const size_t trsDataBufSize = s_cpuTransforms.size() * sizeof(COMMON_TRANSFORM);
+    CORE_ASSERT(trsDataBufSize <= trsDataStagingBuf.GetMemorySize());
+
+    for (size_t i = 0; i < s_cpuTransforms.size(); ++i) {
+        for (size_t j = 0; j < _countof(COMMON_TRANSFORM::MATR); ++j) {
+            pTrsData[i].MATR[j] = s_cpuTransforms[i][j];
+        }
+    }
+
+    trsDataStagingBuf.Unmap();
+
+    vkn::AllocationInfo bufAllocInfo = {};
+    bufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    bufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo bufCreateInfo = {};
+    bufCreateInfo.pDevice = &s_vkDevice;
+    bufCreateInfo.size = trsDataBufSize;
+    bufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufCreateInfo.pAllocInfo = &bufAllocInfo;
+
+    s_commonTransformsBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
+    s_commonTransformsBuffer.SetDebugName("COMMON_TRS_DATA");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy bufferRegion = {};
+        
+        bufferRegion.size = trsDataBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), trsDataStagingBuf.Get(), s_commonTransformsBuffer.Get(), 1, &bufferRegion);
+    });
+}
+
+
+static void UploadGPUInstData()
+{
+    vkn::Buffer& instDataStagingBuf = s_commonStagingBuffers[0];
+
+    COMMON_INST_INFO* pInstData = instDataStagingBuf.Map<COMMON_INST_INFO>();
+
+    const size_t instDataBufSize = s_cpuDIPs.size() * sizeof(COMMON_INST_INFO);
+    CORE_ASSERT(instDataBufSize <= instDataStagingBuf.GetMemorySize());
+
+    auto FindTrsIndex = [](size_t dipIdx)
+    {
+        for (size_t nodeIdx = 0; nodeIdx < s_cpuSceneNodes.size(); ++nodeIdx) {
+            const SceneNode& node = s_cpuSceneNodes[nodeIdx];
+
+            if (node.dipGroupIdx >= 0) {
+                const DIPGroup& dipGroup = s_cpuDIPGroups[node.dipGroupIdx];
+
+                if (dipIdx >= dipGroup.firstDIP && dipIdx < dipGroup.firstDIP + dipGroup.dipCount) {
+                    return node.trsIdx;
+                }
+            }
+        }
+
+        return -1;
+    };
+
+    for (size_t i = 0; i < s_cpuDIPs.size(); ++i) {
+        pInstData[i].TRANSFORM_IDX = FindTrsIndex(i);
+        CORE_ASSERT(pInstData[i].TRANSFORM_IDX >= 0);
+
+        pInstData[i].MESH_IDX = s_cpuDIPs[i].meshIdx;
+        pInstData[i].MATERIAL_IDX = s_cpuDIPs[i].mtlIdx;
+    }
+
+    instDataStagingBuf.Unmap();
+
+    vkn::AllocationInfo bufAllocInfo = {};
+    bufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    bufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo bufCreateInfo = {};
+    bufCreateInfo.pDevice = &s_vkDevice;
+    bufCreateInfo.size = instDataBufSize;
+    bufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bufCreateInfo.pAllocInfo = &bufAllocInfo;
+
+    s_commonInstDataBuffer.Create(bufCreateInfo);
+    CORE_ASSERT(s_commonInstDataBuffer.IsCreated());
+    s_commonInstDataBuffer.SetDebugName("COMMON_INST_DATA");
+    
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy copyRegion = {};
+
+        copyRegion.size = instDataBufSize;
+        vkCmdCopyBuffer(cmdBuffer.Get(), instDataStagingBuf.Get(), s_commonInstDataBuffer.Get(), 1, &copyRegion);
+    });
+}
+
+
+static void UploadGPUResources()
+{
+    UploadGPUMeshData();
+    UploadGPUMaterialData();
+    UploadGPUTransformData();
+    UploadGPUInstData();
+}
+
+
+static void LoadScene(const fs::path& filepath)
+{
+    const std::string strPath = filepath.string();
+
+    if (!fs::exists(filepath)) {
+		CORE_ASSERT_FAIL("Unknown scene path: %s", strPath.c_str());
+		return;
+	}
+
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", 255, 50, 255, 255);
+    
+    CORE_LOG_TRACE("Loading \"%s\"...", strPath.c_str());
+
+    Timer timer;
+
+    static constexpr gltf::Extensions requiredExtensions =
+        gltf::Extensions::KHR_mesh_quantization |
+        gltf::Extensions::KHR_texture_transform |
+        gltf::Extensions::KHR_materials_variants;
+
+    gltf::Parser parser(requiredExtensions);
+
+    constexpr gltf::Options options =
+        gltf::Options::DontRequireValidAssetMember |
+        gltf::Options::LoadExternalBuffers |
+        gltf::Options::GenerateMeshIndices;
+
+    gltf::Expected<gltf::MappedGltfFile> gltfFile = gltf::MappedGltfFile::FromPath(filepath);
+    if (!gltfFile) {
+        CORE_ASSERT_FAIL("Failed to open glTF file: %s", gltf::getErrorMessage(gltfFile.error()).data());
+        return;
+    }
+
+    gltf::Expected<gltf::Asset> asset = parser.loadGltf(gltfFile.get(), filepath.parent_path(), options);
+    if (asset.error() != gltf::Error::None) {
+        CORE_ASSERT_FAIL("Failed to load glTF: : %s", gltf::getErrorMessage(asset.error()).data());
+        return;
+    }
+
+    
+    LoadSceneMeshData(asset.get());
+    LoadSceneNodes(asset.get());
+
+    LoadSceneTexturesData(asset.get(), filepath.parent_path());
+    LoadSceneMaterials(asset.get());
+    
+    UploadGPUResources();
+
+    s_cpuTexturesData = {};
+
+    CORE_LOG_INFO("FastGLTF: \"%s\" loading finished: %f ms", strPath.c_str(), timer.End().GetDuration<float, std::milli>());
+}
+#endif
 
 
 void UpdateCommonConstBuffer()
@@ -2515,7 +3389,7 @@ void PresentImage(uint32_t imageIndex)
     ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", 50, 50, 255, 255);
     
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
-    VkSemaphore vkWaitSemaphore = s_vkRenderingFinishedSemaphores[imageIndex].Get();
+    VkSemaphore vkWaitSemaphore = s_renderFinishedSemaphores[imageIndex].Get();
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2540,16 +3414,16 @@ void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipeline);
     
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipelineLayout, 0, 1, &s_commonDescriptorSet, 0, nullptr);
 
     BASE_CULLING_BINDLESS_REGISTRY registry = {};
-    registry.INST_COUNT = s_sceneInstInfos.size();
+    registry.INST_COUNT = s_cpuDIPs.size();
 
-    vkCmdPushConstants(cmdBuffer.Get(), s_vkBaseCullingPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
+    vkCmdPushConstants(cmdBuffer.Get(), s_baseCullingPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
 
-    vkCmdDispatch(cmdBuffer.Get(), (s_sceneInstInfos.size() + 63) / 64, 1, 1);
+    vkCmdDispatch(cmdBuffer.Get(), (s_cpuDIPs.size() + 63) / 64, 1, 1);
 
     CmdPipelineBufferBarrier(
         cmdBuffer, 
@@ -2575,32 +3449,32 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 {
     ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
 
-    const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[instInfo.MESH_IDX];
+    // const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[instInfo.MESH_IDX];
     
-    glm::vec3 aabbMin = mesh.BOUNDS_MIN_LCS;
-    glm::vec3 aabbMax = mesh.BOUNDS_MAX_LCS;
+    // glm::vec3 aabbMin = mesh.BOUNDS_MIN_LCS;
+    // glm::vec3 aabbMax = mesh.BOUNDS_MAX_LCS;
 
-    const COMMON_TRANSFORM& trs = s_sceneTransforms[instInfo.TRANSFORM_IDX];
-    const glm::mat3x4 wMatr = glm::mat3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
+    // const COMMON_TRANSFORM& trs = s_sceneTransforms[instInfo.TRANSFORM_IDX];
+    // const glm::mat3x4 wMatr = glm::mat3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
 
-    const glm::vec3 newMin(glm::vec4(aabbMin, 1.f) * wMatr);
-    const glm::vec3 newMax(glm::vec4(aabbMax, 1.f) * wMatr);
+    // const glm::vec3 newMin(glm::vec4(aabbMin, 1.f) * wMatr);
+    // const glm::vec3 newMax(glm::vec4(aabbMax, 1.f) * wMatr);
 
-    aabbMin = glm::min(newMin, newMax);
-    aabbMax = glm::max(newMin, newMax);
+    // aabbMin = glm::min(newMin, newMax);
+    // aabbMax = glm::max(newMin, newMax);
 
-    const math::Frustum& frustum = s_camera.GetFrustum();
+    // const math::Frustum& frustum = s_camera.GetFrustum();
 
-    float minDot = FLT_MAX, maxDot = -FLT_MAX;
+    // float minDot = FLT_MAX, maxDot = -FLT_MAX;
 
-    for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
-        minDot = glm::dot(aabbMin, frustum.planes[i].normal) + frustum.planes[i].distance;
-        maxDot = glm::dot(aabbMax, frustum.planes[i].normal) + frustum.planes[i].distance;
+    // for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
+    //     minDot = glm::dot(aabbMin, frustum.planes[i].normal) + frustum.planes[i].distance;
+    //     maxDot = glm::dot(aabbMax, frustum.planes[i].normal) + frustum.planes[i].distance;
 
-        if (minDot < 0.f && maxDot < 0.f) {
-            return false;
-        }
-    }
+    //     if (minDot < 0.f && maxDot < 0.f) {
+    //         return false;
+    //     }
+    // }
 
     return true;
 }
@@ -2621,9 +3495,9 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     scissor.extent = extent;
     cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_basePipeline);
     
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_basePipelineLayout, 0, 1, &s_commonDescriptorSet, 0, nullptr);
 
     cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -2635,25 +3509,25 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 
         s_dbgDrawnMeshCount = 0;
 
-        for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
-            if (s_useMeshCulling) {
-                if (!IsInstVisible(s_sceneInstInfos[i])) {
-                    continue;
-                }
-            }
+    //     for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
+    //         if (s_useMeshCulling) {
+    //             if (!IsInstVisible(s_sceneInstInfos[i])) {
+    //                 continue;
+    //             }
+    //         }
 
-            ++s_dbgDrawnMeshCount;
+    //         ++s_dbgDrawnMeshCount;
 
-            registry.INST_INFO_IDX = i;
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+    //         registry.INST_INFO_IDX = i;
+    //         vkCmdPushConstants(cmdBuffer.Get(), s_basePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
 
-            const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
-            cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
-        }
+    //         // const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
+    //         // cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
+    //     }
     } else 
 #endif
     {
-        vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+        vkCmdPushConstants(cmdBuffer.Get(), s_basePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
 
         cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(BASE_INDIRECT_DRAW_CMD));
     }
@@ -2664,7 +3538,7 @@ void RenderScene()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", 255, 255, 50, 255);
 
-    vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
+    vkn::Fence& renderingFinishedFence = s_renderFinishedFence;
 
     const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (fenceStatus == VK_NOT_READY) {
@@ -2676,7 +3550,7 @@ void RenderScene()
 
     UpdateCommonConstBuffer();
 
-    vkn::Semaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphore;
+    vkn::Semaphore& presentFinishedSemaphore = s_presentFinishedSemaphore;
 
     uint32_t nextImageIdx;
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
@@ -2689,8 +3563,8 @@ void RenderScene()
         return;
     }
 
-    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[nextImageIdx];
-    vkn::CmdBuffer& cmdBuffer = s_vkRenderCmdBuffer;
+    vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[nextImageIdx];
+    vkn::CmdBuffer& cmdBuffer = s_renderCmdBuffer;
 
     cmdBuffer.Reset();
 
@@ -2726,7 +3600,7 @@ void RenderScene()
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            s_vkDepthImage.Get(),
+            s_depthRT.Get(),
             VK_IMAGE_ASPECT_DEPTH_BIT
         );
 
@@ -2751,7 +3625,7 @@ void RenderScene()
 
         VkRenderingAttachmentInfo depthAttachment = {};
         depthAttachment.sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = s_vkDepthImageView.Get();
+        depthAttachment.imageView = s_depthRTView.Get();
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -2981,6 +3855,10 @@ void ProcessFrame()
 
 int main(int argc, char* argv[])
 {
+#ifdef FREEIMAGE_LIB
+    FreeImage_Initialise();
+#endif
+
     wndSysInit();
     s_pWnd = wndSysGetMainWindow();
 
@@ -3026,60 +3904,62 @@ int main(int argc, char* argv[])
     vkCmdPoolCI.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
     vkCmdPoolCI.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
-    s_vkCmdPool.Create(vkCmdPoolCI);
-    CORE_ASSERT(s_vkCmdPool.IsCreated());
-    s_vkCmdPool.SetDebugName("COMMON_CMD_POOL");
+    s_cmdPool.Create(vkCmdPoolCI);
+    CORE_ASSERT(s_cmdPool.IsCreated());
+    s_cmdPool.SetDebugName("COMMON_CMD_POOL");
     
-    s_vkImmediateSubmitCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_vkImmediateSubmitCmdBuffer.IsCreated());
-    s_vkImmediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
+    s_immediateSubmitCmdBuffer = s_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_immediateSubmitCmdBuffer.IsCreated());
+    s_immediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
 
-    s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
+    s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 
     vkn::QueryCreateInfo queryCI = {};
     queryCI.pDevice = &s_vkDevice;
     queryCI.queryType = VK_QUERY_TYPE_TIMESTAMP;
     queryCI.queryCount = 128;
 
-    s_vkQueryPool.Create(queryCI);
-    CORE_ASSERT(s_vkQueryPool.IsCreated());
-    s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
+    s_queryPool.Create(queryCI);
+    CORE_ASSERT(s_queryPool.IsCreated());
+    s_queryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdResetQueryPool(s_vkQueryPool);
+        cmdBuffer.CmdResetQueryPool(s_queryPool);
     });
 
-    s_vkCommonDescriptorPool = CreateVkCommonDescriptorPool(s_vkDevice.Get());
-    s_vkCommonDescriptorSetLayout = CreateVkCommonDescriptorSetLayout(s_vkDevice.Get());
-    s_vkCommonDescriptorSet = CreateVkCommonDescriptorSet(s_vkDevice.Get(), s_vkCommonDescriptorPool, s_vkCommonDescriptorSetLayout);
+    CreateCommonStagingBuffers();
 
-    s_vkBasePipelineLayout = CreateVkBasePipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
-    s_vkBasePipeline = CreateVkBasePipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
+    s_commonDescriptorPool = CreateVkCommonDescriptorPool(s_vkDevice.Get());
+    s_commonDescriptorSetLayout = CreateVkCommonDescriptorSetLayout(s_vkDevice.Get());
+    s_commonDescriptorSet = CreateVkCommonDescriptorSet(s_vkDevice.Get(), s_commonDescriptorPool, s_commonDescriptorSetLayout);
 
-    s_vkBaseCullingPipelineLayout = CreateVkBaseCullingPipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
-    s_vkBaseCullingPipeline = CreateVkBaseCullingPipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base_culling.cs.spv");
+    s_basePipelineLayout = CreateVkBasePipelineLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout);
+    s_basePipeline = CreateVkBasePipeline(s_vkDevice.Get(), s_basePipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
+
+    s_baseCullingPipelineLayout = CreateVkBaseCullingPipelineLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout);
+    s_baseCullingPipeline = CreateVkBaseCullingPipeline(s_vkDevice.Get(), s_basePipelineLayout, "shaders/bin/base_culling.cs.spv");
 
     const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
 
-    s_vkRenderingFinishedSemaphores.resize(swapchainImageCount);
+    s_renderFinishedSemaphores.resize(swapchainImageCount);
     for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
-        CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
+        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
+        CORE_ASSERT(s_renderFinishedSemaphores[i].IsCreated());
 
-        s_vkRenderingFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
+        s_renderFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
     }
 
-    s_vkPresentFinishedSemaphore.Create(&s_vkDevice);
-    CORE_ASSERT(s_vkPresentFinishedSemaphore.IsCreated());
-    s_vkPresentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
+    s_presentFinishedSemaphore.Create(&s_vkDevice);
+    CORE_ASSERT(s_presentFinishedSemaphore.IsCreated());
+    s_presentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
 
-    s_vkRenderingFinishedFence.Create(&s_vkDevice);
-    CORE_ASSERT(s_vkRenderingFinishedFence.IsCreated());
-    s_vkRenderingFinishedFence.SetDebugName("RND_FINISH_FENCE");
+    s_renderFinishedFence.Create(&s_vkDevice);
+    CORE_ASSERT(s_renderFinishedFence.IsCreated());
+    s_renderFinishedFence.SetDebugName("RND_FINISH_FENCE");
     
-    s_vkRenderCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_vkRenderCmdBuffer.IsCreated());
-    s_vkRenderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
+    s_renderCmdBuffer = s_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_renderCmdBuffer.IsCreated());
+    s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     CreateDepthRT();
     CreateCommonSamplers();
@@ -3087,6 +3967,20 @@ int main(int argc, char* argv[])
     LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
 
     CreateVkIndirectDrawBuffers();
+
+    vkn::AllocationInfo commonConstBufAI = {};
+    commonConstBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    commonConstBufAI.usage = VMA_MEMORY_USAGE_AUTO;
+    
+    vkn::BufferCreateInfo commonConstBufCI = {};
+    commonConstBufCI.pDevice = &s_vkDevice;
+    commonConstBufCI.size = sizeof(COMMON_CB_DATA);
+    commonConstBufCI.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonConstBufCI.pAllocInfo = &commonConstBufAI;
+
+    s_commonConstBuffer.Create(commonConstBufCI); 
+    CORE_ASSERT(s_commonConstBuffer.IsCreated());
+    s_commonConstBuffer.SetDebugName("COMMON_CB");
 
     WriteDescriptorSet();
 
@@ -3103,18 +3997,22 @@ int main(int argc, char* argv[])
     s_vkDevice.WaitIdle();
 
     
-    vkDestroyPipeline(s_vkDevice.Get(), s_vkBaseCullingPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBaseCullingPipelineLayout, nullptr);
-    vkDestroyPipeline(s_vkDevice.Get(), s_vkBasePipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBasePipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkCommonDescriptorPool, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_baseCullingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_baseCullingPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_basePipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_basePipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorPool, nullptr);
 
     DbgUI::Terminate();
 
     s_pWnd->Destroy();
 
     wndSysTerminate();
+
+#ifdef FREEIMAGE_LIB
+    FreeImage_DeInitialise();
+#endif
 
     return 0;
 }

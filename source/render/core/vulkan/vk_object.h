@@ -13,6 +13,9 @@ namespace vkn
     class Object
     {
     public:
+        static inline constexpr size_t MAX_OBJ_DBG_NAME_LENGTH = 60;
+
+    public:
         Object() = default;
         ~Object();
 
@@ -52,8 +55,6 @@ namespace vkn
 
     private:
     #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        static inline constexpr size_t MAX_OBJ_DBG_NAME_LENGTH = 60;
-
         std::array<char, MAX_OBJ_DBG_NAME_LENGTH> m_debugName = {};
     #endif
 
