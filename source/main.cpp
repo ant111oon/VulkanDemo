@@ -44,7 +44,7 @@
 namespace fs = std::filesystem;
 namespace gltf = tinygltf;
 
-using VertexIndexType = uint32_t;
+using IndexType = uint32_t;
 
 
 struct Vertex
@@ -318,9 +318,11 @@ static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 9;
 
 static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
 
-static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 2048;
+static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
-static constexpr size_t MAX_VERTEX_COUNT = 512 * 1024;
+static constexpr size_t TEXTURE_RGBA8_MAX_SIZE = 4096 * 4096 * 4 * sizeof(uint8_t);
+static constexpr size_t STAGING_BUFFER_SIZE    = TEXTURE_RGBA8_MAX_SIZE;
+static constexpr size_t STAGING_BUFFER_COUNT   = 2;
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -341,55 +343,57 @@ static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
 
 static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
-static vkn::CmdPool   s_vkCmdPool;
-static vkn::CmdBuffer s_vkImmediateSubmitCmdBuffer;
+static vkn::CmdPool   s_commonCmdPool;
 
-static VkDescriptorPool      s_vkCommonDescriptorPool = VK_NULL_HANDLE;
-static VkDescriptorSet       s_vkCommonDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_vkCommonDescriptorSetLayout = VK_NULL_HANDLE;
+static vkn::CmdBuffer s_immediateSubmitCmdBuffer;
+static vkn::Fence s_immediateSubmitFinishedFence;
 
-static VkPipelineLayout s_vkBasePipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_vkBasePipeline = VK_NULL_HANDLE;
+static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
+static vkn::Semaphore s_presentFinishedSemaphore;
+static vkn::Fence     s_renderFinishedFence;
+static vkn::CmdBuffer s_renderCmdBuffer;
 
-static VkPipelineLayout s_vkBaseCullingPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_vkBaseCullingPipeline = VK_NULL_HANDLE;
+static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 
-static std::vector<vkn::Semaphore> s_vkRenderingFinishedSemaphores;
-static vkn::Semaphore s_vkPresentFinishedSemaphore;
-static vkn::Fence     s_vkRenderingFinishedFence;
-static vkn::CmdBuffer s_vkRenderCmdBuffer;
+static VkDescriptorPool      s_commonDescriptorPool = VK_NULL_HANDLE;
+static VkDescriptorSet       s_commonDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_commonDescriptorSetLayout = VK_NULL_HANDLE;
 
-static vkn::Fence s_vkImmediateSubmitFinishedFence;
+static VkPipelineLayout s_baseRenderPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_baseRenderPipeline = VK_NULL_HANDLE;
 
-static vkn::Image     s_vkDepthImage;
-static vkn::ImageView s_vkDepthImageView;
+static VkPipelineLayout s_baseCullingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_baseCullingPipeline = VK_NULL_HANDLE;
+
+static vkn::Image     s_depthRT;
+static vkn::ImageView s_depthRTView;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
 
-static vkn::Buffer s_commonMeshInfosBuffer;
-static vkn::Buffer s_commonMaterialsBuffer;
-static vkn::Buffer s_commonTransformsBuffer;
-static vkn::Buffer s_commonInstInfosBuffer;
+static vkn::Buffer s_commonMeshDataBuffer;
+static vkn::Buffer s_commonMaterialDataBuffer;
+static vkn::Buffer s_commonTransformDataBuffer;
+static vkn::Buffer s_commonInstDataBuffer;
 
 static vkn::Buffer s_drawIndirectCommandsBuffer;
 static vkn::Buffer s_drawIndirectCommandsCountBuffer;
 
-static vkn::QueryPool s_vkQueryPool;
+static vkn::QueryPool s_commonQueryPool;
 
-static std::vector<COMMON_MESH_INFO> s_sceneMeshInfos;
-static std::vector<COMMON_MATERIAL>  s_sceneMaterials;
-static std::vector<COMMON_TRANSFORM> s_sceneTransforms;
-static std::vector<COMMON_INST_INFO> s_sceneInstInfos;
+static std::vector<COMMON_MESH_INFO> s_cpuMeshData;
+static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
+static std::vector<COMMON_TRANSFORM> s_cpuTransformData;
+static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
 static std::vector<vkn::Image>     s_sceneImages;
 static std::vector<vkn::ImageView> s_sceneImageViews;
 static std::vector<vkn::Sampler>   s_commonSamplers;
 
-static vkn::Image     s_sceneDefaultImage;
-static vkn::ImageView s_sceneDefaultImageView;
+static vkn::Image     s_commonGreyImage;
+static vkn::ImageView s_commonGreyImageView;
 
 static eng::Camera s_camera;
 static glm::vec3 s_cameraVel = M3D_ZEROF3;
@@ -411,115 +415,6 @@ static size_t s_dbgDrawnMeshCount = 0;
 
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-
-namespace tinygltf
-{
-    static constexpr VkFormat GetImageVkFormatR(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat  GetImageVkFormatRG(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormatRGB(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormatRGBA(uint32_t pixelType, bool isSRGB)
-    {
-        if (isSRGB) {
-            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
-                "If texture is in sRGB, it must be 8-bit per component");
-        }
-    
-        switch (pixelType) {
-            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
-            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
-            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
-            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
-            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
-        return VK_FORMAT_UNDEFINED;
-    }
-    
-    
-    static constexpr VkFormat GetImageVkFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
-    {
-        switch (component) {
-            case 1: return GetImageVkFormatR(pixelType, isSRGB);
-            case 2: return GetImageVkFormatRG(pixelType, isSRGB);
-            case 3: return GetImageVkFormatRGB(pixelType, isSRGB);
-            case 4: return GetImageVkFormatRGBA(pixelType, isSRGB);
-        }
-    
-        CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
-        return VK_FORMAT_UNDEFINED;
-    }
-}
 
 
 namespace DbgUI
@@ -549,34 +444,34 @@ namespace DbgUI
         };
     #endif
 
-        ImGui_ImplVulkan_InitInfo imGuiVkInitInfo = {};
-        imGuiVkInitInfo.ApiVersion = s_vkInstance.GetApiVersion();
-        imGuiVkInitInfo.Instance = s_vkInstance.Get();
-        imGuiVkInitInfo.PhysicalDevice = s_vkPhysDevice.Get();
-        imGuiVkInitInfo.Device = s_vkDevice.Get();
-        imGuiVkInitInfo.QueueFamily = s_vkDevice.GetQueueFamilyIndex();
-        imGuiVkInitInfo.Queue = s_vkDevice.GetQueue();
-        imGuiVkInitInfo.DescriptorPoolSize = 1000;
-        imGuiVkInitInfo.MinImageCount = 2;
-        imGuiVkInitInfo.ImageCount = s_vkSwapchain.GetImageCount();
-        imGuiVkInitInfo.PipelineCache = VK_NULL_HANDLE;
+        ImGui_ImplVulkan_InitInfo imGuiInitInfo = {};
+        imGuiInitInfo.ApiVersion = s_vkInstance.GetApiVersion();
+        imGuiInitInfo.Instance = s_vkInstance.Get();
+        imGuiInitInfo.PhysicalDevice = s_vkPhysDevice.Get();
+        imGuiInitInfo.Device = s_vkDevice.Get();
+        imGuiInitInfo.QueueFamily = s_vkDevice.GetQueueFamilyIndex();
+        imGuiInitInfo.Queue = s_vkDevice.GetQueue();
+        imGuiInitInfo.DescriptorPoolSize = 1000;
+        imGuiInitInfo.MinImageCount = 2;
+        imGuiInitInfo.ImageCount = s_vkSwapchain.GetImageCount();
+        imGuiInitInfo.PipelineCache = VK_NULL_HANDLE;
 
-        imGuiVkInitInfo.UseDynamicRendering = true;
-        imGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // 0 defaults to VK_SAMPLE_COUNT_1_BIT
+        imGuiInitInfo.UseDynamicRendering = true;
+        imGuiInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // 0 defaults to VK_SAMPLE_COUNT_1_BIT
     #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
         
         const VkFormat swapchainFormat = s_vkSwapchain.GetImageFormat();
-        imGuiVkInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainFormat;
+        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainFormat;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
     #endif
-        imGuiVkInitInfo.CheckVkResultFn = [](VkResult error) { VK_CHECK(error); };
-        imGuiVkInitInfo.MinAllocationSize = 1024 * 1024;
+        imGuiInitInfo.CheckVkResultFn = [](VkResult error) { VK_CHECK(error); };
+        imGuiInitInfo.MinAllocationSize = 1024 * 1024;
 
-        if (!ImGui_ImplVulkan_Init(&imGuiVkInitInfo)) {
+        if (!ImGui_ImplVulkan_Init(&imGuiInitInfo)) {
             CORE_ASSERT_FAIL("Failed to initialize ImGui Vulkan part");
         }
 
@@ -728,11 +623,11 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 
 static constexpr VkIndexType GetVkIndexType()
 {
-    static_assert(std::is_same_v<VertexIndexType, uint8_t> || std::is_same_v<VertexIndexType, uint16_t> || std::is_same_v<VertexIndexType, uint32_t>);
+    static_assert(std::is_same_v<IndexType, uint8_t> || std::is_same_v<IndexType, uint16_t> || std::is_same_v<IndexType, uint32_t>);
 
-    if constexpr (std::is_same_v<VertexIndexType, uint8_t>) {
+    if constexpr (std::is_same_v<IndexType, uint8_t>) {
         return VK_INDEX_TYPE_UINT8;
-    } else if constexpr (std::is_same_v<VertexIndexType, uint16_t>) {
+    } else if constexpr (std::is_same_v<IndexType, uint16_t>) {
         return VK_INDEX_TYPE_UINT16;
     } else {
         return VK_INDEX_TYPE_UINT32;
@@ -743,52 +638,52 @@ static constexpr VkIndexType GetVkIndexType()
 template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 {   
-    s_vkImmediateSubmitFinishedFence.Reset();
-    s_vkImmediateSubmitCmdBuffer.Reset();
+    s_immediateSubmitFinishedFence.Reset();
+    s_immediateSubmitCmdBuffer.Reset();
 
     VkCommandBufferBeginInfo cmdBI = {};
     cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    s_vkImmediateSubmitCmdBuffer.Begin(cmdBI);
-        func(s_vkImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    s_vkImmediateSubmitCmdBuffer.End();
+    s_immediateSubmitCmdBuffer.Begin(cmdBI);
+        func(s_immediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    s_immediateSubmitCmdBuffer.End();
 
     SubmitVkQueue(
         vkQueue, 
-        s_vkImmediateSubmitCmdBuffer.Get(), 
-        s_vkImmediateSubmitFinishedFence.Get(), 
+        s_immediateSubmitCmdBuffer.Get(), 
+        s_immediateSubmitFinishedFence.Get(), 
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE,
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    s_vkImmediateSubmitFinishedFence.WaitFor(10'000'000'000);
+    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
 }
 
 
 static void CreateVkInstance()
 {
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkn::InstanceDebugMessengerCreateInfo vkDbgMessengerCI = {};
-    vkDbgMessengerCI.messageType = 
+    vkn::InstanceDebugMessengerCreateInfo dbgMessengerCreateInfo = {};
+    dbgMessengerCreateInfo.messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    vkDbgMessengerCI.messageSeverity = 
+    dbgMessengerCreateInfo.messageSeverity = 
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    vkDbgMessengerCI.pMessageCallback = DbgVkMessageCallback;
+    dbgMessengerCreateInfo.pMessageCallback = DbgVkMessageCallback;
 
-    constexpr std::array vkInstLayers = {
+    constexpr std::array instLayers = {
         "VK_LAYER_KHRONOS_validation",
     };
 #endif
 
-    constexpr std::array vkInstExtensions = {
+    constexpr std::array instExtensions = {
     #ifdef ENG_VK_DEBUG_UTILS_ENABLED
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
     #endif
@@ -799,69 +694,69 @@ static void CreateVkInstance()
     #endif
     };
 
-    vkn::InstanceCreateInfo vkInstCI = {};
-    vkInstCI.pApplicationName = APP_NAME;
-    vkInstCI.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCI.pEngineName = "VkEngine";
-    vkInstCI.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    vkInstCI.apiVersion = VK_API_VERSION_1_3;
-    vkInstCI.extensions = vkInstExtensions;
+    vkn::InstanceCreateInfo instCreateInfo = {};
+    instCreateInfo.pApplicationName = APP_NAME;
+    instCreateInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    instCreateInfo.pEngineName = "VkEngine";
+    instCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    instCreateInfo.apiVersion = VK_API_VERSION_1_3;
+    instCreateInfo.extensions = instExtensions;
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
-    vkInstCI.layers = vkInstLayers;
-    vkInstCI.pDbgMessengerCreateInfo = &vkDbgMessengerCI;
+    instCreateInfo.layers = instLayers;
+    instCreateInfo.pDbgMessengerCreateInfo = &dbgMessengerCreateInfo;
 #endif
 
-    s_vkInstance.Create(vkInstCI); 
+    s_vkInstance.Create(instCreateInfo); 
     CORE_ASSERT(s_vkInstance.IsCreated());
 }
 
 
 static void CreateVkSwapchain()
 {
-    vkn::SwapchainCreateInfo vkSwapchainCI = {};
-    vkSwapchainCI.pDevice = &s_vkDevice;
-    vkSwapchainCI.pSurface = &s_vkSurface;
+    vkn::SwapchainCreateInfo swapchainCreateInfo = {};
+    swapchainCreateInfo.pDevice = &s_vkDevice;
+    swapchainCreateInfo.pSurface = &s_vkSurface;
 
-    vkSwapchainCI.width = s_pWnd->GetWidth();
-    vkSwapchainCI.height = s_pWnd->GetHeight();
+    swapchainCreateInfo.width = s_pWnd->GetWidth();
+    swapchainCreateInfo.height = s_pWnd->GetHeight();
 
-    vkSwapchainCI.minImageCount    = 2;
-    vkSwapchainCI.imageFormat      = VK_FORMAT_B8G8R8A8_SRGB;
-    vkSwapchainCI.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    vkSwapchainCI.imageArrayLayers = 1u;
-    vkSwapchainCI.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    vkSwapchainCI.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    vkSwapchainCI.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    vkSwapchainCI.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    swapchainCreateInfo.minImageCount    = 2;
+    swapchainCreateInfo.imageFormat      = VK_FORMAT_B8G8R8A8_SRGB;
+    swapchainCreateInfo.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    swapchainCreateInfo.imageArrayLayers = 1u;
+    swapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    swapchainCreateInfo.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    swapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
-    s_vkSwapchain.Create(vkSwapchainCI);
+    s_vkSwapchain.Create(swapchainCreateInfo);
     CORE_ASSERT(s_vkSwapchain.IsCreated());
 }
 
 
 static void CreateVkPhysAndLogicalDevices()
 {
-    vkn::PhysicalDeviceFeaturesRequirenments vkPhysDeviceFeturesReq = {};
-    vkPhysDeviceFeturesReq.independentBlend = true;
-    vkPhysDeviceFeturesReq.descriptorBindingPartiallyBound = true;
-    vkPhysDeviceFeturesReq.runtimeDescriptorArray = true;
-    vkPhysDeviceFeturesReq.samplerAnisotropy = true;
-    vkPhysDeviceFeturesReq.samplerMirrorClampToEdge = true;
-    vkPhysDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
+    vkn::PhysicalDeviceFeaturesRequirenments physDeviceFeturesReq = {};
+    physDeviceFeturesReq.independentBlend = true;
+    physDeviceFeturesReq.descriptorBindingPartiallyBound = true;
+    physDeviceFeturesReq.runtimeDescriptorArray = true;
+    physDeviceFeturesReq.samplerAnisotropy = true;
+    physDeviceFeturesReq.samplerMirrorClampToEdge = true;
+    physDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
 
-    vkn::PhysicalDevicePropertiesRequirenments vkPhysDevicePropsReq = {};
-    vkPhysDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    vkn::PhysicalDevicePropertiesRequirenments physDevicePropsReq = {};
+    physDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 
-    vkn::PhysicalDeviceCreateInfo vkPhysDeviceCI = {};
-    vkPhysDeviceCI.pInstance = &s_vkInstance;
-    vkPhysDeviceCI.pPropertiesRequirenments = &vkPhysDevicePropsReq;
-    vkPhysDeviceCI.pFeaturesRequirenments = &vkPhysDeviceFeturesReq;
+    vkn::PhysicalDeviceCreateInfo physDeviceCreateInfo = {};
+    physDeviceCreateInfo.pInstance = &s_vkInstance;
+    physDeviceCreateInfo.pPropertiesRequirenments = &physDevicePropsReq;
+    physDeviceCreateInfo.pFeaturesRequirenments = &physDeviceFeturesReq;
 
-    s_vkPhysDevice.Create(vkPhysDeviceCI);
+    s_vkPhysDevice.Create(physDeviceCreateInfo);
     CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
 
 
-    constexpr std::array vkDeviceExtensions = {
+    constexpr std::array deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
 
@@ -893,22 +788,42 @@ static void CreateVkPhysAndLogicalDevices()
     features2.features.samplerAnisotropy = VK_TRUE;
     features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
 
-    vkn::DeviceCreateInfo vkDeviceCI = {};
-    vkDeviceCI.pPhysDevice = &s_vkPhysDevice;
-    vkDeviceCI.pSurface = &s_vkSurface;
-    vkDeviceCI.queuePriority = 1.f;
-    vkDeviceCI.extensions = vkDeviceExtensions;
-    vkDeviceCI.pFeatures2 = &features2;
+    vkn::DeviceCreateInfo deviceCreateInfo = {};
+    deviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
+    deviceCreateInfo.pSurface = &s_vkSurface;
+    deviceCreateInfo.queuePriority = 1.f;
+    deviceCreateInfo.extensions = deviceExtensions;
+    deviceCreateInfo.pFeatures2 = &features2;
 
-    s_vkDevice.Create(vkDeviceCI);
+    s_vkDevice.Create(deviceCreateInfo);
     CORE_ASSERT(s_vkDevice.IsCreated());
+}
+
+
+static void CreateCommonStagingBuffers()
+{
+    vkn::AllocationInfo stagingBufAllocInfo = {};
+    stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+    stagingBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+
+    vkn::BufferCreateInfo stagingBufCreateInfo = {};
+    stagingBufCreateInfo.pDevice = &s_vkDevice;
+    stagingBufCreateInfo.size = STAGING_BUFFER_SIZE;
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
+
+    for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
+        vkn::Buffer& buffer = s_commonStagingBuffers[i];
+        
+        buffer.Create(stagingBufCreateInfo);
+        CORE_ASSERT_MSG(buffer.IsCreated(), "Failed to create staging buffer %zu", i);
+        buffer.SetDebugName("STAGING_BUFFER_%zu", i);
+    }
 }
 
 
 static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
 {
-    Timer timer;
-
     std::vector<uint8_t>* pShaderData = nullptr;
     std::vector<uint8_t> localBuffer;
     
@@ -921,25 +836,21 @@ static VkShaderModule CreateVkShaderModule(VkDevice vkDevice, const fs::path& sh
     }
     VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
 
-    VkShaderModuleCreateInfo shaderModuleCI = {};
-    shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
-    shaderModuleCI.codeSize = pShaderData->size();
+    VkShaderModuleCreateInfo shaderCreateInfo = {};
+    shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
+    shaderCreateInfo.codeSize = pShaderData->size();
 
-    VkShaderModule vkShaderModule = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &vkShaderModule));
-    VK_ASSERT(vkShaderModule != VK_NULL_HANDLE);
+    VkShaderModule shader = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateShaderModule(vkDevice, &shaderCreateInfo, nullptr, &shader));
+    VK_ASSERT(shader != VK_NULL_HANDLE);
 
-    CORE_LOG_INFO("Shader module \"%s\" creating finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
-
-    return vkShaderModule;
+    return shader;
 }
 
 
-static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
+static VkDescriptorPool CreateCommonDescriptorPool(VkDevice vkDevice)
 {
-    Timer timer;
-
     vkn::DescriptorPoolBuilder builder;
 
     builder
@@ -952,18 +863,12 @@ static VkDescriptorPool CreateVkCommonDescriptorPool(VkDevice vkDevice)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
     
-    VkDescriptorPool vkPool = builder.Build(vkDevice);
-
-    CORE_LOG_INFO("Common descriptor pool creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkPool;
+    return builder.Build(vkDevice);
 }
 
 
-static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice)
+static VkDescriptorSetLayout CreateCommonDescriptorSetLayout(VkDevice vkDevice)
 {
-    Timer timer;
-
     vkn::DescriptorSetLayoutBuilder builder;
 
     builder
@@ -979,84 +884,66 @@ static VkDescriptorSetLayout CreateVkCommonDescriptorSetLayout(VkDevice vkDevice
         .AddBinding(BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL);
 
-    VkDescriptorSetLayout vkLayout = builder.Build(vkDevice);
-
-    CORE_LOG_INFO("Common descriptor set layout creating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkLayout;
+    return builder.Build(vkDevice);
 }
 
 
-static VkDescriptorSet CreateVkCommonDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
+static VkDescriptorSet CreateCommonDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::DescriptorSetAllocator allocator;
 
-    VkDescriptorSet vkDescriptorSets[] = { VK_NULL_HANDLE };
+    VkDescriptorSet descriptorSets[] = { VK_NULL_HANDLE };
 
     allocator
         .SetPool(vkDescriptorPool)
         .AddLayout(vkDescriptorSetLayout)
-        .Allocate(vkDevice, vkDescriptorSets);
+        .Allocate(vkDevice, descriptorSets);
 
-    CORE_LOG_INFO("Common descriptor set allocating finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkDescriptorSets[0];
+    return descriptorSets[0];
 }
 
 
-static VkPipelineLayout CreateVkBasePipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
+static VkPipelineLayout CreateBasePipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
-    VkPipelineLayout vkLayout = plBuilder
+    VkPipelineLayout layout = plBuilder
         .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    CORE_LOG_INFO("Base pipeline layout initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkLayout;
+    return layout;
 }
 
 
-static VkPipelineLayout CreateVkBaseCullingPipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
+static VkPipelineLayout CreateBaseCullingPipelineLayout(VkDevice vkDevice, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    Timer timer;
-
     vkn::PipelineLayoutBuilder plBuilder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
-    VkPipelineLayout vkLayout = plBuilder
+    VkPipelineLayout layout = plBuilder
         .AddPushConstantRange(VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(vkDescriptorSetLayout)
         .Build(vkDevice);
 
-    CORE_LOG_INFO("Base culling pipeline layout  initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkLayout;
+    return layout;
 }
 
 
-static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
+static VkPipeline CreateBaseRenderPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& vsPath, const fs::path& psPath)
 {
-    Timer timer;
-
     std::vector<uint8_t> shaderCodeBuffer;
-    std::array vkShaderModules = {
+    std::array shaderModules = {
         CreateVkShaderModule(vkDevice, vsPath, &shaderCodeBuffer),
         CreateVkShaderModule(vkDevice, psPath, &shaderCodeBuffer),
     };
 
-    std::array vkShaderModuleStages = {
+    const std::array shaderModuleStages = {
         VK_SHADER_STAGE_VERTEX_BIT,
         VK_SHADER_STAGE_FRAGMENT_BIT,
     };
 
-    static_assert(vkShaderModules.size() == vkShaderModuleStages.size());
-    const size_t shadersCount = vkShaderModules.size();
+    static_assert(shaderModules.size() == shaderModuleStages.size());
+    const size_t shadersCount = shaderModules.size();
 
     VkPipelineColorBlendAttachmentState blendState = {};
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -1064,10 +951,10 @@ static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLay
     vkn::GraphicsPipelineBuilder builder;
 
     for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(vkShaderModules[i], vkShaderModuleStages[i], "main");
+        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
     }
     
-    VkPipeline vkPipeline = builder
+    VkPipeline renderPipeline = builder
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
@@ -1087,365 +974,351 @@ static VkPipeline CreateVkBasePipeline(VkDevice vkDevice, VkPipelineLayout vkLay
         .SetLayout(vkLayout)
         .Build(vkDevice);
 
-    for (VkShaderModule& shader : vkShaderModules) {
+    for (VkShaderModule& shader : shaderModules) {
         vkDestroyShaderModule(vkDevice, shader, nullptr);
         shader = VK_NULL_HANDLE;
     }
 
-    CORE_LOG_INFO("VkPipeline (graphics) initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkPipeline;
+    return renderPipeline;
 }
 
 
-static VkPipeline CreateVkBaseCullingPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& csPath)
+static VkPipeline CreateBaseCullingPipeline(VkDevice vkDevice, VkPipelineLayout vkLayout, const fs::path& csPath)
 {
-    Timer timer;
-
     std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule vkShaderModule = CreateVkShaderModule(vkDevice, csPath, &shaderCodeBuffer);
+    VkShaderModule shaderModule = CreateVkShaderModule(vkDevice, csPath, &shaderCodeBuffer);
 
     vkn::ComputePipelineBuilder builder;
 
-    VkPipeline vkPipeline = builder
-        .SetShader(vkShaderModule, "main")
+    VkPipeline cullingPipeline = builder
+        .SetShader(shaderModule, "main")
         .SetLayout(vkLayout)
         .Build(vkDevice);
     
-    vkDestroyShaderModule(vkDevice, vkShaderModule, nullptr);
-    vkShaderModule = VK_NULL_HANDLE;
+    vkDestroyShaderModule(vkDevice, shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
 
-    CORE_LOG_INFO("Base culling pipeline initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    return vkPipeline;
+    return cullingPipeline;
 }
 
 
-void CreateVkIndirectDrawBuffers()
+void CreateBaseRenderIndirectDrawBuffers()
 {
-    Timer timer;
+    vkn::AllocationInfo allocInfo = {};
+    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::AllocationInfo ai = {};
-    ai.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    ai.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::BufferCreateInfo createInfo = {};
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    createInfo.pAllocInfo = &allocInfo;
 
-    vkn::BufferCreateInfo ci = {};
-    ci.pDevice = &s_vkDevice;
-    ci.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
-    ci.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    ci.pAllocInfo = &ai;
-
-    s_drawIndirectCommandsBuffer.Create(ci); 
+    s_drawIndirectCommandsBuffer.Create(createInfo); 
     CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
     s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
 
-    ci.size = sizeof(glm::uint);
+    createInfo.size = sizeof(glm::uint);
 
-    s_drawIndirectCommandsCountBuffer.Create(ci); 
+    s_drawIndirectCommandsCountBuffer.Create(createInfo); 
     CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
     s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
-
-    CORE_LOG_INFO("Vulkan draw indirect buffers creation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
 static void CreateDepthRT()
 {
-    vkn::Image& depthImage = s_vkDepthImage;
-    vkn::ImageView& depthImageView = s_vkDepthImageView;
+    vkn::Image& depthRT = s_depthRT;
+    vkn::ImageView& depthRTView = s_depthRTView;
 
-    if (depthImageView.IsCreated()) {
-        depthImageView.Destroy();
+    if (depthRTView.IsCreated()) {
+        depthRTView.Destroy();
     }
 
-    if (depthImage.IsCreated()) {
-        depthImage.Destroy();
+    if (depthRT.IsCreated()) {
+        depthRT.Destroy();
     }
 
-    vkn::AllocationInfo depthImageAI = {};
-    depthImageAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    depthImageAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo depthRTAllocInfo = {};
+    depthRTAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    depthRTAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::ImageCreateInfo depthImageCI = {};
-    depthImageCI.pDevice = &s_vkDevice;
+    vkn::ImageCreateInfo depthRTCreateInfo = {};
+    depthRTCreateInfo.pDevice = &s_vkDevice;
 
-    depthImageCI.type = VK_IMAGE_TYPE_2D;
-    depthImageCI.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    depthImageCI.format = VK_FORMAT_D32_SFLOAT;
-    depthImageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
-    depthImageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthImageCI.flags = 0;
-    depthImageCI.mipLevels = 1;
-    depthImageCI.arrayLayers = 1;
-    depthImageCI.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthImageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-    depthImageCI.pAllocInfo = &depthImageAI;
+    depthRTCreateInfo.type = VK_IMAGE_TYPE_2D;
+    depthRTCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    depthRTCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthRTCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; 
+    depthRTCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthRTCreateInfo.flags = 0;
+    depthRTCreateInfo.mipLevels = 1;
+    depthRTCreateInfo.arrayLayers = 1;
+    depthRTCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthRTCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    depthRTCreateInfo.pAllocInfo = &depthRTAllocInfo;
 
-    depthImage.Create(depthImageCI);
-    CORE_ASSERT(depthImage.IsCreated());
-    depthImage.SetDebugName("COMMON_DEPTH");
+    depthRT.Create(depthRTCreateInfo);
+    CORE_ASSERT(depthRT.IsCreated());
+    depthRT.SetDebugName("COMMON_DEPTH_RT");
 
-    vkn::ImageViewCreateInfo depthImageViewCI = {};
-    depthImageViewCI.pOwner = &depthImage;
-    depthImageViewCI.type = VK_IMAGE_VIEW_TYPE_2D;
-    depthImageViewCI.format = VK_FORMAT_D32_SFLOAT;
-    depthImageViewCI.components.r = VK_COMPONENT_SWIZZLE_R;
-    depthImageViewCI.components.g = VK_COMPONENT_SWIZZLE_G;
-    depthImageViewCI.components.b = VK_COMPONENT_SWIZZLE_B;
-    depthImageViewCI.components.a = VK_COMPONENT_SWIZZLE_A;
-    depthImageViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthImageViewCI.subresourceRange.baseMipLevel = 0;
-    depthImageViewCI.subresourceRange.levelCount = 1;
-    depthImageViewCI.subresourceRange.baseArrayLayer = 0;
-    depthImageViewCI.subresourceRange.layerCount = 1;
+    vkn::ImageViewCreateInfo depthRTViewCreateInfo = {};
+    depthRTViewCreateInfo.pOwner = &depthRT;
+    depthRTViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    depthRTViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthRTViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    depthRTViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    depthRTViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    depthRTViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    depthRTViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthRTViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    depthRTViewCreateInfo.subresourceRange.levelCount = 1;
+    depthRTViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    depthRTViewCreateInfo.subresourceRange.layerCount = 1;
 
-    depthImageView.Create(depthImageViewCI);
-    CORE_ASSERT(depthImageView.IsValid());
-    depthImageView.SetDebugName("COMMON_DEPTH_VIEW");
+    depthRTView.Create(depthRTViewCreateInfo);
+    CORE_ASSERT(depthRTView.IsValid());
+    depthRTView.SetDebugName("COMMON_DEPTH_RT_VIEW");
 }
 
 
 static void CreateCommonSamplers()
 {
-    Timer timer;
-
     s_commonSamplers.resize((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
-    std::vector<vkn::SamplerCreateInfo> smpCIs((uint32_t)COMMON_SAMPLER_IDX::COUNT);
+    std::vector<vkn::SamplerCreateInfo> samplerCreateInfo((uint32_t)COMMON_SAMPLER_IDX::COUNT);
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].pDevice = &s_vkDevice;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].magFilter = VK_FILTER_NEAREST;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minFilter = VK_FILTER_NEAREST;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipLodBias = 0.f;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].anisotropyEnable = VK_FALSE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].compareEnable = VK_FALSE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minLod = 0.f;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].pDevice = &s_vkDevice;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].magFilter = VK_FILTER_NEAREST;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minFilter = VK_FILTER_NEAREST;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].mipLodBias = 0.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].anisotropyEnable = VK_FALSE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].compareEnable = VK_FALSE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].minLod = 0.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].magFilter = VK_FILTER_LINEAR;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].magFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
 
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
 
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
 
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
     
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = smpCIs[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    smpCIs[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
 
-    for (size_t i = 0; i < smpCIs.size(); ++i) {
-        s_commonSamplers[i].Create(smpCIs[i]);
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
+
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
+
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
+    
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
+
+
+    for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
+        s_commonSamplers[i].Create(samplerCreateInfo[i]);
         CORE_ASSERT(s_commonSamplers[i].IsCreated());
         s_commonSamplers[i].SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
-
-    CORE_LOG_INFO("Common samplers initialization finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -1465,7 +1338,7 @@ static void WriteDescriptorSet()
     
         VkWriteDescriptorSet commonSamplerWrite = {};
         commonSamplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        commonSamplerWrite.dstSet = s_vkCommonDescriptorSet;
+        commonSamplerWrite.dstSet = s_commonDescriptorSet;
         commonSamplerWrite.dstBinding = COMMON_SAMPLERS_DESCRIPTOR_SLOT;
         commonSamplerWrite.dstArrayElement = i;
         commonSamplerWrite.descriptorCount = 1;
@@ -1483,7 +1356,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonConstBufWrite = {};
     commonConstBufWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonConstBufWrite.dstSet = s_vkCommonDescriptorSet;
+    commonConstBufWrite.dstSet = s_commonDescriptorSet;
     commonConstBufWrite.dstBinding = COMMON_CONST_BUFFER_DESCRIPTOR_SLOT;
     commonConstBufWrite.dstArrayElement = 0;
     commonConstBufWrite.descriptorCount = 1;
@@ -1493,113 +1366,113 @@ static void WriteDescriptorSet()
     descWrites.emplace_back(commonConstBufWrite);
 
 
-    VkDescriptorBufferInfo commonMeshInfoBufferInfo = {};
-    commonMeshInfoBufferInfo.buffer = s_commonMeshInfosBuffer.Get();
-    commonMeshInfoBufferInfo.offset = 0;
-    commonMeshInfoBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonMeshDataBufferInfo = {};
+    commonMeshDataBufferInfo.buffer = s_commonMeshDataBuffer.Get();
+    commonMeshDataBufferInfo.offset = 0;
+    commonMeshDataBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonMeshInfoBufferWrite = {};
-    commonMeshInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMeshInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
-    commonMeshInfoBufferWrite.dstBinding = COMMON_MESH_INFOS_DESCRIPTOR_SLOT;
-    commonMeshInfoBufferWrite.dstArrayElement = 0;
-    commonMeshInfoBufferWrite.descriptorCount = 1;
-    commonMeshInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonMeshInfoBufferWrite.pBufferInfo = &commonMeshInfoBufferInfo;
+    VkWriteDescriptorSet commonMeshDataBufferWrite = {};
+    commonMeshDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonMeshDataBufferWrite.dstSet = s_commonDescriptorSet;
+    commonMeshDataBufferWrite.dstBinding = COMMON_MESH_INFOS_DESCRIPTOR_SLOT;
+    commonMeshDataBufferWrite.dstArrayElement = 0;
+    commonMeshDataBufferWrite.descriptorCount = 1;
+    commonMeshDataBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonMeshDataBufferWrite.pBufferInfo = &commonMeshDataBufferInfo;
 
-    descWrites.emplace_back(commonMeshInfoBufferWrite);
-
-
-    VkDescriptorBufferInfo commonTrsBufferInfo = {};
-    commonTrsBufferInfo.buffer = s_commonTransformsBuffer.Get();
-    commonTrsBufferInfo.offset = 0;
-    commonTrsBufferInfo.range = VK_WHOLE_SIZE;
-
-    VkWriteDescriptorSet commonTrsBufferWrite = {};
-    commonTrsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonTrsBufferWrite.dstSet = s_vkCommonDescriptorSet;
-    commonTrsBufferWrite.dstBinding = COMMON_TRANSFORMS_DESCRIPTOR_SLOT;
-    commonTrsBufferWrite.dstArrayElement = 0;
-    commonTrsBufferWrite.descriptorCount = 1;
-    commonTrsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonTrsBufferWrite.pBufferInfo = &commonTrsBufferInfo;
-
-    descWrites.emplace_back(commonTrsBufferWrite);
+    descWrites.emplace_back(commonMeshDataBufferWrite);
 
 
-    VkDescriptorBufferInfo commonMaterialsBufferInfo = {};
-    commonMaterialsBufferInfo.buffer = s_commonMaterialsBuffer.Get();
-    commonMaterialsBufferInfo.offset = 0;
-    commonMaterialsBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonTransformDataBufferInfo = {};
+    commonTransformDataBufferInfo.buffer = s_commonTransformDataBuffer.Get();
+    commonTransformDataBufferInfo.offset = 0;
+    commonTransformDataBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonMaterialsBufferWrite = {};
-    commonMaterialsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonMaterialsBufferWrite.dstSet = s_vkCommonDescriptorSet;
-    commonMaterialsBufferWrite.dstBinding = COMMON_MATERIALS_DESCRIPTOR_SLOT;
-    commonMaterialsBufferWrite.dstArrayElement = 0;
-    commonMaterialsBufferWrite.descriptorCount = 1;
-    commonMaterialsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonMaterialsBufferWrite.pBufferInfo = &commonMaterialsBufferInfo;
+    VkWriteDescriptorSet commonTransformDataBufferWrite = {};
+    commonTransformDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonTransformDataBufferWrite.dstSet = s_commonDescriptorSet;
+    commonTransformDataBufferWrite.dstBinding = COMMON_TRANSFORMS_DESCRIPTOR_SLOT;
+    commonTransformDataBufferWrite.dstArrayElement = 0;
+    commonTransformDataBufferWrite.descriptorCount = 1;
+    commonTransformDataBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonTransformDataBufferWrite.pBufferInfo = &commonTransformDataBufferInfo;
 
-    descWrites.emplace_back(commonMaterialsBufferWrite);
+    descWrites.emplace_back(commonTransformDataBufferWrite);
 
 
-    std::vector<VkDescriptorImageInfo> imageInfos(s_sceneImageViews.size());
-    imageInfos.clear();
+    VkDescriptorBufferInfo commonMaterialDataBufferInfo = {};
+    commonMaterialDataBufferInfo.buffer = s_commonMaterialDataBuffer.Get();
+    commonMaterialDataBufferInfo.offset = 0;
+    commonMaterialDataBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet commonMaterialDataBufferWrite = {};
+    commonMaterialDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonMaterialDataBufferWrite.dstSet = s_commonDescriptorSet;
+    commonMaterialDataBufferWrite.dstBinding = COMMON_MATERIALS_DESCRIPTOR_SLOT;
+    commonMaterialDataBufferWrite.dstArrayElement = 0;
+    commonMaterialDataBufferWrite.descriptorCount = 1;
+    commonMaterialDataBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonMaterialDataBufferWrite.pBufferInfo = &commonMaterialDataBufferInfo;
+
+    descWrites.emplace_back(commonMaterialDataBufferWrite);
+
+
+    std::vector<VkDescriptorImageInfo> descImageInfos(s_sceneImageViews.size());
+    descImageInfos.clear();
 
     for (size_t i = 0; i < s_sceneImageViews.size(); ++i) {
-        VkDescriptorImageInfo imageInfo = {};
-        imageInfo.imageView = s_sceneImageViews[i].Get();
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        VkDescriptorImageInfo descImageInfo = {};
+        descImageInfo.imageView = s_sceneImageViews[i].Get();
+        descImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        imageInfos.emplace_back(imageInfo);
+        descImageInfos.emplace_back(descImageInfo);
 
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkCommonDescriptorSet;
+        texWrite.dstSet = s_commonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
         texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        texWrite.pImageInfo = &imageInfos.back();
+        texWrite.pImageInfo = &descImageInfos.back();
 
         descWrites.emplace_back(texWrite);
     }
 
-    VkDescriptorImageInfo emptyTexInfo = {};
-    emptyTexInfo.imageView = s_sceneDefaultImageView.Get();
-    emptyTexInfo.sampler = VK_NULL_HANDLE;
-    emptyTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkDescriptorImageInfo emptyDescImageInfo = {};
+    emptyDescImageInfo.imageView = s_commonGreyImageView.Get();
+    emptyDescImageInfo.sampler = VK_NULL_HANDLE;
+    emptyDescImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
         VkWriteDescriptorSet texWrite = {};
         texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_vkCommonDescriptorSet;
+        texWrite.dstSet = s_commonDescriptorSet;
         texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
         texWrite.dstArrayElement = i;
         texWrite.descriptorCount = 1;
         texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        texWrite.pImageInfo = &emptyTexInfo;
+        texWrite.pImageInfo = &emptyDescImageInfo;
 
         descWrites.emplace_back(texWrite);
     }
 
 
-    VkDescriptorBufferInfo commonInstInfoBufferInfo = {};
-    commonInstInfoBufferInfo.buffer = s_commonInstInfosBuffer.Get();
-    commonInstInfoBufferInfo.offset = 0;
-    commonInstInfoBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonInstDataBufferInfo = {};
+    commonInstDataBufferInfo.buffer = s_commonInstDataBuffer.Get();
+    commonInstDataBufferInfo.offset = 0;
+    commonInstDataBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonInstInfoBufferWrite = {};
-    commonInstInfoBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonInstInfoBufferWrite.dstSet = s_vkCommonDescriptorSet;
-    commonInstInfoBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
-    commonInstInfoBufferWrite.dstArrayElement = 0;
-    commonInstInfoBufferWrite.descriptorCount = 1;
-    commonInstInfoBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonInstInfoBufferWrite.pBufferInfo = &commonInstInfoBufferInfo;
+    VkWriteDescriptorSet commonInstDataBufferWrite = {};
+    commonInstDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonInstDataBufferWrite.dstSet = s_commonDescriptorSet;
+    commonInstDataBufferWrite.dstBinding = COMMON_INST_INFOS_DESCRIPTOR_SLOT;
+    commonInstDataBufferWrite.dstArrayElement = 0;
+    commonInstDataBufferWrite.descriptorCount = 1;
+    commonInstDataBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonInstDataBufferWrite.pBufferInfo = &commonInstDataBufferInfo;
 
-    descWrites.emplace_back(commonInstInfoBufferWrite);
+    descWrites.emplace_back(commonInstDataBufferWrite);
 
 
     VkDescriptorBufferInfo commonVertDataBufferInfo = {};
@@ -1609,7 +1482,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet commonVertDataBufferWrite = {};
     commonVertDataBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonVertDataBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    commonVertDataBufferWrite.dstSet = s_commonDescriptorSet;
     commonVertDataBufferWrite.dstBinding = COMMON_VERTEX_DATA_DESCRIPTOR_SLOT;
     commonVertDataBufferWrite.dstArrayElement = 0;
     commonVertDataBufferWrite.descriptorCount = 1;
@@ -1626,7 +1499,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
     drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsBufferWrite.dstSet = s_commonDescriptorSet;
     drawIndirectCommandsBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsBufferWrite.descriptorCount = 1;
@@ -1642,7 +1515,7 @@ static void WriteDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_vkCommonDescriptorSet;
+    drawIndirectCommandsCountBufferWrite.dstSet = s_commonDescriptorSet;
     drawIndirectCommandsCountBufferWrite.dstBinding = BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
@@ -1683,12 +1556,12 @@ static void CmdPipelineImageBarrier(
     imageBarrier2.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
     imageBarrier2.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    VkDependencyInfo vkDependencyInfo = {};
-    vkDependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    vkDependencyInfo.imageMemoryBarrierCount = 1;
-    vkDependencyInfo.pImageMemoryBarriers = &imageBarrier2;
+    VkDependencyInfo dependencyInfo = {};
+    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependencyInfo.imageMemoryBarrierCount = 1;
+    dependencyInfo.pImageMemoryBarriers = &imageBarrier2;
 
-    cmdBuffer.CmdPipelineBarrier2(vkDependencyInfo);
+    cmdBuffer.CmdPipelineBarrier2(dependencyInfo);
 }
 
 
@@ -1714,12 +1587,12 @@ static void CmdPipelineBufferBarrier(
     bufferBarrier2.offset = offset;
     bufferBarrier2.size = size;
 
-    VkDependencyInfo vkDependencyInfo = {};
-    vkDependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    vkDependencyInfo.bufferMemoryBarrierCount = 1;
-    vkDependencyInfo.pBufferMemoryBarriers = &bufferBarrier2;
+    VkDependencyInfo dependencyInfo = {};
+    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependencyInfo.bufferMemoryBarrierCount = 1;
+    dependencyInfo.pBufferMemoryBarriers = &bufferBarrier2;
 
-    cmdBuffer.CmdPipelineBarrier2(vkDependencyInfo);
+    cmdBuffer.CmdPipelineBarrier2(dependencyInfo);
 }
 
 
@@ -1745,17 +1618,17 @@ static void SubmitVkQueue(VkQueue vkQueue,
     signalSemaphoreInfo.stageMask = signalSemaphoreStageMask;
     signalSemaphoreInfo.deviceIndex = 0;
     
-    VkCommandBufferSubmitInfo commandBufferInfo = {};
-    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    commandBufferInfo.commandBuffer = vkCmdBuffer;
-    commandBufferInfo.deviceMask = 0;
+    VkCommandBufferSubmitInfo bufferSubmitInfo = {};
+    bufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    bufferSubmitInfo.commandBuffer = vkCmdBuffer;
+    bufferSubmitInfo.deviceMask = 0;
 
     VkSubmitInfo2 submitInfo2 = {};
     submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submitInfo2.waitSemaphoreInfoCount = vkWaitSemaphore != VK_NULL_HANDLE ? 1 : 0;
     submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
     submitInfo2.commandBufferInfoCount = 1;
-    submitInfo2.pCommandBufferInfos = &commandBufferInfo;
+    submitInfo2.pCommandBufferInfos = &bufferSubmitInfo;
     submitInfo2.signalSemaphoreInfoCount = vkSignalSemaphore != VK_NULL_HANDLE ? 1 : 0;
     submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
 
@@ -1763,19 +1636,126 @@ static void SubmitVkQueue(VkQueue vkQueue,
 }
 
 
+namespace tinygltf
+{
+    static constexpr VkFormat GetImageVkFormatR(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported R image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat  GetImageVkFormatRG(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RG image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGB(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGB image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormatRGBA(uint32_t pixelType, bool isSRGB)
+    {
+        if (isSRGB) {
+            CORE_ASSERT_MSG(pixelType == TINYGLTF_COMPONENT_TYPE_BYTE || pixelType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE,
+                "If texture is in sRGB, it must be 8-bit per component");
+        }
+    
+        switch (pixelType) {
+            case TINYGLTF_COMPONENT_TYPE_BYTE:           return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:  return isSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_SHORT:          return VK_FORMAT_R16G16B16A16_SNORM;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: return VK_FORMAT_R16G16B16A16_UNORM;
+            case TINYGLTF_COMPONENT_TYPE_INT:            return VK_FORMAT_R32G32B32A32_SINT;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:   return VK_FORMAT_R32G32B32A32_UINT;
+            case TINYGLTF_COMPONENT_TYPE_FLOAT:          return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case TINYGLTF_COMPONENT_TYPE_DOUBLE:         return VK_FORMAT_R64G64B64A64_SFLOAT;
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported RGBA image format combitaion. pixel_type = %u", pixelType);
+        return VK_FORMAT_UNDEFINED;
+    }
+    
+    
+    static constexpr VkFormat GetImageVkFormat(uint32_t component, uint32_t pixelType, bool isSRGB)
+    {
+        switch (component) {
+            case 1: return GetImageVkFormatR(pixelType, isSRGB);
+            case 2: return GetImageVkFormatRG(pixelType, isSRGB);
+            case 3: return GetImageVkFormatRGB(pixelType, isSRGB);
+            case 4: return GetImageVkFormatRGBA(pixelType, isSRGB);
+        }
+    
+        CORE_ASSERT_FAIL("Unsupported image format combitaion. pixel_type = %u, component = %u", pixelType, component);
+        return VK_FORMAT_UNDEFINED;
+    }
+}
+
+
 static void LoadSceneMaterials(const gltf::Model& model)
 {
     Timer timer;
 
-    s_sceneMaterials.resize(model.materials.size());
-    s_sceneMaterials.clear();
+    s_cpuMaterialData.resize(model.materials.size());
+    s_cpuMaterialData.clear();
 
     s_sceneImages.resize(model.images.size());
     s_sceneImageViews.resize(model.images.size());
 
-    std::vector<vkn::Buffer> stagingSceneImageBuffers(model.images.size());
-
-    auto AddGltfMaterialTexture = [&stagingSceneImageBuffers, &model](int32_t texIdx, bool isSRGB = false) -> void
+    auto AddGltfMaterialTexture = [&model](int32_t texIdx, bool isSRGB = false) -> void
     {
         if (texIdx == -1 || s_sceneImages[texIdx].IsCreated()) {
             return;
@@ -1783,68 +1763,104 @@ static void LoadSceneMaterials(const gltf::Model& model)
 
         const gltf::Image& gltfImage = model.images[texIdx];
 
-        vkn::AllocationInfo stagingTexBufAI = {};
-        stagingTexBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        stagingTexBufAI.usage = VMA_MEMORY_USAGE_AUTO;
-
-        vkn::BufferCreateInfo stagingTexBufCI = {};
-        stagingTexBufCI.pDevice = &s_vkDevice;
-        stagingTexBufCI.size = gltfImage.image.size() * sizeof(gltfImage.image[0]);
-        stagingTexBufCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        stagingTexBufCI.pAllocInfo = &stagingTexBufAI;
-
-        vkn::Buffer& stagingTexBuffer = stagingSceneImageBuffers[texIdx];
-        stagingTexBuffer.Create(stagingTexBufCI);
-        CORE_ASSERT(stagingTexBuffer.IsCreated());
+        vkn::Buffer& stagingTexBuffer = s_commonStagingBuffers[0];
+        CORE_ASSERT(stagingTexBuffer.GetMemorySize() >= gltfImage.image.size() * sizeof(uint8_t));
 
         void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pImageData, gltfImage.image.data(), stagingTexBufCI.size);
+        memcpy(pImageData, gltfImage.image.data(), gltfImage.image.size() * sizeof(uint8_t));
         stagingTexBuffer.Unmap();
 
-        vkn::AllocationInfo imageAI = {};
-        imageAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-        imageAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        vkn::AllocationInfo imageAllocInfo = {};
+        imageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+        imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-        vkn::ImageCreateInfo imageCI = {};
+        vkn::ImageCreateInfo imageCreateInfo = {};
 
-        imageCI.pDevice = &s_vkDevice;
-        imageCI.type = VK_IMAGE_TYPE_2D;
-        imageCI.extent.width = gltfImage.width;
-        imageCI.extent.height = gltfImage.height;
-        imageCI.extent.depth = 1;
-        imageCI.format = gltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
-        imageCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        imageCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageCI.mipLevels = 1;
-        imageCI.arrayLayers = 1;
-        imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageCI.pAllocInfo = &imageAI;
+        imageCreateInfo.pDevice = &s_vkDevice;
+        imageCreateInfo.type = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.extent.width = gltfImage.width;
+        imageCreateInfo.extent.height = gltfImage.height;
+        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.format = gltf::GetImageVkFormat(gltfImage.component, gltfImage.pixel_type, isSRGB);
+        imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCreateInfo.mipLevels = 1;
+        imageCreateInfo.arrayLayers = 1;
+        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.pAllocInfo = &imageAllocInfo;
 
         vkn::Image& sceneImage = s_sceneImages[texIdx];
-        sceneImage.Create(imageCI);
+        sceneImage.Create(imageCreateInfo);
         CORE_ASSERT(sceneImage.IsCreated());
         sceneImage.SetDebugName("COMMON_MTL_TEXTURE_%zu", texIdx);
 
-        vkn::ImageViewCreateInfo viewCI = {};
+        vkn::ImageViewCreateInfo viewCreateInfo = {};
 
-        viewCI.pOwner = &sceneImage;
-        viewCI.type = VK_IMAGE_VIEW_TYPE_2D;
-        viewCI.format = imageCI.format;
-        viewCI.components.r = VK_COMPONENT_SWIZZLE_R;
-        viewCI.components.g = VK_COMPONENT_SWIZZLE_G;
-        viewCI.components.b = VK_COMPONENT_SWIZZLE_B;
-        viewCI.components.a = VK_COMPONENT_SWIZZLE_A;
-        viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        viewCI.subresourceRange.baseMipLevel = 0;
-        viewCI.subresourceRange.baseArrayLayer = 0;
-        viewCI.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-        viewCI.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        viewCreateInfo.pOwner = &sceneImage;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+        viewCreateInfo.format = imageCreateInfo.format;
+        viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-        vkn::ImageView& view = s_sceneImageViews[texIdx];
-        view.Create(viewCI);
-        CORE_ASSERT(view.IsCreated());
-        view.SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", texIdx);
+        vkn::ImageView& sceneImageView = s_sceneImageViews[texIdx];
+        sceneImageView.Create(viewCreateInfo);
+        CORE_ASSERT(sceneImageView.IsCreated());
+        sceneImageView.SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", texIdx);
+
+        ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+            CmdPipelineImageBarrier(
+                cmdBuffer,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_2_NONE,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_NONE,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                sceneImage.Get(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+
+            VkCopyBufferToImageInfo2 copyInfo = {};
+
+            copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+            copyInfo.srcBuffer = stagingTexBuffer.Get();
+            copyInfo.dstImage = sceneImage.Get();
+            copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            copyInfo.regionCount = 1;
+
+            VkBufferImageCopy2 texRegion = {};
+
+            texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+            texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            texRegion.imageSubresource.mipLevel = 0;
+            texRegion.imageSubresource.baseArrayLayer = 0;
+            texRegion.imageSubresource.layerCount = 1;
+            texRegion.imageExtent = sceneImage.GetSize();
+
+            copyInfo.pRegions = &texRegion;
+
+            vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+
+            CmdPipelineImageBarrier(
+                cmdBuffer,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT,
+                sceneImage.Get(),
+                VK_IMAGE_ASPECT_COLOR_BIT
+            );
+        });
     };
 
     for (const gltf::Material& mtl : model.materials) {
@@ -1862,7 +1878,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
         material.AO_TEX_IDX       = aoTexIdx >= 0 ? model.textures[aoTexIdx].source : -1;
         material.EMISSIVE_TEX_IDX = emissiveTexIdx >= 0 ? model.textures[emissiveTexIdx].source : -1;
     
-        s_sceneMaterials.emplace_back(material);
+        s_cpuMaterialData.emplace_back(material);
 
         AddGltfMaterialTexture(material.ALBEDO_TEX_IDX, true);
         AddGltfMaterialTexture(material.NORMAL_TEX_IDX);
@@ -1871,118 +1887,106 @@ static void LoadSceneMaterials(const gltf::Model& model)
         AddGltfMaterialTexture(material.EMISSIVE_TEX_IDX, true);
     }
 
-    vkn::AllocationInfo commonMtlBuffAI = {};
-    commonMtlBuffAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    commonMtlBuffAI.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::AllocationInfo mtlBufAllocInfo = {};
+    mtlBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    mtlBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vkn::BufferCreateInfo commonMtlBuffCI = {};
-    commonMtlBuffCI.pDevice = &s_vkDevice;
-    commonMtlBuffCI.size = s_sceneMaterials.size() * sizeof(COMMON_MATERIAL);
-    commonMtlBuffCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    commonMtlBuffCI.pAllocInfo = &commonMtlBuffAI;
+    vkn::BufferCreateInfo mtlBufCreateInfo = {};
+    mtlBufCreateInfo.pDevice = &s_vkDevice;
+    mtlBufCreateInfo.size = s_cpuMaterialData.size() * sizeof(COMMON_MATERIAL);
+    mtlBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
 
-    s_commonMaterialsBuffer.Create(commonMtlBuffCI);
-    CORE_ASSERT(s_commonMaterialsBuffer.IsCreated());
-    s_commonMaterialsBuffer.SetDebugName("COMMON_MATERIALS");
+    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo);
+    CORE_ASSERT(s_commonMaterialDataBuffer.IsCreated());
+    s_commonMaterialDataBuffer.SetDebugName("COMMON_MATERIALS");
 
-    void* pCommonMaterialsData = s_commonMaterialsBuffer.Map(0, VK_WHOLE_SIZE);
-    memcpy(pCommonMaterialsData, s_sceneMaterials.data(), s_sceneMaterials.size() * sizeof(COMMON_MATERIAL));
-    s_commonMaterialsBuffer.Unmap();
+    void* pCommonMaterialsData = s_commonMaterialDataBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pCommonMaterialsData, s_cpuMaterialData.data(), s_cpuMaterialData.size() * sizeof(COMMON_MATERIAL));
+    s_commonMaterialDataBuffer.Unmap();
 
-    vkn::AllocationInfo defTexAI = {};
-    defTexAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    defTexAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo greyImageAllocInfo = {};
+    greyImageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    greyImageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::ImageCreateInfo defTexCI = {};
+    vkn::ImageCreateInfo greyImageCreateInfo = {};
 
-    defTexCI.pDevice = &s_vkDevice;
-    defTexCI.type = VK_IMAGE_TYPE_2D;
-    defTexCI.extent.width = 1;
-    defTexCI.extent.height = 1;
-    defTexCI.extent.depth = 1;
-    defTexCI.format = VK_FORMAT_R8_UNORM;
-    defTexCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    defTexCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    defTexCI.mipLevels = 1;
-    defTexCI.arrayLayers = 1;
-    defTexCI.samples = VK_SAMPLE_COUNT_1_BIT;
-    defTexCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-    defTexCI.pAllocInfo = &defTexAI;
+    greyImageCreateInfo.pDevice = &s_vkDevice;
+    greyImageCreateInfo.type = VK_IMAGE_TYPE_2D;
+    greyImageCreateInfo.extent.width = 1;
+    greyImageCreateInfo.extent.height = 1;
+    greyImageCreateInfo.extent.depth = 1;
+    greyImageCreateInfo.format = VK_FORMAT_R8_UNORM;
+    greyImageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    greyImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    greyImageCreateInfo.mipLevels = 1;
+    greyImageCreateInfo.arrayLayers = 1;
+    greyImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    greyImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    greyImageCreateInfo.pAllocInfo = &greyImageAllocInfo;
 
-    s_sceneDefaultImage.Create(defTexCI);
-    CORE_ASSERT(s_sceneDefaultImage.IsCreated());
-    s_sceneDefaultImage.SetDebugName("DEFAULT_TEX");
+    s_commonGreyImage.Create(greyImageCreateInfo);
+    CORE_ASSERT(s_commonGreyImage.IsCreated());
+    s_commonGreyImage.SetDebugName("COMMON_GREY_TEX");
 
-    vkn::ImageViewCreateInfo defTexViewCI = {};
+    vkn::ImageViewCreateInfo greyImageViewCreateInfo = {};
 
-    defTexViewCI.pOwner = &s_sceneDefaultImage;
-    defTexViewCI.type = VK_IMAGE_VIEW_TYPE_2D;
-    defTexViewCI.format = defTexCI.format;
-    defTexViewCI.components.r = VK_COMPONENT_SWIZZLE_R;
-    defTexViewCI.components.g = VK_COMPONENT_SWIZZLE_G;
-    defTexViewCI.components.b = VK_COMPONENT_SWIZZLE_B;
-    defTexViewCI.components.a = VK_COMPONENT_SWIZZLE_A;
-    defTexViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    defTexViewCI.subresourceRange.baseMipLevel = 0;
-    defTexViewCI.subresourceRange.baseArrayLayer = 0;
-    defTexViewCI.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    defTexViewCI.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    greyImageViewCreateInfo.pOwner = &s_commonGreyImage;
+    greyImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+    greyImageViewCreateInfo.format = greyImageCreateInfo.format;
+    greyImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    greyImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    greyImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    greyImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    greyImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    greyImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    greyImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    greyImageViewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    greyImageViewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_sceneDefaultImageView.Create(defTexViewCI);
-    CORE_ASSERT(s_sceneDefaultImageView.IsCreated());
-    s_sceneDefaultImageView.SetDebugName("DEFAULT_TEX_VIEW");
+    s_commonGreyImageView.Create(greyImageViewCreateInfo);
+    CORE_ASSERT(s_commonGreyImageView.IsCreated());
+    s_commonGreyImageView.SetDebugName("COMMON_GREY_TEX_VIEW");
+
+    vkn::Buffer& greyImageStagingBuffer = s_commonStagingBuffers[0];
+
+    uint8_t* pGreyImageData = (uint8_t*)greyImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    *pGreyImageData = 128;
+    greyImageStagingBuffer.Unmap();
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        for (size_t i = 0; i < s_sceneImages.size(); ++i) {
-            if (!s_sceneImages[i].IsCreated()) {
-                continue;
-            }
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            s_commonGreyImage.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
 
-            CmdPipelineImageBarrier(
-                cmdBuffer,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_PIPELINE_STAGE_2_NONE,
-                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                VK_ACCESS_2_NONE,
-                VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                s_sceneImages[i].Get(),
-                VK_IMAGE_ASPECT_COLOR_BIT
-            );
+        VkCopyBufferToImageInfo2 copyInfo = {};
 
-            VkCopyBufferToImageInfo2 copyInfo = {};
+        copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+        copyInfo.srcBuffer = greyImageStagingBuffer.Get();
+        copyInfo.dstImage = s_commonGreyImage.Get();
+        copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        copyInfo.regionCount = 1;
 
-            copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
-            copyInfo.srcBuffer = stagingSceneImageBuffers[i].Get();
-            copyInfo.dstImage = s_sceneImages[i].Get();
-            copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            copyInfo.regionCount = 1;
+        VkBufferImageCopy2 texRegion = {};
 
-            VkBufferImageCopy2 texRegion = {};
+        texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+        texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        texRegion.imageSubresource.mipLevel = 0;
+        texRegion.imageSubresource.baseArrayLayer = 0;
+        texRegion.imageSubresource.layerCount = 1;
+        texRegion.imageExtent = s_commonGreyImage.GetSize();
 
-            texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
-            texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            texRegion.imageSubresource.mipLevel = 0;
-            texRegion.imageSubresource.baseArrayLayer = 0;
-            texRegion.imageSubresource.layerCount = 1;
-            texRegion.imageExtent = s_sceneImages[i].GetSize();
+        copyInfo.pRegions = &texRegion;
 
-            copyInfo.pRegions = &texRegion;
-
-            vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
-
-            CmdPipelineImageBarrier(
-                cmdBuffer,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                VK_ACCESS_2_SHADER_READ_BIT,
-                s_sceneImages[i].Get(),
-                VK_IMAGE_ASPECT_COLOR_BIT
-            );
-        }
+        vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
     
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -1992,7 +1996,7 @@ static void LoadSceneMaterials(const gltf::Model& model)
             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_SHADER_READ_BIT,
-            s_sceneDefaultImage.Get(),
+            s_commonGreyImage.Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
         );
     });
@@ -2016,8 +2020,6 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         });
     });
 
-    CORE_ASSERT_MSG(vertexCount < MAX_VERTEX_COUNT, "Vertex buffer overflow: %zu, max vertex count: %zu", vertexCount, MAX_VERTEX_COUNT);
-
     std::vector<Vertex> cpuVertBuffer;
     cpuVertBuffer.reserve(vertexCount);
 
@@ -2032,11 +2034,11 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         });
     });
 
-    std::vector<VertexIndexType> cpuIndexBuffer;
+    std::vector<IndexType> cpuIndexBuffer;
     cpuIndexBuffer.reserve(indexCount);
 
-    s_sceneMeshInfos.reserve(model.meshes.size());
-    s_sceneMeshInfos.clear();
+    s_cpuMeshData.reserve(model.meshes.size());
+    s_cpuMeshData.clear();
 
     auto GetAttribPtr = [](const gltf::Model& model, const gltf::Primitive& primitive, const char* pAttribName, size_t& count, size_t& stride) -> const uint8_t*
     {
@@ -2065,7 +2067,7 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
             mesh.BOUNDS_MIN_LCS = glm::vec3(FLT_MAX);
             mesh.BOUNDS_MAX_LCS = glm::vec3(-FLT_MAX);
 
-            const VertexIndexType primitiveStartIndex = cpuVertBuffer.size();
+            const IndexType primitiveStartIndex = cpuVertBuffer.size();
 
             size_t positionsCount = 0; size_t posStride = 0;
             const uint8_t* pPositionData = GetAttribPtr(model, primitive, "POSITION", positionsCount, posStride);
@@ -2130,100 +2132,55 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
 
                 index = primitiveStartIndex + index;
 
-                CORE_ASSERT_MSG(index < std::numeric_limits<VertexIndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<VertexIndexType>::max());
-                cpuIndexBuffer.push_back(static_cast<VertexIndexType>(index));
+                CORE_ASSERT_MSG(index < std::numeric_limits<IndexType>::max(), "Vertex index is greater than %zu", std::numeric_limits<IndexType>::max());
+                cpuIndexBuffer.push_back(static_cast<IndexType>(index));
             }
 
-            s_sceneMeshInfos.emplace_back(mesh);
+            s_cpuMeshData.emplace_back(mesh);
         }
     }
 
-    vkn::AllocationInfo stagingBufAI = {};
-    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::Buffer& stagingVertBuffer = s_commonStagingBuffers[0];
 
-    vkn::BufferCreateInfo stagingBufCI = {};
-    stagingBufCI.pDevice = &s_vkDevice;
-    stagingBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
-    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCI.pAllocInfo = &stagingBufAI;
+    void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(Vertex));
+    stagingVertBuffer.Unmap();
 
-    vkn::Buffer stagingVertBuffer(stagingBufCI);
-    CORE_ASSERT(stagingVertBuffer.IsCreated());
-    stagingVertBuffer.SetDebugName("STAGING_VERT_BUFFER");
-
-    {
-        void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pVertexBufferData, cpuVertBuffer.data(), cpuVertBuffer.size() * sizeof(Vertex));
-        stagingVertBuffer.Unmap();
-    }
-
-    stagingBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
-
-    vkn::Buffer stagingIndexBuffer(stagingBufCI);
+    vkn::Buffer& stagingIndexBuffer = s_commonStagingBuffers[1];
     CORE_ASSERT(stagingIndexBuffer.IsCreated());
     stagingIndexBuffer.SetDebugName("STAGING_IDX_BUFFER");
 
-    {
-        void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(VertexIndexType));
-        stagingIndexBuffer.Unmap();
-    }
+    void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pIndexBufferData, cpuIndexBuffer.data(), cpuIndexBuffer.size() * sizeof(IndexType));
+    stagingIndexBuffer.Unmap();
 
-    stagingBufCI.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
+    vkn::AllocationInfo vertBufAllocInfo = {};
+    vertBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    vertBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::Buffer stagingMeshInfosBuffer(stagingBufCI);
-    CORE_ASSERT(stagingMeshInfosBuffer.IsCreated());
-    stagingMeshInfosBuffer.SetDebugName("STAGING_MESH_INFOS_BUFFER");
+    vkn::BufferCreateInfo vertBufCreateInfo = {};
+    vertBufCreateInfo.pDevice = &s_vkDevice;
+    vertBufCreateInfo.size = cpuVertBuffer.size() * sizeof(Vertex);
+    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
-    {
-        void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pMeshBufferData, s_sceneMeshInfos.data(), s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO));
-        stagingMeshInfosBuffer.Unmap();
-    }
-
-    vkn::AllocationInfo vertBufAI = {};
-    vertBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    vertBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo vertBufCI = {};
-    vertBufCI.pDevice = &s_vkDevice;
-    vertBufCI.size = cpuVertBuffer.size() * sizeof(Vertex);
-    vertBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    vertBufCI.pAllocInfo = &vertBufAI;
-
-    s_vertexBuffer.Create(vertBufCI);
+    s_vertexBuffer.Create(vertBufCreateInfo);
     CORE_ASSERT(s_vertexBuffer.IsCreated());
     s_vertexBuffer.SetDebugName("COMMON_VB");
 
-    vkn::AllocationInfo idxBufAI = {};
-    idxBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    idxBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    vkn::AllocationInfo idxBufAllocInfo = {};
+    idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    idxBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo idxBufCI = {};
-    idxBufCI.pDevice = &s_vkDevice;
-    idxBufCI.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
-    idxBufCI.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    idxBufCI.pAllocInfo = &idxBufAI;
+    vkn::BufferCreateInfo idxBufCreateInfo = {};
+    idxBufCreateInfo.pDevice = &s_vkDevice;
+    idxBufCreateInfo.size = cpuIndexBuffer.size() * sizeof(IndexType);
+    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
-    s_indexBuffer.Create(idxBufCI);
+    s_indexBuffer.Create(idxBufCreateInfo);
     CORE_ASSERT(s_indexBuffer.IsCreated());
     s_indexBuffer.SetDebugName("COMMON_IB");
-
-    vkn::AllocationInfo meshInfosBufAI = {};
-    meshInfosBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    meshInfosBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo meshInfosBufCI = {};
-    meshInfosBufCI.pDevice = &s_vkDevice;
-    meshInfosBufCI.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
-    meshInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    meshInfosBufCI.pAllocInfo = &meshInfosBufAI;
-    
-    s_commonMeshInfosBuffer.Create(meshInfosBufCI);
-    CORE_ASSERT(s_commonMeshInfosBuffer.IsCreated());
-    s_commonMeshInfosBuffer.SetDebugName("COMMON_MESH_INFOS");
-
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
@@ -2231,11 +2188,36 @@ static void LoadSceneMeshInfos(const gltf::Model& model)
         bufferRegion.size = cpuVertBuffer.size() * sizeof(Vertex);
         vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), s_vertexBuffer.Get(), 1, &bufferRegion);
 
-        bufferRegion.size = cpuIndexBuffer.size() * sizeof(VertexIndexType);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &bufferRegion);
-        
-        bufferRegion.size = s_sceneMeshInfos.size() * sizeof(COMMON_MESH_INFO);
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshInfosBuffer.Get(), 1, &bufferRegion);
+        bufferRegion.size = cpuIndexBuffer.size() * sizeof(IndexType);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &bufferRegion);    
+    });
+
+
+    vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
+
+    void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pMeshBufferData, s_cpuMeshData.data(), s_cpuMeshData.size() * sizeof(COMMON_MESH_INFO));
+    stagingMeshInfosBuffer.Unmap();
+
+    vkn::AllocationInfo meshInfosBufAllocInfo = {};
+    meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    meshInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
+    meshInfosBufCreateInfo.pDevice = &s_vkDevice;
+    meshInfosBufCreateInfo.size = s_cpuMeshData.size() * sizeof(COMMON_MESH_INFO);
+    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
+    
+    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo);
+    CORE_ASSERT(s_commonMeshDataBuffer.IsCreated());
+    s_commonMeshDataBuffer.SetDebugName("COMMON_MESH_DATA");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        VkBufferCopy bufferRegion = {};
+                
+        bufferRegion.size = s_cpuMeshData.size() * sizeof(COMMON_MESH_INFO);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshDataBuffer.Get(), 1, &bufferRegion);
     });
 
     CORE_LOG_INFO("Mesh loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2246,9 +2228,9 @@ static void LoadSceneTransforms(const gltf::Model& model)
 {
     Timer timer;
 
-    s_sceneTransforms.resize(model.nodes.size());
+    s_cpuTransformData.resize(model.nodes.size());
 
-    for (size_t trsIdx = 0; trsIdx < s_sceneTransforms.size(); ++trsIdx) {
+    for (size_t trsIdx = 0; trsIdx < s_cpuTransformData.size(); ++trsIdx) {
         const gltf::Node& node = model.nodes[trsIdx];
 
         glm::mat4x4 transform(1.f);
@@ -2276,49 +2258,35 @@ static void LoadSceneTransforms(const gltf::Model& model)
         }
 
         for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
-            s_sceneTransforms[trsIdx].MATR[i] = transform[i];
+            s_cpuTransformData[trsIdx].MATR[i] = transform[i];
         }
     }
 
-    vkn::AllocationInfo stagingBufAI = {};
-    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::Buffer& stagingBuffer = s_commonStagingBuffers[0];
 
-    vkn::BufferCreateInfo stagingBufCI = {};
-    stagingBufCI.pDevice = &s_vkDevice;
-    stagingBufCI.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
-    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCI.pAllocInfo = &stagingBufAI;
+    void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pData, s_cpuTransformData.data(), s_cpuTransformData.size() * sizeof(COMMON_TRANSFORM));
+    stagingBuffer.Unmap();
 
-    vkn::Buffer stagingBuffer(stagingBufCI);
-    CORE_ASSERT(stagingBuffer.IsCreated());
-    stagingBuffer.SetDebugName("STAGING_TRANSFORM_BUFFER");
+    vkn::AllocationInfo commonTrsBufAllocInfo = {};
+    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    {
-        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pData, s_sceneTransforms.data(), s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM));
-        stagingBuffer.Unmap();
-    }
+    vkn::BufferCreateInfo commonTrsBufCreateInfo = {};
+    commonTrsBufCreateInfo.pDevice = &s_vkDevice;
+    commonTrsBufCreateInfo.size = s_cpuTransformData.size() * sizeof(COMMON_TRANSFORM);
+    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
 
-    vkn::AllocationInfo commonTrsBufAI = {};
-    commonTrsBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    commonTrsBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo commonTrsCI = {};
-    commonTrsCI.pDevice = &s_vkDevice;
-    commonTrsCI.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
-    commonTrsCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonTrsCI.pAllocInfo = &commonTrsBufAI;
-
-    s_commonTransformsBuffer.Create(commonTrsCI);
-    CORE_ASSERT(s_commonTransformsBuffer.IsCreated());
-    s_commonTransformsBuffer.SetDebugName("COMMON_TRANSFORMS");
+    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo);
+    CORE_ASSERT(s_commonTransformDataBuffer.IsCreated());
+    s_commonTransformDataBuffer.SetDebugName("COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
-        bufferRegion.size = s_sceneTransforms.size() * sizeof(COMMON_TRANSFORM);
+        bufferRegion.size = s_cpuTransformData.size() * sizeof(COMMON_TRANSFORM);
         
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonTransformsBuffer.Get(), 1, &bufferRegion);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonTransformDataBuffer.Get(), 1, &bufferRegion);
     });
 
     CORE_LOG_INFO("Transforms loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2329,8 +2297,8 @@ static void LoadSceneInstInfos(const gltf::Model& model)
 {
     Timer timer;
 
-    s_sceneInstInfos.reserve(model.meshes.size());
-    s_sceneInstInfos.clear();
+    s_cpuInstData.reserve(model.meshes.size());
+    s_cpuInstData.clear();
 
     uint32_t meshIdx = 0;
 
@@ -2341,7 +2309,7 @@ static void LoadSceneInstInfos(const gltf::Model& model)
             instInfo.MESH_IDX = meshIdx;
             instInfo.MATERIAL_IDX = primitive.material;
 
-            s_sceneInstInfos.emplace_back(instInfo);
+            s_cpuInstData.emplace_back(instInfo);
             ++meshIdx;
         }
     }
@@ -2352,50 +2320,36 @@ static void LoadSceneInstInfos(const gltf::Model& model)
         const gltf::Mesh& mesh = model.meshes[meshGroupIndex];
 
         for (size_t meshIdx = 0; meshIdx < mesh.primitives.size(); ++meshIdx) {
-            s_sceneInstInfos[instInfoIdx].TRANSFORM_IDX = meshGroupIndex;
+            s_cpuInstData[instInfoIdx].TRANSFORM_IDX = meshGroupIndex;
             ++instInfoIdx;
         }
     }
 
-    vkn::AllocationInfo stagingBufAI = {};
-    stagingBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingBufAI.usage = VMA_MEMORY_USAGE_AUTO;
+    vkn::Buffer& stagingBuffer = s_commonStagingBuffers[0];
 
-    vkn::BufferCreateInfo stagingBufCI = {};
-    stagingBufCI.pDevice = &s_vkDevice;
-    stagingBufCI.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
-    stagingBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    stagingBufCI.pAllocInfo = &stagingBufAI;
+    void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
+    memcpy(pData, s_cpuInstData.data(), s_cpuInstData.size() * sizeof(COMMON_INST_INFO));
+    stagingBuffer.Unmap();
 
-    vkn::Buffer stagingBuffer(stagingBufCI);
-    CORE_ASSERT(stagingBuffer.IsCreated());
-    stagingBuffer.SetDebugName("STAGING_INST_INFOS_BUFFER");
+    vkn::AllocationInfo instInfosBufAllocInfo = {};
+    instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    instInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    {
-        void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
-        memcpy(pData, s_sceneInstInfos.data(), s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO));
-        stagingBuffer.Unmap();
-    }
+    vkn::BufferCreateInfo instInfosBufCreateInfo = {};
+    instInfosBufCreateInfo.pDevice = &s_vkDevice;
+    instInfosBufCreateInfo.size = s_cpuInstData.size() * sizeof(COMMON_INST_INFO);
+    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
-    vkn::AllocationInfo instInfosBufAI = {};
-    instInfosBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    instInfosBufAI.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo instInfosBufCI = {};
-    instInfosBufCI.pDevice = &s_vkDevice;
-    instInfosBufCI.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
-    instInfosBufCI.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    instInfosBufCI.pAllocInfo = &instInfosBufAI;
-
-    s_commonInstInfosBuffer.Create(instInfosBufCI);
-    CORE_ASSERT(s_commonInstInfosBuffer.IsCreated());
-    s_commonInstInfosBuffer.SetDebugName("COMMON_INST_INFOS");
+    s_commonInstDataBuffer.Create(instInfosBufCreateInfo);
+    CORE_ASSERT(s_commonInstDataBuffer.IsCreated());
+    s_commonInstDataBuffer.SetDebugName("COMMON_INST_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
-        bufferRegion.size = s_sceneInstInfos.size() * sizeof(COMMON_INST_INFO);
+        bufferRegion.size = s_cpuInstData.size() * sizeof(COMMON_INST_INFO);
         
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstInfosBuffer.Get(), 1, &bufferRegion);
+        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstDataBuffer.Get(), 1, &bufferRegion);
     });
 
     CORE_LOG_INFO("Instance infos loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2431,21 +2385,25 @@ static void LoadScene(const fs::path& filepath)
     LoadSceneMeshInfos(model);
     LoadSceneInstInfos(model);
 
-    vkn::AllocationInfo commonConstBufAI = {};
-    commonConstBufAI.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    commonConstBufAI.usage = VMA_MEMORY_USAGE_AUTO;
-    
-    vkn::BufferCreateInfo commonConstBufCI = {};
-    commonConstBufCI.pDevice = &s_vkDevice;
-    commonConstBufCI.size = sizeof(COMMON_CB_DATA);
-    commonConstBufCI.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    commonConstBufCI.pAllocInfo = &commonConstBufAI;
+    CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
+}
 
-    s_commonConstBuffer.Create(commonConstBufCI); 
+
+static void CreateCommonConstBuffer()
+{
+    vkn::AllocationInfo allocInfo = {};
+    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    
+    vkn::BufferCreateInfo createInfo = {};
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.size = sizeof(COMMON_CB_DATA);
+    createInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    createInfo.pAllocInfo = &allocInfo;
+
+    s_commonConstBuffer.Create(createInfo); 
     CORE_ASSERT(s_commonConstBuffer.IsCreated());
     s_commonConstBuffer.SetDebugName("COMMON_CB");
-
-    CORE_LOG_INFO("\"%s\" loading finished: %f ms", pathS.c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -2515,7 +2473,7 @@ void PresentImage(uint32_t imageIndex)
     ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", 50, 50, 255, 255);
     
     VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
-    VkSemaphore vkWaitSemaphore = s_vkRenderingFinishedSemaphores[imageIndex].Get();
+    VkSemaphore vkWaitSemaphore = s_renderFinishedSemaphores[imageIndex].Get();
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2540,16 +2498,16 @@ void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipeline);
     
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_vkBaseCullingPipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipelineLayout, 0, 1, &s_commonDescriptorSet, 0, nullptr);
 
     BASE_CULLING_BINDLESS_REGISTRY registry = {};
-    registry.INST_COUNT = s_sceneInstInfos.size();
+    registry.INST_COUNT = s_cpuInstData.size();
 
-    vkCmdPushConstants(cmdBuffer.Get(), s_vkBaseCullingPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
+    vkCmdPushConstants(cmdBuffer.Get(), s_baseCullingPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
 
-    vkCmdDispatch(cmdBuffer.Get(), (s_sceneInstInfos.size() + 63) / 64, 1, 1);
+    vkCmdDispatch(cmdBuffer.Get(), (s_cpuInstData.size() + 63) / 64, 1, 1);
 
     CmdPipelineBufferBarrier(
         cmdBuffer, 
@@ -2575,12 +2533,12 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 {
     ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
 
-    const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[instInfo.MESH_IDX];
+    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
     
     glm::vec3 aabbMin = mesh.BOUNDS_MIN_LCS;
     glm::vec3 aabbMax = mesh.BOUNDS_MAX_LCS;
 
-    const COMMON_TRANSFORM& trs = s_sceneTransforms[instInfo.TRANSFORM_IDX];
+    const COMMON_TRANSFORM& trs = s_cpuTransformData[instInfo.TRANSFORM_IDX];
     const glm::mat3x4 wMatr = glm::mat3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
 
     const glm::vec3 newMin(glm::vec4(aabbMin, 1.f) * wMatr);
@@ -2621,9 +2579,9 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     scissor.extent = extent;
     cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_baseRenderPipeline);
     
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_vkBasePipelineLayout, 0, 1, &s_vkCommonDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_baseRenderPipelineLayout, 0, 1, &s_commonDescriptorSet, 0, nullptr);
 
     cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -2635,9 +2593,9 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 
         s_dbgDrawnMeshCount = 0;
 
-        for (uint32_t i = 0; i < s_sceneInstInfos.size(); ++i) {
+        for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
             if (s_useMeshCulling) {
-                if (!IsInstVisible(s_sceneInstInfos[i])) {
+                if (!IsInstVisible(s_cpuInstData[i])) {
                     continue;
                 }
             }
@@ -2645,15 +2603,15 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
             ++s_dbgDrawnMeshCount;
 
             registry.INST_INFO_IDX = i;
-            vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+            vkCmdPushConstants(cmdBuffer.Get(), s_baseRenderPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
 
-            const COMMON_MESH_INFO& mesh = s_sceneMeshInfos[s_sceneInstInfos[i].MESH_IDX];
+            const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
             cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
         }
     } else 
 #endif
     {
-        vkCmdPushConstants(cmdBuffer.Get(), s_vkBasePipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
+        vkCmdPushConstants(cmdBuffer.Get(), s_baseRenderPipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(BASE_BINDLESS_REGISTRY), &registry);
 
         cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(BASE_INDIRECT_DRAW_CMD));
     }
@@ -2664,7 +2622,7 @@ void RenderScene()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", 255, 255, 50, 255);
 
-    vkn::Fence& renderingFinishedFence = s_vkRenderingFinishedFence;
+    vkn::Fence& renderingFinishedFence = s_renderFinishedFence;
 
     const VkResult fenceStatus = vkGetFenceStatus(s_vkDevice.Get(), renderingFinishedFence.Get());
     if (fenceStatus == VK_NOT_READY) {
@@ -2676,7 +2634,7 @@ void RenderScene()
 
     UpdateCommonConstBuffer();
 
-    vkn::Semaphore& presentFinishedSemaphore = s_vkPresentFinishedSemaphore;
+    vkn::Semaphore& presentFinishedSemaphore = s_presentFinishedSemaphore;
 
     uint32_t nextImageIdx;
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
@@ -2689,8 +2647,8 @@ void RenderScene()
         return;
     }
 
-    vkn::Semaphore& renderingFinishedSemaphore = s_vkRenderingFinishedSemaphores[nextImageIdx];
-    vkn::CmdBuffer& cmdBuffer = s_vkRenderCmdBuffer;
+    vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[nextImageIdx];
+    vkn::CmdBuffer& cmdBuffer = s_renderCmdBuffer;
 
     cmdBuffer.Reset();
 
@@ -2726,7 +2684,7 @@ void RenderScene()
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            s_vkDepthImage.Get(),
+            s_depthRT.Get(),
             VK_IMAGE_ASPECT_DEPTH_BIT
         );
 
@@ -2751,7 +2709,7 @@ void RenderScene()
 
         VkRenderingAttachmentInfo depthAttachment = {};
         depthAttachment.sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = s_vkDepthImageView.Get();
+        depthAttachment.imageView = s_depthRTView.Get();
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -2995,11 +2953,11 @@ int main(int argc, char* argv[])
 
     CreateVkInstance();    
 
-    vkn::SurfaceCreateInfo vkSurfCI = {};
-    vkSurfCI.pInstance = &s_vkInstance;
-    vkSurfCI.pWndHandle = s_pWnd->GetNativeHandle();
+    vkn::SurfaceCreateInfo surfCreateInfo = {};
+    surfCreateInfo.pInstance = &s_vkInstance;
+    surfCreateInfo.pWndHandle = s_pWnd->GetNativeHandle();
 
-    s_vkSurface.Create(vkSurfCI);
+    s_vkSurface.Create(surfCreateInfo);
     CORE_ASSERT(s_vkSurface.IsCreated());
 
     CreateVkPhysAndLogicalDevices();
@@ -3009,84 +2967,73 @@ int main(int argc, char* argv[])
     CORE_ASSERT(vkn::GetProfiler().IsCreated());
 #endif
 
-    vkn::AllocatorCreateInfo vkAllocatorCI = {}; 
-    vkAllocatorCI.pDevice = &s_vkDevice;
+    vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
+    vkAllocatorCreateInfo.pDevice = &s_vkDevice;
     // RenderDoc doesn't work with buffer device address if you use VMA :(
-    // vkAllocatorCI.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    // vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    s_vkAllocator.Create(vkAllocatorCI);
+    s_vkAllocator.Create(vkAllocatorCreateInfo);
     CORE_ASSERT(s_vkAllocator.IsCreated());
 
     CreateVkSwapchain();
 
     DbgUI::Init();
 
-    vkn::CmdPoolCreateInfo vkCmdPoolCI = {};
-    vkCmdPoolCI.pDevice = &s_vkDevice;
-    vkCmdPoolCI.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
-    vkCmdPoolCI.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
+    cmdPoolCreateInfo.pDevice = &s_vkDevice;
+    cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
+    cmdPoolCreateInfo.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
-    s_vkCmdPool.Create(vkCmdPoolCI);
-    CORE_ASSERT(s_vkCmdPool.IsCreated());
-    s_vkCmdPool.SetDebugName("COMMON_CMD_POOL");
+    s_commonCmdPool.Create(cmdPoolCreateInfo);
+    CORE_ASSERT(s_commonCmdPool.IsCreated());
+    s_commonCmdPool.SetDebugName("COMMON_CMD_POOL");
     
-    s_vkImmediateSubmitCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_vkImmediateSubmitCmdBuffer.IsCreated());
-    s_vkImmediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
+    s_immediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_immediateSubmitCmdBuffer.IsCreated());
+    s_immediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
 
-    s_vkImmediateSubmitFinishedFence.Create(&s_vkDevice);
+    s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 
-    vkn::QueryCreateInfo queryCI = {};
-    queryCI.pDevice = &s_vkDevice;
-    queryCI.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryCI.queryCount = 128;
-
-    s_vkQueryPool.Create(queryCI);
-    CORE_ASSERT(s_vkQueryPool.IsCreated());
-    s_vkQueryPool.SetDebugName("COMMON_GPU_QUERY_POOL");
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdResetQueryPool(s_vkQueryPool);
-    });
-
-    s_vkCommonDescriptorPool = CreateVkCommonDescriptorPool(s_vkDevice.Get());
-    s_vkCommonDescriptorSetLayout = CreateVkCommonDescriptorSetLayout(s_vkDevice.Get());
-    s_vkCommonDescriptorSet = CreateVkCommonDescriptorSet(s_vkDevice.Get(), s_vkCommonDescriptorPool, s_vkCommonDescriptorSetLayout);
-
-    s_vkBasePipelineLayout = CreateVkBasePipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
-    s_vkBasePipeline = CreateVkBasePipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
-
-    s_vkBaseCullingPipelineLayout = CreateVkBaseCullingPipelineLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout);
-    s_vkBaseCullingPipeline = CreateVkBaseCullingPipeline(s_vkDevice.Get(), s_vkBasePipelineLayout, "shaders/bin/base_culling.cs.spv");
-
-    const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
-
-    s_vkRenderingFinishedSemaphores.resize(swapchainImageCount);
-    for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_vkRenderingFinishedSemaphores[i].Create(&s_vkDevice);
-        CORE_ASSERT(s_vkRenderingFinishedSemaphores[i].IsCreated());
-
-        s_vkRenderingFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
-    }
-
-    s_vkPresentFinishedSemaphore.Create(&s_vkDevice);
-    CORE_ASSERT(s_vkPresentFinishedSemaphore.IsCreated());
-    s_vkPresentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
-
-    s_vkRenderingFinishedFence.Create(&s_vkDevice);
-    CORE_ASSERT(s_vkRenderingFinishedFence.IsCreated());
-    s_vkRenderingFinishedFence.SetDebugName("RND_FINISH_FENCE");
-    
-    s_vkRenderCmdBuffer = s_vkCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_vkRenderCmdBuffer.IsCreated());
-    s_vkRenderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
+    CreateCommonStagingBuffers();
 
     CreateDepthRT();
     CreateCommonSamplers();
+    CreateCommonConstBuffer();
+    CreateBaseRenderIndirectDrawBuffers();
+
+    s_commonDescriptorPool = CreateCommonDescriptorPool(s_vkDevice.Get());
+    s_commonDescriptorSetLayout = CreateCommonDescriptorSetLayout(s_vkDevice.Get());
+    s_commonDescriptorSet = CreateCommonDescriptorSet(s_vkDevice.Get(), s_commonDescriptorPool, s_commonDescriptorSetLayout);
+
+    s_baseRenderPipelineLayout = CreateBasePipelineLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout);
+    s_baseRenderPipeline = CreateBaseRenderPipeline(s_vkDevice.Get(), s_baseRenderPipelineLayout, "shaders/bin/base.vs.spv", "shaders/bin/base.ps.spv");
+
+    s_baseCullingPipelineLayout = CreateBaseCullingPipelineLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout);
+    s_baseCullingPipeline = CreateBaseCullingPipeline(s_vkDevice.Get(), s_baseRenderPipelineLayout, "shaders/bin/base_culling.cs.spv");
+
+    const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
+
+    s_renderFinishedSemaphores.resize(swapchainImageCount);
+    for (size_t i = 0; i < swapchainImageCount; ++i) {
+        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
+        CORE_ASSERT(s_renderFinishedSemaphores[i].IsCreated());
+
+        s_renderFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
+    }
+
+    s_presentFinishedSemaphore.Create(&s_vkDevice);
+    CORE_ASSERT(s_presentFinishedSemaphore.IsCreated());
+    s_presentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
+
+    s_renderFinishedFence.Create(&s_vkDevice);
+    CORE_ASSERT(s_renderFinishedFence.IsCreated());
+    s_renderFinishedFence.SetDebugName("RND_FINISH_FENCE");
+    
+    s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    CORE_ASSERT(s_renderCmdBuffer.IsCreated());
+    s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-
-    CreateVkIndirectDrawBuffers();
 
     WriteDescriptorSet();
 
@@ -3103,12 +3050,12 @@ int main(int argc, char* argv[])
     s_vkDevice.WaitIdle();
 
     
-    vkDestroyPipeline(s_vkDevice.Get(), s_vkBaseCullingPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBaseCullingPipelineLayout, nullptr);
-    vkDestroyPipeline(s_vkDevice.Get(), s_vkBasePipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_vkBasePipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_vkCommonDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(s_vkDevice.Get(), s_vkCommonDescriptorPool, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_baseCullingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_baseCullingPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_baseRenderPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_baseRenderPipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorPool, nullptr);
 
     DbgUI::Terminate();
 
