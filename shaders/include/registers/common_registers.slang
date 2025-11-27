@@ -1,8 +1,8 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
-#include "frustum.slang"
-#include "bit_math.slang"
+#include "math/frustum.slang"
+#include "math/math.slang"
 
 
 struct COMMON_TRANSFORM

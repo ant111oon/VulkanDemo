@@ -69,24 +69,22 @@ if (ENG_ENABLE_TRACY)
 endif()
 
 
-# FetchContent_Declare(
-#     meshoptimizer
-#     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-#     GIT_TAG        v0.25
-#     GIT_PROGRESS   TRUE
-# )
-# FetchContent_MakeAvailable(meshoptimizer)
+FetchContent_Declare(
+    fastgltf
+    GIT_REPOSITORY https://github.com/spnda/fastgltf.git
+    GIT_TAG        v0.9.0
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(fastgltf)
 
 
 FetchContent_Declare(
-    tinygltf
-    GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
-    GIT_TAG        v2.9.6
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        HEAD
     GIT_PROGRESS   TRUE
 )
-FetchContent_MakeAvailable(tinygltf)
-
-target_compile_options(tinygltf PRIVATE -w)
+FetchContent_MakeAvailable(stb)
 
 
 add_library(imgui STATIC
@@ -140,11 +138,10 @@ target_precompile_headers(${ENGINE_PROJ_NAME}
 
 target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE Vulkan::Vulkan
+    PRIVATE vma
     PRIVATE glm 
     PRIVATE imgui
-    PRIVATE tinygltf
-    PRIVATE vma
-    # PRIVATE meshoptimizer
+    PRIVATE fastgltf
     
     PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient>
 
@@ -154,6 +151,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
 target_include_directories(${ENGINE_PROJ_NAME} 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${ENGINE_CXX_SOURCE_DIR}
+    PRIVATE ${stb_SOURCE_DIR}
 )
 
 target_compile_options(${ENGINE_PROJ_NAME}

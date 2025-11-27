@@ -1,5 +1,5 @@
-#ifndef CONST_MATH_H
-#define CONST_MATH_H
+#ifndef MATH_H
+#define MATH_H
 
 
 static const float M3D_EPS     = 0.000001f;
@@ -27,5 +27,17 @@ static const float3 M3D_AXIS_Z = float3(0.f, 0.f, 1.f);
 
 #define M3D_IS_ZERO(x)      (length(x) < M3D_EPS)
 #define M3D_IS_EQUAL(l, r)  (M3D_IS_ZERO((l) - (r)))
+
+
+bool IsFlagSet(uint value, uint mask)
+{
+    return (value & mask) != 0;
+}
+
+bool IsBitSet(uint value, uint bit)
+{
+    return IsFlagSet(value, uint(1) << bit);
+}
+
 
 #endif

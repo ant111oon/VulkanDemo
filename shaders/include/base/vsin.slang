@@ -1,8 +1,8 @@
 #ifndef TEST_VS_IN_H
 #define TEST_VS_IN_H
 
-#include "half_utils.slang"
-#include "common_registers.slang"
+#include "registers/common_registers.slang"
+#include "math/half.slang"
 
 
 struct BASE_BINDLESS_REGISTRY

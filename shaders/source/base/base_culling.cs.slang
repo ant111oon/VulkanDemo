@@ -1,4 +1,4 @@
-#include "common_registers.slang"
+#include "registers/common_registers.slang"
 
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)

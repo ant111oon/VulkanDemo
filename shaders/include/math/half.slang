@@ -1,5 +1,7 @@
-#ifndef HALF_UTILS_H
-#define HALF_UTILS_H
+#ifndef HALF_H
+#define HALF_H
+
+#include "math.slang"
 
 
 float HalfBitsToFloat(uint packed)

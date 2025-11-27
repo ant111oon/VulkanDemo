@@ -1,6 +1,7 @@
-#include "base_vsout.slang"
+#include "registers/common_registers.slang"
+#include "math/colors.slang"
 
-#include "common_registers.slang"
+#include "base/vsout.slang"
 
 
 struct BASE_PS_OUTPUT
@@ -23,7 +24,8 @@ BASE_PS_OUTPUT main(BASE_VS_OUTPUT input)
 
     if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_ALBEDO_TEX) {
         if (material.ALBEDO_TEX_IDX >= 0) {
-            result.color = COMMON_MTL_TEXTURES[material.ALBEDO_TEX_IDX].Sample(smp, input.data.texCoord);
+            const float4 albedo = COMMON_MTL_TEXTURES[material.ALBEDO_TEX_IDX].Sample(smp, input.data.texCoord);
+            result.color = float4(SRGBToLinear(albedo.rgb), albedo.a);
         }
     } else if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_NORMAL_TEX) { 
         if (material.NORMAL_TEX_IDX >= 0) {
