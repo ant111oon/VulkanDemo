@@ -556,10 +556,7 @@ namespace vkn
         descriptor.stageFlags = stages;
 
         m_bindings.emplace_back(descriptor);
-
-        if (flags != 0x0) {
-            m_bindingsFlags.emplace_back(flags);
-        }
+        m_bindingsFlags.emplace_back(flags);
 
         return *this;
     }
@@ -582,13 +579,10 @@ namespace vkn
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = {};
         bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
-        
-        if (!m_bindingsFlags.empty()) {
-            bindingFlagsCreateInfo.bindingCount = m_bindingsFlags.size();
-            bindingFlagsCreateInfo.pBindingFlags = m_bindingsFlags.data();
-    
-            descriptorSetLayoutCreateInfo.pNext = &bindingFlagsCreateInfo;
-        }
+        bindingFlagsCreateInfo.bindingCount = m_bindingsFlags.size();
+        bindingFlagsCreateInfo.pBindingFlags = m_bindingsFlags.data();
+
+        descriptorSetLayoutCreateInfo.pNext = &bindingFlagsCreateInfo;
 
         VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
         VK_CHECK(vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout));

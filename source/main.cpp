@@ -581,7 +581,7 @@ static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 8;
 static constexpr size_t BASE_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 9;
 
-static constexpr uint32_t COMMON_MTL_TEXTURES_COUNT = 128;
+static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
@@ -1131,7 +1131,7 @@ static VkDescriptorPool CreateCommonDescriptorPool(VkDevice vkDevice)
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
         .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
-        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT);
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT);
     
     return builder.Build(vkDevice);
 }
@@ -1148,7 +1148,7 @@ static VkDescriptorSetLayout CreateCommonDescriptorSetLayout(VkDevice vkDevice)
         .AddBinding(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MTL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT)
         .AddBinding(BASE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
@@ -1705,24 +1705,6 @@ static void WriteDescriptorSet()
         texWrite.descriptorCount = 1;
         texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         texWrite.pImageInfo = &descImageInfos.back();
-
-        descWrites.emplace_back(texWrite);
-    }
-
-    VkDescriptorImageInfo emptyDescImageInfo = {};
-    emptyDescImageInfo.imageView = s_commonGreyImageView.Get();
-    emptyDescImageInfo.sampler = VK_NULL_HANDLE;
-    emptyDescImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    for (size_t i = s_sceneImageViews.size(); i < 128; ++i) {
-        VkWriteDescriptorSet texWrite = {};
-        texWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        texWrite.dstSet = s_commonDescriptorSet;
-        texWrite.dstBinding = COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT;
-        texWrite.dstArrayElement = i;
-        texWrite.descriptorCount = 1;
-        texWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        texWrite.pImageInfo = &emptyDescImageInfo;
 
         descWrites.emplace_back(texWrite);
     }
