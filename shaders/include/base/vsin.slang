@@ -2,16 +2,9 @@
 #define TEST_VS_IN_H
 
 #include "registers/common_registers.slang"
+#include "registers/base_render_registers.slang"
+
 #include "math/half.slang"
-
-
-struct BASE_BINDLESS_REGISTRY
-{
-    uint3 PAD0;
-    uint  INST_INFO_IDX;
-};
-
-[[vk::push_constant]] BASE_BINDLESS_REGISTRY BASE_REGISTRY;
 
 
 struct BASE_INPUT_DATA

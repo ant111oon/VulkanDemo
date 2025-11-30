@@ -146,19 +146,6 @@ enum COMMON_SAMPLER_IDX
 };
 
 
-struct BASE_INDIRECT_DRAW_CMD
-{
-    // NOTE: Don't change order of this variables!!!
-    uint INDEX_COUNT;
-    uint INSTANCE_COUNT;
-    uint FIRST_INDEX;
-    int  VERTEX_OFFSET;
-    uint FIRST_INSTANCE;
-
-    uint INSTANCE_INFO_IDX;
-};
-
-
 static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 
 
@@ -173,8 +160,5 @@ static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 
 [vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 [vk::binding(7, 0)] StructuredBuffer<uint4> COMMON_VERTEX_DATA;
-
-[vk::binding(8, 0)] RWStructuredBuffer<BASE_INDIRECT_DRAW_CMD> BASE_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(9, 0)] RWStructuredBuffer<uint>                   BASE_INDIRECT_DRAW_CMDS_COUNT;
 
 #endif

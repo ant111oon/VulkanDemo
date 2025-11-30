@@ -74,7 +74,7 @@ namespace vkn
         GraphicsPipelineBuilder& AddColorBlendAttachment(const VkPipelineColorBlendAttachmentState& blendState);
         GraphicsPipelineBuilder& AddColorBlendAttachment(const std::span<const VkPipelineColorBlendAttachmentState> blendStates);
 
-        VkPipeline Build(VkDevice vkDevice);
+        VkPipeline Build();
 
     private:
         static inline constexpr size_t MAX_SHADER_ENTRY_NAME_LENGTH = 64;
@@ -125,7 +125,7 @@ namespace vkn
 
         ComputePipelineBuilder& SetShader(VkShaderModule shader, const char* pEntryName = "main");
 
-        VkPipeline Build(VkDevice vkDevice);
+        VkPipeline Build();
 
     private:
         static inline constexpr size_t MAX_SHADER_ENTRY_NAME_LENGTH = 127;
@@ -151,7 +151,7 @@ namespace vkn
 
         PipelineLayoutBuilder& AddDescriptorSetLayout(VkDescriptorSetLayout vkSetLayout);
 
-        VkPipelineLayout Build(VkDevice vkDevice);
+        VkPipelineLayout Build();
 
     private:
         static inline constexpr size_t MAX_PUSH_CONSTANT_RANGE_COUNT = 32;
@@ -180,7 +180,7 @@ namespace vkn
 
         DescriptorSetLayoutBuilder& SetFlags(VkDescriptorSetLayoutCreateFlags flags);
 
-        VkDescriptorSetLayout Build(VkDevice vkDevice);
+        VkDescriptorSetLayout Build();
 
     private:
         bool IsBindingExist(uint32_t bindingNumber);
@@ -205,7 +205,7 @@ namespace vkn
 
         DescriptorPoolBuilder& AddResource(VkDescriptorType type, uint32_t descriptorCount);
 
-        VkDescriptorPool Build(VkDevice vkDevice);
+        VkDescriptorPool Build();
 
     private:
         std::vector<VkDescriptorPoolSize> m_poolSizes;
@@ -225,7 +225,7 @@ namespace vkn
 
         DescriptorSetAllocator& AddLayout(VkDescriptorSetLayout vkLayout);
 
-        void Allocate(VkDevice vkDevice, std::span<VkDescriptorSet> outDescriptorSets);
+        void Allocate(std::span<VkDescriptorSet> outDescriptorSets);
 
     private:
         std::vector<VkDescriptorSetLayout> m_layouts;

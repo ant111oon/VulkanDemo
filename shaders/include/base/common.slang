@@ -1,0 +1,16 @@
+#ifndef BASE_COMMON_H
+#define BASE_COMMON_H
+
+struct BASE_INDIRECT_DRAW_CMD
+{
+    // NOTE: Don't change order of this variables!!!
+    uint INDEX_COUNT;
+    uint INSTANCE_COUNT;
+    uint FIRST_INDEX;
+    int VERTEX_OFFSET;
+    uint FIRST_INSTANCE;
+
+    uint INSTANCE_INFO_IDX;
+};
+
+#endif

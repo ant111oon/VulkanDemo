@@ -1,4 +1,5 @@
 #include "registers/common_registers.slang"
+#include "registers/base_culling_registers.slang"
 
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
@@ -22,25 +23,17 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
 void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID)
 {
     uint idx = 0;
-    InterlockedAdd(BASE_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
+    InterlockedAdd(BASE_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
 
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
 
-    BASE_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
+    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
 }
-
-
-struct BASE_CULLING_BINDLESS_REGISTRY
-{
-    float3 PAD0;
-    uint   INST_COUNT;
-};
-
-[[vk::push_constant]] BASE_CULLING_BINDLESS_REGISTRY CULLING_REGISTRY; 
+ 
 
 
 [numthreads(64, 1, 1)]
@@ -48,7 +41,7 @@ struct BASE_CULLING_BINDLESS_REGISTRY
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
-        InterlockedExchange(BASE_INDIRECT_DRAW_CMDS_COUNT[0], 0);
+        InterlockedExchange(BASE_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
     }
 
     AllMemoryBarrier();

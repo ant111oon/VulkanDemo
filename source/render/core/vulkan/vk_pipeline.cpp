@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_pipeline.h"
+#include "vk_device.h"
 
 
 namespace vkn
@@ -321,7 +322,7 @@ namespace vkn
     }
 
 
-    VkPipeline GraphicsPipelineBuilder::Build(VkDevice vkDevice)
+    VkPipeline GraphicsPipelineBuilder::Build()
     {
         CORE_ASSERT_MSG(m_colorBlendAttachmentStatesCount == m_colorAttachmentFormatsCount, "Color attachments count and color blend states count must be equal");
         CORE_ASSERT_MSG(m_layout != VK_NULL_HANDLE, "Graphics pipeline layout is not set");
@@ -386,7 +387,7 @@ namespace vkn
         pipelineCreateInfo.layout = m_layout;
 
         VkPipeline vkPipeline = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkPipeline));
+        VK_CHECK(vkCreateGraphicsPipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkPipeline));
         VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
 
         return vkPipeline;
@@ -432,16 +433,16 @@ namespace vkn
     }
 
 
-    VkPipeline ComputePipelineBuilder::Build(VkDevice vkDevice)
+    VkPipeline ComputePipelineBuilder::Build()
     {
         CORE_ASSERT(m_createInfo.layout);
         CORE_ASSERT(m_createInfo.stage.module);
 
-        VkPipeline vkPipeline = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateComputePipelines(vkDevice, VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &vkPipeline));
-        VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateComputePipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &pipeline));
+        VK_ASSERT(pipeline != VK_NULL_HANDLE);
 
-        return vkPipeline;
+        return pipeline;
     }
 
 
@@ -509,7 +510,7 @@ namespace vkn
     }
 
 
-    VkPipelineLayout PipelineLayoutBuilder::Build(VkDevice vkDevice)
+    VkPipelineLayout PipelineLayoutBuilder::Build()
     {
         VkPipelineLayoutCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -519,11 +520,11 @@ namespace vkn
         createInfo.pushConstantRangeCount = m_pushConstRangeCount;
         createInfo.pPushConstantRanges = m_pushConstRanges.data();
 
-        VkPipelineLayout vkLayout = VK_NULL_HANDLE;
-        VK_CHECK(vkCreatePipelineLayout(vkDevice, &createInfo, nullptr, &vkLayout));
-        VK_ASSERT(vkLayout != VK_NULL_HANDLE);
+        VkPipelineLayout layout = VK_NULL_HANDLE;
+        VK_CHECK(vkCreatePipelineLayout(GetDevice().Get(), &createInfo, nullptr, &layout));
+        VK_ASSERT(layout != VK_NULL_HANDLE);
 
-        return vkLayout;
+        return layout;
     }
 
 
@@ -569,7 +570,7 @@ namespace vkn
     }
 
 
-    VkDescriptorSetLayout DescriptorSetLayoutBuilder::Build(VkDevice vkDevice)
+    VkDescriptorSetLayout DescriptorSetLayoutBuilder::Build()
     {
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -584,11 +585,11 @@ namespace vkn
 
         descriptorSetLayoutCreateInfo.pNext = &bindingFlagsCreateInfo;
 
-        VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout));
-        VK_ASSERT(vkDescriptorSetLayout != VK_NULL_HANDLE);
+        VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateDescriptorSetLayout(GetDevice().Get(), &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout));
+        VK_ASSERT(descriptorSetLayout != VK_NULL_HANDLE);
 
-        return vkDescriptorSetLayout;
+        return descriptorSetLayout;
     }
 
     
@@ -643,7 +644,7 @@ namespace vkn
     }
 
 
-    VkDescriptorPool DescriptorPoolBuilder::Build(VkDevice vkDevice)
+    VkDescriptorPool DescriptorPoolBuilder::Build()
     {
         VkDescriptorPoolCreateInfo descPoolCreateInfo = {};
         descPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -652,11 +653,11 @@ namespace vkn
         descPoolCreateInfo.poolSizeCount = m_poolSizes.size();
         descPoolCreateInfo.pPoolSizes = m_poolSizes.data();
 
-        VkDescriptorPool vkDescriptorPool = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateDescriptorPool(vkDevice, &descPoolCreateInfo, nullptr, &vkDescriptorPool));
-        VK_ASSERT(vkDescriptorPool != VK_NULL_HANDLE);
+        VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateDescriptorPool(GetDevice().Get(), &descPoolCreateInfo, nullptr, &descriptorPool));
+        VK_ASSERT(descriptorPool != VK_NULL_HANDLE);
 
-        return vkDescriptorPool;
+        return descriptorPool;
     }
 
 
@@ -694,7 +695,7 @@ namespace vkn
     }
 
 
-    void DescriptorSetAllocator::Allocate(VkDevice vkDevice, std::span<VkDescriptorSet> outDescriptorSets)
+    void DescriptorSetAllocator::Allocate(std::span<VkDescriptorSet> outDescriptorSets)
     {
         VK_ASSERT(outDescriptorSets.size() >= m_layouts.size());
 
@@ -704,6 +705,6 @@ namespace vkn
         descSetAllocInfo.descriptorSetCount = m_layouts.size();
         descSetAllocInfo.pSetLayouts = m_layouts.data();
 
-        VK_CHECK(vkAllocateDescriptorSets(vkDevice, &descSetAllocInfo, outDescriptorSets.data()));
+        VK_CHECK(vkAllocateDescriptorSets(GetDevice().Get(), &descSetAllocInfo, outDescriptorSets.data()));
     }
 }
