@@ -1,50 +1,66 @@
 #include "pch.h"
 
-#include "vk_image.h"
+#include "vk_Texture.h"
 #include "vk_utils.h"
 
 
 namespace vkn
 {
-    void ImageView::SetDebugName(const char* pName)
+    static constexpr VkImageViewType ImageTypeToViewType(VkImageType type)
+    {
+        switch(type) {
+            case VK_IMAGE_TYPE_1D:
+                return VK_IMAGE_VIEW_TYPE_1D;
+            case VK_IMAGE_TYPE_2D:
+                return VK_IMAGE_VIEW_TYPE_2D;
+            case VK_IMAGE_TYPE_3D:
+                return VK_IMAGE_VIEW_TYPE_3D;
+            default:
+                VK_ASSERT_FAIL("Invalid Vulkan image type");
+                return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+        }
+    }
+
+
+    void TextureView::SetDebugName(const char* pName)
     {
         Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
     }
 
 
-    const char* ImageView::GetDebugName() const
+    const char* TextureView::GetDebugName() const
     { 
-        return Object::GetDebugName("ImageView");
+        return Object::GetDebugName("TextureView");
     }
 
 
-    Device* ImageView::GetDevice() const
+    Device* TextureView::GetDevice() const
     {
         VK_ASSERT(IsValid());
         return m_pOwner->GetDevice();
     }
 
 
-    ImageView::ImageView(const ImageViewCreateInfo& info)
+    TextureView::TextureView(const TextureViewCreateInfo& info)
         : Object()
     {
         Create(info);
     }
 
 
-    ImageView::~ImageView()
+    TextureView::~TextureView()
     {
         Destroy();
     }
 
 
-    ImageView::ImageView(ImageView&& view) noexcept
+    TextureView::TextureView(TextureView&& view) noexcept
     {
         *this = std::move(view);
     }
 
 
-    ImageView& ImageView::operator=(ImageView&& view) noexcept
+    TextureView& TextureView::operator=(TextureView&& view) noexcept
     {
         if (this == &view) {
             return *this;
@@ -67,14 +83,14 @@ namespace vkn
     }
 
 
-    bool ImageView::Create(const ImageViewCreateInfo& info)
+    bool TextureView::Create(const TextureViewCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Image view %s is already created", GetDebugName());
+            VK_LOG_WARN("Texture view %s is already created", GetDebugName());
             return false;
         }
 
-        const Image* pOwner = info.pOwner;
+        const Texture* pOwner = info.pOwner;
 
         VK_ASSERT(pOwner && pOwner->IsCreated());
 
@@ -105,7 +121,22 @@ namespace vkn
     }
 
 
-    void ImageView::Destroy()
+    bool TextureView::Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange)
+    {
+        VK_ASSERT(texture.IsCreated());
+
+        TextureViewCreateInfo createInfo = {};
+        createInfo.pOwner = &texture;
+        createInfo.type = ImageTypeToViewType(texture.GetType());
+        createInfo.format = texture.GetFormat();
+        createInfo.components = mapping;
+        createInfo.subresourceRange = subresourceRange;
+
+        return Create(createInfo);
+    }
+
+
+    void TextureView::Destroy()
     {
         if (!IsCreated()) {
             return;
@@ -124,32 +155,32 @@ namespace vkn
     }
 
 
-    bool ImageView::IsValid() const
+    bool TextureView::IsValid() const
     {
         return IsCreated() && m_pOwner->IsCreated();
     }
 
 
-    Image::Image(const ImageCreateInfo& info)
+    Texture::Texture(const TextureCreateInfo& info)
         : Object()
     {
         Create(info);
     }
 
 
-    Image::Image(Image&& image) noexcept
+    Texture::Texture(Texture&& image) noexcept
     {
         *this = std::move(image);
     }
 
 
-    Image::~Image()
+    Texture::~Texture()
     {
         Destroy();
     }
 
 
-    Image& Image::operator=(Image&& image) noexcept
+    Texture& Texture::operator=(Texture&& image) noexcept
     {
         if (this == &image) {
             return *this;
@@ -176,10 +207,10 @@ namespace vkn
     }
 
 
-    bool Image::Create(const ImageCreateInfo& info)
+    bool Texture::Create(const TextureCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Image %s is already created", GetDebugName());
+            VK_LOG_WARN("Texture %s is already created", GetDebugName());
             return false;
         }
 
@@ -228,7 +259,7 @@ namespace vkn
     }
 
 
-    void Image::Destroy()
+    void Texture::Destroy()
     {
         if (!IsCreated()) {
             return;
@@ -250,9 +281,9 @@ namespace vkn
     }
 
 
-    const char* Image::GetDebugName() const
+    const char* Texture::GetDebugName() const
     { 
-        return Object::GetDebugName("Image");
+        return Object::GetDebugName("Texture");
     }
 
 
@@ -297,7 +328,7 @@ namespace vkn
     bool Sampler::Create(const SamplerCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Image %s is already created", GetDebugName());
+            VK_LOG_WARN("Texture %s is already created", GetDebugName());
             return false;
         }
 

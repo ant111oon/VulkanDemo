@@ -17,7 +17,7 @@
 #include "render/core/vulkan/vk_semaphore.h"
 #include "render/core/vulkan/vk_cmd.h"
 #include "render/core/vulkan/vk_buffer.h"
-#include "render/core/vulkan/vk_image.h"
+#include "render/core/vulkan/vk_texture.h"
 #include "render/core/vulkan/vk_pipeline.h"
 #include "render/core/vulkan/vk_query.h"
 
@@ -641,8 +641,8 @@ static VkPipeline       s_baseRenderPipeline = VK_NULL_HANDLE;
 static VkPipelineLayout s_baseCullingPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_baseCullingPipeline = VK_NULL_HANDLE;
 
-static vkn::Image     s_depthRT;
-static vkn::ImageView s_depthRTView;
+static vkn::Texture     s_depthRT;
+static vkn::TextureView s_depthRTView;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -659,12 +659,12 @@ static vkn::Buffer s_drawIndirectCommandsCountBuffer;
 
 static vkn::QueryPool s_commonQueryPool;
 
-static std::vector<vkn::Image>     s_sceneImages;
-static std::vector<vkn::ImageView> s_sceneImageViews;
-static std::vector<vkn::Sampler>   s_commonSamplers;
+static std::vector<vkn::Texture>     s_sceneTextures;
+static std::vector<vkn::TextureView> s_sceneTextureViews;
+static std::vector<vkn::Sampler>     s_commonSamplers;
 
-static vkn::Image     s_commonGreyImage;
-static vkn::ImageView s_commonGreyImageView;
+static vkn::Texture     s_commonGreyTexture;
+static vkn::TextureView s_commonGreyTextureView;
 
 static std::vector<Vertex> s_cpuVertexBuffer;
 static std::vector<IndexType> s_cpuIndexBuffer;
@@ -1369,8 +1369,8 @@ void CreateBaseRenderIndirectDrawBuffers()
 
 static void CreateDepthRT()
 {
-    vkn::Image& depthRT = s_depthRT;
-    vkn::ImageView& depthRTView = s_depthRTView;
+    vkn::Texture& depthRT = s_depthRT;
+    vkn::TextureView& depthRTView = s_depthRTView;
 
     if (depthRTView.IsCreated()) {
         depthRTView.Destroy();
@@ -1384,7 +1384,7 @@ static void CreateDepthRT()
     depthRTAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     depthRTAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::ImageCreateInfo depthRTCreateInfo = {};
+    vkn::TextureCreateInfo depthRTCreateInfo = {};
     depthRTCreateInfo.pDevice = &s_vkDevice;
 
     depthRTCreateInfo.type = VK_IMAGE_TYPE_2D;
@@ -1403,21 +1403,20 @@ static void CreateDepthRT()
     CORE_ASSERT(depthRT.IsCreated());
     depthRT.SetDebugName("COMMON_DEPTH_RT");
 
-    vkn::ImageViewCreateInfo depthRTViewCreateInfo = {};
-    depthRTViewCreateInfo.pOwner = &depthRT;
-    depthRTViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    depthRTViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    depthRTViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    depthRTViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    depthRTViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    depthRTViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    depthRTViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    depthRTViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    depthRTViewCreateInfo.subresourceRange.levelCount = 1;
-    depthRTViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    depthRTViewCreateInfo.subresourceRange.layerCount = 1;
+    VkComponentMapping mapping = {};
+    mapping.r = VK_COMPONENT_SWIZZLE_R;
+    mapping.g = VK_COMPONENT_SWIZZLE_G;
+    mapping.b = VK_COMPONENT_SWIZZLE_B;
+    mapping.a = VK_COMPONENT_SWIZZLE_A;
+    
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    depthRTView.Create(depthRTViewCreateInfo);
+    depthRTView.Create(depthRT, mapping, subresourceRange);
     CORE_ASSERT(depthRTView.IsValid());
     depthRTView.SetDebugName("COMMON_DEPTH_RT_VIEW");
 }
@@ -1838,12 +1837,12 @@ static void WriteCommonDescriptorSet()
     descWrites.emplace_back(commonMaterialDataBufferWrite);
 
 
-    std::vector<VkDescriptorImageInfo> descImageInfos(s_sceneImageViews.size());
+    std::vector<VkDescriptorImageInfo> descImageInfos(s_sceneTextureViews.size());
     descImageInfos.clear();
 
-    for (size_t i = 0; i < s_sceneImageViews.size(); ++i) {
+    for (size_t i = 0; i < s_sceneTextureViews.size(); ++i) {
         VkDescriptorImageInfo descImageInfo = {};
-        descImageInfo.imageView = s_sceneImageViews[i].Get();
+        descImageInfo.imageView = s_sceneTextureViews[i].Get();
         descImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         descImageInfos.emplace_back(descImageInfo);
@@ -2452,8 +2451,8 @@ static void UploadGPUTextureData()
 
     Timer timer;
 
-    s_sceneImages.resize(s_cpuTexturesData.size());
-    s_sceneImageViews.resize(s_cpuTexturesData.size());
+    s_sceneTextures.resize(s_cpuTexturesData.size());
+    s_sceneTextureViews.resize(s_cpuTexturesData.size());
 
     for (size_t i = 0; i < s_cpuTexturesData.size(); i += STAGING_BUFFER_COUNT) {
         for (size_t j = 0; j < STAGING_BUFFER_COUNT; ++j) {
@@ -2477,7 +2476,7 @@ static void UploadGPUTextureData()
             imageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
             imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-            vkn::ImageCreateInfo imageCreateInfo = {};
+            vkn::TextureCreateInfo imageCreateInfo = {};
 
             imageCreateInfo.pDevice = &s_vkDevice;
             imageCreateInfo.type = VK_IMAGE_TYPE_2D;
@@ -2493,28 +2492,22 @@ static void UploadGPUTextureData()
             imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
             imageCreateInfo.pAllocInfo = &imageAllocInfo;
 
-            vkn::Image& sceneImage = s_sceneImages[textureIdx];
+            vkn::Texture& sceneImage = s_sceneTextures[textureIdx];
             sceneImage.Create(imageCreateInfo);
             CORE_ASSERT(sceneImage.IsCreated());
             sceneImage.SetDebugName("COMMON_MTL_TEXTURE_%zu", textureIdx);
 
-            vkn::ImageViewCreateInfo viewCreateInfo = {};
+            VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+            
+            VkImageSubresourceRange subresourceRange = {};
+            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresourceRange.baseMipLevel = 0;
+            subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+            subresourceRange.baseArrayLayer = 0;
+            subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-            viewCreateInfo.pOwner = &sceneImage;
-            viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-            viewCreateInfo.format = imageCreateInfo.format;
-            viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-            viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-            viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-            viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-            viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            viewCreateInfo.subresourceRange.baseMipLevel = 0;
-            viewCreateInfo.subresourceRange.baseArrayLayer = 0;
-            viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-            vkn::ImageView& sceneImageView = s_sceneImageViews[textureIdx];
-            sceneImageView.Create(viewCreateInfo);
+            vkn::TextureView& sceneImageView = s_sceneTextureViews[textureIdx];
+            sceneImageView.Create(sceneImage, mapping, subresourceRange);
             CORE_ASSERT(sceneImageView.IsCreated());
             sceneImageView.SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", textureIdx);
         }
@@ -2527,7 +2520,7 @@ static void UploadGPUTextureData()
                     break;
                 }
 
-                vkn::Image& image = s_sceneImages[textureIdx];
+                vkn::Texture& image = s_sceneTextures[textureIdx];
 
                 CmdPipelineImageBarrier(
                     cmdBuffer,
@@ -2581,7 +2574,7 @@ static void UploadGPUTextureData()
     greyImageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     greyImageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::ImageCreateInfo greyImageCreateInfo = {};
+    vkn::TextureCreateInfo greyImageCreateInfo = {};
 
     greyImageCreateInfo.pDevice = &s_vkDevice;
     greyImageCreateInfo.type = VK_IMAGE_TYPE_2D;
@@ -2597,28 +2590,22 @@ static void UploadGPUTextureData()
     greyImageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     greyImageCreateInfo.pAllocInfo = &greyImageAllocInfo;
 
-    s_commonGreyImage.Create(greyImageCreateInfo);
-    CORE_ASSERT(s_commonGreyImage.IsCreated());
-    s_commonGreyImage.SetDebugName("COMMON_GREY_TEX");
+    s_commonGreyTexture.Create(greyImageCreateInfo);
+    CORE_ASSERT(s_commonGreyTexture.IsCreated());
+    s_commonGreyTexture.SetDebugName("COMMON_GREY_TEX");
 
-    vkn::ImageViewCreateInfo greyImageViewCreateInfo = {};
+    VkComponentMapping greyTexMapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+            
+    VkImageSubresourceRange greyTexSubresourceRange = {};
+    greyTexSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    greyTexSubresourceRange.baseMipLevel = 0;
+    greyTexSubresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    greyTexSubresourceRange.baseArrayLayer = 0;
+    greyTexSubresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    greyImageViewCreateInfo.pOwner = &s_commonGreyImage;
-    greyImageViewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
-    greyImageViewCreateInfo.format = greyImageCreateInfo.format;
-    greyImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    greyImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    greyImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    greyImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    greyImageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    greyImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    greyImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    greyImageViewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    greyImageViewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-    s_commonGreyImageView.Create(greyImageViewCreateInfo);
-    CORE_ASSERT(s_commonGreyImageView.IsCreated());
-    s_commonGreyImageView.SetDebugName("COMMON_GREY_TEX_VIEW");
+    s_commonGreyTextureView.Create(s_commonGreyTexture, greyTexMapping, greyTexSubresourceRange);
+    CORE_ASSERT(s_commonGreyTextureView.IsCreated());
+    s_commonGreyTextureView.SetDebugName("COMMON_GREY_TEX_VIEW");
 
     vkn::Buffer& greyImageStagingBuffer = s_commonStagingBuffers[0];
 
@@ -2635,7 +2622,7 @@ static void UploadGPUTextureData()
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            s_commonGreyImage.Get(),
+            s_commonGreyTexture.Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
@@ -2643,7 +2630,7 @@ static void UploadGPUTextureData()
 
         copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
         copyInfo.srcBuffer = greyImageStagingBuffer.Get();
-        copyInfo.dstImage = s_commonGreyImage.Get();
+        copyInfo.dstImage = s_commonGreyTexture.Get();
         copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         copyInfo.regionCount = 1;
 
@@ -2654,7 +2641,7 @@ static void UploadGPUTextureData()
         texRegion.imageSubresource.mipLevel = 0;
         texRegion.imageSubresource.baseArrayLayer = 0;
         texRegion.imageSubresource.layerCount = 1;
-        texRegion.imageExtent = s_commonGreyImage.GetSize();
+        texRegion.imageExtent = s_commonGreyTexture.GetSize();
 
         copyInfo.pRegions = &texRegion;
 
@@ -2668,7 +2655,7 @@ static void UploadGPUTextureData()
             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_SHADER_READ_BIT,
-            s_commonGreyImage.Get(),
+            s_commonGreyTexture.Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
         );
     });

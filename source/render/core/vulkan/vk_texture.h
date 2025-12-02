@@ -7,12 +7,12 @@
 
 namespace vkn
 {
-    class Image;
+    class Texture;
 
 
-    struct ImageViewCreateInfo
+    struct TextureViewCreateInfo
     {
-        const Image*            pOwner;
+        const Texture*          pOwner;
 
         VkImageViewType         type;
         VkFormat                format;
@@ -21,20 +21,22 @@ namespace vkn
     };
 
 
-    class ImageView : public Object
+    class TextureView : public Object
     {
     public:
-        ENG_DECL_CLASS_NO_COPIABLE(ImageView);
+        ENG_DECL_CLASS_NO_COPIABLE(TextureView);
 
-        ImageView() = default;
-        ImageView(const ImageViewCreateInfo& info);
+        TextureView() = default;
+        TextureView(const TextureViewCreateInfo& info);
 
-        ~ImageView();
+        ~TextureView();
 
-        ImageView(ImageView&& view) noexcept;
-        ImageView& operator=(ImageView&& view) noexcept;
+        TextureView(TextureView&& view) noexcept;
+        TextureView& operator=(TextureView&& view) noexcept;
 
-        bool Create(const ImageViewCreateInfo& info);
+        bool Create(const TextureViewCreateInfo& info);
+        bool Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange);
+        
         void Destroy();
 
         template <typename... Args>
@@ -46,7 +48,7 @@ namespace vkn
         void SetDebugName(const char* pName);
         const char* GetDebugName() const;
 
-        const Image* GetOwner() const
+        const Texture* GetOwner() const
         {
             VK_ASSERT(IsCreated());
             return m_pOwner;
@@ -87,7 +89,7 @@ namespace vkn
         bool IsValid() const;
 
     private:
-        const Image* m_pOwner = nullptr;
+        const Texture* m_pOwner = nullptr;
 
         VkImageView m_view = VK_NULL_HANDLE;
 
@@ -98,7 +100,7 @@ namespace vkn
     };
 
 
-    struct ImageCreateInfo
+    struct TextureCreateInfo
     {
         Device* pDevice;
 
@@ -117,20 +119,20 @@ namespace vkn
     };
 
 
-    class Image : public Object
+    class Texture : public Object
     {
     public:
-        ENG_DECL_CLASS_NO_COPIABLE(Image);
+        ENG_DECL_CLASS_NO_COPIABLE(Texture);
 
-        Image() = default;
-        Image(const ImageCreateInfo& info);
+        Texture() = default;
+        Texture(const TextureCreateInfo& info);
 
-        ~Image();
+        ~Texture();
 
-        Image(Image&& image) noexcept;
-        Image& operator=(Image&& image) noexcept;
+        Texture(Texture&& image) noexcept;
+        Texture& operator=(Texture&& image) noexcept;
 
-        bool Create(const ImageCreateInfo& info);
+        bool Create(const TextureCreateInfo& info);
         void Destroy();
 
         const char* GetDebugName() const;

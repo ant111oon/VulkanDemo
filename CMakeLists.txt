@@ -81,7 +81,7 @@ FetchContent_MakeAvailable(fastgltf)
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG        HEAD
+    GIT_TAG        master
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(stb)
