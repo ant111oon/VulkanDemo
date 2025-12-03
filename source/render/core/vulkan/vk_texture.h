@@ -34,18 +34,19 @@ namespace vkn
         TextureView(TextureView&& view) noexcept;
         TextureView& operator=(TextureView&& view) noexcept;
 
-        bool Create(const TextureViewCreateInfo& info);
-        bool Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange);
+        TextureView& Create(const TextureViewCreateInfo& info);
+        TextureView& Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange);
         
-        void Destroy();
+        TextureView& Destroy();
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        TextureView& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
-        void SetDebugName(const char* pName);
+        TextureView& SetDebugName(const char* pName);
         const char* GetDebugName() const;
 
         const Texture* GetOwner() const
@@ -132,8 +133,8 @@ namespace vkn
         Texture(Texture&& image) noexcept;
         Texture& operator=(Texture&& image) noexcept;
 
-        bool Create(const TextureCreateInfo& info);
-        void Destroy();
+        Texture& Create(const TextureCreateInfo& info);
+        Texture& Destroy();
 
         const char* GetDebugName() const;
 
@@ -184,9 +185,10 @@ namespace vkn
         const uint32_t GetSizeZ() const { return GetSize().depth; }
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        Texture& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
     private:
@@ -239,13 +241,14 @@ namespace vkn
         Sampler(Sampler&& sampler) noexcept;
         Sampler& operator=(Sampler&& sampler) noexcept;
 
-        bool Create(const SamplerCreateInfo& info);
-        void Destroy();
+        Sampler& Create(const SamplerCreateInfo& info);
+        Sampler& Destroy();
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        Sampler& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_sampler, VK_OBJECT_TYPE_SAMPLER, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;

@@ -22,9 +22,10 @@ namespace vkn
     }
 
 
-    void TextureView::SetDebugName(const char* pName)
+    TextureView& TextureView::SetDebugName(const char* pName)
     {
         Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
+        return *this;
     }
 
 
@@ -83,11 +84,11 @@ namespace vkn
     }
 
 
-    bool TextureView::Create(const TextureViewCreateInfo& info)
+    TextureView& TextureView::Create(const TextureViewCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Texture view %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Texture view %s is already created. Destroy at first", GetDebugName());
+            return *this;
         }
 
         const Texture* pOwner = info.pOwner;
@@ -105,10 +106,9 @@ namespace vkn
         m_view = VK_NULL_HANDLE;
         VK_CHECK(vkCreateImageView(pOwner->GetDevice()->Get(), &imageViewCreateInfo, nullptr, &m_view));
 
-        const bool isCreated = m_view != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan texture view");
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
         m_pOwner = pOwner;
 
@@ -117,11 +117,11 @@ namespace vkn
         m_components = info.components;
         m_subresourceRange = info.subresourceRange;
 
-        return isCreated;
+        return *this;
     }
 
 
-    bool TextureView::Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange)
+    TextureView& TextureView::Create(const Texture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange)
     {
         VK_ASSERT(texture.IsCreated());
 
@@ -136,10 +136,10 @@ namespace vkn
     }
 
 
-    void TextureView::Destroy()
+    TextureView& TextureView::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vkDestroyImageView(GetDevice()->Get(), m_view, nullptr);
@@ -152,6 +152,8 @@ namespace vkn
         m_subresourceRange = {};
 
         Object::Destroy();
+
+        return *this;
     }
 
 
@@ -207,11 +209,11 @@ namespace vkn
     }
 
 
-    bool Texture::Create(const TextureCreateInfo& info)
+    Texture& Texture::Create(const TextureCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Texture %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Texture %s is already created. Destroy at first", GetDebugName());
+            return *this;
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -244,10 +246,10 @@ namespace vkn
         m_allocation = VK_NULL_HANDLE;
         VK_CHECK(vmaCreateImage(GetAllocator().Get(), &ci, &allocCI, &m_image, &m_allocation, &m_allocInfo));
         
-        const bool isCreated = m_image != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT_MSG(m_image != VK_NULL_HANDLE, "Failed to create Vulkan texture");
+        VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
         m_pDevice = info.pDevice;
 
@@ -255,14 +257,14 @@ namespace vkn
         m_extent = info.extent;
         m_format = info.format;
 
-        return isCreated;
+        return *this;
     }
 
 
-    void Texture::Destroy()
+    Texture& Texture::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vmaDestroyImage(GetAllocator().Get(), m_image, m_allocation);
@@ -278,6 +280,8 @@ namespace vkn
         m_format = {};
 
         Object::Destroy();
+
+        return *this;
     }
 
 
@@ -325,11 +329,11 @@ namespace vkn
     }
 
 
-    bool Sampler::Create(const SamplerCreateInfo& info)
+    Sampler& Sampler::Create(const SamplerCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Texture %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Sampler %s is already created. Destroy at first", GetDebugName());
+            return *this;
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -358,21 +362,20 @@ namespace vkn
         m_sampler = VK_NULL_HANDLE;
         VK_CHECK(vkCreateSampler(vkDevice, &createInfo, nullptr, &m_sampler));
 
-        const bool isCreated = m_sampler != VK_NULL_HANDLE;
-        VK_ASSERT(m_sampler);
+        VK_ASSERT_MSG(m_sampler != VK_NULL_HANDLE, "Failed to create Vulkan sampler");
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
         m_pDevice = info.pDevice;
 
-        return isCreated;
+        return *this;
     }
 
 
-    void Sampler::Destroy()
+    Sampler& Sampler::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         VkDevice vkDevice = m_pDevice->Get();
@@ -383,6 +386,8 @@ namespace vkn
         m_pDevice = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 
 
