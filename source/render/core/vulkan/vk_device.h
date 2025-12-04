@@ -34,10 +34,10 @@ namespace vkn
 
         ~Device();
 
-        bool Create(const DeviceCreateInfo& info);
-        void Destroy();
+        Device& Create(const DeviceCreateInfo& info);
+        Device& Destroy();
 
-        void WaitIdle() const;
+        const Device& WaitIdle() const;
 
         VkDevice Get() const
         {

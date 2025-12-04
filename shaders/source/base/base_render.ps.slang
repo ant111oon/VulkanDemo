@@ -1,5 +1,5 @@
 #include "registers/common_registers.slang"
-#include "math/colors.slang"
+#include "math/color_utils.slang"
 
 #include "base/vsout.slang"
 

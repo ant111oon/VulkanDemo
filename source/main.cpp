@@ -1127,11 +1127,7 @@ static void CreateCommonStagingBuffers()
     stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
-        vkn::Buffer& buffer = s_commonStagingBuffers[i];
-        
-        buffer.Create(stagingBufCreateInfo);
-        CORE_ASSERT_MSG(buffer.IsCreated(), "Failed to create staging buffer %zu", i);
-        buffer.SetDebugName("STAGING_BUFFER_%zu", i);
+        s_commonStagingBuffers[i].Create(stagingBufCreateInfo).SetDebugName("STAGING_BUFFER_%zu", i);
     }
 }
 
@@ -1392,15 +1388,11 @@ void CreateBaseRenderIndirectDrawBuffers()
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_drawIndirectCommandsBuffer.Create(createInfo); 
-    CORE_ASSERT(s_drawIndirectCommandsBuffer.IsCreated());
-    s_drawIndirectCommandsBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
+    s_drawIndirectCommandsBuffer.Create(createInfo).SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
 
     createInfo.size = sizeof(glm::uint);
 
-    s_drawIndirectCommandsCountBuffer.Create(createInfo); 
-    CORE_ASSERT(s_drawIndirectCommandsCountBuffer.IsCreated());
-    s_drawIndirectCommandsCountBuffer.SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
+    s_drawIndirectCommandsCountBuffer.Create(createInfo).SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
 }
 
 
@@ -2337,9 +2329,7 @@ static void UploadGPUMeshData()
     vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
-    s_vertexBuffer.Create(vertBufCreateInfo);
-    CORE_ASSERT(s_vertexBuffer.IsCreated());
-    s_vertexBuffer.SetDebugName("COMMON_VB");
+    s_vertexBuffer.Create(vertBufCreateInfo).SetDebugName("COMMON_VB");
 
     vkn::AllocationInfo idxBufAllocInfo = {};
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -2351,9 +2341,7 @@ static void UploadGPUMeshData()
     idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
-    s_indexBuffer.Create(idxBufCreateInfo);
-    CORE_ASSERT(s_indexBuffer.IsCreated());
-    s_indexBuffer.SetDebugName("COMMON_IB");
+    s_indexBuffer.Create(idxBufCreateInfo).SetDebugName("COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
@@ -2384,9 +2372,7 @@ static void UploadGPUMeshData()
     meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
-    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo);
-    CORE_ASSERT(s_commonMeshDataBuffer.IsCreated());
-    s_commonMeshDataBuffer.SetDebugName("COMMON_MESH_DATA");
+    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo).SetDebugName("COMMON_MESH_DATA");
 
     vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[1];
 
@@ -2407,9 +2393,7 @@ static void UploadGPUMeshData()
     commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
 
-    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo);
-    CORE_ASSERT(s_commonTransformDataBuffer.IsCreated());
-    s_commonTransformDataBuffer.SetDebugName("COMMON_TRANSFORM_DATA");
+    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo).SetDebugName("COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
@@ -2659,9 +2643,7 @@ static void UploadGPUMaterialData()
     mtlBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
 
-    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo);
-    CORE_ASSERT(s_commonMaterialDataBuffer.IsCreated());
-    s_commonMaterialDataBuffer.SetDebugName("COMMON_MATERIAL_DATA");
+    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo).SetDebugName("COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         VkBufferCopy bufferRegion = {};
@@ -2699,9 +2681,7 @@ static void UploadGPUInstData()
     instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
-    s_commonInstDataBuffer.Create(instInfosBufCreateInfo);
-    CORE_ASSERT(s_commonInstDataBuffer.IsCreated());
-    s_commonInstDataBuffer.SetDebugName("COMMON_INSTANCE_DATA");
+    s_commonInstDataBuffer.Create(instInfosBufCreateInfo).SetDebugName("COMMON_INSTANCE_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         VkBufferCopy bufferRegion = {};
@@ -2870,9 +2850,7 @@ static void CreateCommonConstBuffer()
     createInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_commonConstBuffer.Create(createInfo); 
-    CORE_ASSERT(s_commonConstBuffer.IsCreated());
-    s_commonConstBuffer.SetDebugName("COMMON_CB");
+    s_commonConstBuffer.Create(createInfo).SetDebugName("COMMON_CB");
 }
 
 
@@ -3293,7 +3271,7 @@ static bool ResizeVkSwapchain(Window* pWnd)
         return false;
     }
 
-    const bool resizeResult = s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight());
+    const bool resizeResult = s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight()).IsCreated();
     
     s_swapchainRecreateRequired = !resizeResult;
 
@@ -3509,12 +3487,9 @@ int main(int argc, char* argv[])
     cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
     cmdPoolCreateInfo.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
-    s_commonCmdPool.Create(cmdPoolCreateInfo);
-    CORE_ASSERT(s_commonCmdPool.IsCreated());
-    s_commonCmdPool.SetDebugName("COMMON_CMD_POOL");
+    s_commonCmdPool.Create(cmdPoolCreateInfo).SetDebugName("COMMON_CMD_POOL");
     
     s_immediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_immediateSubmitCmdBuffer.IsCreated());
     s_immediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
 
     s_immediateSubmitFinishedFence.Create(&s_vkDevice);
@@ -3534,22 +3509,13 @@ int main(int argc, char* argv[])
 
     s_renderFinishedSemaphores.resize(swapchainImageCount);
     for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
-        CORE_ASSERT(s_renderFinishedSemaphores[i].IsCreated());
-
-        s_renderFinishedSemaphores[i].SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
+        s_renderFinishedSemaphores[i].Create(&s_vkDevice).SetDebugName("RND_FINISH_SEMAPHORE_%zu", i);
     }
+    s_presentFinishedSemaphore.Create(&s_vkDevice).SetDebugName("PRESENT_FINISH_SEMAPHORE");
 
-    s_presentFinishedSemaphore.Create(&s_vkDevice);
-    CORE_ASSERT(s_presentFinishedSemaphore.IsCreated());
-    s_presentFinishedSemaphore.SetDebugName("PRESENT_FINISH_SEMAPHORE");
-
-    s_renderFinishedFence.Create(&s_vkDevice);
-    CORE_ASSERT(s_renderFinishedFence.IsCreated());
-    s_renderFinishedFence.SetDebugName("RND_FINISH_FENCE");
+    s_renderFinishedFence.Create(&s_vkDevice).SetDebugName("RND_FINISH_FENCE");
     
     s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    CORE_ASSERT(s_renderCmdBuffer.IsCreated());
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");

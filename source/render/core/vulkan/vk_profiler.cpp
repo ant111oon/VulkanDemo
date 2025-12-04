@@ -13,11 +13,11 @@ namespace vkn
     }
 
 
-    bool Profiler::Create(Device* pDevice)
+    Profiler& Profiler::Create(Device* pDevice)
     {
         if (IsCreated()) {
-            CORE_LOG_WARN("Vulkan profiler is already created");
-            return false;
+            CORE_LOG_WARN("Recreation of Vulkan profiler");
+            Destroy();
         }
 
         CORE_ASSERT(pDevice && pDevice->IsCreated());
@@ -42,22 +42,21 @@ namespace vkn
 
         m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue(), m_cmdBuffer.Get());
 
-        const bool isCreated = m_context != nullptr;
-        CORE_ASSERT_MSG(isCreated, "Failed to create Vulkan profiler");
+        CORE_ASSERT_MSG(m_context != nullptr, "Failed to create Vulkan profiler");
 
         const char* pContextName = "Vulkan Queue";
         TracyVkContextName(m_context, pContextName, strlen(pContextName));
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    void Profiler::Destroy()
+    Profiler& Profiler::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         TracyVkDestroy(m_context);
@@ -72,16 +71,19 @@ namespace vkn
         m_vkCmdEndDebugUtilsLabelFunc = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 
 
-    void Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const
+    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const
     {
         BeginCmdGroup(cmd, pGroupName, 168, 168, 168, 255);
+        return *this;
     }
 
 
-    void Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const
+    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const
     {
         CORE_ASSERT(IsCreated());
         CORE_ASSERT(pGroupName != nullptr);
@@ -97,22 +99,28 @@ namespace vkn
         dbgLabel.color[3] = static_cast<float>(a) / 255.f;
 
         m_vkCmdBeginDebugUtilsLabelFunc(cmd.Get(), &dbgLabel);
+
+        return *this;
     }
 
 
-    void Profiler::EndCmdGroup(CmdBuffer& cmd) const
+    const Profiler& Profiler::EndCmdGroup(CmdBuffer& cmd) const
     {
         CORE_ASSERT(IsCreated());
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to end GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
     
         m_vkCmdEndDebugUtilsLabelFunc(cmd.Get());
+
+        return *this;
     }
 
 
-    void Profiler::CollectCmdStats(CmdBuffer& cmd) const
+    const Profiler& Profiler::CollectCmdStats(CmdBuffer& cmd) const
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to collect tracy GPU timings within not started/ended command buffer: %s", cmd.GetDebugName());
         TracyVkCollect(GetProfiler().GetTracyContext(), cmd.Get());
+
+        return *this;
     }
 
 

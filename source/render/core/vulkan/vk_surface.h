@@ -23,8 +23,8 @@ namespace vkn
 
         ~Surface();
 
-        bool Create(const SurfaceCreateInfo& info);
-        void Destroy();
+        Surface& Create(const SurfaceCreateInfo& info);
+        Surface& Destroy();
 
         VkSurfaceKHR Get() const
         {

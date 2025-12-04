@@ -22,15 +22,15 @@ namespace vkn
 
         ~Profiler();
 
-        bool Create(Device* pDevice);
-        void Destroy();
+        Profiler& Create(Device* pDevice);
+        Profiler& Destroy();
 
-        void BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const;
-        void BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) const;
+        const Profiler& BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const;
+        const Profiler& BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) const;
 
-        void EndCmdGroup(CmdBuffer& cmd) const;
+        const Profiler& EndCmdGroup(CmdBuffer& cmd) const;
 
-        void CollectCmdStats(CmdBuffer& cmd) const;
+        const Profiler& CollectCmdStats(CmdBuffer& cmd) const;
 
         TracyVkCtx GetTracyContext() const;
 

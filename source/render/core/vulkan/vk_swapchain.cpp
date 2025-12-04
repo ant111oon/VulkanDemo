@@ -123,21 +123,21 @@ namespace vkn
     }
 
 
-    bool Swapchain::Create(const SwapchainCreateInfo& info)
+    Swapchain& Swapchain::Create(const SwapchainCreateInfo& info)
     {
         if (IsCreated()) {
             VK_LOG_WARN("Use Swapchain::Recreate if you want to recreate swapchain");
-            return true;
+            return *this;
         }
 
         return Recreate(info);
     }
 
 
-    void Swapchain::Destroy()
+    Swapchain& Swapchain::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         DestroyImageViews();
@@ -161,21 +161,23 @@ namespace vkn
         m_presentMode = {};
 
         Object::Destroy();
+
+        return *this;
     }
 
 
-    bool Swapchain::Recreate(const SwapchainCreateInfo& info)
+    Swapchain& Swapchain::Recreate(const SwapchainCreateInfo& info)
     {
         VkSwapchainCreateInfoKHR swapchainCreateInfo = CreateSwapchainCreateInfo(info, *this);
 
         const VkExtent2D newExtent = swapchainCreateInfo.imageExtent;
 
         if (newExtent.width == 0 || newExtent.height == 0) {
-            return true;
+            return *this;
         }
 
         if (newExtent.width == m_imageExtent.width && newExtent.height == m_imageExtent.height) {
-            return true;
+            return *this;
         }
 
         VK_CHECK(vkDeviceWaitIdle(info.pDevice->Get()));
@@ -183,18 +185,16 @@ namespace vkn
         VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
         VK_CHECK(vkCreateSwapchainKHR(info.pDevice->Get(), &swapchainCreateInfo, nullptr, &newSwapchain));
 
-        const bool isCreated = newSwapchain != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        if (newSwapchain == VK_NULL_HANDLE) {
+            VK_ASSERT_FAIL("New swapchain is VK_NULL_HANDLE");
+            return *this;
+        }
 
         if (m_swapchain) {
             vkDestroySwapchainKHR(info.pDevice->Get(), m_swapchain, nullptr);
         }
 
-        SetCreated(isCreated);
-
-        if (!isCreated) {
-            return false;
-        }
+        SetCreated(true);
 
         m_pSurface = info.pSurface;
         m_pDevice = info.pDevice;
@@ -216,15 +216,15 @@ namespace vkn
         PullImages();
         CreateImageViews();
 
-        return isCreated;
+        return *this;
     }
 
 
-    bool Swapchain::Resize(uint32_t width, uint32_t height)
+    Swapchain& Swapchain::Resize(uint32_t width, uint32_t height)
     {
         if (!IsCreated()) {
             VK_ASSERT_FAIL("Swapchain is not created. Can't resize swapchain.");
-            return false;
+            return *this;
         }
 
         SwapchainCreateInfo createInfo = {};

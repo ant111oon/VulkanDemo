@@ -31,22 +31,31 @@ namespace vkn
         Buffer(Buffer&& buffer) noexcept;
         Buffer& operator=(Buffer&& buffer) noexcept;
 
-        bool Create(const BufferCreateInfo& info);
-        void Destroy();
+        Buffer& Create(const BufferCreateInfo& info);
+        Buffer& Destroy();
 
         template<typename T>
-        T* Map()
+        T* Map() { return static_cast<T*>(Map(0, VK_WHOLE_SIZE)); }
+
+        template<typename T>
+        Buffer& Map(T** ppData)
         {
-            return static_cast<T*>(Map(0, VK_WHOLE_SIZE));
+            VK_ASSERT(ppData);
+            *ppData = Map<T>();
+
+            return *this;
         }
 
         void* Map(VkDeviceSize offset, VkDeviceSize size);
-        void Unmap();
+        Buffer& Map(void** ppData, VkDeviceSize offset, VkDeviceSize size);
+
+        Buffer& Unmap();
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        Buffer& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*m_pDevice, (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;

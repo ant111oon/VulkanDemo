@@ -66,13 +66,15 @@ namespace vkn
     }
     
     
-    void CmdBuffer::End()
+    CmdBuffer& CmdBuffer::End()
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
         VK_CHECK(vkEndCommandBuffer(m_cmdBuffer));
 
         m_state.set(FLAG_IS_STARTED, false);
+
+        return *this;
     }
 
 
@@ -199,10 +201,12 @@ namespace vkn
     }
 
 
-    void CmdBuffer::Reset(VkCommandBufferResetFlags flags)
+    CmdBuffer& CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
         VK_ASSERT(IsValid());
         VK_CHECK(vkResetCommandBuffer(m_cmdBuffer, flags));
+
+        return *this;
     }
 
 
@@ -224,13 +228,13 @@ namespace vkn
     }
 
 
-    bool CmdBuffer::Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level)
+    CmdBuffer& CmdBuffer::Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level)
     {
         VK_ASSERT(pOwnerPool->IsCreated());
 
         if (IsCreated()) {
-            VK_LOG_WARN("Command buffer %s is already allocated", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of command buffer %s", GetDebugName());
+            m_pOwner->FreeCmdBuffer(*this);
         }
 
         VK_ASSERT(pOwnerPool && pOwnerPool->IsCreated());
@@ -247,21 +251,20 @@ namespace vkn
         m_cmdBuffer = VK_NULL_HANDLE;
         VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &m_cmdBuffer));
 
-        const bool isCreated = m_cmdBuffer != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_cmdBuffer != VK_NULL_HANDLE);
 
         m_pOwner = pOwnerPool;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    void CmdBuffer::Free()
+    CmdBuffer& CmdBuffer::Free()
     {
         if (!IsValid()) {
-            return;
+            return *this;
         }
 
         VkDevice vkDevice = GetDevice()->Get();
@@ -274,6 +277,8 @@ namespace vkn
         m_state.reset();
 
         Object::Destroy();
+
+        return *this;
     }
 
 
@@ -314,11 +319,11 @@ namespace vkn
     }
 
 
-    bool CmdPool::Create(const CmdPoolCreateInfo& info)
+    CmdPool& CmdPool::Create(const CmdPoolCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Command pool %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of command pool %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -333,21 +338,20 @@ namespace vkn
         m_pool = VK_NULL_HANDLE;
         VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &m_pool));
 
-        const bool isCreated =  m_pool != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_pool != VK_NULL_HANDLE);
 
         m_pDevice = info.pDevice;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    void CmdPool::Destroy()
+    CmdPool& CmdPool::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         Object::Destroy();
@@ -358,13 +362,17 @@ namespace vkn
         m_pool = VK_NULL_HANDLE;
 
         m_pDevice = nullptr;
+
+        return *this;
     }
 
 
-    void CmdPool::Reset(VkCommandPoolResetFlags flags)
+    CmdPool& CmdPool::Reset(VkCommandPoolResetFlags flags)
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkResetCommandPool(m_pDevice->Get(), m_pool, flags));
+
+        return *this;
     }
 
 
@@ -375,10 +383,12 @@ namespace vkn
     }
 
 
-    void CmdPool::FreeCmdBuffer(CmdBuffer& cmdBuffer)
+    CmdPool& CmdPool::FreeCmdBuffer(CmdBuffer& cmdBuffer)
     {
         VK_ASSERT(IsCreated());
         cmdBuffer.Free();
+
+        return *this;
     }
 
 

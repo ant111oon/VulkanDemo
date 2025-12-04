@@ -51,11 +51,11 @@ namespace vkn
     }
 
 
-    bool Buffer::Create(const BufferCreateInfo& info)
+    Buffer& Buffer::Create(const BufferCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Buffer %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of buffer %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -80,13 +80,8 @@ namespace vkn
 
         // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
 
-        const bool isBufferCreated = m_buffer != VK_NULL_HANDLE;
-        const bool isMemoryAllocated = m_allocation != VK_NULL_HANDLE;
-        VK_ASSERT(isBufferCreated);
-        VK_ASSERT(isMemoryAllocated);
-
-        const bool isCreated = isBufferCreated && isMemoryAllocated;
-        VK_ASSERT(isCreated);
+        VK_ASSERT_MSG(m_buffer != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
+        VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
         if ((info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
             VkBufferDeviceAddressInfo addressInfo = {};
@@ -97,16 +92,16 @@ namespace vkn
 
         m_pDevice = info.pDevice;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
     
-    void Buffer::Destroy()
+    Buffer& Buffer::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vmaDestroyBuffer(GetAllocator().Get(), m_buffer, m_allocation);
@@ -121,6 +116,8 @@ namespace vkn
         m_state.reset();
 
         Object::Destroy();
+
+        return *this;
     }
 
 
@@ -141,7 +138,16 @@ namespace vkn
     }
 
 
-    void Buffer::Unmap()
+    Buffer& Buffer::Map(void** ppData, VkDeviceSize offset, VkDeviceSize size)
+    {
+        VK_ASSERT(ppData);
+        *ppData = Map(offset, size);
+
+        return *this;
+    }
+
+
+    Buffer& Buffer::Unmap()
     {
         VK_ASSERT(IsCreated());
         VK_ASSERT(IsMapped());
@@ -149,6 +155,8 @@ namespace vkn
         vmaUnmapMemory(GetAllocator().Get(), m_allocation);
 
         m_state.set(BIT_IS_MAPPED, false);
+
+        return *this;
     }
 
 

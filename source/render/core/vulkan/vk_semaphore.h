@@ -27,15 +27,16 @@ namespace vkn
         Semaphore(Semaphore&& semaphore) noexcept;
         Semaphore& operator=(Semaphore&& semaphore) noexcept;
 
-        bool Create(const SemaphoreCreateInfo& info);
-        bool Create(Device* pDevice, VkSemaphoreCreateFlags flags = 0);
+        Semaphore& Create(const SemaphoreCreateInfo& info);
+        Semaphore& Create(Device* pDevice, VkSemaphoreCreateFlags flags = 0);
 
-        void Destroy();
+        Semaphore& Destroy();
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        Semaphore& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;

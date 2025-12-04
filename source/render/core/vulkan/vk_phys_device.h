@@ -44,8 +44,8 @@ namespace vkn
 
         ~PhysicalDevice();
 
-        bool Create(const PhysicalDeviceCreateInfo& info);
-        void Destroy();
+        PhysicalDevice& Create(const PhysicalDeviceCreateInfo& info);
+        PhysicalDevice& Destroy();
 
         VkPhysicalDevice Get() const
         {

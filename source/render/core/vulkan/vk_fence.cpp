@@ -49,11 +49,11 @@ namespace vkn
     }
 
 
-    bool Fence::Create(const FenceCreateInfo& info)
+    Fence& Fence::Create(const FenceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Fence %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of fence %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -66,19 +66,17 @@ namespace vkn
 
         m_fence = VK_NULL_HANDLE;
         VK_CHECK(vkCreateFence(vkDevice, &fenceCreateInfo, nullptr, &m_fence));
-
-        const bool isCreated = m_fence != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_fence != VK_NULL_HANDLE);
 
         m_pDevice = info.pDevice;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    bool Fence::Create(Device* pDevice, VkFenceCreateFlags flags)
+    Fence& Fence::Create(Device* pDevice, VkFenceCreateFlags flags)
     {
         FenceCreateInfo info = {};
         info.pDevice = pDevice;
@@ -88,10 +86,10 @@ namespace vkn
     }
 
 
-    void Fence::Destroy()
+    Fence& Fence::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vkDestroyFence(m_pDevice->Get(), m_fence, nullptr);
@@ -100,20 +98,26 @@ namespace vkn
         m_pDevice = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 
 
-    void Fence::Reset()
+    Fence& Fence::Reset()
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkResetFences(m_pDevice->Get(), 1, &m_fence));
+        
+        return *this;
     }
 
 
-    void Fence::WaitFor(uint64_t timeout)
+    Fence& Fence::WaitFor(uint64_t timeout)
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &m_fence, VK_TRUE, timeout));
+    
+        return *this;
     }
 
 

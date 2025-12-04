@@ -12,11 +12,11 @@ namespace vkn
     }
 
 
-    bool Allocator::Create(const AllocatorCreateInfo& info)
+    Allocator& Allocator::Create(const AllocatorCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Device is already initialized");
-            return false;
+            VK_LOG_WARN("Recreation of Vulan memory allocator");
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice != nullptr);
@@ -32,22 +32,20 @@ namespace vkn
 
         m_allocator = VK_NULL_HANDLE;
         VK_CHECK(vmaCreateAllocator(&createInfo, &m_allocator));
-
-        const bool isCreated = m_allocator != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_allocator != VK_NULL_HANDLE);
 
         m_pDevice = info.pDevice;
         
-        SetCreated(isCreated);
+        SetCreated(true);
         
-        return isCreated;
+        return *this;
     }
 
 
-    void Allocator::Destroy()
+    Allocator& Allocator::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vmaDestroyAllocator(m_allocator);
@@ -56,5 +54,7 @@ namespace vkn
         m_pDevice = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 }

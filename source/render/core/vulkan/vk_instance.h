@@ -42,8 +42,8 @@ namespace vkn
 
         ~Instance();
 
-        bool Create(const InstanceCreateInfo& info);
-        void Destroy();
+        Instance& Create(const InstanceCreateInfo& info);
+        Instance& Destroy();
 
         PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
 

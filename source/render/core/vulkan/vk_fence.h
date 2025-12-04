@@ -27,18 +27,19 @@ namespace vkn
         Fence(Fence&& fence) noexcept;
         Fence& operator=(Fence&& fence) noexcept;
 
-        bool Create(const FenceCreateInfo& info);
-        bool Create(Device* pDevice, VkFenceCreateFlags flags = VK_FENCE_CREATE_SIGNALED_BIT);
+        Fence& Create(const FenceCreateInfo& info);
+        Fence& Create(Device* pDevice, VkFenceCreateFlags flags = VK_FENCE_CREATE_SIGNALED_BIT);
 
-        void Destroy();
+        Fence& Destroy();
 
-        void Reset();
-        void WaitFor(uint64_t timeout);
+        Fence& Reset();
+        Fence& WaitFor(uint64_t timeout);
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        Fence& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*m_pDevice, (uint64_t)m_fence, VK_OBJECT_TYPE_FENCE, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;

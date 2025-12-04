@@ -75,11 +75,11 @@ namespace vkn
     }
 
 
-    bool PhysicalDevice::Create(const PhysicalDeviceCreateInfo& info)
+    PhysicalDevice& PhysicalDevice::Create(const PhysicalDeviceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("PhysicalDevice is already initialized");
-            return false;
+            VK_LOG_WARN("Recreation of Vulkan physical device");
+            Destroy();
         }
 
         VK_ASSERT(info.pInstance && info.pInstance->IsCreated());
@@ -129,17 +129,16 @@ namespace vkn
         }
 
         VK_ASSERT(isPicked);
-
         SetCreated(isPicked);
 
-        return isPicked;
+        return *this;
     }
 
 
-    void PhysicalDevice::Destroy()
+    PhysicalDevice& PhysicalDevice::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         m_physDevice = VK_NULL_HANDLE;
@@ -154,5 +153,7 @@ namespace vkn
         m_features2 = {};
 
         Object::Destroy();
+
+        return *this;
     }
 }

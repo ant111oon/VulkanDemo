@@ -100,11 +100,11 @@ namespace vkn
     }
 
 
-    bool Instance::Create(const InstanceCreateInfo& info)
+    Instance& Instance::Create(const InstanceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Instance is already created");
-            return false;
+            VK_LOG_WARN("Recreation of Vulkan instance");
+            Destroy();
         }
 
         CheckInstanceExtensionsSupport(info.extensions);
@@ -146,27 +146,25 @@ namespace vkn
         m_instance = VK_NULL_HANDLE;
         VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &m_instance));
 
-        bool isCreated = m_instance != VK_NULL_HANDLE;
+        VK_ASSERT(m_instance != VK_NULL_HANDLE);
 
         if (dbgMessengerEnabled) {
             m_dbgMessenger = CreateDebugMessenger(m_instance, vkDbgMessengerCreateInfo);
-            isCreated = isCreated && m_dbgMessenger != VK_NULL_HANDLE;
+            VK_ASSERT(m_dbgMessenger != VK_NULL_HANDLE);
         }
-
-        VK_ASSERT(isCreated);
 
         m_apiVersion = info.apiVersion;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    void Instance::Destroy()
+    Instance& Instance::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         DestroyDebugMessenger(m_instance, m_dbgMessenger);
@@ -177,6 +175,8 @@ namespace vkn
         m_apiVersion = UINT32_MAX;
 
         Object::Destroy();
+
+        return *this;
     }
 
 

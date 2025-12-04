@@ -87,8 +87,8 @@ namespace vkn
     TextureView& TextureView::Create(const TextureViewCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Texture view %s is already created. Destroy at first", GetDebugName());
-            return *this;
+            VK_LOG_WARN("Recreation of texture view %s", GetDebugName());
+            Destroy();
         }
 
         const Texture* pOwner = info.pOwner;
@@ -212,8 +212,8 @@ namespace vkn
     Texture& Texture::Create(const TextureCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Texture %s is already created. Destroy at first", GetDebugName());
-            return *this;
+            VK_LOG_WARN("Recreation of texture %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -332,8 +332,8 @@ namespace vkn
     Sampler& Sampler::Create(const SamplerCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Sampler %s is already created. Destroy at first", GetDebugName());
-            return *this;
+            VK_LOG_WARN("Recreation of sampler %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());

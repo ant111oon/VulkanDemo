@@ -24,10 +24,10 @@ namespace vkn
         CmdBuffer(CmdBuffer&& cmdBuffer) noexcept;
         CmdBuffer& operator=(CmdBuffer&& cmdBuffer) noexcept;
 
-        void Reset(VkCommandBufferResetFlags flags = 0);
+        CmdBuffer& Reset(VkCommandBufferResetFlags flags = 0);
 
         CmdBuffer& Begin(const VkCommandBufferBeginInfo& beginInfo);
-        void End();
+        CmdBuffer& End();
         
         CmdBuffer& CmdPipelineBarrier2(const VkDependencyInfo& depInfo);
 
@@ -48,9 +48,10 @@ namespace vkn
         CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
         
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        CmdBuffer& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;
@@ -86,8 +87,8 @@ namespace vkn
     private:
         CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level);
 
-        bool Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level);
-        void Free();
+        CmdBuffer& Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level);
+        CmdBuffer& Free();
 
     private:
         enum StateFlags
@@ -127,18 +128,19 @@ namespace vkn
         CmdPool(CmdPool&& pool) noexcept;
         CmdPool& operator=(CmdPool&& pool) noexcept;
 
-        bool Create(const CmdPoolCreateInfo& info);
-        void Destroy();
+        CmdPool& Create(const CmdPoolCreateInfo& info);
+        CmdPool& Destroy();
 
-        void Reset(VkCommandPoolResetFlags flags = 0);
+        CmdPool& Reset(VkCommandPoolResetFlags flags = 0);
 
         CmdBuffer AllocCmdBuffer(VkCommandBufferLevel level);
-        void FreeCmdBuffer(CmdBuffer& cmdBuffer);
+        CmdPool& FreeCmdBuffer(CmdBuffer& cmdBuffer);
 
         template <typename... Args>
-        void SetDebugName(const char* pFmt, Args&&... args)
+        CmdPool& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pFmt, std::forward<Args>(args)...);
+            return *this;
         }
 
         const char* GetDebugName() const;

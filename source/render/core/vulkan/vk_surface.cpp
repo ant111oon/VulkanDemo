@@ -11,11 +11,11 @@ namespace vkn
     }
 
 
-    bool Surface::Create(const SurfaceCreateInfo& info)
+    Surface& Surface::Create(const SurfaceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Surface is already initialized");
-            return false;
+            VK_LOG_WARN("Recreation of Vulkan surface");
+            Destroy();
         }
 
         VK_ASSERT(info.pInstance && info.pInstance->IsCreated());
@@ -31,20 +31,18 @@ namespace vkn
 
         VK_CHECK(vkCreateWin32SurfaceKHR(m_pInstance->Get(), &vkWin32SurfCreateInfo, nullptr, &m_surface));
     #endif
+        VK_ASSERT(m_surface != VK_NULL_HANDLE);
 
-        const bool isCreated = m_surface != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        SetCreated(true);
 
-        SetCreated(isCreated);
-
-        return isCreated;
+        return *this;
     }
 
 
-    void Surface::Destroy()
+    Surface& Surface::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
         
         vkDestroySurfaceKHR(m_pInstance->Get(), m_surface, nullptr);
@@ -53,5 +51,7 @@ namespace vkn
         m_pInstance = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 }

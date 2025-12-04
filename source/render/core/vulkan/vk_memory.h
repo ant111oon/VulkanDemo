@@ -37,8 +37,8 @@ namespace vkn
 
         ~Allocator();
 
-        bool Create(const AllocatorCreateInfo& info);
-        void Destroy();
+        Allocator& Create(const AllocatorCreateInfo& info);
+        Allocator& Destroy();
 
         VmaAllocator Get() const
         {

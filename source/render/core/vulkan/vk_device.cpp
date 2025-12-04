@@ -33,11 +33,11 @@ namespace vkn
     }
 
 
-    bool Device::Create(const DeviceCreateInfo& info)
+    Device& Device::Create(const DeviceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Device is already initialized");
-            return false;
+            VK_LOG_WARN("Recreation of Vulkan device");
+            Destroy();
         }
 
         VK_ASSERT(info.pPhysDevice && info.pPhysDevice->IsCreated());
@@ -119,27 +119,21 @@ namespace vkn
 
         m_device = VK_NULL_HANDLE;
         VK_CHECK(vkCreateDevice(m_pPhysDevice->Get(), &deviceCreateInfo, nullptr, &m_device));
-        
-        const bool isDeviceInitialized = m_device != VK_NULL_HANDLE;
-        VK_ASSERT(isDeviceInitialized);
+        VK_ASSERT(m_device != VK_NULL_HANDLE);
         
         vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_queue);
+        VK_ASSERT(m_queue != VK_NULL_HANDLE);
 
-        const bool isQueueInitialized = m_queue != VK_NULL_HANDLE;
-        VK_ASSERT(isQueueInitialized);
+        SetCreated(true);
 
-        const bool isCreated = isDeviceInitialized && isQueueInitialized;
-
-        SetCreated(isCreated);
-
-        return isCreated;
+        return *this;
     }
 
 
-    void Device::Destroy()
+    Device& Device::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vkDestroyDevice(m_device, nullptr);
@@ -150,12 +144,16 @@ namespace vkn
         m_queue = VK_NULL_HANDLE;
 
         Object::Destroy();
+
+        return *this;
     }
 
 
-    void Device::WaitIdle() const
+    const Device& Device::WaitIdle() const
     {
         VK_ASSERT(IsCreated());
         VK_CHECK(vkDeviceWaitIdle(m_device));
+
+        return *this;
     }
 }

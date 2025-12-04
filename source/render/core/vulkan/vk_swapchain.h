@@ -38,11 +38,11 @@ namespace vkn
 
         ~Swapchain();
 
-        bool Create(const SwapchainCreateInfo& info);
-        void Destroy();
+        Swapchain& Create(const SwapchainCreateInfo& info);
+        Swapchain& Destroy();
 
-        bool Recreate(const SwapchainCreateInfo& info);
-        bool Resize(uint32_t width, uint32_t height);
+        Swapchain& Recreate(const SwapchainCreateInfo& info);
+        Swapchain& Resize(uint32_t width, uint32_t height);
 
         VkSwapchainKHR Get() const
         {

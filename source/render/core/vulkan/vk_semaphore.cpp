@@ -49,11 +49,11 @@ namespace vkn
     }
 
 
-    bool Semaphore::Create(const SemaphoreCreateInfo& info)
+    Semaphore& Semaphore::Create(const SemaphoreCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Semaphore %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of semaphore %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -66,19 +66,17 @@ namespace vkn
 
         m_semaphore = VK_NULL_HANDLE;
         VK_CHECK(vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, &m_semaphore));
-
-        const bool isCreated = m_semaphore != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_semaphore != VK_NULL_HANDLE);
 
         m_pDevice = info.pDevice;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    bool Semaphore::Create(Device* pDevice, VkSemaphoreCreateFlags flags)
+    Semaphore& Semaphore::Create(Device* pDevice, VkSemaphoreCreateFlags flags)
     {
         SemaphoreCreateInfo info = {};
         info.pDevice = pDevice;
@@ -88,10 +86,10 @@ namespace vkn
     }
 
 
-    void Semaphore::Destroy()
+    Semaphore& Semaphore::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         vkDestroySemaphore(m_pDevice->Get(), m_semaphore, nullptr);
@@ -100,6 +98,8 @@ namespace vkn
         m_pDevice = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 
 

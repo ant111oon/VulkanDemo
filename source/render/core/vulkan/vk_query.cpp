@@ -45,11 +45,11 @@ namespace vkn
     }
 
 
-    bool QueryPool::Create(const QueryCreateInfo& info)
+    QueryPool& QueryPool::Create(const QueryCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("QueryPool %s is already created", GetDebugName());
-            return false;
+            VK_LOG_WARN("Recreation of query pool %s", GetDebugName());
+            Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
@@ -65,23 +65,21 @@ namespace vkn
 
         m_pool = VK_NULL_HANDLE;
         VK_CHECK(vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, nullptr, &m_pool));
-
-        const bool isCreated = m_pool != VK_NULL_HANDLE;
-        VK_ASSERT(isCreated);
+        VK_ASSERT(m_pool != VK_NULL_HANDLE);
 
         m_pDevice = info.pDevice;
         m_queryCount = info.queryCount;
 
-        SetCreated(isCreated);
+        SetCreated(true);
 
-        return isCreated;
+        return *this;
     }
 
 
-    void QueryPool::Destroy()
+    QueryPool& QueryPool::Destroy()
     {
         if (!IsCreated()) {
-            return;
+            return *this;
         }
 
         VkDevice vkDevice = m_pDevice->Get();
@@ -94,10 +92,12 @@ namespace vkn
         m_pDevice = nullptr;
 
         Object::Destroy();
+
+        return *this;
     }
 
 
-    void QueryPool::GetResults(uint32_t firstQuery, uint32_t queryCount, size_t dataSize, void* pData, VkDeviceSize stride, VkQueryResultFlags flags) const
+    const QueryPool& QueryPool::GetResults(uint32_t firstQuery, uint32_t queryCount, size_t dataSize, void* pData, VkDeviceSize stride, VkQueryResultFlags flags) const
     {
         VK_ASSERT(IsCreated());
         VK_ASSERT(pData);
@@ -105,11 +105,11 @@ namespace vkn
 
         const VkResult result = vkGetQueryPoolResults(m_pDevice->Get(), m_pool, firstQuery, queryCount, dataSize, pData, stride, flags);
 
-        if (result == VK_NOT_READY) {
-            return;
+        if (result != VK_NOT_READY) {
+            VK_CHECK(result);
         }
 
-        VK_CHECK(result);
+        return *this;
     }
 
 
