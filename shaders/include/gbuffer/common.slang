@@ -1,7 +1,8 @@
-#ifndef BASE_COMMON_H
-#define BASE_COMMON_H
+#ifndef GBUFFER_COMMON_H
+#define GBUFFER_COMMON_H
 
-struct BASE_INDIRECT_DRAW_CMD
+
+struct GBUFFER_INDIRECT_DRAW_CMD
 {
     // NOTE: Don't change order of this variables!!!
     uint INDEX_COUNT;

@@ -321,14 +321,14 @@ struct Vertex
 };
 
 
-struct BASE_RENDER_BINDLESS_REGISTRY
+struct GBUFFER_BINDLESS_REGISTRY
 {
     glm::vec3 PAD0;
     glm::uint INST_INFO_IDX;
 };
 
 
-struct BASE_CULLING_BINDLESS_REGISTRY
+struct GBUFFER_CULLING_BINDLESS_REGISTRY
 {
     glm::vec3 PAD0;
     glm::uint INST_COUNT;
@@ -374,7 +374,7 @@ struct COMMON_INST_INFO
 };
 
 
-struct BASE_INDIRECT_DRAW_CMD
+struct GBUFFER_INDIRECT_DRAW_CMD
 {
     // NOTE: Don't change order of this variables!!!
     glm::uint INDEX_COUNT;
@@ -596,11 +596,11 @@ static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
 static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
 static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 
-static constexpr size_t BASE_CULL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t BASE_CULL_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GBUFFER_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GBUFFER_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
 
-static constexpr size_t BASE_RENDER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t BASE_RENDER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
@@ -646,17 +646,17 @@ static VkDescriptorPool      s_commonDescriptorSetPool = VK_NULL_HANDLE;
 static VkDescriptorSet       s_commonDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_commonDescriptorSetLayout = VK_NULL_HANDLE;
 
-static VkDescriptorSet       s_baseCullingDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_baseCullingDescriptorSetLayout = VK_NULL_HANDLE;
+static VkDescriptorSet       s_gbufferCullingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_gbufferCullingDescriptorSetLayout = VK_NULL_HANDLE;
 
-static VkDescriptorSet       s_baseRenderDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_baseRenderDescriptorSetLayout = VK_NULL_HANDLE;
+static VkDescriptorSet       s_gbufferRenderDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_gbufferRenderDescriptorSetLayout = VK_NULL_HANDLE;
 
-static VkPipelineLayout s_baseRenderPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_baseRenderPipeline = VK_NULL_HANDLE;
+static VkPipelineLayout s_gbufferRenderPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_gbufferRenderPipeline = VK_NULL_HANDLE;
 
-static VkPipelineLayout s_baseCullingPipelineLayout = VK_NULL_HANDLE;
-static VkPipeline       s_baseCullingPipeline = VK_NULL_HANDLE;
+static VkPipelineLayout s_gbufferCullingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_gbufferCullingPipeline = VK_NULL_HANDLE;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -843,8 +843,8 @@ namespace DbgUI
             }
 
         #ifdef ENG_BUILD_DEBUG
-            ImGui::Checkbox("BasePass/Use Indirect Draw", &s_useMeshIndirectDraw);
-            ImGui::Checkbox("BasePass/Use Culling", &s_useMeshCulling);
+            ImGui::Checkbox("GBuffer Pass/Use Indirect Draw", &s_useMeshIndirectDraw);
+            ImGui::Checkbox("GBuffer Pass/Use Culling", &s_useMeshCulling);
             if (!s_useMeshIndirectDraw) {
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Mesh Count: %zu)", s_dbgDrawnMeshCount);
@@ -1198,31 +1198,31 @@ static void CreateCommonDescriptorSetLayout()
 }
 
 
-static void CreateBaseCullingDescriptorSetLayout()
+static void CreateGBufferCullingDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutBuilder builder;
 
-    s_baseCullingDescriptorSetLayout = builder
+    s_gbufferCullingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(BASE_CULL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(BASE_CULL_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(GBUFFER_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(GBUFFER_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
-    CORE_ASSERT(s_baseCullingDescriptorSetLayout != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferCullingDescriptorSetLayout != VK_NULL_HANDLE);
 }
 
 
-static void CreateBaseRenderDescriptorSetLayout()
+static void CreateGBufferDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutBuilder builder;
 
-    s_baseRenderDescriptorSetLayout = builder
+    s_gbufferRenderDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(BASE_RENDER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(BASE_RENDER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
-    CORE_ASSERT(s_baseRenderDescriptorSetLayout != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferRenderDescriptorSetLayout != VK_NULL_HANDLE);
 }
 
 
@@ -1235,18 +1235,18 @@ static void AllocateDescriptorSets()
     allocator
         .SetPool(s_commonDescriptorSetPool)
         .AddLayout(s_commonDescriptorSetLayout)
-        .AddLayout(s_baseCullingDescriptorSetLayout)
-        .AddLayout(s_baseRenderDescriptorSetLayout)
+        .AddLayout(s_gbufferCullingDescriptorSetLayout)
+        .AddLayout(s_gbufferRenderDescriptorSetLayout)
         .Allocate(descriptorSets);
 
     s_commonDescriptorSet = descriptorSets[0];
     CORE_ASSERT(s_commonDescriptorSet != VK_NULL_HANDLE);
     
-    s_baseCullingDescriptorSet = descriptorSets[1];
-    CORE_ASSERT(s_baseCullingDescriptorSet != VK_NULL_HANDLE);
+    s_gbufferCullingDescriptorSet = descriptorSets[1];
+    CORE_ASSERT(s_gbufferCullingDescriptorSet != VK_NULL_HANDLE);
     
-    s_baseRenderDescriptorSet  = descriptorSets[2];
-    CORE_ASSERT(s_baseRenderDescriptorSet != VK_NULL_HANDLE);
+    s_gbufferRenderDescriptorSet  = descriptorSets[2];
+    CORE_ASSERT(s_gbufferRenderDescriptorSet != VK_NULL_HANDLE);
 }
 
 
@@ -1255,42 +1255,42 @@ static void CreateDesriptorSets()
     CreateCommonDescriptorPool();
 
     CreateCommonDescriptorSetLayout();
-    CreateBaseCullingDescriptorSetLayout();
-    CreateBaseRenderDescriptorSetLayout();
+    CreateGBufferCullingDescriptorSetLayout();
+    CreateGBufferDescriptorSetLayout();
 
     AllocateDescriptorSets();
 }
 
 
-static void CreateBaseRenderPipelineLayout()
+static void CreateGBufferPipelineLayout()
 {
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
-    s_baseRenderPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BASE_RENDER_BINDLESS_REGISTRY))
+    s_gbufferRenderPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_baseRenderDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_gbufferRenderDescriptorSetLayout)
         .Build();
 
-    CORE_ASSERT(s_baseRenderPipelineLayout != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferRenderPipelineLayout != VK_NULL_HANDLE);
 }
 
 
-static void CreateBaseCullingPipelineLayout()
+static void CreateGBufferCullingPipelineLayout()
 {
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
-    s_baseCullingPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY))
+    s_gbufferCullingPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GBUFFER_CULLING_BINDLESS_REGISTRY))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_baseCullingDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_gbufferCullingDescriptorSetLayout)
         .Build();
 
-    CORE_ASSERT(s_baseCullingPipelineLayout != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferCullingPipelineLayout != VK_NULL_HANDLE);
 }
     
 
-static void CreateBaseRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
     std::vector<uint8_t> shaderCodeBuffer;
     std::array shaderModules = {
@@ -1326,7 +1326,7 @@ static void CreateBaseRenderPipeline(const fs::path& vsPath, const fs::path& psP
     #endif
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_baseRenderPipelineLayout);
+        .SetLayout(s_gbufferRenderPipelineLayout);
 
     VkPipelineColorBlendAttachmentState blendState = {};
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -1337,46 +1337,46 @@ static void CreateBaseRenderPipeline(const fs::path& vsPath, const fs::path& psP
     }
     builder.SetDepthAttachmentFormat(s_GBuffer.depthRT.GetFormat());
     
-    s_baseRenderPipeline = builder.Build();
+    s_gbufferRenderPipeline = builder.Build();
 
     for (VkShaderModule& shader : shaderModules) {
         vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
         shader = VK_NULL_HANDLE;
     }
 
-    CORE_ASSERT(s_baseRenderPipeline != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferRenderPipeline != VK_NULL_HANDLE);
 }
 
 
-static void CreateBaseCullingPipeline(const fs::path& csPath)
+static void CreateGBufferCullingPipeline(const fs::path& csPath)
 {
     std::vector<uint8_t> shaderCodeBuffer;
     VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
 
     vkn::ComputePipelineBuilder builder;
 
-    s_baseCullingPipeline = builder
+    s_gbufferCullingPipeline = builder
         .SetShader(shaderModule, "main")
-        .SetLayout(s_baseCullingPipelineLayout)
+        .SetLayout(s_gbufferCullingPipelineLayout)
         .Build();
     
     vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
     shaderModule = VK_NULL_HANDLE;
 
-    CORE_ASSERT(s_baseCullingPipeline != VK_NULL_HANDLE);
+    CORE_ASSERT(s_gbufferCullingPipeline != VK_NULL_HANDLE);
 }
 
 
 static void CreatePipelines()
 {
-    CreateBaseRenderPipelineLayout();
-    CreateBaseCullingPipelineLayout();
-    CreateBaseRenderPipeline("shaders/bin/base_render.vs.spv", "shaders/bin/base_render.ps.spv");
-    CreateBaseCullingPipeline("shaders/bin/base_culling.cs.spv");
+    CreateGBufferPipelineLayout();
+    CreateGBufferCullingPipelineLayout();
+    CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
+    CreateGBufferCullingPipeline("shaders/bin/gbuffer.cs.spv");
 }
 
 
-void CreateBaseRenderIndirectDrawBuffers()
+void CreateGBufferIndirectDrawBuffers()
 {
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -1384,7 +1384,7 @@ void CreateBaseRenderIndirectDrawBuffers()
 
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(BASE_INDIRECT_DRAW_CMD);
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(GBUFFER_INDIRECT_DRAW_CMD);
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
@@ -1634,7 +1634,7 @@ static void CreateCommonSamplers()
 }
 
 
-static void WriteBaseCullingDescriptorSet()
+static void WriteGBufferCullingDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
@@ -1645,8 +1645,8 @@ static void WriteBaseCullingDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
     drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_baseCullingDescriptorSet;
-    drawIndirectCommandsBufferWrite.dstBinding = BASE_CULL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    drawIndirectCommandsBufferWrite.dstSet = s_gbufferCullingDescriptorSet;
+    drawIndirectCommandsBufferWrite.dstBinding = GBUFFER_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsBufferWrite.descriptorCount = 1;
     drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1661,8 +1661,8 @@ static void WriteBaseCullingDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_baseCullingDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = BASE_CULL_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstSet = s_gbufferCullingDescriptorSet;
+    drawIndirectCommandsCountBufferWrite.dstBinding = GBUFFER_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
     drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1674,7 +1674,7 @@ static void WriteBaseCullingDescriptorSet()
 }
 
 
-static void WriteBaseRenderDescriptorSet()
+static void WriteGBufferDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
@@ -1685,8 +1685,8 @@ static void WriteBaseRenderDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
     drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_baseRenderDescriptorSet;
-    drawIndirectCommandsBufferWrite.dstBinding = BASE_RENDER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    drawIndirectCommandsBufferWrite.dstSet = s_gbufferRenderDescriptorSet;
+    drawIndirectCommandsBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsBufferWrite.descriptorCount = 1;
     drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1701,8 +1701,8 @@ static void WriteBaseRenderDescriptorSet()
 
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_baseRenderDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = BASE_RENDER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstSet = s_gbufferRenderDescriptorSet;
+    drawIndirectCommandsCountBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
     drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1872,8 +1872,8 @@ static void WriteCommonDescriptorSet()
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
-    WriteBaseCullingDescriptorSet();
-    WriteBaseRenderDescriptorSet();
+    WriteGBufferCullingDescriptorSet();
+    WriteGBufferDescriptorSet();
 }
 
 
@@ -2941,19 +2941,19 @@ void PresentImage(uint32_t imageIndex)
 }
 
 
-void BaseCullingPass(vkn::CmdBuffer& cmdBuffer)
+void GBufferCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Culling_Pass", 50, 50, 255, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Culling_Pass", 50, 50, 255, 255);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_gbufferCullingPipeline);
     
-    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_baseCullingDescriptorSet };
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_baseCullingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_gbufferCullingDescriptorSet };
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_gbufferCullingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
-    BASE_CULLING_BINDLESS_REGISTRY registry = {};
+    GBUFFER_CULLING_BINDLESS_REGISTRY registry = {};
     registry.INST_COUNT = s_cpuInstData.size();
 
-    vkCmdPushConstants(cmdBuffer.Get(), s_baseCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BASE_CULLING_BINDLESS_REGISTRY), &registry);
+    vkCmdPushConstants(cmdBuffer.Get(), s_gbufferCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GBUFFER_CULLING_BINDLESS_REGISTRY), &registry);
 
     vkCmdDispatch(cmdBuffer.Get(), (s_cpuInstData.size() + 63) / 64, 1, 1);
 
@@ -3012,9 +3012,9 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 }
 
 
-void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
+void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "BaseMesh_Render_Pass", 128, 128, 128, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Render_Pass", 128, 128, 128, 255);
 
     VkViewport viewport = {};
     viewport.width = extent.width;
@@ -3027,10 +3027,10 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     scissor.extent = extent;
     cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_baseRenderPipeline);
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_gbufferRenderPipeline);
     
-    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_baseRenderDescriptorSet };
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_baseRenderPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_gbufferRenderDescriptorSet };
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_gbufferRenderPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
     cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -3049,10 +3049,10 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
 
             ++s_dbgDrawnMeshCount;
 
-            BASE_RENDER_BINDLESS_REGISTRY registry = {};
+            GBUFFER_BINDLESS_REGISTRY registry = {};
             registry.INST_INFO_IDX = i;
 
-            vkCmdPushConstants(cmdBuffer.Get(), s_baseRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(BASE_RENDER_BINDLESS_REGISTRY), &registry);
+            vkCmdPushConstants(cmdBuffer.Get(), s_gbufferRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_BINDLESS_REGISTRY), &registry);
 
             const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
             cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
@@ -3060,7 +3060,7 @@ void BaseRenderPass(vkn::CmdBuffer& cmdBuffer, const VkExtent2D& extent)
     } else 
 #endif
     {
-        cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(BASE_INDIRECT_DRAW_CMD));
+        cmdBuffer.CmdDrawIndexedIndirect(s_drawIndirectCommandsBuffer, 0, s_drawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(GBUFFER_INDIRECT_DRAW_CMD));
     }
 }
 
@@ -3107,7 +3107,7 @@ void RenderScene()
     {
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "CMD_Buffer_Frame", 255, 165, 0, 255);
 
-        BaseCullingPass(cmdBuffer);
+        GBufferCullingPass(cmdBuffer);
 
         for (vkn::Texture& colorRT : s_GBuffer.colorRTs) {
             CmdPipelineImageBarrier(
@@ -3175,7 +3175,7 @@ void RenderScene()
         renderingInfo.pDepthAttachment = &depthAttachment;
         
         cmdBuffer.CmdBeginRendering(renderingInfo);
-            BaseRenderPass(cmdBuffer, renderingInfo.renderArea.extent);
+            GBufferRenderPass(cmdBuffer, renderingInfo.renderArea.extent);
 
             DbgUI::FillData();
             DbgUI::EndFrame();
@@ -3499,7 +3499,7 @@ int main(int argc, char* argv[])
     CreateGBuffer();
     CreateCommonSamplers();
     CreateCommonConstBuffer();
-    CreateBaseRenderIndirectDrawBuffers();
+    CreateGBufferIndirectDrawBuffers();
     CreateDesriptorSets();
     CreatePipelines();
 
@@ -3535,14 +3535,14 @@ int main(int argc, char* argv[])
     s_vkDevice.WaitIdle();
 
     
-    vkDestroyPipeline(s_vkDevice.Get(), s_baseCullingPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_baseCullingPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_gbufferCullingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_gbufferCullingPipelineLayout, nullptr);
 
-    vkDestroyPipeline(s_vkDevice.Get(), s_baseRenderPipeline, nullptr);
-    vkDestroyPipelineLayout(s_vkDevice.Get(), s_baseRenderPipelineLayout, nullptr);
+    vkDestroyPipeline(s_vkDevice.Get(), s_gbufferRenderPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_gbufferRenderPipelineLayout, nullptr);
     
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_baseCullingDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_baseRenderDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferCullingDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferRenderDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);

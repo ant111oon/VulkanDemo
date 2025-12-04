@@ -1,10 +1,10 @@
 #include "registers/common_registers.slang"
 #include "math/color_utils.slang"
 
-#include "base/vsout.slang"
+#include "gbuffer/vsout.slang"
 
 
-struct BASE_PS_OUTPUT
+struct GBUFFER_PS_OUTPUT
 {
     [[vk::location(0)]] float4 color;
     [[vk::location(1)]] float4 normal;
@@ -12,9 +12,9 @@ struct BASE_PS_OUTPUT
 
 
 [shader("fragment")]
-BASE_PS_OUTPUT main(BASE_VS_OUTPUT input)
+GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 {
-    BASE_PS_OUTPUT result = (BASE_PS_OUTPUT)0;
+    GBUFFER_PS_OUTPUT result = (GBUFFER_PS_OUTPUT)0;
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];

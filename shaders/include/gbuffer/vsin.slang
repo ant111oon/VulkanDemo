@@ -1,13 +1,13 @@
-#ifndef TEST_VS_IN_H
-#define TEST_VS_IN_H
+#ifndef GBUFFER_VS_IN_H
+#define GBUFFER_VS_IN_H
 
 #include "registers/common_registers.slang"
-#include "registers/base_render_registers.slang"
+#include "registers/gbuffer_registers.slang"
 
 #include "math/half.slang"
 
 
-struct BASE_INPUT_DATA
+struct GBUFFER_INPUT_DATA
 {
     float3 position;
     float3 lnorm;
@@ -15,9 +15,9 @@ struct BASE_INPUT_DATA
 };
 
 
-BASE_INPUT_DATA PrepareBaseVSInputData(uint vertID)
+GBUFFER_INPUT_DATA PrepareBaseVSInputData(uint vertID)
 {
-    BASE_INPUT_DATA inputData = (BASE_INPUT_DATA)0;
+    GBUFFER_INPUT_DATA inputData = (GBUFFER_INPUT_DATA)0;
 
     static const uint VERTEX_DATA_SIZE_UI4 = 1;
     const uint offset = vertID * VERTEX_DATA_SIZE_UI4;

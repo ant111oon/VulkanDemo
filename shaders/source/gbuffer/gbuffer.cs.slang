@@ -1,5 +1,5 @@
 #include "registers/common_registers.slang"
-#include "registers/base_culling_registers.slang"
+#include "registers/gbuffer_culling_registers.slang"
 
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
@@ -23,15 +23,15 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
 void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID)
 {
     uint idx = 0;
-    InterlockedAdd(BASE_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
+    InterlockedAdd(GBUFFER_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
 
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
 
-    BASE_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
+    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
 }
  
 
@@ -41,14 +41,14 @@ void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uin
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
-        InterlockedExchange(BASE_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
+        InterlockedExchange(GBUFFER_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
     }
 
     AllMemoryBarrier();
 
     const uint instID = DTid.x;
 
-    if (instID >= CULLING_REGISTRY.INST_COUNT) {
+    if (instID >= GBUFFER_CULLING_REGISTRY.INST_COUNT) {
         return;
     }
 
@@ -56,7 +56,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
 
 #ifdef ENV_DEBUG
-    if (!COMMON_DBG_IS_MESH_GPU_CULLING) {
+    if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {
         PushCmd(meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID);
         return;
     }
