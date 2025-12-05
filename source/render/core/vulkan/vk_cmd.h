@@ -40,6 +40,9 @@ namespace vkn
 
         CmdBuffer& CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports);
         CmdBuffer& CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors);
+
+        CmdBuffer& CmdSetDepthCompareOp(VkCompareOp op);
+        CmdBuffer& CmdSetDepthWriteEnable(VkBool32 enabled);
         
         CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 

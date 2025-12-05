@@ -1,5 +1,5 @@
 #include "registers/common_registers.slang"
-#include "registers/gbuffer_culling_registers.slang"
+#include "registers/mesh_culling_registers.slang"
 
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
@@ -23,15 +23,15 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
 void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID)
 {
     uint idx = 0;
-    InterlockedAdd(GBUFFER_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
+    InterlockedAdd(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
 
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].VERTEX_OFFSET = firstVertex;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
 
-    GBUFFER_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
+    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
 }
  
 
@@ -41,14 +41,14 @@ void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uin
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
-        InterlockedExchange(GBUFFER_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
+        InterlockedExchange(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
     }
 
     AllMemoryBarrier();
 
     const uint instID = DTid.x;
 
-    if (instID >= GBUFFER_CULLING_REGISTRY.INST_COUNT) {
+    if (instID >= MESH_CULLING_REGISTRY.INST_COUNT) {
         return;
     }
 

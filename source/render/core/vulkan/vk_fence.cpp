@@ -121,6 +121,20 @@ namespace vkn
     }
 
 
+    VkResult Fence::GetStatus() const
+    {
+        VK_ASSERT(IsCreated());
+        return vkGetFenceStatus(m_pDevice->Get(), m_fence);
+    }
+
+
+    const Fence& Fence::GetStatus(VkResult& status) const
+    {
+        status = GetStatus();
+        return *this;
+    }
+
+
     const char* Fence::GetDebugName() const
     {
         return Object::GetDebugName("Fence");

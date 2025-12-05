@@ -35,6 +35,9 @@ namespace vkn
         Fence& Reset();
         Fence& WaitFor(uint64_t timeout);
 
+        VkResult GetStatus() const;
+        const Fence& GetStatus(VkResult& status) const;
+
         template <typename... Args>
         Fence& SetDebugName(const char* pFmt, Args&&... args)
         {

@@ -15,7 +15,7 @@ struct GBUFFER_INPUT_DATA
 };
 
 
-GBUFFER_INPUT_DATA PrepareBaseVSInputData(uint vertID)
+GBUFFER_INPUT_DATA PrepareGBufferVSInputData(uint vertID)
 {
     GBUFFER_INPUT_DATA inputData = (GBUFFER_INPUT_DATA)0;
 

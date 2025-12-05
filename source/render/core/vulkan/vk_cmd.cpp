@@ -161,6 +161,26 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdSetDepthCompareOp(VkCompareOp op)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetDepthCompareOp(m_cmdBuffer, op);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdSetDepthWriteEnable(VkBool32 enabled)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetDepthWriteEnable(m_cmdBuffer, enabled);
+
+        return *this;
+    }
+
+
     CmdBuffer& CmdBuffer::CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
