@@ -1,7 +1,7 @@
 #include "registers/common_registers.slang"
 
-#include "gbuffer/vsin.slang"
-#include "gbuffer/vsout.slang"
+#include "pass/gbuffer/vsin.slang"
+#include "pass/gbuffer/vsout.slang"
 
 
 [shader("vertex")]

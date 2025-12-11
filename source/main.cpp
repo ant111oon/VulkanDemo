@@ -3113,7 +3113,7 @@ void PresentImage(uint32_t imageIndex)
 
 void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 255, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_meshCullingPipeline);
     
@@ -3288,7 +3288,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Render_Pass", 20, 255, 20, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Render_Pass", 50, 200, 50, 255);
 
     for (vkn::Texture& colorRT : s_GBuffer.colorRTs) {
         CmdPipelineImageBarrier(
@@ -3421,7 +3421,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 255, 50, 50, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
 
     DbgUI::FillData();
     DbgUI::EndFrame();
@@ -3459,7 +3459,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 static void CopyRT0ToSwapchain(vkn::CmdBuffer& cmdBuffer, VkImage swapchainImage)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "RT0_Swapchain_Copy", 50, 255, 255, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "RT0_Swapchain_Copy", 50, 200, 200, 255);
 
     CmdPipelineImageBarrier(
         cmdBuffer,
@@ -3771,8 +3771,8 @@ int main(int argc, char* argv[])
 
     WindowInitInfo wndInitInfo = {};
     wndInitInfo.pTitle = APP_NAME;
-    wndInitInfo.width = 980;
-    wndInitInfo.height = 640;
+    wndInitInfo.width = 1280;
+    wndInitInfo.height = 720;
     wndInitInfo.isVisible = false;
 
     s_pWnd->Create(wndInitInfo);

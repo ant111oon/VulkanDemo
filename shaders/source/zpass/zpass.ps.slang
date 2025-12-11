@@ -1,4 +1,4 @@
-#include "zpass/vsout.slang"
+#include "pass/zpass/vsout.slang"
 
 
 struct ZPASS_PS_OUTPUT

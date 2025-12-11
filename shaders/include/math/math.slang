@@ -25,8 +25,29 @@ static const float3 M3D_AXIS_X = float3(1.f, 0.f, 0.f);
 static const float3 M3D_AXIS_Y = float3(0.f, 1.f, 0.f);
 static const float3 M3D_AXIS_Z = float3(0.f, 0.f, 1.f);
 
-#define M3D_IS_ZERO(x)      (length(x) < M3D_EPS)
-#define M3D_IS_EQUAL(l, r)  (M3D_IS_ZERO((l) - (r)))
+
+bool IsZero(in float value)
+{
+    return abs(value) < M3D_EPS;
+}
+
+
+bool IsZero(in float2 vec)
+{
+    return IsZero(vec.x) && IsZero(vec.y);
+}
+
+
+bool IsZero(in float3 vec)
+{
+    return IsZero(vec.xy) && IsZero(vec.z);
+}
+
+
+bool IsZero(in float4 vec)
+{
+    return IsZero(vec.xyz) && IsZero(vec.w);
+}
 
 
 bool IsFlagSet(uint value, uint mask)
@@ -34,10 +55,15 @@ bool IsFlagSet(uint value, uint mask)
     return (value & mask) != 0;
 }
 
+
 bool IsBitSet(uint value, uint bit)
 {
     return IsFlagSet(value, uint(1) << bit);
 }
+
+
+#define M3D_IS_ZERO(x)      IsZero(x)
+#define M3D_IS_EQUAL(l, r)  M3D_IS_ZERO((l) - (r))
 
 
 #endif
