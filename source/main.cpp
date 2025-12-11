@@ -531,6 +531,7 @@ static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "EMISSIVE"
 };
 
+
 static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
     "NEAREST_REPEAT",
     "NEAREST_MIRRORED_REPEAT",
@@ -1280,32 +1281,29 @@ static void AllocateDescriptorSets()
 {
     vkn::DescriptorSetAllocator allocator;
 
-    VkDescriptorSet descriptorSets[] = {
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE
+    std::array descriptorSetsPairs = {
+        std::make_pair(&s_commonDescriptorSetLayout,        &s_commonDescriptorSet),
+        std::make_pair(&s_meshCullingDescriptorSetLayout,   &s_meshCullingDescriptorSet),
+        std::make_pair(&s_zpassDescriptorSetLayout,         &s_zpassDescriptorSet),
+        std::make_pair(&s_gbufferRenderDescriptorSetLayout, &s_gbufferRenderDescriptorSet),
     };
 
-    allocator
-        .SetPool(s_commonDescriptorSetPool)
-        .AddLayout(s_commonDescriptorSetLayout)
-        .AddLayout(s_zpassDescriptorSetLayout)
-        .AddLayout(s_meshCullingDescriptorSetLayout)
-        .AddLayout(s_gbufferRenderDescriptorSetLayout)
-        .Allocate(descriptorSets);
+    std::array<VkDescriptorSet, descriptorSetsPairs.size()> descriptorSets;
 
-    s_commonDescriptorSet = descriptorSets[0];
-    CORE_ASSERT(s_commonDescriptorSet != VK_NULL_HANDLE);
-    
-    s_zpassDescriptorSet = descriptorSets[1];
-    CORE_ASSERT(s_zpassDescriptorSet != VK_NULL_HANDLE);
+    allocator.SetPool(s_commonDescriptorSetPool);
 
-    s_meshCullingDescriptorSet = descriptorSets[2];
-    CORE_ASSERT(s_meshCullingDescriptorSet != VK_NULL_HANDLE);
+    for (auto& [pLayout, pSet] : descriptorSetsPairs) {
+        allocator.AddLayout(*pLayout);
+    }
     
-    s_gbufferRenderDescriptorSet  = descriptorSets[3];
-    CORE_ASSERT(s_gbufferRenderDescriptorSet != VK_NULL_HANDLE);
+    allocator.Allocate(descriptorSets);
+
+    for (size_t i = 0; i < descriptorSets.size(); ++i) {
+        auto& [pLayout, pSet] = descriptorSetsPairs[i];
+
+        *pSet = descriptorSets[i];
+        CORE_ASSERT(*pSet != VK_NULL_HANDLE);
+    }
 }
 
 
@@ -1319,6 +1317,20 @@ static void CreateDesriptorSets()
     CreateGBufferDescriptorSetLayout();
 
     AllocateDescriptorSets();
+}
+
+
+static void CreateMeshCullingPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_meshCullingPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY))
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_meshCullingDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_meshCullingPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -1350,17 +1362,22 @@ static void CreateGBufferPipelineLayout()
 }
 
 
-static void CreateMeshCullingPipelineLayout()
+static void CreateMeshCullingPipeline(const fs::path& csPath)
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
 
-    s_meshCullingPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_meshCullingDescriptorSetLayout)
+    vkn::ComputePipelineBuilder builder;
+
+    s_meshCullingPipeline = builder
+        .SetShader(shaderModule, "main")
+        .SetLayout(s_meshCullingPipelineLayout)
         .Build();
+    
+    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
 
-    CORE_ASSERT(s_meshCullingPipelineLayout != VK_NULL_HANDLE);
+    CORE_ASSERT(s_meshCullingPipeline != VK_NULL_HANDLE);
 }
 
 
@@ -1475,33 +1492,16 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
 }
 
 
-static void CreateMeshCullingPipeline(const fs::path& csPath)
-{
-    std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
-
-    vkn::ComputePipelineBuilder builder;
-
-    s_meshCullingPipeline = builder
-        .SetShader(shaderModule, "main")
-        .SetLayout(s_meshCullingPipelineLayout)
-        .Build();
-    
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
-
-    CORE_ASSERT(s_meshCullingPipeline != VK_NULL_HANDLE);
-}
 
 
 static void CreatePipelines()
 {
+    CreateMeshCullingPipelineLayout();
     CreateZPassPipelineLayout();
     CreateGBufferPipelineLayout();
-    CreateMeshCullingPipelineLayout();
+    CreateMeshCullingPipeline("shaders/bin/gbuffer.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
-    CreateMeshCullingPipeline("shaders/bin/gbuffer.cs.spv");
 }
 
 
