@@ -2,7 +2,7 @@
 #define GBUFFER_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/common.slang"
+#include "common/common_structs.slang"
 
 
 struct GBUFFER_BINDLESS_REGISTRY

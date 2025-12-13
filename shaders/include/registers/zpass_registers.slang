@@ -2,7 +2,7 @@
 #define ZPASS_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/common.slang"
+#include "common/common_structs.slang"
 
 
 struct ZPASS_BINDLESS_REGISTRY

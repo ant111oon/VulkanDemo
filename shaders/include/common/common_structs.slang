@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef COMMON_STRUCTS_H
+#define COMMON_STRUCTS_H
 
 
 struct COMMON_INDIRECT_DRAW_CMD

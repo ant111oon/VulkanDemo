@@ -2,7 +2,7 @@
 #define MESH_CULLING_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/common.slang"
+#include "common/common_structs.slang"
 
 
 struct MESH_CULLING_BINDLESS_REGISTRY
