@@ -406,16 +406,17 @@ struct COMMON_CB_DATA
 };
 
 
-enum class COMMON_DBG_FLAG_MASKS
+enum COMMON_DBG_FLAG_MASKS
 {
-    OUTPUT_COMMON_MTL_ALBEDO_TEX = 0x1,
-    OUTPUT_COMMON_MTL_NORMAL_TEX = 0x2,
-    OUTPUT_COMMON_MTL_MR_TEX = 0x4,
-    OUTPUT_COMMON_MTL_AO_TEX = 0x8,
-    OUTPUT_COMMON_MTL_EMISSIVE_TEX = 0x10,
+    DBG_VIS_GBUFFER_ALBEDO_MASK = 0x1,
+    DBG_VIS_GBUFFER_NORMAL_MASK = 0x2,
+    DBG_VIS_GBUFFER_METALNESS_MASK = 0x4,
+    DBG_VIS_GBUFFER_ROUGHNESS_MASK = 0x8,
+    DBG_VIS_GBUFFER_AO_MASK = 0x10,
+    DBG_VIS_GBUFFER_EMISSIVE_MASK = 0x20,
 
-    USE_MESH_INDIRECT_DRAW = 0x20,
-    USE_MESH_GPU_CULLING = 0x40
+    USE_MESH_INDIRECT_DRAW_MASK = 0x40,
+    USE_MESH_GPU_CULLING_MASK = 0x80,
 };
 
 
@@ -526,7 +527,8 @@ struct GBuffer
 static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
     "ALBEDO",
     "NORMAL",
-    "MR",
+    "METALNESS",
+    "ROUGHNESS",
     "AO",
     "EMISSIVE"
 };
@@ -842,43 +844,48 @@ namespace DbgUI
             constexpr const char* BUILD_TYPE_STR = "RELEASE";
         #endif            
 
+            ImGui::SeparatorText("Common Info");
             ImGui::Text("Build Type: %s", BUILD_TYPE_STR);
             ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
 
-            ImGui::Separator();
             ImGui::NewLine();
-
-            ImGui::Text("Cursor Position: [x: %d, y: %d]", s_pWnd->GetCursorX(), s_pWnd->GetCursorY());
+            ImGui::SeparatorText("Camera Info");
             ImGui::Text("Fly Camera Mode (F5):");
             ImGui::SameLine(); 
             ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
             
-            ImGui::Separator();
             ImGui::NewLine();
-
-            ImGui::Text("Material Debug Texture: %s", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
-            if (ImGui::IsItemHovered()) {
-                if (ImGui::BeginTooltip()) {
-                    ImGui::Text("Use <-/-> arrows to switch");
+            ImGui::SeparatorText("Debug Output");
+            if (ImGui::BeginCombo("Render Target", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx])) {
+                for (size_t i = 0; i < _countof(DBG_TEX_OUTPUT_NAMES); ++i) {
+                    const bool isSelected = (DBG_TEX_OUTPUT_NAMES[i] == DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
+                    
+                    if (ImGui::Selectable(DBG_TEX_OUTPUT_NAMES[i], isSelected)) {
+                        s_dbgTexIdx = i;
+                    }
+                    
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
-                ImGui::EndTooltip();
+                ImGui::EndCombo();
             }
-            ImGui::NewLine();
 
         #ifdef ENG_BUILD_DEBUG
             static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
             static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
 
-            ImGui::SeparatorText("Mesh Culling Pass");
-            ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
-            ImGui::SameLine(); ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
             ImGui::NewLine();
+            ImGui::SeparatorText("Mesh Culling");
+             ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
+            ImGui::SameLine(); ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
+            ImGui::NewLine();
             ImGui::SeparatorText("Depth Pass");
             ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
             ImGui::SameLine(); ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-            ImGui::NewLine();
 
+            ImGui::NewLine();
             ImGui::SeparatorText("GBuffer Pass");
             ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
             ImGui::SameLine(); ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
@@ -3040,19 +3047,22 @@ void UpdateGPUCommonConstBuffer()
     
     switch(s_dbgTexIdx) {
         case 0:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_ALBEDO_TEX;
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK;
             break;
         case 1:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_NORMAL_TEX;
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK;
             break;
         case 2:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_MR_TEX;
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK;
             break;
         case 3:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_AO_TEX;
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK;
             break;
         case 4:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::OUTPUT_COMMON_MTL_EMISSIVE_TEX;
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK;
+            break;
+        case 5:
+            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK;
             break;
         default:
             CORE_ASSERT_FAIL("Invalid material debug texture viewer index: %u", s_dbgTexIdx);
@@ -3060,8 +3070,8 @@ void UpdateGPUCommonConstBuffer()
     }
 
 #ifdef ENG_BUILD_DEBUG
-    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW : 0;
-    dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING : 0;
+    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
+    dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
 #endif
 
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
@@ -3608,7 +3618,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
     if (event.Is<WndKeyEvent>()) {
         const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
 
-        if (keyEvent.IsPressed() || keyEvent.IsHold()) {
+        if (keyEvent.IsPressed()) {
             const float finalSpeed = CAMERA_SPEED * s_frameTime;
 
             if (keyEvent.key == WndKey::KEY_W) { 
@@ -3711,14 +3721,6 @@ void ProcessWndEvent(const WndEvent& event)
         if (keyEvent.key == WndKey::KEY_F5 && keyEvent.IsPressed()) {
             s_flyCameraMode = !s_flyCameraMode;
             s_pWnd->SetCursorRelativeMode(s_flyCameraMode);
-        }
-
-        if (keyEvent.IsPressed() || keyEvent.IsHold()) {
-            if (keyEvent.key == WndKey::KEY_LEFT) {
-                s_dbgTexIdx = s_dbgTexIdx >= 1 ? s_dbgTexIdx - 1 : 0;
-            } else if (keyEvent.key == WndKey::KEY_RIGHT) {
-                s_dbgTexIdx = glm::clamp<uint32_t>(s_dbgTexIdx + 1, 0, _countof(DBG_TEX_OUTPUT_NAMES) - 1);
-            }
         }
     }
 

@@ -1,6 +1,8 @@
 #include "registers/common_registers.slang"
 #include "math/color_utils.slang"
 
+#include "common/dbg_vis.slang"
+
 #include "pass/gbuffer/vsout.slang"
 
 
@@ -21,7 +23,14 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 
     const SamplerState smp = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
 
+    // NOTE: It's need to be trasformed from sRGB space to linear
+    // but since we copy RT0 to swapchain directly without any tone mapping etc. right now
+    // and swapchain format is VK_FORMAT_R8G8B8A8_SRGB we don't need any transformations.
+    // Will be fixed later
+    //
+    // albedo = float4(SRGBToLinear(albedo.rgb), albedo.a);
     const float4 albedo = material.ALBEDO_TEX_IDX >= 0 ? COMMON_MTL_TEXTURES[material.ALBEDO_TEX_IDX].Sample(smp, input.data.texCoord) : M3D_ZEROF4;
+    
     const float3 normal = material.NORMAL_TEX_IDX >= 0 ? COMMON_MTL_TEXTURES[material.NORMAL_TEX_IDX].Sample(smp, input.data.texCoord).xyz : M3D_ZEROF3;
     const float4 emissive = material.EMISSIVE_TEX_IDX >= 0 ? COMMON_MTL_TEXTURES[material.EMISSIVE_TEX_IDX].Sample(smp, input.data.texCoord) : M3D_ZEROF4;
 
@@ -35,30 +44,14 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
         aoMetRough.gb = material.MR_TEX_IDX >= 0 ? COMMON_MTL_TEXTURES[material.MR_TEX_IDX].Sample(smp, input.data.texCoord).bg : M3D_ZEROF2;
     }
 
-    result.normal = float4(M3D_IS_ZERO(normal) ? normal : normalize(normal), 1.f);
-
-    if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_ALBEDO_TEX) {
-        // NOTE: It's need to be trasformed from sRGB space to linear
-        // but since we copy RT0 to swapchain directly without any tone mapping etc. right now
-        // and swapchain format is VK_FORMAT_R8G8B8A8_SRGB we don't need any transformations.
-        // Will be fixed later
-        //
-        // result.color = float4(SRGBToLinear(albedo.rgb), albedo.a);
-
-        result.color = albedo;
-    } else if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_NORMAL_TEX) {
-        result.color = result.normal;
-    } else if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_MR_TEX) {
-        result.color = float4(aoMetRough.gb, 0.f, 1.f);
-    } else if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_AO_TEX) {
-        result.color = float4(aoMetRough.rrr, 1.f);
-    } else if (COMMON_DBG_IS_OUTPUT_COMMON_MTL_EMISSIVE_TEX) {
-        result.color = emissive;
-    }
-
-    if (result.color.a <= 0.0001f) {
+    if (albedo.a <= 0.0001f) {
         discard;
     }
-    
+
+    result.color = albedo;
+    result.normal = float4(M3D_IS_ZERO(normal) ? normal : normalize(normal), 1.f);
+
+    DbgVisOutput(result.color, albedo, normal, aoMetRough.g, aoMetRough.b, aoMetRough.r, emissive);
+
     return result;
 }
