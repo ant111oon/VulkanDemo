@@ -294,16 +294,16 @@ private:
 };
 
 
-static constexpr uint32_t VERTEX_DATA_SIZE_UI4 = 1;
+static constexpr uint32_t VERTEX_DATA_SIZE_UI = 4;
 
 struct Vertex
 {
     void Pack(const glm::vec3& lpos, const glm::vec3& lnorm, glm::vec2 uv)
     {
-        data[0].x = glm::packHalf2x16(glm::vec2(lpos.x, lpos.y));
-        data[0].y = glm::packHalf2x16(glm::vec2(lpos.z, lnorm.x));
-        data[0].z = glm::packHalf2x16(glm::vec2(lnorm.y, lnorm.z));
-        data[0].w = glm::packHalf2x16(uv);
+        data[0] = glm::packHalf2x16(glm::vec2(lpos.x, lpos.y));
+        data[1] = glm::packHalf2x16(glm::vec2(lpos.z, lnorm.x));
+        data[2] = glm::packHalf2x16(glm::vec2(lnorm.y, lnorm.z));
+        data[3] = glm::packHalf2x16(uv);
     }
 
     void Unpack(glm::vec3& outLPos, glm::vec3& outLNorm, glm::vec2& outUv)
@@ -313,11 +313,11 @@ struct Vertex
         outUv = GetUV();
     }
 
-    glm::vec3 GetLPos() const { return glm::vec3(glm::unpackHalf2x16(data[0].x), glm::unpackHalf2x16(data[0].y).x); }
-    glm::vec3 GetLNorm() const { return glm::vec3(glm::unpackHalf2x16(data[0].y).y, glm::unpackHalf2x16(data[0].z)); }
-    glm::vec2 GetUV() const { return glm::unpackHalf2x16(data[0].w); }
+    glm::vec3 GetLPos() const { return glm::vec3(glm::unpackHalf2x16(data[0]), glm::unpackHalf2x16(data[1]).x); }
+    glm::vec3 GetLNorm() const { return glm::vec3(glm::unpackHalf2x16(data[1]).y, glm::unpackHalf2x16(data[2])); }
+    glm::vec2 GetUV() const { return glm::unpackHalf2x16(data[3]); }
 
-    glm::u32vec4 data[VERTEX_DATA_SIZE_UI4] = {};
+    glm::uint data[VERTEX_DATA_SIZE_UI] = {};
 };
 
 
@@ -513,6 +513,8 @@ struct GBuffer
     {
         RT_0,
         RT_1,
+        RT_2,
+        RT_3,
         RT_COUNT
     };
 
@@ -1506,7 +1508,7 @@ static void CreatePipelines()
     CreateMeshCullingPipelineLayout();
     CreateZPassPipelineLayout();
     CreateGBufferPipelineLayout();
-    CreateMeshCullingPipeline("shaders/bin/gbuffer.cs.spv");
+    CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
 }
@@ -2222,7 +2224,8 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             const gltf::Accessor* pUvAccessor = GetVertexAttribAccessor(asset, primitive, "TEXCOORD_0");
             CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
 
-            CORE_ASSERT(pPosAccessor->count == pNormAccessor->count && pPosAccessor->count == pUvAccessor->count);
+            CORE_ASSERT(pPosAccessor->count == pNormAccessor->count);
+            CORE_ASSERT(pPosAccessor->count == pUvAccessor->count);
 
             COMMON_MESH_INFO cpuMesh = {};
 
@@ -2963,24 +2966,44 @@ static void CreateGBuffer()
     subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
 
-    vkn::Texture& albedoRT = s_GBuffer.colorRTs[GBuffer::RT_0];
-    vkn::TextureView& albedoRTView = s_GBuffer.colorRTViews[GBuffer::RT_0];
+    vkn::Texture& rt0 = s_GBuffer.colorRTs[GBuffer::RT_0];
+    vkn::TextureView& rt0View = s_GBuffer.colorRTViews[GBuffer::RT_0];
 
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-    albedoRT.Create(rtCreateInfo).SetDebugName("COMMON_ALBEDO_RT");
-    albedoRTView.Create(albedoRT, mapping, subresourceRange).SetDebugName("COMMON_ALBEDO_RT_VIEW");
+    rt0.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_0");
+    rt0View.Create(rt0, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_0_VIEW");
 
 
-    vkn::Texture& normalsRT = s_GBuffer.colorRTs[GBuffer::RT_1];
-    vkn::TextureView& normalsRTView = s_GBuffer.colorRTViews[GBuffer::RT_1];
+    vkn::Texture& rt1 = s_GBuffer.colorRTs[GBuffer::RT_1];
+    vkn::TextureView& rt1View = s_GBuffer.colorRTViews[GBuffer::RT_1];
 
     rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-    normalsRT.Create(rtCreateInfo).SetDebugName("COMMON_NORMALS_RT");
-    normalsRTView.Create(normalsRT, mapping, subresourceRange).SetDebugName("COMMON_NORMALS_RT_VIEW");
+    rt1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");
+    rt1View.Create(rt1, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_1_VIEW");
+
+
+    vkn::Texture& rt2 = s_GBuffer.colorRTs[GBuffer::RT_2];
+    vkn::TextureView& rt2View = s_GBuffer.colorRTViews[GBuffer::RT_2];
+
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+    rt2.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_2");
+    rt2View.Create(rt2, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_2_VIEW");
+
+
+    vkn::Texture& rt3 = s_GBuffer.colorRTs[GBuffer::RT_3];
+    vkn::TextureView& rt3View = s_GBuffer.colorRTViews[GBuffer::RT_3];
+
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+    rt3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
+    rt3View.Create(rt3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
 
 
     vkn::Texture& depthRT = s_GBuffer.depthRT;

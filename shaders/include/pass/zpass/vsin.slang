@@ -17,11 +17,10 @@ ZPASS_INPUT_DATA PrepareZPassVSInputData(uint vertID)
 {
     ZPASS_INPUT_DATA inputData = (ZPASS_INPUT_DATA)0;
 
-    static const uint VERTEX_DATA_SIZE_UI4 = 1;
-    const uint offset = vertID * VERTEX_DATA_SIZE_UI4;
+    const uint offset = vertID * VERTEX_DATA_SIZE_UI;
 
-    inputData.position.xy = UnpackHalf2x16(COMMON_VERTEX_DATA[offset][0]);
-    inputData.position.z = UnpackHalf2x16(COMMON_VERTEX_DATA[offset][1]).x;
+    inputData.position.xy = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 0]);
+    inputData.position.z = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 1]).x;
 
     return inputData;
 }

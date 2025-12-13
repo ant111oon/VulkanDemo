@@ -4,14 +4,16 @@
 
 struct GBUFFER_VS_OUTPUT_INTERP
 {
-    [[vk::location(0)]] float3 lnorm;
-    [[vk::location(1)]] float2 texCoord;
+    [[vk::location(0)]] float3 lpos;
+    [[vk::location(1)]] float3 wpos;
+    [[vk::location(2)]] float3 lnorm;
+    [[vk::location(3)]] float2 uv;
 };
 
 
 struct GBUFFER_VS_OUTPUT_NO_INTERP
 {
-    [[vk::location(2)]] uint instID;
+    [[vk::location(4)]] uint instID;
 };
 
 

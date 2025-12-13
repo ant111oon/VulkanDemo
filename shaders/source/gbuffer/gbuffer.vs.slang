@@ -22,13 +22,16 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
 
     GBUFFER_INPUT_DATA inputData = PrepareGBufferVSInputData(vertID);
 
-    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)); 
+    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f));
 
-    result.hpos = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
+    result.data.lpos = inputData.position;
+    result.data.wpos = wpos;
     result.data.lnorm = inputData.lnorm;
-    result.data.texCoord = inputData.texCoord;
+    result.data.uv = inputData.uv;
 
     result.flatData.instID = instIdx;
+
+    result.hpos = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(wpos, 1.f));
 
     return result; 
 }

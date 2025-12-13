@@ -4,13 +4,16 @@
 #include "common/dbg_vis.slang"
 #include "common/common_defines.slang"
 
+#include "pass/gbuffer/common.slang"
 #include "pass/gbuffer/vsout.slang"
 
 
 struct GBUFFER_PS_OUTPUT
 {
-    [[vk::location(0)]] float4 color;
-    [[vk::location(1)]] float4 normal;
+    [[vk::location(0)]] float4 rt0;
+    [[vk::location(1)]] float4 rt1;
+    [[vk::location(2)]] float4 rt2;
+    [[vk::location(3)]] float4 rt3;
 };
 
 
@@ -20,40 +23,27 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     GBUFFER_PS_OUTPUT result = (GBUFFER_PS_OUTPUT)0;
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
-    const COMMON_MATERIAL mtl = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
+    const COMMON_TRANSFORM transform = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
-    const SamplerState smp = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
+    const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
 
-    // NOTE: It's need to be trasformed from sRGB space to linear
-    // but since we copy RT0 to swapchain directly without any tone mapping etc. right now
-    // and swapchain format is VK_FORMAT_R8G8B8A8_SRGB we don't need any transformations.
-    // Will be fixed later
-    //
-    // albedo = float4(SRGBToLinear(albedo.rgb), albedo.a);
-    // emissive = float4(SRGBToLinear(emissive.rgb), emissive.a);
-    const float4 albedo = mtl.ALBEDO_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, smp, input.data.texCoord) : M3D_ZEROF4;
-    const float4 emissive = mtl.EMISSIVE_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, smp, input.data.texCoord) : M3D_ZEROF4;
+    const float3x3 TBN = float3x3(
+        1.f, 0.f, 0.f,
+        0.f, 1.f, 0.f,
+        0.f, 0.f, 1.f
+    );
+    COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, TBN, wMatr, input.data.uv);
 
-    const float3 normal = mtl.NORMAL_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, smp, input.data.texCoord).xyz : M3D_ZEROF3;
-
-    const bool isMergedAoMetRough = mtl.MR_TEX_IDX == mtl.AO_TEX_IDX;
-
-    float3 aoMetRough = M3D_ZEROF3;
-    if (isMergedAoMetRough) {
-        aoMetRough = mtl.MR_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, smp, input.data.texCoord).rgb : M3D_ZEROF3;
-    } else {
-        aoMetRough.r = mtl.AO_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, smp, input.data.texCoord).r : 0.f;
-        aoMetRough.gb = mtl.MR_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, smp, input.data.texCoord).bg : M3D_ZEROF2;
-    }
-
-    if (albedo.a <= 0.0001f) {
+    if (surf.albedo.a <= 0.0001f) {
         discard;
     }
 
-    result.color = albedo;
-    result.normal = float4(M3D_IS_ZERO(normal) ? normal : normalize(normal), 1.f);
+    result.rt0 = surf.albedo;
+    result.rt1 = float4(surf.wnorm, 0.f);
+    result.rt2 = float4(surf.metalness, surf.roughness, surf.ao, 0.f);
+    result.rt3 = surf.emissive;
 
-    DbgVisOutput(result.color, albedo, normal, aoMetRough.g, aoMetRough.b, aoMetRough.r, emissive);
+    DbgVisOutput(result.rt0, surf.albedo, surf.lnorm, surf.metalness, surf.roughness, surf.ao, surf.emissive);
 
     return result;
 }
