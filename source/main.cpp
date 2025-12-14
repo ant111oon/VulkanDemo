@@ -536,12 +536,12 @@ struct GBuffer
 
 
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
-    "ALBEDO",
-    "NORMAL",
-    "METALNESS",
-    "ROUGHNESS",
-    "AO",
-    "EMISSIVE",
+    "GBUFFER ALBEDO",
+    "GBUFFER NORMAL",
+    "GBUFFER METALNESS",
+    "GBUFFER ROUGHNESS",
+    "GBUFFER AO",
+    "GBUFFER EMISSIVE",
     "VERT NORMAL",
     "VERT TANGENT",
 };
@@ -1513,6 +1513,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     #endif
 
     VkPipelineColorBlendAttachmentState blendState = {};
+    blendState.blendEnable = VK_FALSE;
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     for (const vkn::Texture& colorRT : s_GBuffer.colorRTs) {
@@ -2256,11 +2257,15 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
 
             const gltf::Accessor* pTangAccessor = GetVertexAttribAccessor(asset, primitive, "TANGENT");
-            CORE_ASSERT_MSG(pTangAccessor != nullptr, "Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
-
+            
             CORE_ASSERT(pPosAccessor->count == pNormAccessor->count);
             CORE_ASSERT(pPosAccessor->count == pUvAccessor->count);
-            CORE_ASSERT(pPosAccessor->count == pTangAccessor->count);
+
+            if (pTangAccessor) {
+                CORE_ASSERT(pPosAccessor->count == pTangAccessor->count);
+            } else {
+                CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
+            }
 
             COMMON_MESH_INFO cpuMesh = {};
 
@@ -2269,9 +2274,17 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
             for (size_t vertIdx = 0; vertIdx < pPosAccessor->count; ++vertIdx) {
                 const glm::vec3 lpos = gltf::getAccessorElement<glm::vec3>(asset, *pPosAccessor, vertIdx);
-                const glm::vec3 lnorm = gltf::getAccessorElement<glm::vec3>(asset, *pNormAccessor, vertIdx);
+                const glm::vec3 lnorm = glm::normalize(gltf::getAccessorElement<glm::vec3>(asset, *pNormAccessor, vertIdx));
                 const glm::vec2 uv = gltf::getAccessorElement<glm::vec2>(asset, *pUvAccessor, vertIdx);
-                const glm::vec4 tang = gltf::getAccessorElement<glm::vec4>(asset, *pTangAccessor, vertIdx);
+                
+                glm::vec4 tang; 
+                if (pTangAccessor) {
+                    tang = gltf::getAccessorElement<glm::vec4>(asset, *pTangAccessor, vertIdx);
+                    tang = glm::vec4(glm::normalize(glm::vec3(tang.x, tang.y, tang.z)), tang.a);
+                } else {
+                    const glm::vec3 binorm = !math::IsEqual(lnorm, -M3D_AXIS_Z) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
+                    tang = glm::vec4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
+                }
                 
                 Vertex vertex = {};
                 vertex.Pack(lpos, lnorm, uv, tang);
@@ -2470,7 +2483,12 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 CORE_ASSERT(primitive.materialIndex.has_value());
                 instInfo.MATERIAL_IDX = primitive.materialIndex.value();
 
-                s_cpuInstData.emplace_back(instInfo);
+                // TODO: support transparent objects rendering
+                if (primitive.materialIndex.has_value()) {
+                    if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
+                        s_cpuInstData.emplace_back(instInfo);
+                    }
+                }
                 ++meshIdx;
             }
         }
@@ -3716,10 +3734,6 @@ void ProcessWndEvent(const WndEvent& event)
 {
     if (event.Is<WndResizeEvent>()) {
         s_swapchainRecreateRequired = true;
-    }
-
-    if (DbgUI::IsAnyWindowFocused()) {
-        return;
     }
 
     if (event.Is<WndKeyEvent>()) {

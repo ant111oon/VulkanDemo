@@ -16,13 +16,15 @@ struct FRUSTUM
 {
     bool IsIntersect(in AABB aabb)
     {
-        float minDot = M3D_FLT_MAX, maxDot = -M3D_FLT_MAX;
-
         for (uint i = 0; i < 6; ++i) {
-            minDot = dot(aabb.min, planes[i].normal) + planes[i].distance;
-            maxDot = dot(aabb.max, planes[i].normal) + planes[i].distance;
+            FRUSTUM_PLANE plane = planes[i];
 
-            if (minDot < 0.f && maxDot < 0.f) {
+            float3 positive = M3D_ZEROF3;
+            positive.x = (plane.normal.x >= 0.f) ? aabb.max.x : aabb.min.x;
+            positive.y = (plane.normal.y >= 0.f) ? aabb.max.y : aabb.min.y;
+            positive.z = (plane.normal.z >= 0.f) ? aabb.max.z : aabb.min.z;
+
+            if (dot(plane.normal, positive) + plane.distance < 0.f) {
                 return false;
             }
         }

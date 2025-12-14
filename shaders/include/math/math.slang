@@ -25,6 +25,32 @@ static const float3 M3D_AXIS_X = float3(1.f, 0.f, 0.f);
 static const float3 M3D_AXIS_Y = float3(0.f, 1.f, 0.f);
 static const float3 M3D_AXIS_Z = float3(0.f, 0.f, 1.f);
 
+static const float3x3 M3D_IDENTITY_3X3 = float3x3(
+    1.f, 0.f, 0.f,
+    0.f, 1.f, 0.f,
+    0.f, 0.f, 1.f
+);
+
+static const float4x4 M3D_IDENTITY_4X4 = float4x4(
+    1.f, 0.f, 0.f, 0.f,
+    0.f, 1.f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f,
+    0.f, 0.f, 0.f, 1.f
+);
+
+static const float3x4 M3D_IDENTITY_3X4 = float3x4(
+    1.f, 0.f, 0.f, 0.f,
+    0.f, 1.f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f,
+);
+
+static const float4x3 M3D_IDENTITY_4X3 = float4x3(
+    1.f, 0.f, 0.f,
+    0.f, 1.f, 0.f,
+    0.f, 0.f, 1.f,
+    0.f, 0.f, 0.f
+);
+
 
 bool IsZero(in float value)
 {
