@@ -2390,51 +2390,6 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 }
 
 
-static void LoadSceneTransformData(const gltf::Asset& asset)
-{
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Transform_Data", 255, 50, 255, 255);
-
-    Timer timer;
-
-    s_cpuTransformData.resize(asset.nodes.size());
-
-    for (size_t trsIdx = 0; trsIdx < s_cpuTransformData.size(); ++trsIdx) {
-        const gltf::Node& node = asset.nodes[trsIdx];
-
-        glm::mat4x4 transform(1.f);
-
-        std::visit(
-            gltf::visitor {
-                [](const auto& arg){},
-                [&](const gltf::TRS& trs) {   
-                    const glm::quat rotation(trs.rotation.w(), trs.rotation.x(), trs.rotation.y(), trs.rotation.z());
-                    const glm::vec3 scale(trs.scale.x(), trs.scale.y(), trs.scale.z());
-                    const glm::vec3 translation(trs.translation.x(), trs.translation.y(), trs.translation.z());
-
-                    transform = glm::translate(transform, translation);
-                    transform = transform * glm::mat4_cast(rotation);
-                    transform = transform * glm::scale(glm::mat4x4(1.0f), scale);
-                    transform = glm::transpose(transform);
-                },
-                [&](const gltf::math::fmat4x4& mat) {
-                    for (size_t rawIdx = 0; rawIdx < 4; ++rawIdx) {
-                        for (size_t colIdx = 0; colIdx < 4; ++colIdx) {
-                            transform[rawIdx][colIdx] = mat[rawIdx][colIdx];
-                        }
-                    }
-                },
-            },
-        node.transform);
-
-        for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
-            s_cpuTransformData[trsIdx].MATR[i] = transform[i];
-        }
-    }
-
-    CORE_LOG_INFO("FastGLTF: Transform data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
-}
-
-
 static void LoadSceneInstData(const gltf::Asset& asset)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Inst_Data", 255, 50, 255, 255);
@@ -2444,32 +2399,48 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     s_cpuInstData.reserve(asset.meshes.size());
     s_cpuInstData.clear();
 
+    s_cpuTransformData.reserve(asset.nodes.size());
+    s_cpuTransformData.clear();
+
     uint32_t meshIdx = 0;
+    uint32_t trsIdx = 0;
 
-    for (const gltf::Mesh& mesh : asset.meshes) {
-        for (const gltf::Primitive& primitive : mesh.primitives) {
-            COMMON_INST_INFO instInfo = {};
-            
-            instInfo.MESH_IDX = meshIdx;
+    gltf::iterateSceneNodes(asset, 0, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
+    {
+        static_assert(sizeof(trs) == sizeof(glm::mat4x4));
 
-            CORE_ASSERT(primitive.materialIndex.has_value());
-            instInfo.MATERIAL_IDX = primitive.materialIndex.value();
+        glm::mat4x4 transform(1.f);
+        memcpy(&transform, &trs, sizeof(glm::mat4x4));
 
-            s_cpuInstData.emplace_back(instInfo);
-            ++meshIdx;
+        transform = glm::transpose(transform);
+
+        COMMON_TRANSFORM cmnTrs = {};
+
+        for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
+            cmnTrs.MATR[i] = transform[i];
         }
-    }
 
-    size_t instInfoIdx = 0;
+        s_cpuTransformData.emplace_back(cmnTrs);
 
-    for (size_t meshGroupIndex = 0; meshGroupIndex < asset.meshes.size(); ++meshGroupIndex) {
-        const gltf::Mesh& mesh = asset.meshes[meshGroupIndex];
+        if (node.meshIndex.has_value()) {
+            const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
 
-        for (size_t meshIdx = 0; meshIdx < mesh.primitives.size(); ++meshIdx) {
-            s_cpuInstData[instInfoIdx].TRANSFORM_IDX = meshGroupIndex;
-            ++instInfoIdx;
+            for (const gltf::Primitive& primitive : mesh.primitives) {
+                COMMON_INST_INFO instInfo = {};
+                
+                instInfo.MESH_IDX = meshIdx;
+                instInfo.TRANSFORM_IDX = trsIdx;
+
+                CORE_ASSERT(primitive.materialIndex.has_value());
+                instInfo.MATERIAL_IDX = primitive.materialIndex.value();
+
+                s_cpuInstData.emplace_back(instInfo);
+                ++meshIdx;
+            }
         }
-    }
+
+        ++trsIdx;
+    });
 
     CORE_LOG_INFO("FastGLTF: Instance data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -2923,7 +2894,6 @@ static void LoadScene(const fs::path& filepath)
     LoadSceneMeshData(asset.get());
     LoadSceneTexturesData(asset.get(), filepath.parent_path());
     LoadSceneMaterialData(asset.get());
-    LoadSceneTransformData(asset.get());
     LoadSceneInstData(asset.get());
     
     UploadGPUResources();
