@@ -43,7 +43,7 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     result.rt2 = float4(surf.metalness, surf.roughness, surf.ao, 0.f);
     result.rt3 = surf.emissive;
 
-    DbgVisOutput(result.rt0, surf.albedo, surf.lnorm, surf.metalness, surf.roughness, surf.ao, surf.emissive);
+    DbgVisOutput(result.rt0, surf.albedo, surf.lnorm, surf.metalness, surf.roughness, surf.ao, surf.emissive, input.data.lnorm);
 
     return result;
 }

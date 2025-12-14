@@ -402,11 +402,19 @@ struct COMMON_CB_DATA
 
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
-    glm::uvec2 PAD0;
+    glm::uint  COMMON_DBG_VIS_FLAGS;
+    glm::uint  PAD0;
 };
 
 
 enum COMMON_DBG_FLAG_MASKS
+{
+    USE_MESH_INDIRECT_DRAW_MASK = 0x1,
+    USE_MESH_GPU_CULLING_MASK = 0x2
+};
+
+
+enum COMMON_DBG_VIS_FLAG_MASKS
 {
     DBG_VIS_GBUFFER_ALBEDO_MASK = 0x1,
     DBG_VIS_GBUFFER_NORMAL_MASK = 0x2,
@@ -414,9 +422,7 @@ enum COMMON_DBG_FLAG_MASKS
     DBG_VIS_GBUFFER_ROUGHNESS_MASK = 0x8,
     DBG_VIS_GBUFFER_AO_MASK = 0x10,
     DBG_VIS_GBUFFER_EMISSIVE_MASK = 0x20,
-
-    USE_MESH_INDIRECT_DRAW_MASK = 0x40,
-    USE_MESH_GPU_CULLING_MASK = 0x80,
+    DBG_VIS_VERT_NORMAL_MASK = 0x40,
 };
 
 
@@ -526,13 +532,25 @@ struct GBuffer
 };
 
 
-static constexpr const char* DBG_TEX_OUTPUT_NAMES[] = {
+static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "ALBEDO",
     "NORMAL",
     "METALNESS",
     "ROUGHNESS",
     "AO",
-    "EMISSIVE"
+    "EMISSIVE",
+    "VERT NORMAL"
+};
+
+
+static constexpr COMMON_DBG_VIS_FLAG_MASKS DBG_RT_OUTPUT_MASKS[] = {
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK,
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_NORMAL_MASK,
 };
 
 
@@ -716,7 +734,7 @@ static GBuffer s_GBuffer;
 static eng::Camera s_camera;
 static glm::vec3 s_cameraVel = M3D_ZEROF3;
 
-static uint32_t s_dbgTexIdx = 0;
+static uint32_t s_dbgOutputRTIdx = 0;
 
 static size_t s_frameNumber = 0;
 static float s_frameTime = 0.f;
@@ -786,8 +804,8 @@ namespace DbgUI
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = s_GBuffer.depthRT.GetFormat();
         
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat swapchainFormat = s_GBuffer.colorRTs[0].GetFormat();
-        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainFormat;
+        const VkFormat fmt = s_GBuffer.colorRTs[0].GetFormat();
+        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
     #endif
@@ -851,6 +869,11 @@ namespace DbgUI
             ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
 
             ImGui::NewLine();
+            ImGui::SeparatorText("Memory Info");
+            ImGui::Text("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
+            ImGui::Text("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
+
+            ImGui::NewLine();
             ImGui::SeparatorText("Camera Info");
             ImGui::Text("Fly Camera Mode (F5):");
             ImGui::SameLine(); 
@@ -858,12 +881,12 @@ namespace DbgUI
             
             ImGui::NewLine();
             ImGui::SeparatorText("Debug Output");
-            if (ImGui::BeginCombo("Render Target", DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx])) {
-                for (size_t i = 0; i < _countof(DBG_TEX_OUTPUT_NAMES); ++i) {
-                    const bool isSelected = (DBG_TEX_OUTPUT_NAMES[i] == DBG_TEX_OUTPUT_NAMES[s_dbgTexIdx]);
+            if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
+                for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
+                    const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
                     
-                    if (ImGui::Selectable(DBG_TEX_OUTPUT_NAMES[i], isSelected)) {
-                        s_dbgTexIdx = i;
+                    if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
+                        s_dbgOutputRTIdx = i;
                     }
                     
                     if (isSelected) {
@@ -3036,31 +3059,8 @@ void UpdateGPUCommonConstBuffer()
 
     memcpy(&pCommonConstBufferData->COMMON_CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
+    uint32_t dbgVisFlags = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     uint32_t dbgFlags = 0;
-    
-    switch(s_dbgTexIdx) {
-        case 0:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK;
-            break;
-        case 1:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK;
-            break;
-        case 2:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK;
-            break;
-        case 3:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK;
-            break;
-        case 4:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK;
-            break;
-        case 5:
-            dbgFlags |= (uint32_t)COMMON_DBG_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK;
-            break;
-        default:
-            CORE_ASSERT_FAIL("Invalid material debug texture viewer index: %u", s_dbgTexIdx);
-            break;
-    }
 
 #ifdef ENG_BUILD_DEBUG
     dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
@@ -3068,6 +3068,7 @@ void UpdateGPUCommonConstBuffer()
 #endif
 
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
+    pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
 
     s_commonConstBuffer.Unmap();
 }
@@ -3835,7 +3836,7 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza2/Sponza.gltf");
 
     WriteDescriptorSets();
 

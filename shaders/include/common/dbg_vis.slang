@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 
 
-void DbgVisOutput(out float4 outColor, in float4 albedo, in float3 normal, in float metalness, in float roughness, in float ao, in float4 emissive)
+void DbgVisOutput(out float4 outColor, in float4 albedo, in float3 normal, in float metalness, in float roughness, in float ao, in float4 emissive, in float3 vertNormal)
 {
     if (COMMON_DBG_VIS_GBUFFER_ALBEDO) {
         outColor = albedo;
@@ -18,6 +18,8 @@ void DbgVisOutput(out float4 outColor, in float4 albedo, in float3 normal, in fl
         outColor = float4(FLOAT3(ao), 1.f);
     } else if (COMMON_DBG_VIS_GBUFFER_EMISSIVE) {
         outColor = emissive;
+    } else if (COMMON_DBG_VIS_VERT_NORMAL) {
+        outColor = float4(vertNormal * 0.5f + 0.5f, 1.f);
     }
 }
 

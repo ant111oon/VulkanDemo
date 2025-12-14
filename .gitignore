@@ -4,3 +4,4 @@ build
 
 assets/*
 !assets/**/Sponza/
+!assets/**/Sponza2/

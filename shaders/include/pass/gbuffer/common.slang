@@ -25,10 +25,10 @@ COMMON_SURFACE SampleCommonSurface(in uint mtlIdx, in float3x3 TBN, in float3x4 
     const COMMON_MATERIAL mtl = COMMON_MATERIALS[mtlIdx];
     const SamplerState smp = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
 
-    surf.albedo = mtl.ALBEDO_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, smp, uv) : M3D_ZEROF4;
+    surf.albedo = mtl.ALBEDO_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, smp, uv) : float4(M3D_ZEROF3, 1.f);
     surf.albedo = float4(SRGBToLinear(surf.albedo.rgb), surf.albedo.a);
 
-    surf.emissive = mtl.EMISSIVE_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, smp, uv) : M3D_ZEROF4;
+    surf.emissive = mtl.EMISSIVE_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, smp, uv) : float4(M3D_ZEROF3, 1.f);
     surf.emissive = float4(SRGBToLinear(surf.emissive.rgb), surf.emissive.a);
 
     surf.lnorm = mtl.NORMAL_TEX_IDX >= 0 ? SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, smp, uv).xyz : M3D_ZEROF3;
