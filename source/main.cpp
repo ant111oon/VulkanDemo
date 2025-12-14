@@ -294,16 +294,18 @@ private:
 };
 
 
-static constexpr uint32_t VERTEX_DATA_SIZE_UI = 4;
+static constexpr uint32_t VERTEX_DATA_SIZE_UI = 6;
 
 struct Vertex
 {
-    void Pack(const glm::vec3& lpos, const glm::vec3& lnorm, glm::vec2 uv)
+    void Pack(const glm::vec3& lpos, const glm::vec3& lnorm, glm::vec2 uv, const glm::vec4& tangent)
     {
         data[0] = glm::packHalf2x16(glm::vec2(lpos.x, lpos.y));
         data[1] = glm::packHalf2x16(glm::vec2(lpos.z, lnorm.x));
         data[2] = glm::packHalf2x16(glm::vec2(lnorm.y, lnorm.z));
         data[3] = glm::packHalf2x16(uv);
+        data[4] = glm::packHalf2x16(glm::vec2(tangent.x, tangent.y));
+        data[5] = glm::packHalf2x16(glm::vec2(tangent.z, tangent.w));
     }
 
     void Unpack(glm::vec3& outLPos, glm::vec3& outLNorm, glm::vec2& outUv)
@@ -2247,8 +2249,12 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             const gltf::Accessor* pUvAccessor = GetVertexAttribAccessor(asset, primitive, "TEXCOORD_0");
             CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
 
+            const gltf::Accessor* pTangAccessor = GetVertexAttribAccessor(asset, primitive, "TANGENT");
+            CORE_ASSERT_MSG(pTangAccessor != nullptr, "Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+
             CORE_ASSERT(pPosAccessor->count == pNormAccessor->count);
             CORE_ASSERT(pPosAccessor->count == pUvAccessor->count);
+            CORE_ASSERT(pPosAccessor->count == pTangAccessor->count);
 
             COMMON_MESH_INFO cpuMesh = {};
 
@@ -2259,9 +2265,10 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 const glm::vec3 lpos = gltf::getAccessorElement<glm::vec3>(asset, *pPosAccessor, vertIdx);
                 const glm::vec3 lnorm = gltf::getAccessorElement<glm::vec3>(asset, *pNormAccessor, vertIdx);
                 const glm::vec2 uv = gltf::getAccessorElement<glm::vec2>(asset, *pUvAccessor, vertIdx);
+                const glm::vec4 tang = gltf::getAccessorElement<glm::vec4>(asset, *pTangAccessor, vertIdx);
                 
                 Vertex vertex = {};
-                vertex.Pack(lpos, lnorm, uv);
+                vertex.Pack(lpos, lnorm, uv, tang);
 
                 s_cpuVertexBuffer.emplace_back(vertex);
             }

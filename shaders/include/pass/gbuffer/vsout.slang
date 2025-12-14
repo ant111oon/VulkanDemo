@@ -8,12 +8,13 @@ struct GBUFFER_VS_OUTPUT_INTERP
     [[vk::location(1)]] float3 wpos;
     [[vk::location(2)]] float3 lnorm;
     [[vk::location(3)]] float2 uv;
+    [[vk::location(4)]] float4 tangent;
 };
 
 
 struct GBUFFER_VS_OUTPUT_NO_INTERP
 {
-    [[vk::location(4)]] uint instID;
+    [[vk::location(5)]] uint instID;
 };
 
 

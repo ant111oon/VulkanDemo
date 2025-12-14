@@ -27,12 +27,11 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 
     const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
 
-    const float3x3 TBN = float3x3(
-        1.f, 0.f, 0.f,
-        0.f, 1.f, 0.f,
-        0.f, 0.f, 1.f
-    );
-    COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, TBN, wMatr, input.data.uv);
+    const float3 T = normalize(input.data.tangent.xyz);
+    const float3 N = normalize(input.data.lnorm);
+    const float3 B = normalize(cross(N, T)) * sign(input.data.tangent.w);
+
+    COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, float3x3(T, B, N), wMatr, input.data.uv);
 
     if (surf.albedo.a <= 0.0001f) {
         discard;

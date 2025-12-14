@@ -28,6 +28,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
     result.data.wpos = wpos;
     result.data.lnorm = inputData.lnorm;
     result.data.uv = inputData.uv;
+    result.data.tangent = inputData.tangent;
 
     result.flatData.instID = instIdx;
 

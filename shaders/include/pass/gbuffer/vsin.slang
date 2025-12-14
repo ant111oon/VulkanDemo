@@ -12,6 +12,7 @@ struct GBUFFER_INPUT_DATA
     float3 position;
     float3 lnorm;
     float2 uv;
+    float4 tangent;
 };
 
 
@@ -28,6 +29,9 @@ GBUFFER_INPUT_DATA PrepareGBufferVSInputData(uint vertID)
     inputData.lnorm.yz = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 2]);
 
     inputData.uv = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 3]);
+
+    inputData.tangent.xy = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 4]);
+    inputData.tangent.zw = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 5]);
 
     return inputData;
 }

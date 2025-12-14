@@ -170,7 +170,7 @@ static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 
 [vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 
-static const uint VERTEX_DATA_SIZE_UI = 4;
+static const uint VERTEX_DATA_SIZE_UI = 6;
 [vk::binding(7, 0)] StructuredBuffer<uint> COMMON_VERTEX_DATA;
 
 #endif
