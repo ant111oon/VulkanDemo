@@ -647,8 +647,7 @@ static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
-static constexpr size_t TEXTURE_RGBA8_MAX_SIZE = 4096 * 4096 * 4 * sizeof(uint8_t);
-static constexpr size_t STAGING_BUFFER_SIZE    = TEXTURE_RGBA8_MAX_SIZE;
+static constexpr size_t STAGING_BUFFER_SIZE    = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT   = 2;
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -2454,47 +2453,49 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     uint32_t meshIdx = 0;
     uint32_t trsIdx = 0;
 
-    gltf::iterateSceneNodes(asset, 0, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
-    {
-        static_assert(sizeof(trs) == sizeof(glm::mat4x4));
-
-        glm::mat4x4 transform(1.f);
-        memcpy(&transform, &trs, sizeof(glm::mat4x4));
-
-        transform = glm::transpose(transform);
-
-        COMMON_TRANSFORM cmnTrs = {};
-
-        for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
-            cmnTrs.MATR[i] = transform[i];
-        }
-
-        s_cpuTransformData.emplace_back(cmnTrs);
-
-        if (node.meshIndex.has_value()) {
-            const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
-
-            for (const gltf::Primitive& primitive : mesh.primitives) {
-                COMMON_INST_INFO instInfo = {};
-                
-                instInfo.MESH_IDX = meshIdx;
-                instInfo.TRANSFORM_IDX = trsIdx;
-
-                CORE_ASSERT(primitive.materialIndex.has_value());
-                instInfo.MATERIAL_IDX = primitive.materialIndex.value();
-
-                // TODO: support transparent objects rendering
-                if (primitive.materialIndex.has_value()) {
-                    if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
-                        s_cpuInstData.emplace_back(instInfo);
-                    }
-                }
-                ++meshIdx;
+    for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
+        gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
+        {
+            static_assert(sizeof(trs) == sizeof(glm::mat4x4));
+    
+            glm::mat4x4 transform(1.f);
+            memcpy(&transform, &trs, sizeof(glm::mat4x4));
+    
+            transform = glm::transpose(transform);
+    
+            COMMON_TRANSFORM cmnTrs = {};
+    
+            for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
+                cmnTrs.MATR[i] = transform[i];
             }
-        }
-
-        ++trsIdx;
-    });
+    
+            s_cpuTransformData.emplace_back(cmnTrs);
+    
+            if (node.meshIndex.has_value()) {
+                const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
+    
+                for (const gltf::Primitive& primitive : mesh.primitives) {
+                    COMMON_INST_INFO instInfo = {};
+                    
+                    instInfo.MESH_IDX = meshIdx;
+                    instInfo.TRANSFORM_IDX = trsIdx;
+    
+                    CORE_ASSERT(primitive.materialIndex.has_value());
+                    instInfo.MATERIAL_IDX = primitive.materialIndex.value();
+    
+                    // TODO: support transparent objects rendering
+                    if (primitive.materialIndex.has_value()) {
+                        if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
+                            s_cpuInstData.emplace_back(instInfo);
+                        }
+                    }
+                    ++meshIdx;
+                }
+            }
+    
+            ++trsIdx;
+        });
+    }
 
     CORE_LOG_INFO("FastGLTF: Instance data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -3863,7 +3864,7 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza2/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
 
     WriteDescriptorSets();
 
