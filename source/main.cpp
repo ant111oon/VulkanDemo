@@ -777,6 +777,12 @@ namespace DbgUI
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; 
 
+		ImGui::GetStyle().Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
+		ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);
+		ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+		ImGui::GetStyle().Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+		ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+
     #ifdef ENG_OS_WINDOWS
         if (!ImGui_ImplWin32_Init(s_pWnd->GetNativeHandle())) {
             CORE_ASSERT_FAIL("Failed to initialize ImGui Win32 part");
@@ -929,12 +935,13 @@ namespace DbgUI
             ImGui::NewLine();
         #endif
         } ImGui::End();
+
+        ImGui::Render();
     }
 
 
     static void Render(vkn::CmdBuffer& cmdBuffer)
     {
-        ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
     }
 }
