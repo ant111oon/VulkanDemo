@@ -158,6 +158,20 @@ enum COMMON_SAMPLER_IDX
 };
 
 
+enum COMMON_DBG_TEX_IDX
+{
+    RED,
+    GREEN,
+    BLUE,
+    BLACK,
+    WHITE,
+    GREY,
+    CHECKERBOARD,
+
+    COUNT
+};
+
+
 static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 
 
@@ -174,5 +188,7 @@ static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 
 static const uint VERTEX_DATA_SIZE_UI = 6;
 [vk::binding(7, 0)] StructuredBuffer<uint> COMMON_VERTEX_DATA;
+
+[vk::binding(8, 0)] Texture2D COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
 
 #endif

@@ -42,8 +42,6 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 
     COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, TBN, input.data.uv);
 
-    surf.lnorm = M3D_IS_ZERO(surf.lnorm) ? input.data.lnorm : surf.lnorm;
-
     const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
     const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)));
 

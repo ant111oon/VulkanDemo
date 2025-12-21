@@ -17,46 +17,98 @@ struct COMMON_SURFACE
 };
 
 
+float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+{
+#ifdef ENV_DEBUG
+    if (mtl.ALBEDO_TEX_IDX < 0) {
+        return SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT], uv);
+    }
+#endif
+
+    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, sampler, uv);
+    albedo.rgb = SRGBToLinear(albedo.rgb);
+
+    return albedo;
+}
+
+
+float4 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+{
+#ifdef ENV_DEBUG
+    if (mtl.EMISSIVE_TEX_IDX < 0) {
+        return float4(0.f, 0.f, 0.f, 1.f);
+    }
+#endif
+
+    float4 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, sampler, uv);
+    emissive.rgb = SRGBToLinear(emissive.rgb);
+
+    return emissive;
+}
+
+
+float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv, in float3x3 TBN)
+{
+    float3 lnorm = M3D_AXIS_Z;
+
+#ifdef ENV_DEBUG
+    if (mtl.NORMAL_TEX_IDX >= 0)
+#endif
+    {
+        lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, sampler, uv).xyz;
+    }
+
+    return normalize(mul(normalize(lnorm), TBN));
+}
+
+
+float3 SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+{
+    float3 aoMetRough = float3(1.f, 0.f, 1.f);
+
+    if (mtl.MR_TEX_IDX == mtl.AO_TEX_IDX) {
+        #ifdef ENV_DEBUG
+        if (mtl.MR_TEX_IDX >= 0)
+        #endif
+        {
+            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, sampler, uv).rgb;
+        }
+    } else {
+        #ifdef ENV_DEBUG
+        if (mtl.AO_TEX_IDX >= 0)
+        #endif
+        {
+            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, sampler, uv).r;
+        }
+
+        #ifdef ENV_DEBUG
+        if (mtl.MR_TEX_IDX >= 0)
+        #endif
+        {
+            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, sampler, uv).bg;
+        }
+    }
+
+    return float3(aoMetRough.g, aoMetRough.b, aoMetRough.r);
+}
+
+
 COMMON_SURFACE SampleCommonSurface(in uint mtlIdx, in float3x3 TBN, in float2 uv)
 {
     COMMON_SURFACE surf = (COMMON_SURFACE)0;
 
     const COMMON_MATERIAL mtl = COMMON_MATERIALS[mtlIdx];
-    const SamplerState smp = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
+    const SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
 
-    if (mtl.ALBEDO_TEX_IDX >= 0) {
-        surf.albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, smp, uv);
-        surf.albedo = float4(SRGBToLinear(surf.albedo.rgb), surf.albedo.a);
-    }
+    surf.albedo = SampleCommonSurfaceAlbedo(mtl, sampler, uv);
+    surf.emissive = SampleCommonSurfaceEmissive(mtl, sampler, uv);
+    surf.lnorm = SampleCommonSurfaceNormal(mtl, sampler, uv, TBN);
 
-    if (mtl.EMISSIVE_TEX_IDX >= 0) {
-        surf.emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, smp, uv);
-        surf.emissive = float4(SRGBToLinear(surf.emissive.rgb), surf.emissive.a);
-    }
+    const float3 metRoughAO = SampleCommonSurfaceMetRoughAO(mtl, sampler, uv);
 
-    if (mtl.NORMAL_TEX_IDX >= 0) {
-        surf.lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, smp, uv).xyz;
-        surf.lnorm = normalize(mul(normalize(surf.lnorm), TBN));
-    }
-
-    float3 aoMetRough = M3D_ZEROF3;
-    if (mtl.MR_TEX_IDX == mtl.AO_TEX_IDX) {
-        if (mtl.MR_TEX_IDX >= 0) {
-            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, smp, uv).rgb;
-        }
-    } else {
-        if (mtl.AO_TEX_IDX >= 0) {
-            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, smp, uv).r;
-        }
-
-        if (mtl.MR_TEX_IDX >= 0) {
-            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, smp, uv).bg;
-        }
-    }
-
-    surf.metalness = aoMetRough.g;
-    surf.roughness = aoMetRough.b;
-    surf.ao = aoMetRough.r;
+    surf.metalness = metRoughAO.r;
+    surf.roughness = metRoughAO.g;
+    surf.ao = metRoughAO.b;
 
     return surf;
 }
