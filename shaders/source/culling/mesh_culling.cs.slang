@@ -10,14 +10,6 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
 
     const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
-    float3 x = float3(wMatr[0][0], wMatr[1][0], wMatr[2][0]);
-    float3 y = float3(wMatr[0][1], wMatr[1][1], wMatr[2][1]);
-    float3 z = float3(wMatr[0][2], wMatr[1][2], wMatr[2][2]);
-
-    float3 x1 = wMatr[0].xyz;
-    float3 y1 = wMatr[1].xyz;
-    float3 z1 = wMatr[2].xyz;
-
     SPHERE sphere = (SPHERE)0;
     sphere.position = mul(wMatr, float4(meshInfo.SPHERE_BOUNDS_CENTER_LCS, 1.f)).xyz;
 
