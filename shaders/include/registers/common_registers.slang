@@ -5,12 +5,6 @@
 #include "math/math.slang"
 
 
-struct COMMON_TRANSFORM
-{
-    float4 MATR[3];
-};
-
-
 struct COMMON_MATERIAL
 {
     int ALBEDO_TEX_IDX;
@@ -28,10 +22,8 @@ struct COMMON_MESH_INFO
     uint FIRST_INDEX;
     uint INDEX_COUNT;
 
-    float3 BOUNDS_MIN_LCS;
-    uint PAD0;
-    float3 BOUNDS_MAX_LCS;
-    uint PAD1;
+    float3 SPHERE_BOUNDS_CENTER_LCS;
+    float SPHERE_BOUNDS_RADIUS_LCS;
 };
 
 
@@ -180,7 +172,7 @@ static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 [vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<COMMON_TRANSFORM> COMMON_TRANSFORMS;
+[vk::binding(3, 0)] StructuredBuffer<float4x4> COMMON_TRANSFORMS;
 [vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
 [vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[];
 

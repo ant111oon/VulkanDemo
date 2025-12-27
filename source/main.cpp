@@ -298,34 +298,28 @@ static constexpr uint32_t VERTEX_DATA_SIZE_UI = 6;
 
 struct Vertex
 {
-    void Pack(const glm::vec3& lpos, const glm::vec3& lnorm, glm::vec2 uv, const glm::vec4& tangent)
+    void Pack(const glm::float3& lpos, const glm::float3& lnorm, glm::float2 uv, const glm::float4& tangent)
     {
-        data[0] = glm::packHalf2x16(glm::vec2(lpos.x, lpos.y));
-        data[1] = glm::packHalf2x16(glm::vec2(lpos.z, lnorm.x));
-        data[2] = glm::packHalf2x16(glm::vec2(lnorm.y, lnorm.z));
+        data[0] = glm::packHalf2x16(glm::float2(lpos.x, lpos.y));
+        data[1] = glm::packHalf2x16(glm::float2(lpos.z, lnorm.x));
+        data[2] = glm::packHalf2x16(glm::float2(lnorm.y, lnorm.z));
         data[3] = glm::packHalf2x16(uv);
-        data[4] = glm::packHalf2x16(glm::vec2(tangent.x, tangent.y));
-        data[5] = glm::packHalf2x16(glm::vec2(tangent.z, tangent.w));
+        data[4] = glm::packHalf2x16(glm::float2(tangent.x, tangent.y));
+        data[5] = glm::packHalf2x16(glm::float2(tangent.z, tangent.w));
     }
 
-    void Unpack(glm::vec3& outLPos, glm::vec3& outLNorm, glm::vec2& outUv)
+    void Unpack(glm::float3& outLPos, glm::float3& outLNorm, glm::float2& outUv)
     {
         outLPos = GetLPos();
         outLNorm = GetLNorm();
         outUv = GetUV();
     }
 
-    glm::vec3 GetLPos() const { return glm::vec3(glm::unpackHalf2x16(data[0]), glm::unpackHalf2x16(data[1]).x); }
-    glm::vec3 GetLNorm() const { return glm::vec3(glm::unpackHalf2x16(data[1]).y, glm::unpackHalf2x16(data[2])); }
-    glm::vec2 GetUV() const { return glm::unpackHalf2x16(data[3]); }
+    glm::float3 GetLPos() const { return glm::float3(glm::unpackHalf2x16(data[0]), glm::unpackHalf2x16(data[1]).x); }
+    glm::float3 GetLNorm() const { return glm::float3(glm::unpackHalf2x16(data[1]).y, glm::unpackHalf2x16(data[2])); }
+    glm::float2 GetUV() const { return glm::unpackHalf2x16(data[3]); }
 
     glm::uint data[VERTEX_DATA_SIZE_UI] = {};
-};
-
-
-struct COMMON_TRANSFORM
-{
-    glm::vec4 MATR[3];
 };
 
 
@@ -346,10 +340,8 @@ struct COMMON_MESH_INFO
     glm::uint FIRST_INDEX;
     glm::uint INDEX_COUNT;
 
-    glm::vec3 BOUNDS_MIN_LCS;
-    glm::uint PAD0;
-    glm::vec3 BOUNDS_MAX_LCS;
-    glm::uint PAD1;
+    glm::float3 SPHERE_BOUNDS_CENTER_LCS;
+    float SPHERE_BOUNDS_RADIUS_LCS;
 };
 
 
@@ -377,7 +369,7 @@ struct COMMON_INDIRECT_DRAW_CMD
 
 struct FRUSTUM_PLANE
 {
-    glm::vec3 normal;
+    glm::float3 normal;
     float distance;
 };
 
@@ -396,9 +388,9 @@ static_assert(sizeof(FRUSTUM) == sizeof(math::Frustum));
 
 struct COMMON_CB_DATA
 {
-    glm::mat4x4 COMMON_VIEW_MATRIX;
-    glm::mat4x4 COMMON_PROJ_MATRIX;
-    glm::mat4x4 COMMON_VIEW_PROJ_MATRIX;
+    glm::float4x4 COMMON_VIEW_MATRIX;
+    glm::float4x4 COMMON_PROJ_MATRIX;
+    glm::float4x4 COMMON_VIEW_PROJ_MATRIX;
 
     FRUSTUM COMMON_CAMERA_FRUSTUM;
 
@@ -511,21 +503,21 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 
 struct MESH_CULLING_BINDLESS_REGISTRY
 {
-    glm::vec3 PAD0;
+    glm::float3 PAD0;
     glm::uint INST_COUNT;
 };
 
 
 struct ZPASS_BINDLESS_REGISTRY
 {
-    glm::vec3 PAD0;
+    glm::float3 PAD0;
     glm::uint INST_INFO_IDX;
 };
 
 
 struct GBUFFER_BINDLESS_REGISTRY
 {
-    glm::vec3 PAD0;
+    glm::float3 PAD0;
     glm::uint INST_INFO_IDX;
 };
 
@@ -650,13 +642,13 @@ static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
@@ -748,13 +740,13 @@ static std::vector<TextureLoadData> s_cpuTexturesData;
 
 static std::vector<COMMON_MESH_INFO> s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
-static std::vector<COMMON_TRANSFORM> s_cpuTransformData;
+static std::vector<glm::float4x4> s_cpuTransformData;
 static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
 static GBuffer s_GBuffer;
 
 static eng::Camera s_camera;
-static glm::vec3 s_cameraVel = M3D_ZEROF3;
+static glm::float3 s_cameraVel = M3D_ZEROF3;
 
 static uint32_t s_dbgOutputRTIdx = 0;
 
@@ -1412,7 +1404,7 @@ static void CreateZPassDescriptorSetLayout()
     s_zpassDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(ZPASS_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(ZPASS_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_zpassDescriptorSetLayout != VK_NULL_HANDLE);
@@ -1426,7 +1418,7 @@ static void CreateMeshCullingDescriptorSetLayout()
     s_meshCullingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_meshCullingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -1440,7 +1432,7 @@ static void CreateGBufferDescriptorSetLayout()
     s_gbufferRenderDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_gbufferRenderDescriptorSetLayout != VK_NULL_HANDLE);
@@ -1864,8 +1856,8 @@ static void UploadGPUDbgTextures()
 
     uint32_t* pCheckerboardImageData = (uint32_t*)checkerboardImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
 
-    const uint32_t whiteColorU32 = glm::packUnorm4x8(glm::vec4(1.f));
-    const uint32_t blackColorU32 = glm::packUnorm4x8(glm::vec4(0.f, 0.f, 0.f, 1.f));
+    const uint32_t whiteColorU32 = glm::packUnorm4x8(glm::float4(1.f));
+    const uint32_t blackColorU32 = glm::packUnorm4x8(glm::float4(0.f, 0.f, 0.f, 1.f));
 
     for (uint32_t y = 0; y < checkerboardTex.GetSizeY(); ++y) {
         for (uint32_t x = 0; x < checkerboardTex.GetSizeX(); ++x) {
@@ -2167,7 +2159,7 @@ static void WriteZPassCullingDescriptorSet()
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     drawIndirectCommandsCountBufferWrite.dstSet = s_zpassDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = ZPASS_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstBinding = ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
     drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2207,7 +2199,7 @@ static void WriteMeshCullingDescriptorSet()
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     drawIndirectCommandsCountBufferWrite.dstSet = s_meshCullingDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
     drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2247,7 +2239,7 @@ static void WriteGBufferDescriptorSet()
     VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
     drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     drawIndirectCommandsCountBufferWrite.dstSet = s_gbufferRenderDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_COUNT_DESCRIPTOR_SLOT;
+    drawIndirectCommandsCountBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
     drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
     drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
     drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2524,17 +2516,17 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             cpuMesh.VERTEX_COUNT = pPosAccessor->count;
 
             for (size_t vertIdx = 0; vertIdx < pPosAccessor->count; ++vertIdx) {
-                const glm::vec3 lpos = gltf::getAccessorElement<glm::vec3>(asset, *pPosAccessor, vertIdx);
-                const glm::vec3 lnorm = glm::normalize(gltf::getAccessorElement<glm::vec3>(asset, *pNormAccessor, vertIdx));
-                const glm::vec2 uv = gltf::getAccessorElement<glm::vec2>(asset, *pUvAccessor, vertIdx);
+                const glm::float3 lpos = gltf::getAccessorElement<glm::float3>(asset, *pPosAccessor, vertIdx);
+                const glm::float3 lnorm = glm::normalize(gltf::getAccessorElement<glm::float3>(asset, *pNormAccessor, vertIdx));
+                const glm::float2 uv = gltf::getAccessorElement<glm::float2>(asset, *pUvAccessor, vertIdx);
                 
-                glm::vec4 tang; 
+                glm::float4 tang; 
                 if (pTangAccessor) {
-                    tang = gltf::getAccessorElement<glm::vec4>(asset, *pTangAccessor, vertIdx);
-                    tang = glm::vec4(glm::normalize(glm::vec3(tang.x, tang.y, tang.z)), tang.a);
+                    tang = gltf::getAccessorElement<glm::float4>(asset, *pTangAccessor, vertIdx);
+                    tang = glm::float4(glm::normalize(glm::float3(tang.x, tang.y, tang.z)), tang.a);
                 } else {
-                    const glm::vec3 binorm = !math::IsEqual(lnorm, -M3D_AXIS_Z) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
-                    tang = glm::vec4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
+                    const glm::float3 binorm = !math::IsEqual(lnorm, -M3D_AXIS_Z) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
+                    tang = glm::float4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
                 }
                 
                 Vertex vertex = {};
@@ -2551,17 +2543,24 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             const auto& aabbLCSMax = pPosAccessor->max.value();
             CORE_ASSERT(aabbLCSMax.size() == 3);
 
+            glm::float3 minVert;
             if (aabbLCSMin.isType<std::int64_t>()) {
-                cpuMesh.BOUNDS_MIN_LCS = glm::vec3(aabbLCSMin.get<std::int64_t>(0), aabbLCSMin.get<std::int64_t>(1), aabbLCSMin.get<std::int64_t>(2));
+                minVert = glm::float3(aabbLCSMin.get<std::int64_t>(0), aabbLCSMin.get<std::int64_t>(1), aabbLCSMin.get<std::int64_t>(2));
             } else {
-                cpuMesh.BOUNDS_MIN_LCS = glm::vec3(aabbLCSMin.get<double>(0), aabbLCSMin.get<double>(1), aabbLCSMin.get<double>(2));
+                minVert = glm::float3(aabbLCSMin.get<double>(0), aabbLCSMin.get<double>(1), aabbLCSMin.get<double>(2));
             }
             
+            glm::float3 maxVert;
             if (aabbLCSMax.isType<std::int64_t>()) {
-                cpuMesh.BOUNDS_MAX_LCS = glm::vec3(aabbLCSMax.get<std::int64_t>(0), aabbLCSMax.get<std::int64_t>(1), aabbLCSMax.get<std::int64_t>(2));
+                maxVert = glm::float3(aabbLCSMax.get<std::int64_t>(0), aabbLCSMax.get<std::int64_t>(1), aabbLCSMax.get<std::int64_t>(2));
             } else {
-                cpuMesh.BOUNDS_MAX_LCS = glm::vec3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
+                maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
             }
+
+            const glm::float3 sphereBoundPosition = (minVert + maxVert) * 0.5f;
+
+            cpuMesh.SPHERE_BOUNDS_CENTER_LCS = sphereBoundPosition;
+            cpuMesh.SPHERE_BOUNDS_RADIUS_LCS = glm::max(glm::distance(minVert, sphereBoundPosition), glm::distance(maxVert, sphereBoundPosition));
 
             CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
             const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
@@ -2708,20 +2707,12 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
         gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
         {
-            static_assert(sizeof(trs) == sizeof(glm::mat4x4));
+            static_assert(sizeof(trs) == sizeof(glm::float4x4));
     
-            glm::mat4x4 transform(1.f);
-            memcpy(&transform, &trs, sizeof(glm::mat4x4));
+            glm::float4x4 transform(1.f);
+            memcpy(&transform, &trs, sizeof(transform));
     
-            transform = glm::transpose(transform);
-    
-            COMMON_TRANSFORM cmnTrs = {};
-    
-            for (size_t i = 0; i < _countof(COMMON_TRANSFORM::MATR); ++i) {
-                cmnTrs.MATR[i] = transform[i];
-            }
-    
-            s_cpuTransformData.emplace_back(cmnTrs);
+            s_cpuTransformData.emplace_back(transform);
     
             if (node.meshIndex.has_value()) {
                 const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
@@ -2834,7 +2825,7 @@ static void UploadGPUMeshData()
 
     vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[1];
 
-    const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(COMMON_TRANSFORM);
+    const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
     CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
 
     void* pData = stagingTransformDataBuffer.Map(0, VK_WHOLE_SIZE);
@@ -3276,7 +3267,7 @@ void UpdateScene()
     const float moveDist = glm::length(s_cameraVel);
 
     if (!math::IsZero(moveDist)) {
-        const glm::vec3 moveDir = glm::normalize(s_camera.GetRotation() * (s_cameraVel / moveDist));
+        const glm::float3 moveDir = glm::normalize(s_camera.GetRotation() * (s_cameraVel / moveDist));
         s_camera.MoveAlongDir(moveDir, moveDist);
     }
 
@@ -3351,28 +3342,20 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
     ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
 
     const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
-    
-    glm::vec3 aabbMin = mesh.BOUNDS_MIN_LCS;
-    glm::vec3 aabbMax = mesh.BOUNDS_MAX_LCS;
 
-    const COMMON_TRANSFORM& trs = s_cpuTransformData[instInfo.TRANSFORM_IDX];
-    const glm::mat3x4 wMatr = glm::mat3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
+    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
 
-    const glm::vec3 newMin(glm::vec4(aabbMin, 1.f) * wMatr);
-    const glm::vec3 newMax(glm::vec4(aabbMax, 1.f) * wMatr);
+    const glm::float3 position = wMatr * glm::float4(mesh.SPHERE_BOUNDS_CENTER_LCS, 1.f);
 
-    aabbMin = glm::min(newMin, newMax);
-    aabbMax = glm::max(newMin, newMax);
+    const float scale = glm::max(glm::max(glm::length(glm::float3(wMatr[0])), glm::length(glm::float3(wMatr[1]))), glm::length(glm::float3(wMatr[2])));
+    const float radius = scale * mesh.SPHERE_BOUNDS_RADIUS_LCS;
 
     const math::Frustum& frustum = s_camera.GetFrustum();
 
-    float minDot = FLT_MAX, maxDot = -FLT_MAX;
-
     for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
-        minDot = glm::dot(aabbMin, frustum.planes[i].normal) + frustum.planes[i].distance;
-        maxDot = glm::dot(aabbMax, frustum.planes[i].normal) + frustum.planes[i].distance;
+        const math::Plane& plane = frustum.planes[i];
 
-        if (minDot < 0.f && maxDot < 0.f) {
+        if (glm::dot(plane.normal, position) + plane.distance < -radius) {
             return false;
         }
     }
@@ -3856,7 +3839,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
     } else if (event.Is<WndCursorEvent>()) {
         CORE_ASSERT(s_pWnd->IsCursorRelativeMode());
 
-        static glm::vec3 pitchYawRoll = s_camera.GetPitchYawRollDegrees();
+        static glm::float3 pitchYawRoll = s_camera.GetPitchYawRollDegrees();
 
         if (firstEvent) {
             firstEvent = false;
@@ -3872,14 +3855,14 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 
             pitchYawRoll.z = 0.f;
 
-            glm::vec3 cameraDir;
+            glm::float3 cameraDir;
             cameraDir.x = -glm::cos(glm::radians(pitchYawRoll.x)) * glm::sin(glm::radians(pitchYawRoll.y));
             cameraDir.y =  glm::sin(glm::radians(pitchYawRoll.x));
             cameraDir.z = -glm::cos(glm::radians(pitchYawRoll.x)) * glm::cos(glm::radians(pitchYawRoll.y));
             cameraDir = glm::normalize(cameraDir);
 
-            const glm::vec3 cameraRight = glm::normalize(glm::cross(cameraDir, M3D_AXIS_Y));
-			const glm::vec3 cameraUp    = glm::cross(cameraRight, cameraDir);
+            const glm::float3 cameraRight = glm::normalize(glm::cross(cameraDir, M3D_AXIS_Y));
+			const glm::float3 cameraUp    = glm::cross(cameraRight, cameraDir);
             const glm::quat newRotation = glm::quatLookAt(cameraDir, cameraUp);
 
             camera.SetRotation(newRotation);
@@ -4028,16 +4011,17 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
 
     UploadGPUResources();
     WriteDescriptorSets();
 
     s_cpuTexturesData.clear();
 
-    s_camera.SetPosition(glm::vec3(0.f, 2.f, 0.f));
+    s_camera.SetPosition(glm::float3(0.f, 2.f, 0.f));
     s_camera.SetRotation(glm::quatLookAt(M3D_AXIS_X, M3D_AXIS_Y));
-    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 100'000.f);
+    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 10'000.f);
 
     s_pWnd->SetVisible(true);
 

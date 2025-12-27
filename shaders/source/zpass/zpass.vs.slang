@@ -16,13 +16,11 @@ ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceI
 #endif
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[instIdx];
-    const COMMON_TRANSFORM transform = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
-
-    const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
 
     ZPASS_INPUT_DATA inputData = PrepareZPassVSInputData(vertID);
-
-    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)); 
+    
+    const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
+    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz; 
 
     result.hpos = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
 

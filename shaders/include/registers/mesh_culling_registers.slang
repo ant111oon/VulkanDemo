@@ -14,6 +14,6 @@ struct MESH_CULLING_BINDLESS_REGISTRY
 [[vk::push_constant]] MESH_CULLING_BINDLESS_REGISTRY MESH_CULLING_REGISTRY;
 
 [vk::binding(0, 1)] RWStructuredBuffer<COMMON_INDIRECT_DRAW_CMD> MESH_CULL_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(1, 1)] RWStructuredBuffer<uint> MESH_CULL_INDIRECT_DRAW_CMDS_COUNT;
+[vk::binding(1, 1)] RWStructuredBuffer<uint> MESH_CULL_INDIRECT_DRAW_CMDS_COUNT_UAV;
 
 #endif

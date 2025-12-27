@@ -8,7 +8,7 @@
 #include "pass/gbuffer/vsout.slang"
 
 
-float3x3 CalcTBN(in float3 lnorm, in float3 ltang)
+float3x3 CalcTBN(in float3 ltang, in float3 lnorm)
 {
     const float3 T = ltang;
     const float3 N = lnorm;
@@ -36,14 +36,13 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     input.data.tangent.xyz = normalize(input.data.tangent.xyz);
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
-    const COMMON_TRANSFORM transform = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
-    const float3x3 TBN = CalcTBN(input.data.lnorm, input.data.tangent.xyz);
+    const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
 
     COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, TBN, input.data.uv);
 
-    const float3x4 wMatr = float3x4(transform.MATR[0], transform.MATR[1], transform.MATR[2]);
-    const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)));
+    const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
+    const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)).xyz);
 
     result.rt0 = surf.albedo;
     result.rt1 = float4(wnorm, 0.f);

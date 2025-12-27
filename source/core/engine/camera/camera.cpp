@@ -169,7 +169,7 @@ namespace eng
     }
 
 
-    void Camera::Move(const glm::vec3& offset) noexcept
+    void Camera::Move(const glm::float3& offset) noexcept
     {
         if (!math::IsZero(offset)) {
             m_position += offset;
@@ -178,7 +178,7 @@ namespace eng
     }
 
 
-    void Camera::MoveAlongDir(const glm::vec3& dir, float distance) noexcept
+    void Camera::MoveAlongDir(const glm::float3& dir, float distance) noexcept
     {
         if (!math::IsZero(distance)) {
             CORE_ASSERT_MSG(math::IsNormalized(dir), "Direction must be a normalized vector");
@@ -200,7 +200,7 @@ namespace eng
     }
 
 
-    void Camera::SetPosition(const glm::vec3& position) noexcept
+    void Camera::SetPosition(const glm::float3& position) noexcept
     {
         if (!math::IsEqual(m_position, position)) {
             m_position = position;
@@ -258,7 +258,13 @@ namespace eng
 
     void Camera::RecalcViewMatrix() noexcept
     {
-        m_matView = glm::inverse(glm::mat4_cast(m_rotation)) * glm::translate(M3D_MAT4X4_IDENTITY, -m_position);
+        // Inverse camera rotation
+        const glm::float4x4 rotation = glm::mat4_cast(glm::conjugate(m_rotation));
+        
+        // Inverse camera translation
+        const glm::float4x4 translation = glm::translate(M3D_MAT4X4_IDENTITY, -m_position);
+
+        m_matView = rotation * translation;
     }
 
 
@@ -272,21 +278,37 @@ namespace eng
     {
         using namespace math;
 
-        const glm::vec3 farVec = GetForwardDir() * m_zFar;
+        const glm::float3 forwardDir = GetForwardDir();
+        const glm::float3 backwardDir = -forwardDir;
+        const glm::float3 farVec = forwardDir * m_zFar;
         const float halfH = m_zFar * glm::tan(m_fovY * 0.5f);
         const float halfW = halfH * m_aspectRatio;
 
-        std::array<glm::vec3, Frustum::PLANE_COUNT> planeNormals = {};
+        const glm::float3 xDir = GetXDir();
+        const glm::float3 yDir = GetYDir();
 
-        planeNormals[Frustum::PLANE_IDX_LEFT] = glm::normalize(glm::cross(farVec - GetXDir() * halfW, GetYDir()));
-        planeNormals[Frustum::PLANE_IDX_TOP] = glm::normalize(glm::cross(farVec + GetYDir() * halfH, -GetXDir()));
-        planeNormals[Frustum::PLANE_IDX_RIGHT] = glm::normalize(glm::cross(farVec + GetXDir() * halfW, -GetYDir()));
-        planeNormals[Frustum::PLANE_IDX_BOTTOM] = glm::normalize(glm::cross(farVec - GetYDir() * halfH, GetXDir()));
-        planeNormals[Frustum::PLANE_IDX_NEAR] = GetForwardDir();
-        planeNormals[Frustum::PLANE_IDX_FAR] = -GetForwardDir();
+        Plane& leftPlane = m_frustum.planes[Frustum::PLANE_IDX_LEFT];
+        leftPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec - xDir * halfW), yDir));
+        leftPlane.distance = -glm::dot(leftPlane.normal, m_position);
+        
+        Plane& topPlane = m_frustum.planes[Frustum::PLANE_IDX_TOP];
+        topPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec + yDir * halfH), xDir));
+        topPlane.distance = -glm::dot(topPlane.normal, m_position);
 
-        for (size_t i = 0; i < Frustum::PLANE_COUNT; ++i) {
-            m_frustum.planes[Frustum::PLANE_IDX_LEFT] = Plane(planeNormals[i], -glm::dot(planeNormals[i], m_position));
-        }
+        Plane& rightPlane = m_frustum.planes[Frustum::PLANE_IDX_RIGHT];
+        rightPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec + xDir * halfW), -yDir));
+        rightPlane.distance = -glm::dot(rightPlane.normal, m_position);
+
+        Plane& bottomPlane = m_frustum.planes[Frustum::PLANE_IDX_BOTTOM];
+        bottomPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec - yDir * halfH), -xDir));
+        bottomPlane.distance = -glm::dot(bottomPlane.normal, m_position);
+
+        Plane& nearPlane = m_frustum.planes[Frustum::PLANE_IDX_NEAR];
+        nearPlane.normal = forwardDir;
+        nearPlane.distance = -glm::dot(nearPlane.normal, m_position + forwardDir * m_zNear);
+
+        Plane& farPlane = m_frustum.planes[Frustum::PLANE_IDX_FAR];
+        farPlane.normal = backwardDir;
+        farPlane.distance = -glm::dot(farPlane.normal, m_position + forwardDir * m_zFar);
     }
 }

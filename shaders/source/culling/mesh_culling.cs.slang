@@ -1,29 +1,37 @@
 #include "registers/common_registers.slang"
 #include "registers/mesh_culling_registers.slang"
 
+#include "common/common_defines.slang"
+
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
 {
-    const COMMON_TRANSFORM trs = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
-    const float3x4 wMatr = float3x4(trs.MATR[0], trs.MATR[1], trs.MATR[2]);
-
     const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
-    AABB aabb = { meshInfo.BOUNDS_MIN_LCS, meshInfo.BOUNDS_MAX_LCS };
 
-    const float3 newMin = mul(wMatr, float4(aabb.min, 1.f)).xyz;
-    const float3 newMax = mul(wMatr, float4(aabb.max, 1.f)).xyz;
+    const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
-    aabb.min = min(newMin, newMax);
-    aabb.max = max(newMin, newMax);
+    float3 x = float3(wMatr[0][0], wMatr[1][0], wMatr[2][0]);
+    float3 y = float3(wMatr[0][1], wMatr[1][1], wMatr[2][1]);
+    float3 z = float3(wMatr[0][2], wMatr[1][2], wMatr[2][2]);
 
-    return COMMON_CB.COMMON_CAMERA_FRUSTUM.IsIntersect(aabb); 
+    float3 x1 = wMatr[0].xyz;
+    float3 y1 = wMatr[1].xyz;
+    float3 z1 = wMatr[2].xyz;
+
+    SPHERE sphere = (SPHERE)0;
+    sphere.position = mul(wMatr, float4(meshInfo.SPHERE_BOUNDS_CENTER_LCS, 1.f)).xyz;
+
+    const float scale = max(max(length(wMatr[0].xyz), length(wMatr[1].xyz)), length(wMatr[2].xyz));
+    sphere.radius = scale * meshInfo.SPHERE_BOUNDS_RADIUS_LCS;
+
+    return COMMON_CB.COMMON_CAMERA_FRUSTUM.IsIntersect(sphere); 
 }
 
 
 void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID)
 {
     uint idx = 0;
-    InterlockedAdd(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 1, idx);
+    InterlockedAdd(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
 
     MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INDEX = firstIndex;
     MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INDEX_COUNT = indexCount;
@@ -33,7 +41,6 @@ void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uin
 
     MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
 }
- 
 
 
 [numthreads(64, 1, 1)]
@@ -41,7 +48,7 @@ void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uin
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
-        InterlockedExchange(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT[0], 0);
+        InterlockedExchange(MESH_CULL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
     }
 
     AllMemoryBarrier();

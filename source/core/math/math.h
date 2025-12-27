@@ -7,6 +7,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <glm/glm.hpp>
+#include <glm/gtx/compatibility.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
@@ -32,23 +33,23 @@ constexpr inline float M3D_2_PI    = 2.0f * M3D_PI;
 constexpr inline float M3D_HALF_PI = 0.5f * M3D_PI;
 
 
-constexpr inline glm::vec2 M3D_ZEROF2 = glm::vec2(0.f);
-constexpr inline glm::vec3 M3D_ZEROF3 = glm::vec3(0.f);
-constexpr inline glm::vec4 M3D_ZEROF4 = glm::vec4(0.f);
-constexpr inline glm::vec2 M3D_ONEF2  = glm::vec2(1.f);
-constexpr inline glm::vec3 M3D_ONEF3  = glm::vec3(1.f);
-constexpr inline glm::vec4 M3D_ONEF4  = glm::vec4(1.f);
+constexpr inline glm::float2 M3D_ZEROF2 = glm::float2(0.f);
+constexpr inline glm::float3 M3D_ZEROF3 = glm::float3(0.f);
+constexpr inline glm::float4 M3D_ZEROF4 = glm::float4(0.f);
+constexpr inline glm::float2 M3D_ONEF2  = glm::float2(1.f);
+constexpr inline glm::float3 M3D_ONEF3  = glm::float3(1.f);
+constexpr inline glm::float4 M3D_ONEF4  = glm::float4(1.f);
 
 
-constexpr inline glm::vec3 M3D_AXIS_X = glm::vec3(1.f, 0.f, 0.f);
-constexpr inline glm::vec3 M3D_AXIS_Y = glm::vec3(0.f, 1.f, 0.f);
-constexpr inline glm::vec3 M3D_AXIS_Z = glm::vec3(0.f, 0.f, 1.f);
+constexpr inline glm::float3 M3D_AXIS_X = glm::float3(1.f, 0.f, 0.f);
+constexpr inline glm::float3 M3D_AXIS_Y = glm::float3(0.f, 1.f, 0.f);
+constexpr inline glm::float3 M3D_AXIS_Z = glm::float3(0.f, 0.f, 1.f);
 
 
-constexpr inline glm::mat3x3 M3D_MAT3X3_IDENTITY = glm::identity<glm::mat3x3>();
-constexpr inline glm::mat3x4 M3D_MAT3X4_IDENTITY = glm::identity<glm::mat3x4>();
-constexpr inline glm::mat4x4 M3D_MAT4X4_IDENTITY = glm::identity<glm::mat4x4>();
-constexpr inline glm::quat M3D_QUAT_IDENTITY     = glm::identity<glm::quat>();
+constexpr inline glm::float3x3 M3D_MAT3X3_IDENTITY = glm::identity<glm::float3x3>();
+constexpr inline glm::float3x4 M3D_MAT3X4_IDENTITY = glm::identity<glm::float3x4>();
+constexpr inline glm::float4x4 M3D_MAT4X4_IDENTITY = glm::identity<glm::float4x4>();
+constexpr inline glm::quat M3D_QUAT_IDENTITY       = glm::identity<glm::quat>();
 
 
 namespace math

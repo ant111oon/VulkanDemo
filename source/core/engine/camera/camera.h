@@ -33,11 +33,11 @@ namespace eng
         void SetOrthoTop(float top) noexcept;
         void SetOrthoBottom(float bottom) noexcept;
 
-        void Move(const glm::vec3& offset) noexcept;
-        void MoveAlongDir(const glm::vec3& dir, float distance) noexcept;
+        void Move(const glm::float3& offset) noexcept;
+        void MoveAlongDir(const glm::float3& dir, float distance) noexcept;
 
         void SetRotation(const glm::quat& rotation) noexcept;
-        void SetPosition(const glm::vec3& position) noexcept;
+        void SetPosition(const glm::float3& position) noexcept;
 
         float GetFovY() const noexcept  { return m_fovY; }
         float GetAspectRatio() const noexcept { return m_aspectRatio; }
@@ -49,21 +49,21 @@ namespace eng
         float GetOrthoTop() const noexcept { return m_top; }
         float GetOrthoBottom() const noexcept { return m_bottom; }
 
-        glm::vec3 GetXDir() const noexcept { return glm::vec3(m_matView[0]); }
-        glm::vec3 GetYDir() const noexcept { return glm::vec3(m_matView[1]); }
-        glm::vec3 GetZDir() const noexcept { return glm::vec3(m_matView[2]); }
+        glm::float3 GetXDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_X); }
+        glm::float3 GetYDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_Y); }
+        glm::float3 GetZDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_Z); }
 
-        glm::vec3 GetForwardDir() const noexcept { return -GetZDir(); }
+        glm::float3 GetForwardDir() const noexcept { return -GetZDir(); }
 
-        glm::vec3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_rotation); }
-        glm::vec3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(GetPitchYawRollRadians()); }
+        glm::float3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_rotation); }
+        glm::float3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(GetPitchYawRollRadians()); }
         
         const glm::quat& GetRotation() const noexcept { return m_rotation; }
-        const glm::vec3& GetPosition() const noexcept { return m_position; }
+        const glm::float3& GetPosition() const noexcept { return m_position; }
 
-        const glm::mat4x4& GetViewMatrix() const noexcept { return m_matView; }
-        const glm::mat4x4& GetProjMatrix() const noexcept { return m_matProj; }
-        const glm::mat4x4& GetViewProjMatrix() const noexcept { return m_matViewProj; }
+        const glm::float4x4& GetViewMatrix() const noexcept { return m_matView; }
+        const glm::float4x4& GetProjMatrix() const noexcept { return m_matProj; }
+        const glm::float4x4& GetViewProjMatrix() const noexcept { return m_matViewProj; }
 
         const math::Frustum& GetFrustum() const noexcept { return m_frustum; }
 
@@ -117,12 +117,12 @@ namespace eng
 
         math::Frustum m_frustum;
 
-        glm::mat4x4 m_matViewProj = M3D_MAT4X4_IDENTITY;
-        glm::mat4x4 m_matProj     = M3D_MAT4X4_IDENTITY;
-        glm::mat4x4 m_matView     = M3D_MAT4X4_IDENTITY;
+        glm::float4x4 m_matViewProj = M3D_MAT4X4_IDENTITY;
+        glm::float4x4 m_matProj     = M3D_MAT4X4_IDENTITY;
+        glm::float4x4 m_matView     = M3D_MAT4X4_IDENTITY;
 
         glm::quat m_rotation = M3D_QUAT_IDENTITY;
-        glm::vec3 m_position = M3D_ZEROF3;
+        glm::float3 m_position = M3D_ZEROF3;
 
         // perspective
         float m_fovY = 0.f;
