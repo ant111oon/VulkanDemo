@@ -17,6 +17,7 @@ namespace vkn
         bool vertexPipelineStoresAndAtomics;
         bool bufferDeviceAddress;
         bool bufferDeviceAddressCaptureReplay;
+        bool shaderFloat16;
     };
 
 

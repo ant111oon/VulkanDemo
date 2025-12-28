@@ -17,7 +17,7 @@ struct COMMON_SURFACE
 };
 
 
-float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
 {
 #ifdef ENV_DEBUG
     if (mtl.ALBEDO_TEX_IDX < 0) {
@@ -25,14 +25,14 @@ float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in SamplerState sampler
     }
 #endif
 
-    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, sampler, uv);
+    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
     albedo.rgb = SRGBToLinear(albedo.rgb);
 
     return albedo;
 }
 
 
-float4 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+float4 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
 {
 #ifdef ENV_DEBUG
     if (mtl.EMISSIVE_TEX_IDX < 0) {
@@ -40,14 +40,14 @@ float4 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in SamplerState sampl
     }
 #endif
 
-    float4 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, sampler, uv);
+    float4 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
     emissive.rgb = SRGBToLinear(emissive.rgb);
 
     return emissive;
 }
 
 
-float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv, in float3x3 TBN)
+float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, in float3x3 TBN)
 {
     float3 lnorm = M3D_AXIS_Z;
 
@@ -55,14 +55,14 @@ float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in SamplerState sampler
     if (mtl.NORMAL_TEX_IDX >= 0)
 #endif
     {
-        lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, sampler, uv).xyz;
+        lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz;
     }
 
     return normalize(mul(normalize(lnorm), TBN));
 }
 
 
-float3 SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in SamplerState sampler, in float2 uv)
+float3 SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
 {
     float3 aoMetRough = float3(1.f, 0.f, 1.f);
 
@@ -71,21 +71,21 @@ float3 SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in SamplerState sam
         if (mtl.MR_TEX_IDX >= 0)
         #endif
         {
-            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, sampler, uv).rgb;
+            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).rgb;
         }
     } else {
         #ifdef ENV_DEBUG
         if (mtl.AO_TEX_IDX >= 0)
         #endif
         {
-            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, sampler, uv).r;
+            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).r;
         }
 
         #ifdef ENV_DEBUG
         if (mtl.MR_TEX_IDX >= 0)
         #endif
         {
-            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, sampler, uv).bg;
+            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).bg;
         }
     }
 
@@ -98,13 +98,14 @@ COMMON_SURFACE SampleCommonSurface(in uint mtlIdx, in float3x3 TBN, in float2 uv
     COMMON_SURFACE surf = (COMMON_SURFACE)0;
 
     const COMMON_MATERIAL mtl = COMMON_MATERIALS[mtlIdx];
-    const SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT];
 
-    surf.albedo = SampleCommonSurfaceAlbedo(mtl, sampler, uv);
-    surf.emissive = SampleCommonSurfaceEmissive(mtl, sampler, uv);
-    surf.lnorm = SampleCommonSurfaceNormal(mtl, sampler, uv, TBN);
+    const uint smpIdx = (uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT;
 
-    const float3 metRoughAO = SampleCommonSurfaceMetRoughAO(mtl, sampler, uv);
+    surf.albedo = SampleCommonSurfaceAlbedo(mtl, smpIdx, uv);
+    surf.emissive = SampleCommonSurfaceEmissive(mtl, smpIdx, uv);
+    surf.lnorm = SampleCommonSurfaceNormal(mtl, smpIdx, uv, TBN);
+
+    const float3 metRoughAO = SampleCommonSurfaceMetRoughAO(mtl, smpIdx, uv);
 
     surf.metalness = metRoughAO.r;
     surf.roughness = metRoughAO.g;

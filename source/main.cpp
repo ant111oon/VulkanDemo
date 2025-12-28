@@ -394,17 +394,20 @@ struct COMMON_CB_DATA
 
     FRUSTUM COMMON_CAMERA_FRUSTUM;
 
+    glm::uvec2 SCREEN_SIZE;
+    glm::uvec2 PADDING_0;
+
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
     glm::uint  COMMON_DBG_VIS_FLAGS;
-    glm::uint  PAD0;
+    glm::uint  PADDING_1;
 };
 
 
 enum COMMON_DBG_FLAG_MASKS
 {
     USE_MESH_INDIRECT_DRAW_MASK = 0x1,
-    USE_MESH_GPU_CULLING_MASK = 0x2
+    USE_MESH_GPU_CULLING_MASK = 0x2,
 };
 
 
@@ -650,6 +653,14 @@ static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
 
+static constexpr size_t DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
+
+static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
+
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
@@ -702,6 +713,12 @@ static VkDescriptorSetLayout s_zpassDescriptorSetLayout = VK_NULL_HANDLE;
 static VkDescriptorSet       s_gbufferRenderDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_gbufferRenderDescriptorSetLayout = VK_NULL_HANDLE;
 
+static VkDescriptorSet       s_deferredLightingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_deferredLightingDescriptorSetLayout = VK_NULL_HANDLE;
+
+static VkDescriptorSet       s_postProcessingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_postProcessingDescriptorSetLayout = VK_NULL_HANDLE;
+
 static VkPipelineLayout s_meshCullingPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_meshCullingPipeline = VK_NULL_HANDLE;
 
@@ -710,6 +727,12 @@ static VkPipeline       s_zpassPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_gbufferRenderPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_gbufferRenderPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_deferredLightingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_deferredLightingPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_postProcessingPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_postProcessingPipeline = VK_NULL_HANDLE;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -740,15 +763,20 @@ static std::vector<TextureLoadData> s_cpuTexturesData;
 
 static std::vector<COMMON_MESH_INFO> s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
-static std::vector<glm::float4x4> s_cpuTransformData;
+static std::vector<glm::float4x4>    s_cpuTransformData;
 static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
 static GBuffer s_GBuffer;
+
+static vkn::Texture s_colorRT;
+static vkn::TextureView s_colorRTView;
+
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
 
 static uint32_t s_dbgOutputRTIdx = 0;
+static uint32_t s_nextImageIdx = 0;
 
 static size_t s_frameNumber = 0;
 static float s_frameTime = 0.f;
@@ -821,10 +849,9 @@ namespace DbgUI
         imGuiInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // 0 defaults to VK_SAMPLE_COUNT_1_BIT
     #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = s_GBuffer.depthRT.GetFormat();
         
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat fmt = s_GBuffer.colorRTs[0].GetFormat();
+        const VkFormat fmt = s_colorRT.GetFormat();
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
@@ -929,7 +956,7 @@ namespace DbgUI
             ImGui::SeparatorText("Depth Pass");
             ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
             ImGui::SameLine(); ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
+            
             ImGui::NewLine();
             ImGui::SeparatorText("GBuffer Pass");
             ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
@@ -1287,8 +1314,6 @@ static void CreateVkPhysAndLogicalDevices()
     features12.samplerMirrorClampToEdge = VK_TRUE;
     features12.drawIndirectCount = VK_TRUE;
 
-    VK_ASSERT(s_vkPhysDevice.GetFeatures11().shaderDrawParameters);
-
     VkPhysicalDeviceVulkan11Features features11 = {};
     features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     features11.pNext = &features12;
@@ -1369,7 +1394,7 @@ static void CreateCommonDescriptorPool()
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100)
         .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
-        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT + (uint32_t)COMMON_DBG_TEX_IDX::COUNT)
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000)
         .Build();
 
     CORE_ASSERT(s_commonDescriptorSetPool != VK_NULL_HANDLE);
@@ -1439,15 +1464,47 @@ static void CreateGBufferDescriptorSetLayout()
 }
 
 
+static void CreateDeferredLightingDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_deferredLightingDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .Build();
+
+    CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreatePostProcessingDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_postProcessingDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .Build();
+
+    CORE_ASSERT(s_postProcessingDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
 static void AllocateDescriptorSets()
 {
     vkn::DescriptorSetAllocator allocator;
 
     std::array descriptorSetsPairs = {
-        std::make_pair(&s_commonDescriptorSetLayout,        &s_commonDescriptorSet),
-        std::make_pair(&s_meshCullingDescriptorSetLayout,   &s_meshCullingDescriptorSet),
-        std::make_pair(&s_zpassDescriptorSetLayout,         &s_zpassDescriptorSet),
-        std::make_pair(&s_gbufferRenderDescriptorSetLayout, &s_gbufferRenderDescriptorSet),
+        std::make_pair(&s_commonDescriptorSetLayout,            &s_commonDescriptorSet),
+        std::make_pair(&s_meshCullingDescriptorSetLayout,       &s_meshCullingDescriptorSet),
+        std::make_pair(&s_zpassDescriptorSetLayout,             &s_zpassDescriptorSet),
+        std::make_pair(&s_gbufferRenderDescriptorSetLayout,     &s_gbufferRenderDescriptorSet),
+        std::make_pair(&s_deferredLightingDescriptorSetLayout,  &s_deferredLightingDescriptorSet),
+        std::make_pair(&s_postProcessingDescriptorSetLayout,    &s_postProcessingDescriptorSet),
     };
 
     std::array<VkDescriptorSet, descriptorSetsPairs.size()> descriptorSets;
@@ -1477,6 +1534,8 @@ static void CreateDesriptorSets()
     CreateZPassDescriptorSetLayout();
     CreateMeshCullingDescriptorSetLayout();
     CreateGBufferDescriptorSetLayout();
+    CreateDeferredLightingDescriptorSetLayout();
+    CreatePostProcessingDescriptorSetLayout();
 
     AllocateDescriptorSets();
 }
@@ -1521,6 +1580,32 @@ static void CreateGBufferPipelineLayout()
         .Build();
 
     CORE_ASSERT(s_gbufferRenderPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreateDeferredLightingPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_deferredLightingPipelineLayout = builder
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_deferredLightingDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_deferredLightingPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreatePostProcessingPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_postProcessingPipelineLayout = builder
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_postProcessingDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_postProcessingPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -1655,6 +1740,73 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
 }
 
 
+static void CreateDeferredLightingPipeline(const fs::path& csPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
+
+    vkn::ComputePipelineBuilder builder;
+
+    s_deferredLightingPipeline = builder
+        .SetShader(shaderModule, "main")
+        .SetLayout(s_deferredLightingPipelineLayout)
+        .Build();
+    
+    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
+
+    CORE_ASSERT(s_deferredLightingPipeline != VK_NULL_HANDLE);
+}
+
+
+static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path& psPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    std::array shaderModules = {
+        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
+        CreateVkShaderModule(psPath, &shaderCodeBuffer),
+    };
+
+    const std::array shaderModuleStages = {
+        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    static_assert(shaderModules.size() == shaderModuleStages.size());
+    const size_t shadersCount = shaderModules.size();
+
+    vkn::GraphicsPipelineBuilder builder;
+
+    for (size_t i = 0; i < shadersCount; ++i) {
+        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    }
+
+    VkPipelineColorBlendAttachmentState blendState = {};
+    blendState.blendEnable = VK_FALSE;
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    
+    s_postProcessingPipeline = builder
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetStencilTestState(VK_FALSE, {}, {})
+        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
+        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetRasterizerLineWidth(1.f)
+        .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
+        .AddColorBlendAttachment(blendState)
+        .SetLayout(s_postProcessingPipelineLayout)
+        .Build();
+
+    for (VkShaderModule& shader : shaderModules) {
+        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
+        shader = VK_NULL_HANDLE;
+    }
+
+    CORE_ASSERT(s_postProcessingPipeline != VK_NULL_HANDLE);
+}
 
 
 static void CreatePipelines()
@@ -1662,9 +1814,13 @@ static void CreatePipelines()
     CreateMeshCullingPipelineLayout();
     CreateZPassPipelineLayout();
     CreateGBufferPipelineLayout();
+    CreateDeferredLightingPipelineLayout();
+    CreatePostProcessingPipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
+    CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.cs.spv");
+    CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
 }
 
 
@@ -2251,6 +2407,73 @@ static void WriteGBufferDescriptorSet()
 }
 
 
+static void WriteDeferredLightingDescriptorSet()
+{
+    std::vector<VkWriteDescriptorSet> descWrites;
+
+    VkDescriptorImageInfo lightingOutputWriteInfo = {};
+    lightingOutputWriteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    lightingOutputWriteInfo.imageView = s_colorRTView.Get();
+
+    VkWriteDescriptorSet lightingOutputWrite = {};
+    lightingOutputWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    lightingOutputWrite.dstSet = s_deferredLightingDescriptorSet;
+    lightingOutputWrite.dstBinding = DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT;
+    lightingOutputWrite.dstArrayElement = 0;
+    lightingOutputWrite.descriptorCount = 1;
+    lightingOutputWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    lightingOutputWrite.pImageInfo = &lightingOutputWriteInfo;
+
+    descWrites.emplace_back(lightingOutputWrite);
+
+    std::array<VkDescriptorImageInfo, GBuffer::RT_COUNT> gbufferInputImageInfos = {};
+    for (size_t i = 0; i < GBuffer::RT_COUNT; ++i) {
+        VkDescriptorImageInfo& info = gbufferInputImageInfos[i];
+
+        info.imageView = s_GBuffer.colorRTViews[i].Get();
+        info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    for (size_t i = 0; i < GBuffer::RT_COUNT; ++i) {
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = s_deferredLightingDescriptorSet;
+        write.dstBinding = DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write.pImageInfo = &gbufferInputImageInfos[i];
+
+        descWrites.emplace_back(write);        
+    }
+
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
+static void WritePostProcessingDescriptorSet()
+{
+    std::array<VkWriteDescriptorSet, 1> descWrites = {};
+
+    VkDescriptorImageInfo postProcInputWriteInfo = {};
+    postProcInputWriteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    postProcInputWriteInfo.imageView = s_colorRTView.Get();
+
+    VkWriteDescriptorSet postProcInputWrite = {};
+    postProcInputWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    postProcInputWrite.dstSet = s_postProcessingDescriptorSet;
+    postProcInputWrite.dstBinding = POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT;
+    postProcInputWrite.dstArrayElement = 0;
+    postProcInputWrite.descriptorCount = 1;
+    postProcInputWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    postProcInputWrite.pImageInfo = &postProcInputWriteInfo;
+
+    descWrites[0] = postProcInputWrite;
+
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
 static void WriteCommonDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
@@ -2436,6 +2659,9 @@ static void WriteDescriptorSets()
     WriteZPassCullingDescriptorSet();
     WriteMeshCullingDescriptorSet();
     WriteGBufferDescriptorSet();
+
+    WriteDeferredLightingDescriptorSet();
+    WritePostProcessingDescriptorSet();
 }
 
 
@@ -3149,7 +3375,7 @@ static void CreateGBuffer()
     vkn::TextureView& rt0View = s_GBuffer.colorRTViews[GBuffer::RT_0];
 
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     rt0.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_0");
     rt0View.Create(rt0, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_0_VIEW");
@@ -3159,7 +3385,7 @@ static void CreateGBuffer()
     vkn::TextureView& rt1View = s_GBuffer.colorRTViews[GBuffer::RT_1];
 
     rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     rt1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");
     rt1View.Create(rt1, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_1_VIEW");
@@ -3169,7 +3395,7 @@ static void CreateGBuffer()
     vkn::TextureView& rt2View = s_GBuffer.colorRTViews[GBuffer::RT_2];
 
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     rt2.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_2");
     rt2View.Create(rt2, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_2_VIEW");
@@ -3179,7 +3405,7 @@ static void CreateGBuffer()
     vkn::TextureView& rt3View = s_GBuffer.colorRTViews[GBuffer::RT_3];
 
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     rt3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
     rt3View.Create(rt3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
@@ -3217,6 +3443,72 @@ static void ResizeGBuffer()
 }
 
 
+static void CreateColorRT()
+{
+    vkn::AllocationInfo rtAllocInfo = {};
+    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.mipLevels = 1;
+    rtCreateInfo.arrayLayers = 1;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &rtAllocInfo;
+    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VkComponentMapping mapping = {};
+    mapping.r = VK_COMPONENT_SWIZZLE_R;
+    mapping.g = VK_COMPONENT_SWIZZLE_G;
+    mapping.b = VK_COMPONENT_SWIZZLE_B;
+    mapping.a = VK_COMPONENT_SWIZZLE_A;
+    
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    s_colorRT.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT");
+    s_colorRTView.Create(s_colorRT, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_NONE,
+            s_colorRT.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    });
+}
+
+
+static void DestroyColorRT()
+{
+    s_colorRTView.Destroy();
+    s_colorRT.Destroy();
+}
+
+
+static void ResizeColorRT()
+{
+    DestroyColorRT();
+    CreateColorRT();
+}
+
+
 static void CreateCommonConstBuffer()
 {
     vkn::AllocationInfo allocInfo = {};
@@ -3245,13 +3537,14 @@ void UpdateGPUCommonConstBuffer()
 
     memcpy(&pCommonConstBufferData->COMMON_CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
+    pCommonConstBufferData->SCREEN_SIZE.x = s_pWnd->GetWidth();
+    pCommonConstBufferData->SCREEN_SIZE.y = s_pWnd->GetHeight();
+
     uint32_t dbgVisFlags = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     uint32_t dbgFlags = 0;
 
-#ifdef ENG_BUILD_DEBUG
     dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
     dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
-#endif
 
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
     pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
@@ -3272,6 +3565,33 @@ void UpdateScene()
     }
 
     s_camera.Update();
+}
+
+
+static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
+
+    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
+
+    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
+
+    const glm::float3 position = wMatr * glm::float4(mesh.SPHERE_BOUNDS_CENTER_LCS, 1.f);
+
+    const float scale = glm::max(glm::max(glm::length(glm::float3(wMatr[0])), glm::length(glm::float3(wMatr[1]))), glm::length(glm::float3(wMatr[2])));
+    const float radius = scale * mesh.SPHERE_BOUNDS_RADIUS_LCS;
+
+    const math::Frustum& frustum = s_camera.GetFrustum();
+
+    for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
+        const math::Plane& plane = frustum.planes[i];
+
+        if (glm::dot(plane.normal, position) + plane.distance < -radius) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 
@@ -3334,33 +3654,6 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
         VK_ACCESS_2_MEMORY_READ_BIT,
         s_commonDrawIndirectCommandsCountBuffer.Get()
     );
-}
-
-
-static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
-{
-    ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
-
-    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
-
-    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
-
-    const glm::float3 position = wMatr * glm::float4(mesh.SPHERE_BOUNDS_CENTER_LCS, 1.f);
-
-    const float scale = glm::max(glm::max(glm::length(glm::float3(wMatr[0])), glm::length(glm::float3(wMatr[1]))), glm::length(glm::float3(wMatr[2])));
-    const float radius = scale * mesh.SPHERE_BOUNDS_RADIUS_LCS;
-
-    const math::Frustum& frustum = s_camera.GetFrustum();
-
-    for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
-        const math::Plane& plane = frustum.planes[i];
-
-        if (glm::dot(plane.normal, position) + plane.distance < -radius) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 
@@ -3601,6 +3894,45 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", 250, 250, 40, 255);
+
+    for (vkn::Texture& colorRT : s_GBuffer.colorRTs) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+            colorRT.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    }
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        s_colorRT.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipeline);
+    
+    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_deferredLightingDescriptorSet };
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+    vkCmdDispatch(cmdBuffer.Get(), (s_pWnd->GetWidth() + 31) / 32, (s_pWnd->GetHeight() + 31) / 32, 1);
+}
+
+
 static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
@@ -3608,25 +3940,28 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     DbgUI::FillData();
     DbgUI::EndFrame();
 
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        s_colorRT.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
     renderingInfo.renderArea.offset = {0, 0};
     renderingInfo.layerCount = 1;
 
-    VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_GBuffer.depthRTView.Get();
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_GBuffer.colorRTViews[GBuffer::RT_0].Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.imageView = s_colorRTView.Get();
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     
@@ -3639,71 +3974,73 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void CopyRT0ToSwapchain(vkn::CmdBuffer& cmdBuffer, VkImage swapchainImage)
+void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "RT0_Swapchain_Copy", 50, 200, 200, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", 100, 250, 250, 255);
 
     CmdPipelineImageBarrier(
         cmdBuffer,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_TRANSFER_READ_BIT,
-        s_GBuffer.colorRTs[GBuffer::RT_0].Get(),
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+        s_colorRT.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
 
     CmdPipelineImageBarrier(
         cmdBuffer,
         VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_NONE,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        swapchainImage,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        s_vkSwapchain.GetImage(s_nextImageIdx),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
 
-    VkCopyImageInfo2 rtToSwapchainTexCopyInfo = {};
-    rtToSwapchainTexCopyInfo.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
-    rtToSwapchainTexCopyInfo.srcImage = s_GBuffer.colorRTs[GBuffer::RT_0].Get();
-    rtToSwapchainTexCopyInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    rtToSwapchainTexCopyInfo.dstImage = swapchainImage;
-    rtToSwapchainTexCopyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    rtToSwapchainTexCopyInfo.regionCount = 1;
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.layerCount = 1;
 
-    VkImageCopy2 cpyRegion = {};
-    cpyRegion.sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2;
-    cpyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    cpyRegion.srcSubresource.mipLevel = 0;
-    cpyRegion.srcSubresource.baseArrayLayer = 0;
-    cpyRegion.srcSubresource.layerCount = 1;
-    cpyRegion.srcOffset = {};
-    cpyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    cpyRegion.dstSubresource.mipLevel = 0;
-    cpyRegion.dstSubresource.baseArrayLayer = 0;
-    cpyRegion.dstSubresource.layerCount = 1;
-    cpyRegion.dstOffset = {};
-    cpyRegion.extent = { s_vkSwapchain.GetImageExtent().width, s_vkSwapchain.GetImageExtent().height, 1U };
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color.float32[0] = 0.f;
+    colorAttachment.clearValue.color.float32[1] = 0.f;
+    colorAttachment.clearValue.color.float32[2] = 0.f;
+    colorAttachment.clearValue.color.float32[3] = 0.f;
     
-    rtToSwapchainTexCopyInfo.pRegions = &cpyRegion;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
 
-    vkCmdCopyImage2(cmdBuffer.Get(), &rtToSwapchainTexCopyInfo);
+    cmdBuffer.CmdBeginRendering(renderingInfo);
+        VkViewport viewport = {};
+        viewport.width = renderingInfo.renderArea.extent.width;
+        viewport.height = renderingInfo.renderArea.extent.height;
+        viewport.minDepth = 0.f;
+        viewport.maxDepth = 1.f;
+        cmdBuffer.CmdSetViewport(0, 1, &viewport); 
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        VK_ACCESS_2_NONE,
-        swapchainImage,
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+        VkRect2D scissor = {};
+        scissor.extent = renderingInfo.renderArea.extent;
+        cmdBuffer.CmdSetScissor(0, 1, &scissor);
+
+        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_postProcessingPipeline);
+        
+        VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_postProcessingDescriptorSet };
+        vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_postProcessingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+        cmdBuffer.CmdDraw(6, 1, 0, 0);        
+    cmdBuffer.CmdEndRendering();
 }
 
 
@@ -3718,8 +4055,7 @@ static void RenderScene()
 
     UpdateGPUCommonConstBuffer();
 
-    uint32_t nextImageIdx;
-    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &nextImageIdx);
+    const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &s_nextImageIdx);
     
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
@@ -3729,7 +4065,7 @@ static void RenderScene()
         return;
     }
 
-    vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[nextImageIdx];
+    vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[s_nextImageIdx];
     vkn::CmdBuffer& cmdBuffer = s_renderCmdBuffer;
 
     cmdBuffer.Reset();
@@ -3745,9 +4081,23 @@ static void RenderScene()
         MeshCullingPass(cmdBuffer);
         DepthPass(cmdBuffer);
         GBufferRenderPass(cmdBuffer);
+        DeferredLightingPass(cmdBuffer);
+
         DebugUIRenderPass(cmdBuffer);
         
-        CopyRT0ToSwapchain(cmdBuffer, s_vkSwapchain.GetImage(nextImageIdx));        
+        PostProcessingPass(cmdBuffer);
+        
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+            VK_ACCESS_2_SHADER_WRITE_BIT,
+            VK_ACCESS_2_NONE,
+            s_vkSwapchain.GetImage(s_nextImageIdx),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
 
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
     }
@@ -3765,7 +4115,7 @@ static void RenderScene()
         VK_PIPELINE_STAGE_2_NONE
     );
 
-    PresentImage(nextImageIdx);
+    PresentImage(s_nextImageIdx);
 }
 
 
@@ -3922,7 +4272,12 @@ void ProcessFrame()
         }
 
         s_vkDevice.WaitIdle();
+
         ResizeGBuffer();
+        ResizeColorRT();
+
+        WriteDeferredLightingDescriptorSet();
+        WritePostProcessingDescriptorSet();
     }
 
     UpdateScene();
@@ -3989,6 +4344,8 @@ int main(int argc, char* argv[])
     CreateCommonStagingBuffers();
 
     CreateGBuffer();
+    CreateColorRT();
+
     CreateCommonSamplers();
     CreateCommonConstBuffer();
     CreateGBufferIndirectDrawBuffers();
@@ -4041,9 +4398,17 @@ int main(int argc, char* argv[])
     vkDestroyPipeline(s_vkDevice.Get(), s_gbufferRenderPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_gbufferRenderPipelineLayout, nullptr);
     
+    vkDestroyPipeline(s_vkDevice.Get(), s_deferredLightingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_deferredLightingPipelineLayout, nullptr);
+    
+    vkDestroyPipeline(s_vkDevice.Get(), s_postProcessingPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_postProcessingPipelineLayout, nullptr);
+
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_zpassDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_meshCullingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferRenderDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_deferredLightingDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_postProcessingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);

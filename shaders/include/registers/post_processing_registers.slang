@@ -1,0 +1,8 @@
+#ifndef POST_PROCESSING_REGISTERS_H
+#define POST_PROCESSING_REGISTERS_H
+
+
+[vk::binding(0, 1)] Texture2D POST_PROCESSING_INPUT_COLOR;
+
+
+#endif

@@ -57,6 +57,10 @@ namespace vkn
             return false;
         }
 
+        if (featuresReq.shaderFloat16 && featuresReq.shaderFloat16 != pFeatures12->shaderFloat16) {
+            return false;
+        }
+
         vkGetPhysicalDeviceProperties(vkPhysDevice, &outDeviceProps);
 
         if (propsReq.deviceType != outDeviceProps.deviceType) {

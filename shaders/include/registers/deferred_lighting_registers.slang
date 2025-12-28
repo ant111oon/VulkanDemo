@@ -1,0 +1,12 @@
+#ifndef DEFERRED_LIGHTING_REGISTERS_H
+#define DEFERRED_LIGHTING_REGISTERS_H
+
+
+[vk::binding(0, 1)] RWTexture2D DEFERRED_LIGHTING_OUTPUT_UAV;
+
+[vk::binding(1, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_0;
+[vk::binding(2, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_1;
+[vk::binding(3, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_2;
+[vk::binding(4, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_3;
+
+#endif
