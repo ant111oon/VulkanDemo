@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 #include "registers/gbuffer_registers.slang"
 
-#include "math/half.slang"
+#include "common/math/half.slang"
 
 
 struct GBUFFER_INPUT_DATA

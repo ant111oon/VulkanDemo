@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 
 #include "common/common_defines.slang"
-#include "math/color_utils.slang"
+#include "common/math/color_utils.slang"
 
 
 struct POST_PROC_PS_OUTPUT

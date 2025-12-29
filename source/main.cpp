@@ -3384,7 +3384,7 @@ static void CreateGBuffer()
     vkn::Texture& rt1 = s_GBuffer.colorRTs[GBuffer::RT_1];
     vkn::TextureView& rt1View = s_GBuffer.colorRTViews[GBuffer::RT_1];
 
-    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     rt1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");

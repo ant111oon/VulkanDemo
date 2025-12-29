@@ -1,8 +1,8 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
-#include "math/frustum.slang"
-#include "math/math.slang"
+#include "common/math/frustum.slang"
+#include "common/math/math.slang"
 
 
 struct COMMON_MATERIAL

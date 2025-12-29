@@ -2,8 +2,9 @@
 #define GBUFFER_COMMON_H
 
 #include "registers/common_registers.slang"
+
 #include "common/common_defines.slang"
-#include "math/color_utils.slang"
+#include "common/math/color_utils.slang"
 
 
 struct COMMON_SURFACE
@@ -56,9 +57,10 @@ float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in floa
 #endif
     {
         lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz;
+        lnorm = normalize(lnorm * 2.f - 1.f);
     }
 
-    return normalize(mul(normalize(lnorm), TBN));
+    return normalize(mul(lnorm, TBN));
 }
 
 

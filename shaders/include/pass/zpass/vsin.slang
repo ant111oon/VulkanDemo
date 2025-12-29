@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 #include "registers/zpass_registers.slang"
 
-#include "math/half.slang"
+#include "common/math/half.slang"
 
 
 struct ZPASS_INPUT_DATA

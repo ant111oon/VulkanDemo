@@ -3,6 +3,8 @@
 #include "registers/deferred_lighting_registers.slang"
 #include "registers/common_registers.slang"
 
+#include "common/brdf.slang"
+
 
 float4 ComputeLighting(in uint2 DTid)
 {
@@ -12,7 +14,7 @@ float4 ComputeLighting(in uint2 DTid)
 
 [shader("compute")]
 [numthreads(32, 32, 1)]
-void main(in uint2 DTid : SV_DispatchThreadID)
+void main(uint2 DTid : SV_DispatchThreadID)
 {
     if (any(DTid >= COMMON_CB.SCREEN_SIZE)) {
         return;
