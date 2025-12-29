@@ -323,13 +323,34 @@ struct Vertex
 };
 
 
+enum class COMMON_MATERIAL_FLAGS : glm::uint
+{
+    DOUBLE_SIDED = 0x1,
+    ALPHA_KILL = 0x2,
+    ALPHA_BLEND = 0x4,
+};
+
+
 struct COMMON_MATERIAL
 {
-    int32_t ALBEDO_TEX_IDX;
-    int32_t NORMAL_TEX_IDX;
-    int32_t MR_TEX_IDX;
-    int32_t AO_TEX_IDX;
-    int32_t EMISSIVE_TEX_IDX;
+    glm::float4 ALBEDO_MULT;
+
+    glm::float3 EMISSIVE_MULT;
+    float ALPHA_REF;
+
+    float NORMAL_SCALE;
+    float METALNESS_SCALE;
+    float ROUGHNESS_SCALE;
+    float AO_COEF;
+
+    int32_t ALBEDO_TEX_IDX = -1;
+    int32_t NORMAL_TEX_IDX = -1;
+    int32_t MR_TEX_IDX = -1;
+    int32_t AO_TEX_IDX = -1;
+
+    glm::uvec2 PAD0;
+    int32_t EMISSIVE_TEX_IDX = -1;
+    glm::uint FLAGS;
 };
 
 
@@ -1391,9 +1412,10 @@ static void CreateCommonDescriptorPool()
         .SetMaxDescriptorSetsCount(10);
         
     s_commonDescriptorSetPool = builder
+        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
         .AddResource(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100)
         .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100)
-        .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
+        .AddResource(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 100)
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000)
         .Build();
 
@@ -2876,18 +2898,31 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
     s_cpuMaterialData.clear();
 
     for (const gltf::Material& material : asset.materials) {
-        COMMON_MATERIAL mtl = { -1, -1, -1, -1, -1 };
+        COMMON_MATERIAL mtl = {};
 
-        const auto& albedoTexOpt = material.pbrData.baseColorTexture;
+        const gltf::PBRData& pbrData = material.pbrData;
+        
+        mtl.ALBEDO_MULT.r = pbrData.baseColorFactor.x();
+        mtl.ALBEDO_MULT.g = pbrData.baseColorFactor.y();
+        mtl.ALBEDO_MULT.b = pbrData.baseColorFactor.z();
+        mtl.ALBEDO_MULT.a = pbrData.baseColorFactor.w();
+        mtl.METALNESS_SCALE = pbrData.metallicFactor;
+        mtl.ROUGHNESS_SCALE = pbrData.roughnessFactor;
+
+        const auto& albedoTexOpt = pbrData.baseColorTexture;
         if (albedoTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[albedoTexOpt.value().textureIndex];
             mtl.ALBEDO_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
 
+        mtl.NORMAL_SCALE = 1.f;
+
         const auto& normalTexOpt = material.normalTexture;
         if (normalTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[normalTexOpt.value().textureIndex];
             mtl.NORMAL_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+        
+            mtl.NORMAL_SCALE = normalTexOpt.value().scale;
         }
 
         const auto& mrTexOpt = material.pbrData.metallicRoughnessTexture;
@@ -2896,10 +2931,14 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
             mtl.MR_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
 
+        mtl.AO_COEF = 1.f;
+
         const auto& aoTexOpt = material.occlusionTexture;
         if (aoTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[aoTexOpt.value().textureIndex];
             mtl.AO_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+        
+            mtl.AO_COEF = aoTexOpt.value().strength;
         }
 
         const auto& emissiveTexOpt = material.emissiveTexture;
@@ -2907,6 +2946,21 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
             const gltf::Texture& tex = asset.textures[emissiveTexOpt.value().textureIndex];
             mtl.EMISSIVE_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
+
+        mtl.EMISSIVE_MULT.r = material.emissiveFactor.x();
+        mtl.EMISSIVE_MULT.g = material.emissiveFactor.y();
+        mtl.EMISSIVE_MULT.b = material.emissiveFactor.z();
+
+        mtl.FLAGS = 0;
+        mtl.FLAGS |= (material.doubleSided ? glm::uint(COMMON_MATERIAL_FLAGS::DOUBLE_SIDED) : glm::uint(0));
+
+        if (material.alphaMode == gltf::AlphaMode::Mask) {
+            mtl.FLAGS |= glm::uint(COMMON_MATERIAL_FLAGS::ALPHA_KILL);
+        } else if (material.alphaMode == gltf::AlphaMode::Blend) {
+            mtl.FLAGS |= glm::uint(COMMON_MATERIAL_FLAGS::ALPHA_BLEND);
+        }
+
+        mtl.ALPHA_REF = material.alphaCutoff;
 
         s_cpuMaterialData.emplace_back(mtl);
     }

@@ -10,10 +10,10 @@
 struct COMMON_SURFACE
 {
     float4 albedo;
-    float4 emissive;
-    float3 lnorm;
     float metalness;
+    float3 emissive;
     float roughness;
+    float3 lnorm;
     float ao;
 };
 
@@ -29,20 +29,24 @@ float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in floa
     float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
     albedo.rgb = SRGBToLinear(albedo.rgb);
 
+    albedo *= mtl.ALBEDO_MULT;
+
     return albedo;
 }
 
 
-float4 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
+float3 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
 {
 #ifdef ENV_DEBUG
     if (mtl.EMISSIVE_TEX_IDX < 0) {
-        return float4(0.f, 0.f, 0.f, 1.f);
+        return M3D_ZEROF3;
     }
 #endif
 
-    float4 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
-    emissive.rgb = SRGBToLinear(emissive.rgb);
+    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).rgb;
+    emissive = SRGBToLinear(emissive);
+
+    emissive *= mtl.EMISSIVE_MULT;
 
     return emissive;
 }
@@ -57,41 +61,43 @@ float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in floa
 #endif
     {
         lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz;
-        lnorm = normalize(lnorm * 2.f - 1.f);
+        lnorm = normalize((lnorm * 2.f - 1.f) * float3(FLOAT2(mtl.NORMAL_SCALE), 1.f));
     }
 
     return normalize(mul(lnorm, TBN));
 }
 
 
-float3 SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
+void SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, out float metalness, out float roughness, out float ao)
 {
     float3 aoMetRough = float3(1.f, 0.f, 1.f);
 
     if (mtl.MR_TEX_IDX == mtl.AO_TEX_IDX) {
-        #ifdef ENV_DEBUG
+    #ifdef ENV_DEBUG
         if (mtl.MR_TEX_IDX >= 0)
-        #endif
+    #endif
         {
             aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).rgb;
         }
     } else {
-        #ifdef ENV_DEBUG
+    #ifdef ENV_DEBUG
         if (mtl.AO_TEX_IDX >= 0)
-        #endif
+    #endif
         {
             aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).r;
         }
 
-        #ifdef ENV_DEBUG
+    #ifdef ENV_DEBUG
         if (mtl.MR_TEX_IDX >= 0)
-        #endif
+    #endif
         {
             aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).bg;
         }
     }
 
-    return float3(aoMetRough.g, aoMetRough.b, aoMetRough.r);
+    metalness = aoMetRough.g * mtl.METALNESS_SCALE;
+    roughness = aoMetRough.b * mtl.ROUGHNESS_SCALE;
+    ao = lerp(1.f, aoMetRough.r, mtl.AO_COEF);
 }
 
 
@@ -107,11 +113,7 @@ COMMON_SURFACE SampleCommonSurface(in uint mtlIdx, in float3x3 TBN, in float2 uv
     surf.emissive = SampleCommonSurfaceEmissive(mtl, smpIdx, uv);
     surf.lnorm = SampleCommonSurfaceNormal(mtl, smpIdx, uv, TBN);
 
-    const float3 metRoughAO = SampleCommonSurfaceMetRoughAO(mtl, smpIdx, uv);
-
-    surf.metalness = metRoughAO.r;
-    surf.roughness = metRoughAO.g;
-    surf.ao = metRoughAO.b;
+    SampleCommonSurfaceMetRoughAO(mtl, smpIdx, uv, surf.metalness, surf.roughness, surf.ao);
 
     return surf;
 }

@@ -5,13 +5,34 @@
 #include "common/math/math.slang"
 
 
+enum COMMON_MATERIAL_FLAGS
+{
+    DOUBLE_SIDED = 0x1,
+    ALPHA_KILL = 0x2,
+    ALPHA_BLEND = 0x4,
+};
+
+
 struct COMMON_MATERIAL
 {
+    float4 ALBEDO_MULT;
+
+    float3 EMISSIVE_MULT;
+    float ALPHA_REF;
+
+    float NORMAL_SCALE;
+    float METALNESS_SCALE;
+    float ROUGHNESS_SCALE;
+    float AO_COEF;
+
     int ALBEDO_TEX_IDX;
     int NORMAL_TEX_IDX;
     int MR_TEX_IDX;
     int AO_TEX_IDX;
+
+    uint2 PAD0;
     int EMISSIVE_TEX_IDX;
+    uint FLAGS;
 };
 
 
