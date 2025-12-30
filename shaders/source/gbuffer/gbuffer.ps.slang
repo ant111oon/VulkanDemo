@@ -3,8 +3,8 @@
 #include "common/math/color_utils.slang"
 #include "common/dbg_vis.slang"
 #include "common/common_defines.slang"
+#include "common/common_structs.slang"
 
-#include "pass/gbuffer/common.slang"
 #include "pass/gbuffer/vsout.slang"
 
 

@@ -31,7 +31,7 @@ void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uin
     MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].FIRST_INSTANCE = firstInstance;
     MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_COUNT = instanceCount;
 
-    MESH_CULL_INDIRECT_DRAW_CMDS_UAV[idx].INSTANCE_INFO_IDX = instID;
+    MESH_CULL_INST_INFO_IDS_UAV[idx] = instID;
 }
 
 

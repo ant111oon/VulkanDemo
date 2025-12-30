@@ -383,8 +383,6 @@ struct COMMON_INDIRECT_DRAW_CMD
     glm::uint FIRST_INDEX;
     int32_t   VERTEX_OFFSET;
     glm::uint FIRST_INSTANCE;
-
-    glm::uint INSTANCE_INFO_IDX;
 };
 
 
@@ -667,12 +665,11 @@ static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 2;
 
-static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
 
-static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
@@ -767,6 +764,8 @@ static vkn::Buffer s_commonInstDataBuffer;
 
 static vkn::Buffer s_commonDrawIndirectCommandsBuffer;
 static vkn::Buffer s_commonDrawIndirectCommandsCountBuffer;
+
+static vkn::Buffer s_commonCulledInstInfoIDsBuffer;
 
 static vkn::QueryPool s_commonQueryPool;
 
@@ -1450,8 +1449,7 @@ static void CreateZPassDescriptorSetLayout()
 
     s_zpassDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(ZPASS_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_zpassDescriptorSetLayout != VK_NULL_HANDLE);
@@ -1466,6 +1464,7 @@ static void CreateMeshCullingDescriptorSetLayout()
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_meshCullingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -1478,8 +1477,7 @@ static void CreateGBufferDescriptorSetLayout()
 
     s_gbufferRenderDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_gbufferRenderDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2051,7 +2049,7 @@ static void UploadGPUDbgTextures()
 }
 
 
-static void CreateGBufferIndirectDrawBuffers()
+static void CreateCullingResources()
 {
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -2063,11 +2061,16 @@ static void CreateGBufferIndirectDrawBuffers()
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_commonDrawIndirectCommandsBuffer.Create(createInfo).SetDebugName("DRAW_INDIRECT_COMMAND_BUFFER");
+    s_commonDrawIndirectCommandsBuffer.Create(createInfo).SetDebugName("COMMON_DRAW_INDIRECT_CMD_BUFFER");
 
     createInfo.size = sizeof(glm::uint);
 
-    s_commonDrawIndirectCommandsCountBuffer.Create(createInfo).SetDebugName("DRAW_INDIRECT_COMMAND_COUNT_BUFFER");
+    s_commonDrawIndirectCommandsCountBuffer.Create(createInfo).SetDebugName("COMMON_DRAW_INDIRECT_CMD_COUNT_BUFFER");
+
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    
+    s_commonCulledInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_INST_INFO_IDS_BUFFER");
 }
 
 
@@ -2313,37 +2316,21 @@ static void WriteZPassCullingDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo drawIndirectCommandsBufferInfo = {};
-    drawIndirectCommandsBufferInfo.buffer = s_commonDrawIndirectCommandsBuffer.Get();
-    drawIndirectCommandsBufferInfo.offset = 0;
-    drawIndirectCommandsBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonCulledInstInfosIDsBuffInfo = {};
+    commonCulledInstInfosIDsBuffInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
+    commonCulledInstInfosIDsBuffInfo.offset = 0;
+    commonCulledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
-    drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_zpassDescriptorSet;
-    drawIndirectCommandsBufferWrite.dstBinding = ZPASS_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsBufferWrite.pBufferInfo = &drawIndirectCommandsBufferInfo;
+    VkWriteDescriptorSet commonCulledInstInfosIDsBuffWrite = {};
+    commonCulledInstInfosIDsBuffWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    commonCulledInstInfosIDsBuffWrite.dstSet = s_zpassDescriptorSet;
+    commonCulledInstInfosIDsBuffWrite.dstBinding = ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    commonCulledInstInfosIDsBuffWrite.dstArrayElement = 0;
+    commonCulledInstInfosIDsBuffWrite.descriptorCount = 1;
+    commonCulledInstInfosIDsBuffWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    commonCulledInstInfosIDsBuffWrite.pBufferInfo = &commonCulledInstInfosIDsBuffInfo;
 
-    descWrites.emplace_back(drawIndirectCommandsBufferWrite);
-
-    VkDescriptorBufferInfo drawIndirectCommandsCountBufferInfo = {};
-    drawIndirectCommandsCountBufferInfo.buffer = s_commonDrawIndirectCommandsCountBuffer.Get();
-    drawIndirectCommandsCountBufferInfo.offset = 0;
-    drawIndirectCommandsCountBufferInfo.range = VK_WHOLE_SIZE;
-
-    VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
-    drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_zpassDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = ZPASS_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsCountBufferWrite.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
-
-    descWrites.emplace_back(drawIndirectCommandsCountBufferWrite);
+    descWrites.emplace_back(commonCulledInstInfosIDsBuffWrite);
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -2358,32 +2345,36 @@ static void WriteMeshCullingDescriptorSet()
     drawIndirectCommandsBufferInfo.offset = 0;
     drawIndirectCommandsBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
-    drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_meshCullingDescriptorSet;
-    drawIndirectCommandsBufferWrite.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsBufferWrite.pBufferInfo = &drawIndirectCommandsBufferInfo;
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_meshCullingDescriptorSet;
+    write.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &drawIndirectCommandsBufferInfo;
 
-    descWrites.emplace_back(drawIndirectCommandsBufferWrite);
+    descWrites.emplace_back(write);
 
     VkDescriptorBufferInfo drawIndirectCommandsCountBufferInfo = {};
     drawIndirectCommandsCountBufferInfo.buffer = s_commonDrawIndirectCommandsCountBuffer.Get();
     drawIndirectCommandsCountBufferInfo.offset = 0;
     drawIndirectCommandsCountBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
-    drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_meshCullingDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsCountBufferWrite.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
+    write.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
 
-    descWrites.emplace_back(drawIndirectCommandsCountBufferWrite);
+    descWrites.emplace_back(write);
+
+    VkDescriptorBufferInfo commonCulledInstInfoIDsBufferInfo = {};
+    commonCulledInstInfoIDsBufferInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
+    commonCulledInstInfoIDsBufferInfo.offset = 0;
+    commonCulledInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &commonCulledInstInfoIDsBufferInfo;
+
+    descWrites.emplace_back(write);
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -2393,37 +2384,21 @@ static void WriteGBufferDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo drawIndirectCommandsBufferInfo = {};
-    drawIndirectCommandsBufferInfo.buffer = s_commonDrawIndirectCommandsBuffer.Get();
-    drawIndirectCommandsBufferInfo.offset = 0;
-    drawIndirectCommandsBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo commonCulledInstInfosIDsBuffInfo = {};
+    commonCulledInstInfosIDsBuffInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
+    commonCulledInstInfosIDsBuffInfo.offset = 0;
+    commonCulledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet drawIndirectCommandsBufferWrite = {};
-    drawIndirectCommandsBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsBufferWrite.dstSet = s_gbufferRenderDescriptorSet;
-    drawIndirectCommandsBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsBufferWrite.pBufferInfo = &drawIndirectCommandsBufferInfo;
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_gbufferRenderDescriptorSet;
+    write.dstBinding = GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &commonCulledInstInfosIDsBuffInfo;
 
-    descWrites.emplace_back(drawIndirectCommandsBufferWrite);
-
-    VkDescriptorBufferInfo drawIndirectCommandsCountBufferInfo = {};
-    drawIndirectCommandsCountBufferInfo.buffer = s_commonDrawIndirectCommandsCountBuffer.Get();
-    drawIndirectCommandsCountBufferInfo.offset = 0;
-    drawIndirectCommandsCountBufferInfo.range = VK_WHOLE_SIZE;
-
-    VkWriteDescriptorSet drawIndirectCommandsCountBufferWrite = {};
-    drawIndirectCommandsCountBufferWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    drawIndirectCommandsCountBufferWrite.dstSet = s_gbufferRenderDescriptorSet;
-    drawIndirectCommandsCountBufferWrite.dstBinding = GBUFFER_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
-    drawIndirectCommandsCountBufferWrite.dstArrayElement = 0;
-    drawIndirectCommandsCountBufferWrite.descriptorCount = 1;
-    drawIndirectCommandsCountBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    drawIndirectCommandsCountBufferWrite.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
-
-    descWrites.emplace_back(drawIndirectCommandsCountBufferWrite);
+    descWrites.emplace_back(write);
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -4402,7 +4377,7 @@ int main(int argc, char* argv[])
 
     CreateCommonSamplers();
     CreateCommonConstBuffer();
-    CreateGBufferIndirectDrawBuffers();
+    CreateCullingResources();
     CreateDesriptorSets();
     CreatePipelines();
     CreateCommonDbgTextures();

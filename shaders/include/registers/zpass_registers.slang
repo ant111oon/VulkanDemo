@@ -13,8 +13,6 @@ struct ZPASS_BINDLESS_REGISTRY
 
 [[vk::push_constant]] ZPASS_BINDLESS_REGISTRY ZPASS_REGISTRY;
 
-
-[vk::binding(0, 1)] StructuredBuffer<COMMON_INDIRECT_DRAW_CMD> ZPASS_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(1, 1)] StructuredBuffer<uint> ZPASS_INDIRECT_DRAW_CMDS_COUNT;
+[vk::binding(0, 1)] StructuredBuffer<uint> ZPASS_INST_INFO_IDS;
 
 #endif
