@@ -663,9 +663,12 @@ static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
 static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 
-static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
+static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
 
@@ -762,12 +765,13 @@ static vkn::Buffer s_commonMaterialDataBuffer;
 static vkn::Buffer s_commonTransformDataBuffer;
 static vkn::Buffer s_commonInstDataBuffer;
 
-static vkn::Buffer s_commonDrawIndirectCommandsBuffer;
-static vkn::Buffer s_commonDrawIndirectCommandsCountBuffer;
+static vkn::Buffer s_commonOpaqueMeshDrawCmdBuffer;
+static vkn::Buffer s_commonOpaqueMeshDrawCmdCountBuffer;
+static vkn::Buffer s_commonCulledOpaqueInstInfoIDsBuffer;
 
-static vkn::Buffer s_commonCulledInstInfoIDsBuffer;
-
-static vkn::QueryPool s_commonQueryPool;
+static vkn::Buffer s_commonTranspMeshDrawCmdBuffer;
+static vkn::Buffer s_commonTranspMeshDrawCmdCountBuffer;
+static vkn::Buffer s_commonCulledTranspInstInfoIDsBuffer;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
@@ -1462,9 +1466,12 @@ static void CreateMeshCullingDescriptorSetLayout()
 
     s_meshCullingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_meshCullingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2061,16 +2068,31 @@ static void CreateCullingResources()
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_commonDrawIndirectCommandsBuffer.Create(createInfo).SetDebugName("COMMON_DRAW_INDIRECT_CMD_BUFFER");
+    s_commonOpaqueMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_BUFFER");
 
     createInfo.size = sizeof(glm::uint);
 
-    s_commonDrawIndirectCommandsCountBuffer.Create(createInfo).SetDebugName("COMMON_DRAW_INDIRECT_CMD_COUNT_BUFFER");
+    s_commonOpaqueMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_COUNT_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
     
-    s_commonCulledInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_INST_INFO_IDS_BUFFER");
+    s_commonCulledOpaqueInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_OPAQUE_INST_INFO_IDS_BUFFER");
+
+
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+
+    s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_BUFFER");
+
+    createInfo.size = sizeof(glm::uint);
+
+    s_commonTranspMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_COUNT_BUFFER");
+
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    
+    s_commonCulledTranspInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_TRANSP_INST_INFO_IDS_BUFFER");
 }
 
 
@@ -2312,25 +2334,25 @@ static void CreateCommonSamplers()
 }
 
 
-static void WriteZPassCullingDescriptorSet()
+static void WriteZPassDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo commonCulledInstInfosIDsBuffInfo = {};
-    commonCulledInstInfosIDsBuffInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
-    commonCulledInstInfosIDsBuffInfo.offset = 0;
-    commonCulledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo culledInstInfosIDsBuffInfo = {};
+    culledInstInfosIDsBuffInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
+    culledInstInfosIDsBuffInfo.offset = 0;
+    culledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet commonCulledInstInfosIDsBuffWrite = {};
-    commonCulledInstInfosIDsBuffWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    commonCulledInstInfosIDsBuffWrite.dstSet = s_zpassDescriptorSet;
-    commonCulledInstInfosIDsBuffWrite.dstBinding = ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT;
-    commonCulledInstInfosIDsBuffWrite.dstArrayElement = 0;
-    commonCulledInstInfosIDsBuffWrite.descriptorCount = 1;
-    commonCulledInstInfosIDsBuffWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    commonCulledInstInfosIDsBuffWrite.pBufferInfo = &commonCulledInstInfosIDsBuffInfo;
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_zpassDescriptorSet;
+    write.dstBinding = ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &culledInstInfosIDsBuffInfo;
 
-    descWrites.emplace_back(commonCulledInstInfosIDsBuffWrite);
+    descWrites.emplace_back(write);
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -2340,41 +2362,73 @@ static void WriteMeshCullingDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo drawIndirectCommandsBufferInfo = {};
-    drawIndirectCommandsBufferInfo.buffer = s_commonDrawIndirectCommandsBuffer.Get();
-    drawIndirectCommandsBufferInfo.offset = 0;
-    drawIndirectCommandsBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo opaqueMeshDrawCmdBufferInfo = {};
+    opaqueMeshDrawCmdBufferInfo.buffer = s_commonOpaqueMeshDrawCmdBuffer.Get();
+    opaqueMeshDrawCmdBufferInfo.offset = 0;
+    opaqueMeshDrawCmdBufferInfo.range = VK_WHOLE_SIZE;
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = s_meshCullingDescriptorSet;
-    write.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    write.dstBinding = MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
     write.dstArrayElement = 0;
     write.descriptorCount = 1;
     write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write.pBufferInfo = &drawIndirectCommandsBufferInfo;
+    write.pBufferInfo = &opaqueMeshDrawCmdBufferInfo;
 
     descWrites.emplace_back(write);
 
-    VkDescriptorBufferInfo drawIndirectCommandsCountBufferInfo = {};
-    drawIndirectCommandsCountBufferInfo.buffer = s_commonDrawIndirectCommandsCountBuffer.Get();
-    drawIndirectCommandsCountBufferInfo.offset = 0;
-    drawIndirectCommandsCountBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo opaqueMeshDrawCmdCountBufferInfo = {};
+    opaqueMeshDrawCmdCountBufferInfo.buffer = s_commonOpaqueMeshDrawCmdCountBuffer.Get();
+    opaqueMeshDrawCmdCountBufferInfo.offset = 0;
+    opaqueMeshDrawCmdCountBufferInfo.range = VK_WHOLE_SIZE;
 
-    write.dstBinding = MESH_CULLING_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
-    write.pBufferInfo = &drawIndirectCommandsCountBufferInfo;
+    write.dstBinding = MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &opaqueMeshDrawCmdCountBufferInfo;
+
+    descWrites.emplace_back(write);
+
+    VkDescriptorBufferInfo culledOpaqueInstInfoIDsBufferInfo = {};
+    culledOpaqueInstInfoIDsBufferInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
+    culledOpaqueInstInfoIDsBufferInfo.offset = 0;
+    culledOpaqueInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledOpaqueInstInfoIDsBufferInfo;
 
     descWrites.emplace_back(write);
 
-    VkDescriptorBufferInfo commonCulledInstInfoIDsBufferInfo = {};
-    commonCulledInstInfoIDsBufferInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
-    commonCulledInstInfoIDsBufferInfo.offset = 0;
-    commonCulledInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
 
-    write.dstBinding = MESH_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
-    write.pBufferInfo = &commonCulledInstInfoIDsBufferInfo;
+    VkDescriptorBufferInfo transpMeshDrawCmdBufferInfo = {};
+    transpMeshDrawCmdBufferInfo.buffer = s_commonTranspMeshDrawCmdBuffer.Get();
+    transpMeshDrawCmdBufferInfo.offset = 0;
+    transpMeshDrawCmdBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &transpMeshDrawCmdBufferInfo;
 
     descWrites.emplace_back(write);
+
+    VkDescriptorBufferInfo transpMeshDrawCmdCountBufferInfo = {};
+    transpMeshDrawCmdCountBufferInfo.buffer = s_commonTranspMeshDrawCmdCountBuffer.Get();
+    transpMeshDrawCmdCountBufferInfo.offset = 0;
+    transpMeshDrawCmdCountBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &transpMeshDrawCmdCountBufferInfo;
+
+    descWrites.emplace_back(write);
+
+    VkDescriptorBufferInfo culledTranspInstInfoIDsBufferInfo = {};
+    culledTranspInstInfoIDsBufferInfo.buffer = s_commonCulledTranspInstInfoIDsBuffer.Get();
+    culledTranspInstInfoIDsBufferInfo.offset = 0;
+    culledTranspInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledTranspInstInfoIDsBufferInfo;
+
+    descWrites.emplace_back(write);
+
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -2384,10 +2438,10 @@ static void WriteGBufferDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo commonCulledInstInfosIDsBuffInfo = {};
-    commonCulledInstInfosIDsBuffInfo.buffer = s_commonCulledInstInfoIDsBuffer.Get();
-    commonCulledInstInfosIDsBuffInfo.offset = 0;
-    commonCulledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo culledOpaqueInstInfoIDsBuffer = {};
+    culledOpaqueInstInfoIDsBuffer.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
+    culledOpaqueInstInfoIDsBuffer.offset = 0;
+    culledOpaqueInstInfoIDsBuffer.range = VK_WHOLE_SIZE;
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -2396,7 +2450,7 @@ static void WriteGBufferDescriptorSet()
     write.dstArrayElement = 0;
     write.descriptorCount = 1;
     write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write.pBufferInfo = &commonCulledInstInfosIDsBuffInfo;
+    write.pBufferInfo = &culledOpaqueInstInfoIDsBuffer;
 
     descWrites.emplace_back(write);
 
@@ -2653,7 +2707,7 @@ static void WriteCommonDescriptorSet()
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
-    WriteZPassCullingDescriptorSet();
+    WriteZPassDescriptorSet();
     WriteMeshCullingDescriptorSet();
     WriteGBufferDescriptorSet();
 
@@ -2981,12 +3035,10 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     CORE_ASSERT(primitive.materialIndex.has_value());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
     
-                    // TODO: support transparent objects rendering
                     if (primitive.materialIndex.has_value()) {
-                        if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
-                            s_cpuInstData.emplace_back(instInfo);
-                        }
+                        s_cpuInstData.emplace_back(instInfo);
                     }
+
                     ++meshIdx;
                 }
             }
@@ -3654,6 +3706,60 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
 
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonOpaqueMeshDrawCmdBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonTranspMeshDrawCmdBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonTranspMeshDrawCmdCountBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonCulledTranspInstInfoIDsBuffer.Get()
+    );
+
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_meshCullingPipeline);
     
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_meshCullingDescriptorSet };
@@ -3665,24 +3771,6 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     vkCmdPushConstants(cmdBuffer.Get(), s_meshCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY), &registry);
 
     vkCmdDispatch(cmdBuffer.Get(), (s_cpuInstData.size() + 63) / 64, 1, 1);
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        s_commonDrawIndirectCommandsBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        s_commonDrawIndirectCommandsCountBuffer.Get()
-    );
 }
 
 
@@ -3705,6 +3793,35 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
         s_GBuffer.depthRT.Get(),
         VK_IMAGE_ASPECT_DEPTH_BIT
     );
+
+    if (s_useMeshIndirectDraw) {
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonOpaqueMeshDrawCmdBuffer.Get()
+        );
+
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+        );
+
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+        );
+    }
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -3746,7 +3863,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdDrawIndexedIndirect(s_commonDrawIndirectCommandsBuffer, 0, s_commonDrawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", 50, 255, 50, 255);
 
@@ -3805,6 +3922,35 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             colorRT.Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    }
+
+    if (s_useMeshIndirectDraw) {
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonOpaqueMeshDrawCmdBuffer.Get()
+        );
+
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+        );
+
+        CmdPipelineBufferBarrier(
+            cmdBuffer, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            VK_ACCESS_2_MEMORY_WRITE_BIT,
+            VK_ACCESS_2_MEMORY_READ_BIT,
+            s_commonCulledOpaqueInstInfoIDsBuffer.Get()
         );
     }
 
@@ -3891,7 +4037,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     #endif
 
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdDrawIndexedIndirect(s_commonDrawIndirectCommandsBuffer, 0, s_commonDrawIndirectCommandsCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", 50, 255, 50, 255);
 
@@ -4378,9 +4524,9 @@ int main(int argc, char* argv[])
     CreateCommonSamplers();
     CreateCommonConstBuffer();
     CreateCullingResources();
+    CreateCommonDbgTextures();
     CreateDesriptorSets();
     CreatePipelines();
-    CreateCommonDbgTextures();
 
     DbgUI::Init();
 

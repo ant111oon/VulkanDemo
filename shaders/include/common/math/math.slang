@@ -87,9 +87,19 @@ bool IsBitSet(uint value, uint bit)
     return IsFlagSet(value, uint(1) << bit);
 }
 
-
 #define M3D_IS_ZERO(x)      IsZero(x)
 #define M3D_IS_EQUAL(l, r)  M3D_IS_ZERO((l) - (r))
+
+
+float3x3 CalcTBN(in float3 tang, in float3 norm)
+{
+    const float3 N = normalize(norm);
+    const float3 T = normalize(tang - dot(tang, N) * N);
+
+    const float3 B = normalize(cross(N, T));
+
+    return float3x3(T, B, N);
+}
 
 
 #endif

@@ -8,17 +8,6 @@
 #include "pass/gbuffer/vsout.slang"
 
 
-float3x3 CalcTBN(in float3 ltang, in float3 lnorm)
-{
-    const float3 N = lnorm;
-    const float3 T = normalize(ltang - dot(ltang, N) * N);
-
-    const float3 B = normalize(cross(N, T));
-
-    return float3x3(T, B, N);
-}
-
-
 struct GBUFFER_PS_OUTPUT
 {
     [[vk::location(0)]] float4 rt0;
