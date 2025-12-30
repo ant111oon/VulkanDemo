@@ -72,7 +72,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
 
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
-    const bool isTranspMtl = !IS_COMMON_MATERIAL_OPAQUE(material);
+
+    // TODO: make 3 queues: opaque, alpha kill and transparent
+    // For now only opaque objects are supported
+    const bool isTranspMtl = IS_COMMON_MATERIAL_ALPHA_KILL(material) || IS_COMMON_MATERIAL_ALPHA_BLEND(material);
 
 #ifdef ENV_DEBUG
     if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {

@@ -27,9 +27,10 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 
     const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
 
-    const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
+    const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
-    COMMON_SURFACE surf = SampleCommonSurface(instInfo.MATERIAL_IDX, TBN, input.data.uv);
+    const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
+    COMMON_SURFACE surf = SampleCommonSurface(material, TBN, input.data.uv);
 
     const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
     const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)).xyz);

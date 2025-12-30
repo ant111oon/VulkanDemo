@@ -686,8 +686,8 @@ static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
-static constexpr size_t STAGING_BUFFER_SIZE    = 96 * 1024 * 1024; // 96 MB
-static constexpr size_t STAGING_BUFFER_COUNT   = 2;
+static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
+static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -1734,7 +1734,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_FALSE, VK_COMPARE_OP_EQUAL)
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
@@ -3035,8 +3035,11 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     CORE_ASSERT(primitive.materialIndex.has_value());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
     
+                    // TODO: support alpha kill and transparent objects rendering
                     if (primitive.materialIndex.has_value()) {
-                        s_cpuInstData.emplace_back(instInfo);
+                        if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
+                            s_cpuInstData.emplace_back(instInfo);
+                        }
                     }
 
                     ++meshIdx;
@@ -3726,7 +3729,7 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 
     CmdPipelineBufferBarrier(
         cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -3753,7 +3756,7 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 
     CmdPipelineBufferBarrier(
         cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -3812,16 +3815,16 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_MEMORY_READ_BIT,
             s_commonOpaqueMeshDrawCmdCountBuffer.Get()
         );
-
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonCulledOpaqueInstInfoIDsBuffer.Get()
-        );
     }
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+    );
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -3943,16 +3946,16 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_MEMORY_READ_BIT,
             s_commonOpaqueMeshDrawCmdCountBuffer.Get()
         );
-
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonCulledOpaqueInstInfoIDsBuffer.Get()
-        );
     }
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+    );
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;

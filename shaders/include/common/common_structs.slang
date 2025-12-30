@@ -112,20 +112,17 @@ void SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in fl
     ao = lerp(1.f, aoMetRough.r, mtl.AO_COEF);
 }
 
-
-COMMON_SURFACE SampleCommonSurface(in uint mtlIdx, in float3x3 TBN, in float2 uv)
+COMMON_SURFACE SampleCommonSurface(in COMMON_MATERIAL material, in float3x3 TBN, in float2 uv)
 {
     COMMON_SURFACE surf = (COMMON_SURFACE)0;
 
-    const COMMON_MATERIAL mtl = COMMON_MATERIALS[mtlIdx];
-
     const uint smpIdx = (uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT;
 
-    surf.albedo = SampleCommonSurfaceAlbedo(mtl, smpIdx, uv);
-    surf.emissive = SampleCommonSurfaceEmissive(mtl, smpIdx, uv);
-    surf.lnorm = SampleCommonSurfaceNormal(mtl, smpIdx, uv, TBN);
+    surf.albedo = SampleCommonSurfaceAlbedo(material, smpIdx, uv);
+    surf.emissive = SampleCommonSurfaceEmissive(material, smpIdx, uv);
+    surf.lnorm = SampleCommonSurfaceNormal(material, smpIdx, uv, TBN);
 
-    SampleCommonSurfaceMetRoughAO(mtl, smpIdx, uv, surf.metalness, surf.roughness, surf.ao);
+    SampleCommonSurfaceMetRoughAO(material, smpIdx, uv, surf.metalness, surf.roughness, surf.ao);
 
     return surf;
 }
