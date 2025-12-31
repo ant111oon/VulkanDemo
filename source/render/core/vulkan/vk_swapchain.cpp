@@ -123,14 +123,15 @@ namespace vkn
     }
 
 
-    Swapchain& Swapchain::Create(const SwapchainCreateInfo& info)
+    Swapchain& Swapchain::Create(const SwapchainCreateInfo& info, bool& succeded)
     {
         if (IsCreated()) {
             VK_LOG_WARN("Use Swapchain::Recreate if you want to recreate swapchain");
+            succeded = false;
             return *this;
         }
 
-        return Recreate(info);
+        return Recreate(info, succeded);
     }
 
 
@@ -166,17 +167,19 @@ namespace vkn
     }
 
 
-    Swapchain& Swapchain::Recreate(const SwapchainCreateInfo& info)
+    Swapchain& Swapchain::Recreate(const SwapchainCreateInfo& info, bool& succeded)
     {
         VkSwapchainCreateInfoKHR swapchainCreateInfo = CreateSwapchainCreateInfo(info, *this);
 
         const VkExtent2D newExtent = swapchainCreateInfo.imageExtent;
 
         if (newExtent.width == 0 || newExtent.height == 0) {
+            succeded = false;
             return *this;
         }
 
         if (newExtent.width == m_imageExtent.width && newExtent.height == m_imageExtent.height) {
+            succeded = true;
             return *this;
         }
 
@@ -187,6 +190,7 @@ namespace vkn
 
         if (newSwapchain == VK_NULL_HANDLE) {
             VK_ASSERT_FAIL("New swapchain is VK_NULL_HANDLE");
+            succeded = false;
             return *this;
         }
 
@@ -195,6 +199,7 @@ namespace vkn
         }
 
         SetCreated(true);
+        succeded = true;
 
         m_pSurface = info.pSurface;
         m_pDevice = info.pDevice;
@@ -220,10 +225,11 @@ namespace vkn
     }
 
 
-    Swapchain& Swapchain::Resize(uint32_t width, uint32_t height)
+    Swapchain& Swapchain::Resize(uint32_t width, uint32_t height, bool& succeded)
     {
         if (!IsCreated()) {
             VK_ASSERT_FAIL("Swapchain is not created. Can't resize swapchain.");
+            succeded = false;
             return *this;
         }
 
@@ -244,7 +250,7 @@ namespace vkn
         createInfo.compositeAlpha = m_compositeAlpha;
         createInfo.presentMode = m_presentMode;
 
-        return Recreate(createInfo);
+        return Recreate(createInfo, succeded);
     }
 
 

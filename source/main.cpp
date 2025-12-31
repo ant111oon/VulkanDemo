@@ -544,25 +544,6 @@ struct GBUFFER_BINDLESS_REGISTRY
 };
 
 
-struct GBuffer
-{
-    enum
-    {
-        RT_0,
-        RT_1,
-        RT_2,
-        RT_3,
-        RT_COUNT
-    };
-
-    std::array<vkn::Texture, RT_COUNT> colorRTs;
-    std::array<vkn::TextureView, RT_COUNT> colorRTViews;
-
-    vkn::Texture depthRT;
-    vkn::TextureView depthRTView;
-};
-
-
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "GBUFFER ALBEDO",
     "GBUFFER NORMAL",
@@ -686,6 +667,8 @@ static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
+static constexpr size_t GBUFFER_RT_COUNT = 4;
+
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
@@ -790,11 +773,15 @@ static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
 static std::vector<glm::float4x4>    s_cpuTransformData;
 static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
-static GBuffer s_GBuffer;
+
+static std::array<vkn::Texture, GBUFFER_RT_COUNT> s_gbufferRTs;
+static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
+
+static vkn::Texture s_commonDepthRT;
+static vkn::TextureView s_commonDepthRTView;
 
 static vkn::Texture s_colorRT;
 static vkn::TextureView s_colorRTView;
-
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
@@ -1275,8 +1262,10 @@ static void CreateVkSwapchain()
     swapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
-    s_vkSwapchain.Create(swapchainCreateInfo);
-    CORE_ASSERT(s_vkSwapchain.IsCreated());
+    bool succeded;
+    s_vkSwapchain.Create(swapchainCreateInfo, succeded);
+
+    CORE_ASSERT(succeded && s_vkSwapchain.IsCreated());
 }
 
 
@@ -1376,6 +1365,127 @@ static void CreateCommonStagingBuffers()
     for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
         s_commonStagingBuffers[i].Create(stagingBufCreateInfo).SetDebugName("STAGING_BUFFER_%zu", i);
     }
+}
+
+
+static void CreateDynamicRenderTargets()
+{
+    vkn::AllocationInfo rtAllocInfo = {};
+    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.mipLevels = 1;
+    rtCreateInfo.arrayLayers = 1;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &rtAllocInfo;
+
+    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+
+    vkn::Texture& gbuffRT0 = s_gbufferRTs[0];
+    vkn::TextureView& gbuffRT0View = s_gbufferRTViews[0];
+
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    gbuffRT0.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_0");
+    gbuffRT0View.Create(gbuffRT0, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_0_VIEW");
+
+
+    vkn::Texture& gbuffRT1 = s_gbufferRTs[1];
+    vkn::TextureView& gbuffRT1View = s_gbufferRTViews[1];
+
+    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    gbuffRT1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");
+    gbuffRT1View.Create(gbuffRT1, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_1_VIEW");
+
+
+    vkn::Texture& gbuffRT2 = s_gbufferRTs[2];
+    vkn::TextureView& gbuffRT2View = s_gbufferRTViews[2];
+
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    gbuffRT2.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_2");
+    gbuffRT2View.Create(gbuffRT2, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_2_VIEW");
+
+
+    vkn::Texture& gbuffRT3 = s_gbufferRTs[3];
+    vkn::TextureView& gbuffRT3View = s_gbufferRTViews[3];
+
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    gbuffRT3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
+    gbuffRT3View.Create(gbuffRT3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
+
+
+    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    s_colorRT.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT");
+    s_colorRTView.Create(s_colorRT, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_NONE,
+            s_colorRT.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    });
+
+
+    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    s_commonDepthRT.Create(rtCreateInfo).SetDebugName("COMMON_DEPTH_RT");
+    s_commonDepthRTView.Create(s_commonDepthRT, mapping, subresourceRange).SetDebugName("COMMON_DEPTH_RT_VIEW");
+}
+
+
+static void DestroyDynamicRenderTargets()
+{
+    for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
+        s_gbufferRTViews[i].Destroy();
+        s_gbufferRTs[i].Destroy();
+    }
+
+    s_commonDepthRTView.Destroy();
+    s_commonDepthRT.Destroy();
+
+    s_colorRTView.Destroy();
+    s_colorRT.Destroy();
+}
+
+
+static void ResizeDynamicRenderTargets()
+{
+    DestroyDynamicRenderTargets();
+    CreateDynamicRenderTargets();
 }
 
 
@@ -1693,7 +1803,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetLayout(s_zpassPipelineLayout);
 
-    builder.SetDepthAttachmentFormat(s_GBuffer.depthRT.GetFormat());
+    builder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
     s_zpassPipeline = builder.Build();
 
@@ -1750,11 +1860,11 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     blendState.blendEnable = VK_FALSE;
     blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-    for (const vkn::Texture& colorRT : s_GBuffer.colorRTs) {
+    for (const vkn::Texture& colorRT : s_gbufferRTs) {
         builder.AddColorAttachmentFormat(colorRT.GetFormat());  
         builder.AddColorBlendAttachment(blendState);   
     }
-    builder.SetDepthAttachmentFormat(s_GBuffer.depthRT.GetFormat());
+    builder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
     s_gbufferRenderPipeline = builder.Build();
 
@@ -2477,15 +2587,15 @@ static void WriteDeferredLightingDescriptorSet()
 
     descWrites.emplace_back(lightingOutputWrite);
 
-    std::array<VkDescriptorImageInfo, GBuffer::RT_COUNT> gbufferInputImageInfos = {};
-    for (size_t i = 0; i < GBuffer::RT_COUNT; ++i) {
+    std::array<VkDescriptorImageInfo, GBUFFER_RT_COUNT> gbufferInputImageInfos = {};
+    for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
         VkDescriptorImageInfo& info = gbufferInputImageInfos[i];
 
-        info.imageView = s_GBuffer.colorRTViews[i].Get();
+        info.imageView = s_gbufferRTViews[i].Get();
         info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
-    for (size_t i = 0; i < GBuffer::RT_COUNT; ++i) {
+    for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
         VkWriteDescriptorSet write = {};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = s_deferredLightingDescriptorSet;
@@ -3423,176 +3533,6 @@ static void LoadScene(const fs::path& filepath)
 }
 
 
-static void CreateGBuffer()
-{
-    vkn::AllocationInfo rtAllocInfo = {};
-    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::TextureCreateInfo rtCreateInfo = {};
-    rtCreateInfo.pDevice = &s_vkDevice;
-    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
-    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    rtCreateInfo.flags = 0;
-    rtCreateInfo.mipLevels = 1;
-    rtCreateInfo.arrayLayers = 1;
-    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    rtCreateInfo.pAllocInfo = &rtAllocInfo;
-
-    VkComponentMapping mapping = {};
-    mapping.r = VK_COMPONENT_SWIZZLE_R;
-    mapping.g = VK_COMPONENT_SWIZZLE_G;
-    mapping.b = VK_COMPONENT_SWIZZLE_B;
-    mapping.a = VK_COMPONENT_SWIZZLE_A;
-    
-    VkImageSubresourceRange subresourceRange = {};
-    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-
-    vkn::Texture& rt0 = s_GBuffer.colorRTs[GBuffer::RT_0];
-    vkn::TextureView& rt0View = s_GBuffer.colorRTViews[GBuffer::RT_0];
-
-    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    rt0.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_0");
-    rt0View.Create(rt0, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_0_VIEW");
-
-
-    vkn::Texture& rt1 = s_GBuffer.colorRTs[GBuffer::RT_1];
-    vkn::TextureView& rt1View = s_GBuffer.colorRTViews[GBuffer::RT_1];
-
-    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    rt1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");
-    rt1View.Create(rt1, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_1_VIEW");
-
-
-    vkn::Texture& rt2 = s_GBuffer.colorRTs[GBuffer::RT_2];
-    vkn::TextureView& rt2View = s_GBuffer.colorRTViews[GBuffer::RT_2];
-
-    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    rt2.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_2");
-    rt2View.Create(rt2, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_2_VIEW");
-
-
-    vkn::Texture& rt3 = s_GBuffer.colorRTs[GBuffer::RT_3];
-    vkn::TextureView& rt3View = s_GBuffer.colorRTViews[GBuffer::RT_3];
-
-    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    rt3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
-    rt3View.Create(rt3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
-
-
-    vkn::Texture& depthRT = s_GBuffer.depthRT;
-    vkn::TextureView& depthRTView = s_GBuffer.depthRTView;
-
-    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-    depthRT.Create(rtCreateInfo).SetDebugName("COMMON_DEPTH_RT");
-    depthRTView.Create(depthRT, mapping, subresourceRange).SetDebugName("COMMON_DEPTH_RT_VIEW");
-}
-
-
-static void DestroyGBuffer()
-{
-    for (size_t i = 0; i < GBuffer::RT_COUNT; ++i) {
-        s_GBuffer.colorRTViews[i].Destroy();
-        s_GBuffer.colorRTs[i].Destroy();
-    }
-
-    s_GBuffer.depthRTView.Destroy();
-    s_GBuffer.depthRT.Destroy();
-}
-
-
-static void ResizeGBuffer()
-{
-    DestroyGBuffer();
-    CreateGBuffer();
-}
-
-
-static void CreateColorRT()
-{
-    vkn::AllocationInfo rtAllocInfo = {};
-    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::TextureCreateInfo rtCreateInfo = {};
-    rtCreateInfo.pDevice = &s_vkDevice;
-    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
-    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
-    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    rtCreateInfo.flags = 0;
-    rtCreateInfo.mipLevels = 1;
-    rtCreateInfo.arrayLayers = 1;
-    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    rtCreateInfo.pAllocInfo = &rtAllocInfo;
-    rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-    VkComponentMapping mapping = {};
-    mapping.r = VK_COMPONENT_SWIZZLE_R;
-    mapping.g = VK_COMPONENT_SWIZZLE_G;
-    mapping.b = VK_COMPONENT_SWIZZLE_B;
-    mapping.a = VK_COMPONENT_SWIZZLE_A;
-    
-    VkImageSubresourceRange subresourceRange = {};
-    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    subresourceRange.baseArrayLayer = 0;
-    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-    s_colorRT.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT");
-    s_colorRTView.Create(s_colorRT, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT");
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_NONE,
-            s_colorRT.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
-    });
-}
-
-
-static void DestroyColorRT()
-{
-    s_colorRTView.Destroy();
-    s_colorRT.Destroy();
-}
-
-
-static void ResizeColorRT()
-{
-    DestroyColorRT();
-    CreateColorRT();
-}
-
-
 static void CreateCommonConstBuffer()
 {
     vkn::AllocationInfo allocInfo = {};
@@ -3793,7 +3733,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
         VK_ACCESS_2_NONE,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        s_GBuffer.depthRT.Get(),
+        s_commonDepthRT.Get(),
         VK_IMAGE_ASPECT_DEPTH_BIT
     );
 
@@ -3834,7 +3774,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_GBuffer.depthRTView.Get();
+    depthAttachment.imageView = s_commonDepthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -3904,7 +3844,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        s_GBuffer.depthRT.Get(),
+        s_commonDepthRT.Get(),
         VK_IMAGE_ASPECT_DEPTH_BIT
     );
 }
@@ -3914,7 +3854,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Render_Pass", 50, 200, 50, 255);
 
-    for (vkn::Texture& colorRT : s_GBuffer.colorRTs) {
+    for (vkn::Texture& colorRT : s_gbufferRTs) {
         CmdPipelineImageBarrier(
             cmdBuffer,
             VK_IMAGE_LAYOUT_UNDEFINED,
@@ -3965,7 +3905,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_GBuffer.depthRTView.Get();
+    depthAttachment.imageView = s_commonDepthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
@@ -3987,13 +3927,13 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
     renderingInfo.pDepthAttachment = &depthAttachment;
 
-    std::array<VkRenderingAttachmentInfo, GBuffer::RT_COUNT> colorAttachments = {};
+    std::array<VkRenderingAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
 
     for (size_t i = 0; i < colorAttachments.size(); ++i) {
         VkRenderingAttachmentInfo& attachment = colorAttachments[i];
 
         attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        attachment.imageView = s_GBuffer.colorRTViews[i].Get();
+        attachment.imageView = s_gbufferRTViews[i].Get();
         attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -4076,7 +4016,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", 250, 250, 40, 255);
 
-    for (vkn::Texture& colorRT : s_GBuffer.colorRTs) {
+    for (vkn::Texture& colorRT : s_gbufferRTs) {
         CmdPipelineImageBarrier(
             cmdBuffer,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -4303,7 +4243,8 @@ static bool ResizeVkSwapchain(Window* pWnd)
         return false;
     }
 
-    const bool resizeResult = s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight()).IsCreated();
+    bool resizeResult;
+    s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight(), resizeResult);
     
     s_swapchainRecreateRequired = !resizeResult;
 
@@ -4451,8 +4392,7 @@ void ProcessFrame()
 
         s_vkDevice.WaitIdle();
 
-        ResizeGBuffer();
-        ResizeColorRT();
+        ResizeDynamicRenderTargets();
 
         WriteDeferredLightingDescriptorSet();
         WritePostProcessingDescriptorSet();
@@ -4521,8 +4461,7 @@ int main(int argc, char* argv[])
 
     CreateCommonStagingBuffers();
 
-    CreateGBuffer();
-    CreateColorRT();
+    CreateDynamicRenderTargets();
 
     CreateCommonSamplers();
     CreateCommonConstBuffer();
