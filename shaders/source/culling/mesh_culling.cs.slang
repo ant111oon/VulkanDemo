@@ -16,7 +16,7 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
     const float scale = max(max(length(wMatr[0].xyz), length(wMatr[1].xyz)), length(wMatr[2].xyz));
     sphere.radius = scale * meshInfo.SPHERE_BOUNDS_RADIUS_LCS;
 
-    return COMMON_CB.COMMON_CAMERA_FRUSTUM.IsIntersect(sphere); 
+    return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(sphere); 
 }
 
 

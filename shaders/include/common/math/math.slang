@@ -102,4 +102,33 @@ float3x3 CalcTBN(in float3 tang, in float3 norm)
 }
 
 
+// Return depth in [near, far] range
+float LinearizeDepth(in float depth, in float near, in float far)
+{
+#ifdef ENV_REVERSED_Z
+    return (near * far) / (near + depth * (far - near));
+#else
+    return (near * far) / (far - depth * (far - near));
+#endif
+}
+
+
+float LinearizeDepth01(in float depth, in float near, in float far)
+{
+    const float linear = LinearizeDepth(depth, near, far);
+    return (linear - near) / (far - near);
+}
+
+
+float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in float4x4 invProjMatr)
+{
+    const float2 NDC = 2.f * uv - 1.f;
+
+    float4 viewPos = mul(invProjMatr, float4(NDC, depth, 1.f));
+    viewPos /= viewPos.w;
+
+    return mul(invViewMatr, viewPos).xyz;
+}
+
+
 #endif

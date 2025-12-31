@@ -9,4 +9,6 @@
 [vk::binding(3, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_2;
 [vk::binding(4, 1)] Texture2D DEFERRED_LIGHTING_GBUFFER_3;
 
+[vk::binding(5, 1)] Texture2D DEFERRED_LIGHTING_DEPTH;
+
 #endif

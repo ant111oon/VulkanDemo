@@ -22,7 +22,7 @@ ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceI
     const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz; 
 
-    result.hpos = mul(COMMON_CB.COMMON_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
+    result.hpos = mul(COMMON_CB.VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
 
     return result; 
 }

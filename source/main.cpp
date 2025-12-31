@@ -407,14 +407,18 @@ static_assert(sizeof(FRUSTUM) == sizeof(math::Frustum));
 
 struct COMMON_CB_DATA
 {
-    glm::float4x4 COMMON_VIEW_MATRIX;
-    glm::float4x4 COMMON_PROJ_MATRIX;
-    glm::float4x4 COMMON_VIEW_PROJ_MATRIX;
+    glm::float4x4 VIEW_MATRIX;
+    glm::float4x4 PROJ_MATRIX;
+    glm::float4x4 VIEW_PROJ_MATRIX;
 
-    FRUSTUM COMMON_CAMERA_FRUSTUM;
+    glm::float4x4 INV_VIEW_MATRIX;
+    glm::float4x4 INV_PROJ_MATRIX;
+
+    FRUSTUM CAMERA_FRUSTUM;
 
     glm::uvec2 SCREEN_SIZE;
-    glm::uvec2 PADDING_0;
+    float Z_NEAR;
+    float Z_FAR;
 
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
@@ -660,6 +664,7 @@ static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
+static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
@@ -1458,7 +1463,7 @@ static void CreateDynamicRenderTargets()
 
 
     rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
@@ -1612,6 +1617,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2608,6 +2614,21 @@ static void WriteDeferredLightingDescriptorSet()
         descWrites.emplace_back(write);        
     }
 
+    VkDescriptorImageInfo depthImageInfo = {};
+    depthImageInfo.imageView = s_commonDepthRTView.Get();
+    depthImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet depthWrite = {};
+    depthWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    depthWrite.dstSet = s_deferredLightingDescriptorSet;
+    depthWrite.dstBinding = DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT;
+    depthWrite.dstArrayElement = 0;
+    depthWrite.descriptorCount = 1;
+    depthWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    depthWrite.pImageInfo = &depthImageInfo;
+
+    descWrites.emplace_back(depthWrite);
+
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
@@ -3555,14 +3576,23 @@ void UpdateGPUCommonConstBuffer()
 
     COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>();
 
-    pCommonConstBufferData->COMMON_VIEW_MATRIX = s_camera.GetViewMatrix();
-    pCommonConstBufferData->COMMON_PROJ_MATRIX = s_camera.GetProjMatrix();
-    pCommonConstBufferData->COMMON_VIEW_PROJ_MATRIX = s_camera.GetViewProjMatrix();
+    const glm::float4x4& viewMatrix = s_camera.GetViewMatrix();
+    const glm::float4x4& projMatrix = s_camera.GetProjMatrix();
 
-    memcpy(&pCommonConstBufferData->COMMON_CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
+    pCommonConstBufferData->VIEW_MATRIX = viewMatrix;
+    pCommonConstBufferData->PROJ_MATRIX = projMatrix;
+    pCommonConstBufferData->VIEW_PROJ_MATRIX = s_camera.GetViewProjMatrix();
+
+    pCommonConstBufferData->INV_VIEW_MATRIX = glm::inverse(viewMatrix);
+    pCommonConstBufferData->INV_PROJ_MATRIX = glm::inverse(projMatrix);
+
+    memcpy(&pCommonConstBufferData->CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
     pCommonConstBufferData->SCREEN_SIZE.x = s_pWnd->GetWidth();
     pCommonConstBufferData->SCREEN_SIZE.y = s_pWnd->GetHeight();
+
+    pCommonConstBufferData->Z_NEAR = s_camera.GetZNear();
+    pCommonConstBufferData->Z_FAR = s_camera.GetZFar();
 
     uint32_t dbgVisFlags = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     uint32_t dbgFlags = 0;
@@ -3897,6 +3927,33 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
         s_commonCulledOpaqueInstInfoIDsBuffer.Get()
     );
 
+    if (s_useDepthPass) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+            s_commonDepthRT.Get(),
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+    } else {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            s_commonDepthRT.Get(),
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+    }
+    
+
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
@@ -4041,6 +4098,19 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         s_colorRT.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        s_useDepthPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        s_commonDepthRT.Get(),
+        VK_IMAGE_ASPECT_DEPTH_BIT
+    );
+    
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipeline);
     
