@@ -6,14 +6,14 @@
 
 float DistributionGGX(in float3 N, in float3 H, in float a)
 {
-    const float a2     = a * a;
-    const float NdotH  = max(dot(N, H), 0.f);
+    const float a2 = a * a;
+    const float NdotH = max(dot(N, H), 0.f);
     const float NdotH2 = NdotH * NdotH;
 	
-    float denom  = (NdotH2 * (a2 - 1.f) + 1.f);
-    denom        = M3D_PI * denom * denom;
+    float denom = (NdotH2 * (a2 - 1.f) + 1.f);
+    denom = M3D_PI * denom * denom;
 
-    return a2 / denom;
+    return a2 / max(denom, M3D_EPS);
 }
 
 
@@ -21,7 +21,7 @@ float GeometrySchlickGGX(in float NdotV, in float k)
 {
     const float denom = NdotV * (1.f - k) + k;
 
-    return NdotV / denom;
+    return NdotV / max(denom, M3D_EPS);
 }
 
 
@@ -38,7 +38,7 @@ float GeometrySmith(in float3 N, in float3 V, in float3 L, in float k)
 
 float3 FresnelSchlick(in float cosTheta, in float3 F0)
 {
-    return F0 + (1.f - F0) * pow(1.f - cosTheta, 5.f);
+    return F0 + (1.f - F0) * pow(saturate(1.f - cosTheta), 5.f);
 }
 
 #endif

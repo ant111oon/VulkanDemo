@@ -19,6 +19,7 @@ POST_PROC_PS_OUTPUT main(POST_PROC_VS_OUTPUT input, uint2 pixPos : SV_Position)
     POST_PROC_PS_OUTPUT result = (POST_PROC_PS_OUTPUT)0;
 
     result.color = LOAD_TEX(POST_PROCESSING_INPUT_COLOR, int3(pixPos, 0));
+    result.color = result.color / (result.color + ONEF4);
 
     return result;
 }

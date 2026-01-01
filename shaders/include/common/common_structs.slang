@@ -51,7 +51,7 @@ float3 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in fl
 {
 #ifdef ENV_DEBUG
     if (mtl.EMISSIVE_TEX_IDX < 0) {
-        return M3D_ZEROF3;
+        return ZEROF3;
     }
 #endif
 

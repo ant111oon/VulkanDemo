@@ -413,6 +413,7 @@ struct COMMON_CB_DATA
 
     glm::float4x4 INV_VIEW_MATRIX;
     glm::float4x4 INV_PROJ_MATRIX;
+    glm::float4x4 INV_VIEW_PROJ_MATRIX;
 
     FRUSTUM CAMERA_FRUSTUM;
 
@@ -3578,13 +3579,15 @@ void UpdateGPUCommonConstBuffer()
 
     const glm::float4x4& viewMatrix = s_camera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_camera.GetProjMatrix();
+    const glm::float4x4& viewProjMatrix = s_camera.GetViewProjMatrix();
 
     pCommonConstBufferData->VIEW_MATRIX = viewMatrix;
     pCommonConstBufferData->PROJ_MATRIX = projMatrix;
-    pCommonConstBufferData->VIEW_PROJ_MATRIX = s_camera.GetViewProjMatrix();
+    pCommonConstBufferData->VIEW_PROJ_MATRIX = viewProjMatrix;
 
     pCommonConstBufferData->INV_VIEW_MATRIX = glm::inverse(viewMatrix);
     pCommonConstBufferData->INV_PROJ_MATRIX = glm::inverse(projMatrix);
+    pCommonConstBufferData->INV_VIEW_PROJ_MATRIX = glm::inverse(viewProjMatrix);
 
     memcpy(&pCommonConstBufferData->CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
