@@ -34,7 +34,10 @@ set(SHADER_COMPILER_FLAGS
 
     $<$<CONFIG:Debug>:-O0>
     $<$<CONFIG:Debug>:-g>
+    
     $<$<CONFIG:Debug>:-DENV_DEBUG>
+    $<$<CONFIG:RelWithDebInfo>:-DENV_PROFILE>
+    $<$<CONFIG:Release>:-DENV_RELEASE>
 
     $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-O>
 )

@@ -25,7 +25,8 @@ struct POINT_LIGHT
 
 static const uint G_LIGHTS_COUNT = 4;
 
-static POINT_LIGHT G_LIGHTS[G_LIGHTS_COUNT] = {
+static POINT_LIGHT G_LIGHTS[G_LIGHTS_COUNT] =
+{
     { 25.f * float3(1.f, 0.f, 0.f), float3(-2.f, 1.f, -1.f) },
     { 25.f * float3(0.f, 1.f, 0.f), float3( 2.f, 1.f, -1.f) },
     { 25.f * float3(0.f, 0.f, 1.f), float3( 2.f, 1.f,  1.f) },
@@ -62,6 +63,7 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 
     return gbuffer;
 }
+
 
 float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos, in float3 viewDir, in float NDF, in float3 F, in float3 kD)
 {
@@ -103,7 +105,7 @@ float3 ComputeLighting(in uint2 pixelCoord)
         Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos, viewDir, NDF, F, kD);
     }
 
-    const float3 ambient = FLOAT3(0.03f) * gbuffer.albedo * gbuffer.ao;
+    const float3 ambient = FLOAT3(0.01f) * gbuffer.albedo * gbuffer.ao;
 
     return ambient + Lo;
 }
@@ -113,11 +115,11 @@ float3 ComputeLighting(in uint2 pixelCoord)
 [numthreads(32, 32, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
-    const uint2 pixelCoord = uint2(DTid.x, COMMON_SCREEN_SIZE.y - 1 - DTid.y);
-    
-    if (any(pixelCoord >= COMMON_SCREEN_SIZE)) {
+    if (any(DTid >= COMMON_SCREEN_SIZE)) {
         return;
     }
+
+    const uint2 pixelCoord = uint2(DTid.x, COMMON_SCREEN_SIZE.y - 1 - DTid.y);
 
     DEFERRED_LIGHTING_OUTPUT_UAV[pixelCoord] = float4(ComputeLighting(pixelCoord), 1.f);
 }

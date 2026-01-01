@@ -432,6 +432,8 @@ enum COMMON_DBG_FLAG_MASKS
 {
     USE_MESH_INDIRECT_DRAW_MASK = 0x1,
     USE_MESH_GPU_CULLING_MASK = 0x2,
+    USE_ACES_TONE_MAPPING_MASK = 0x4,
+    USE_REINHARD_TONE_MAPPING_MASK = 0x8,
 };
 
 
@@ -574,6 +576,21 @@ static constexpr COMMON_DBG_VIS_FLAG_MASKS DBG_RT_OUTPUT_MASKS[] = {
 
 
 static_assert(_countof(DBG_RT_OUTPUT_NAMES) == _countof(DBG_RT_OUTPUT_MASKS));
+
+
+static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
+    "ACES",
+    "REINHARD",
+};
+
+
+static constexpr COMMON_DBG_FLAG_MASKS TONEMAPPING_MASKS[] = {
+    COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
+    COMMON_DBG_FLAG_MASKS::USE_REINHARD_TONE_MAPPING_MASK,
+};
+
+
+static_assert(_countof(DBG_TONEMAPPING_NAMES) == _countof(TONEMAPPING_MASKS));
 
 
 static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
@@ -801,16 +818,22 @@ static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
 
 #ifdef ENG_BUILD_DEBUG
-static bool s_useMeshIndirectDraw = true;
-static bool s_useMeshCulling = true;
-static bool s_useDepthPass = true;
+    static bool s_useMeshIndirectDraw = true;
+    static bool s_useMeshCulling = true;
+    static bool s_useDepthPass = true;
 
-// Uses for debug purposes during CPU frustum culling
-static size_t s_dbgDrawnMeshCount = 0;
+    // Uses for debug purposes during CPU frustum culling
+    static size_t s_dbgDrawnMeshCount = 0;
+
+    static uint32_t s_tonemappingPreset = 0;
 #else
-static constexpr bool s_useMeshIndirectDraw = true;
-static constexpr bool s_useMeshCulling = true;
-static constexpr bool s_useDepthPass = true;
+    static constexpr bool s_useMeshIndirectDraw = true;
+    static constexpr bool s_useMeshCulling = true;
+    static constexpr bool s_useDepthPass = true;
+
+    static constexpr uint32_t s_tonemappingPreset = 0;
+
+    static_assert(s_tonemappingPreset < _countof(TONEMAPPING_MASKS));
 #endif
 
 
@@ -966,7 +989,7 @@ namespace DbgUI
 
             ImGui::NewLine();
             ImGui::SeparatorText("Mesh Culling");
-             ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
+            ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
             ImGui::SameLine(); ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
             ImGui::NewLine();
@@ -984,6 +1007,22 @@ namespace DbgUI
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Mesh Count: %zu)", s_dbgDrawnMeshCount);
             }
             ImGui::NewLine();
+
+            ImGui::SeparatorText("Tonemapping");
+            if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
+                for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
+                    const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
+                    
+                    if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
+                        s_tonemappingPreset = i;
+                    }
+                    
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
         #endif
         } ImGui::End();
 
@@ -3602,6 +3641,7 @@ void UpdateGPUCommonConstBuffer()
 
     dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
     dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
+    dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
 
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
     pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
