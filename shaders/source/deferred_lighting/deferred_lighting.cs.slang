@@ -65,13 +65,12 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 }
 
 
-float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos, in float3 viewDir, in float NDF, in float3 F, in float3 kD)
+float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos, in float NdotV, in float NDF, in float3 F, in float3 kD)
 {
-    const float3 L = normalize(light.wpos - wpos);
-    const float G = GeometrySmith(gbuffer.normal, viewDir, L, gbuffer.roughness);
+    const float3 lightDir = normalize(light.wpos - wpos);
+    const float NdotL = saturate(dot(gbuffer.normal, lightDir));
 
-    const float NdotL = saturate(dot(gbuffer.normal, L));
-    const float NdotV = saturate(dot(gbuffer.normal, viewDir));
+    const float G = GeometrySmith(NdotV, NdotL, gbuffer.roughness);
 
     const float3 specular = NDF * G * F / max(4.f * NdotV * NdotL, M3D_EPS);
 
@@ -93,16 +92,20 @@ float3 ComputeLighting(in uint2 pixelCoord)
 
     const float3 H = normalize(viewDir + gbuffer.normal);
 
-    const float3 F0 = lerp(FLOAT3(0.04f), gbuffer.albedo, gbuffer.metalness);
-    const float3 F = FresnelSchlick(saturate(dot(H, viewDir)), F0);
+    const float VdotH = saturate(dot(viewDir, H));
+    const float NdotH = saturate(dot(gbuffer.normal, H));
+    const float NdotV = saturate(dot(gbuffer.normal, viewDir));
 
-    const float NDF = DistributionGGX(gbuffer.normal, H, gbuffer.roughness);
+    const float3 F0 = lerp(FLOAT3(0.04f), gbuffer.albedo, gbuffer.metalness);
+    const float3 F = FresnelSchlick(VdotH, F0);
+
+    const float NDF = DistributionGGX(NdotH, gbuffer.roughness);
 
     const float3 kD = (ONEF3 - F) * (1.f - gbuffer.metalness);
 
     float3 Lo = ZEROF3;
     for (uint i = 0; i < G_LIGHTS_COUNT; ++i) {
-        Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos, viewDir, NDF, F, kD);
+        Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos, NdotV, NDF, F, kD);
     }
 
     const float3 ambient = FLOAT3(0.01f) * gbuffer.albedo * gbuffer.ao;

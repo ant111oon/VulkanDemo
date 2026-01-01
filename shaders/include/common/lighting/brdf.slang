@@ -4,10 +4,9 @@
 #include "common/math/math.slang"
 
 
-float DistributionGGX(in float3 N, in float3 H, in float a)
+float DistributionGGX(in float NdotH, in float roughness)
 {
-    const float a2 = a * a;
-    const float NdotH = max(dot(N, H), 0.f);
+    const float a2 = roughness * roughness;
     const float NdotH2 = NdotH * NdotH;
 	
     float denom = (NdotH2 * (a2 - 1.f) + 1.f);
@@ -25,10 +24,8 @@ float GeometrySchlickGGX(in float NdotV, in float k)
 }
 
 
-float GeometrySmith(in float3 N, in float3 V, in float3 L, in float k)
+float GeometrySmith(in float NdotV, in float NdotL, in float k)
 {
-    const float NdotV = max(dot(N, V), 0.f);
-    const float NdotL = max(dot(N, L), 0.f);
     const float ggx1 = GeometrySchlickGGX(NdotV, k);
     const float ggx2 = GeometrySchlickGGX(NdotL, k);
 	
