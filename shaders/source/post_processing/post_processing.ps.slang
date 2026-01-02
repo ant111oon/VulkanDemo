@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 
 #include "common/common_defines.slang"
-#include "common/math/color_utils.slang"
+#include "common/math/utils.slang"
 
 
 float3 Reinhard_Tonemap(in float3 color)

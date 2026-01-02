@@ -27,10 +27,10 @@ static const uint G_LIGHTS_COUNT = 4;
 
 static POINT_LIGHT G_LIGHTS[G_LIGHTS_COUNT] =
 {
-    { 25.f * float3(1.f, 0.f, 0.f), float3(-2.f, 1.f, -1.f) },
-    { 25.f * float3(0.f, 1.f, 0.f), float3( 2.f, 1.f, -1.f) },
-    { 25.f * float3(0.f, 0.f, 1.f), float3( 2.f, 1.f,  1.f) },
-    { 25.f * float3(1.f, 1.f, 1.f), float3(-2.f, 1.f,  1.f) },
+    { 4.f * float3(1.f, 0.f, 0.f), float3(-2.f, 1.f, -1.15f) },
+    { 4.f * float3(0.f, 1.f, 0.f), float3( 2.f, 1.f, -1.15f) },
+    { 4.f * float3(0.f, 0.f, 1.f), float3( 2.f, 1.f,  1.15f) },
+    { 4.f * float3(1.f, 1.f, 0.f), float3(-2.f, 1.f,  1.15f) },
 };
 
 
@@ -40,11 +40,9 @@ float2 PixelCoordToUV(in uint2 pixelCoord)
 }
 
 
-float CalcLightAttenuation(in float3 surfWPos, in float3 lightWPos)
+float CalcLightAttenuation(in float distToLight)
 {
-    const float dist = distance(surfWPos, lightWPos);
-    
-    return rcp(dist * dist);
+    return rcp(distToLight * distToLight);
 }
 
 
@@ -65,19 +63,36 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 }
 
 
-float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos, in float NdotV, in float NDF, in float3 F, in float3 kD)
+float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos)
 {
+    const float3 viewDir = normalize(COMMON_CAM_WPOS - wpos);
     const float3 lightDir = normalize(light.wpos - wpos);
+    const float3 halfDir = normalize(viewDir + lightDir);
+
     const float NdotL = saturate(dot(gbuffer.normal, lightDir));
+    const float VdotH = saturate(dot(viewDir, halfDir));
+    const float NdotH = saturate(dot(gbuffer.normal, halfDir));
+    const float NdotV = saturate(dot(gbuffer.normal, viewDir));
 
-    const float G = GeometrySmith(NdotV, NdotL, gbuffer.roughness);
+    const float3 F0 = lerp(FLOAT3(0.04f), gbuffer.albedo, gbuffer.metalness);
+    const float3 F = F_Schlick(VdotH, F0);
 
-    const float3 specular = NDF * G * F / max(4.f * NdotV * NdotL, M3D_EPS);
+    const float NDF = NDF_GGX(NdotH, gbuffer.roughness);
 
-    const float attenuation = CalcLightAttenuation(wpos, light.wpos);
-    const float3 radiance = light.color * attenuation;
+    const float k = pow(gbuffer.roughness + 1.f, 2.f) / 8.f;
+    const float G = G_Smith(NdotV, NdotL, k);
 
-    return (kD * gbuffer.albedo / M3D_PI + specular) * radiance * NdotL;
+    const float3 specular = (NDF * G * F) / max(4.f * NdotV * NdotL, M3D_EPS);
+
+    const float dist = distance(light.wpos, wpos);
+
+    const float attenuation = CalcLightAttenuation(dist);
+    const float3 radiance = light.color * attenuation * NdotL;
+
+    const float3 kD = (ONEF3 - F) * (1.f - gbuffer.metalness);
+    const float3 diffuse = kD * (gbuffer.albedo / M3D_PI);
+    
+    return (diffuse + specular) * radiance; 
 }
 
 
@@ -94,27 +109,13 @@ float3 ComputeLighting(in uint2 pixelCoord)
 #endif
 
     const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x, COMMON_CB.INV_VIEW_PROJ_MATRIX);
-    const float3 viewDir = normalize(COMMON_CAM_WPOS - wpos);
-
-    const float3 H = normalize(viewDir + gbuffer.normal);
-
-    const float VdotH = saturate(dot(viewDir, H));
-    const float NdotH = saturate(dot(gbuffer.normal, H));
-    const float NdotV = saturate(dot(gbuffer.normal, viewDir));
-
-    const float3 F0 = lerp(FLOAT3(0.04f), gbuffer.albedo, gbuffer.metalness);
-    const float3 F = FresnelSchlick(VdotH, F0);
-
-    const float NDF = DistributionGGX(NdotH, gbuffer.roughness);
-
-    const float3 kD = (ONEF3 - F) * (1.f - gbuffer.metalness);
 
     float3 Lo = ZEROF3;
     for (uint i = 0; i < G_LIGHTS_COUNT; ++i) {
-        Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos, NdotV, NDF, F, kD);
+        Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos);
     }
 
-    const float3 ambient = FLOAT3(0.01f) * gbuffer.albedo * gbuffer.ao;
+    const float3 ambient = FLOAT3(0.02f) * gbuffer.albedo * gbuffer.ao;
 
     return ambient + Lo;
 }

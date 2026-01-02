@@ -1,7 +1,6 @@
-#ifndef COLOR_UTILS_H
-#define COLOR_UTILS_H
+#ifndef MATH_UTILS_H
+#define MATH_UTILS_H
 
-#include "math.slang"
 
 float SRGBToLinear(in float color)
 {
@@ -31,6 +30,19 @@ float3 LinearToSRGB(in float3 color)
 float3 LinearToSRGBFast(in float3 color)
 {
     return pow(saturate(color), 1.f / 2.2f);
+}
+
+
+float2 UVToNDC(in float2 uv)
+{
+    return 2.f * uv - 1.f;
+}
+
+
+float4 InvTransformNDC(in float3 NDC, in float4x4 invMatr)
+{
+    float4 result = mul(invMatr, float4(NDC, 1.f));
+    return result /= result.w;
 }
 
 #endif

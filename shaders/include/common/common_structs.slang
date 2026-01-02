@@ -5,7 +5,7 @@
 #include "registers/common_registers.slang"
 
 #include "common/common_defines.slang"
-#include "common/math/color_utils.slang"
+#include "common/math/utils.slang"
 
 
 struct COMMON_INDIRECT_DRAW_CMD
@@ -111,6 +111,7 @@ void SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in fl
     roughness = aoMetRough.b * mtl.ROUGHNESS_SCALE;
     ao = lerp(1.f, aoMetRough.r, mtl.AO_COEF);
 }
+
 
 COMMON_SURFACE SampleCommonSurface(in COMMON_MATERIAL material, in float3x3 TBN, in float2 uv)
 {

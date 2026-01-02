@@ -1,6 +1,6 @@
 #include "registers/common_registers.slang"
 
-#include "common/math/color_utils.slang"
+#include "common/math/utils.slang"
 #include "common/dbg_vis.slang"
 #include "common/common_defines.slang"
 #include "common/common_structs.slang"

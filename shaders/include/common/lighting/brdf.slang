@@ -4,38 +4,35 @@
 #include "common/math/math.slang"
 
 
-float DistributionGGX(in float NdotH, in float roughness)
+float NDF_GGX(in float NdotH, in float roughness)
 {
     const float a2 = roughness * roughness;
     const float NdotH2 = NdotH * NdotH;
-	
+
     float denom = (NdotH2 * (a2 - 1.f) + 1.f);
-    denom = M3D_PI * denom * denom;
+    denom = max(M3D_PI * denom * denom, M3D_EPS);
 
-    return a2 / max(denom, M3D_EPS);
+    return a2 / denom;
 }
 
 
-float GeometrySchlickGGX(in float NdotV, in float k)
+float G_GGX(in float NdotV, in float k)
 {
-    const float denom = NdotV * (1.f - k) + k;
+    const float denom = max(NdotV * (1.f - k) + k, M3D_EPS);
 
-    return NdotV / max(denom, M3D_EPS);
+    return NdotV / denom;
 }
 
 
-float GeometrySmith(in float NdotV, in float NdotL, in float k)
+float G_Smith(in float NdotV, in float NdotL, in float k)
 {
-    const float ggx1 = GeometrySchlickGGX(NdotV, k);
-    const float ggx2 = GeometrySchlickGGX(NdotL, k);
-	
-    return ggx1 * ggx2;
+    return G_GGX(NdotV, k) * G_GGX(NdotL, k);
 }
 
 
-float3 FresnelSchlick(in float cosTheta, in float3 F0)
+float3 F_Schlick(in float VdotH, in float3 F0)
 {
-    return F0 + (1.f - F0) * pow(saturate(1.f - cosTheta), 5.f);
+    return F0 + (1.f - F0) * pow(saturate(1.f - VdotH), 5.f);
 }
 
 #endif

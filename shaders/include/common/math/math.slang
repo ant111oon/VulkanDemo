@@ -1,6 +1,8 @@
 #ifndef MATH_H
 #define MATH_H
 
+#include "utils.slang"
+
 
 static const float M3D_EPS     = 0.000001f;
 static const float M3D_PI      = 3.14159265359f;
@@ -144,18 +146,19 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 
 float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewProjMatr)
 {
-    const float2 NDC = 2.f * uv - 1.f;
-
-    float4 wpos = mul(invViewProjMatr, float4(NDC, depth, 1.f));
-    wpos /= wpos.w;
-
-    return wpos.xyz;
+    return InvTransformNDC(float3(UVToNDC(uv), depth), invViewProjMatr).xyz;
 }
 
 
 float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in float4x4 invProjMatr)
 {
     return WPosFromDepth(uv, depth, mul(invViewMatr, invProjMatr));
+}
+
+
+float3 ViewPosFromDepth(in float2 uv, in float depth, in float4x4 invProjMatr)
+{
+    return InvTransformNDC(float3(UVToNDC(uv), depth), invProjMatr).xyz;
 }
 
 
