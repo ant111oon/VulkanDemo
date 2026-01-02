@@ -27,14 +27,18 @@ float3 ACES_Tonemap(in float3 color)
 
 float3 Tonemap(in float3 color)
 {
-#if !defined(ENV_RELEASE)
-    if (COMMON_DBG_USE_ACES_TONEMAPPING)
-#endif
-    {
-        return ACES_Tonemap(color);
+#ifdef ENV_DEBUG
+    if (!COMMON_DBG_VIS_NONE) {
+        return color;
     }
-#if !defined(ENV_RELEASE)
-    else if (COMMON_DBG_USE_REINHARD_TONEMAPPING) {
+#endif
+
+#if defined(ENV_RELEASE)
+    return ACES_Tonemap(color);
+#else
+    if (COMMON_DBG_USE_ACES_TONEMAPPING) {
+        return ACES_Tonemap(color);
+    } else if (COMMON_DBG_USE_REINHARD_TONEMAPPING) {
         return Reinhard_Tonemap(color);
     } else {
         return float3(1.f, 0.f, 0.f); // Invalid tonemapping flag

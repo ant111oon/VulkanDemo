@@ -4,6 +4,7 @@
 #include "registers/common_registers.slang"
 
 
+#ifdef ENV_DEBUG
 void DbgVisOutput(out float4 outColor, in float4 albedo, in float3 wnorm, in float metalness, in float roughness, in float ao, in float3 emissive, in float3 vNorm, in float4 vTang)
 {
     if (COMMON_DBG_VIS_GBUFFER_ALBEDO) {
@@ -24,5 +25,6 @@ void DbgVisOutput(out float4 outColor, in float4 albedo, in float3 wnorm, in flo
         outColor = float4(vTang.xyz * sign(vTang.w) * 0.5f + 0.5f, 1.f);
     }
 }
+#endif
 
 #endif

@@ -439,14 +439,15 @@ enum COMMON_DBG_FLAG_MASKS
 
 enum COMMON_DBG_VIS_FLAG_MASKS
 {
-    DBG_VIS_GBUFFER_ALBEDO_MASK = 0x1,
-    DBG_VIS_GBUFFER_NORMAL_MASK = 0x2,
-    DBG_VIS_GBUFFER_METALNESS_MASK = 0x4,
-    DBG_VIS_GBUFFER_ROUGHNESS_MASK = 0x8,
-    DBG_VIS_GBUFFER_AO_MASK = 0x10,
-    DBG_VIS_GBUFFER_EMISSIVE_MASK = 0x20,
-    DBG_VIS_VERT_NORMAL_MASK = 0x40,
-    DBG_VIS_VERT_TANGENT_MASK = 0x80,
+    DBG_VIS_NONE_MASK = 0x1,
+    DBG_VIS_GBUFFER_ALBEDO_MASK = 0x2,
+    DBG_VIS_GBUFFER_NORMAL_MASK = 0x4,
+    DBG_VIS_GBUFFER_METALNESS_MASK = 0x8,
+    DBG_VIS_GBUFFER_ROUGHNESS_MASK = 0x10,
+    DBG_VIS_GBUFFER_AO_MASK = 0x20,
+    DBG_VIS_GBUFFER_EMISSIVE_MASK = 0x40,
+    DBG_VIS_VERT_NORMAL_MASK = 0x80,
+    DBG_VIS_VERT_TANGENT_MASK = 0x100,
 };
 
 
@@ -552,6 +553,7 @@ struct GBUFFER_BINDLESS_REGISTRY
 
 
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
+    "NONE",
     "GBUFFER ALBEDO",
     "GBUFFER NORMAL",
     "GBUFFER METALNESS",
@@ -564,6 +566,7 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
 
 
 static constexpr COMMON_DBG_VIS_FLAG_MASKS DBG_RT_OUTPUT_MASKS[] = {
+    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_NONE_MASK,
     COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK,
     COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK,
     COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK,
@@ -965,23 +968,6 @@ namespace DbgUI
             ImGui::Text("Fly Camera Mode (F5):");
             ImGui::SameLine(); 
             ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
-            
-            ImGui::NewLine();
-            ImGui::SeparatorText("Debug Output");
-            if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
-                for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
-                    const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
-                    
-                    if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                        s_dbgOutputRTIdx = i;
-                    }
-                    
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
 
         #ifdef ENG_BUILD_DEBUG
             static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
@@ -1024,6 +1010,23 @@ namespace DbgUI
                 ImGui::EndCombo();
             }
         #endif
+
+            ImGui::NewLine();
+            ImGui::SeparatorText("Debug Output");
+            if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
+                for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
+                    const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
+                    
+                    if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
+                        s_dbgOutputRTIdx = i;
+                    }
+                    
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
         } ImGui::End();
 
         ImGui::Render();

@@ -87,6 +87,12 @@ float3 ComputeLighting(in uint2 pixelCoord)
 
     GBUFFER gbuffer = SampleGBuffer(texCoord);
 
+#ifdef ENV_DEBUG
+    if (!COMMON_DBG_VIS_NONE) {
+        return gbuffer.albedo.rgb;
+    }
+#endif
+
     const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x, COMMON_CB.INV_VIEW_PROJ_MATRIX);
     const float3 viewDir = normalize(COMMON_CAM_WPOS - wpos);
 
