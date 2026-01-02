@@ -891,7 +891,7 @@ namespace DbgUI
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat fmt = s_colorRT.GetFormat();
+        const VkFormat fmt = s_vkSwapchain.GetImageFormat();
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
@@ -4164,59 +4164,18 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
-{
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
-
-    DbgUI::FillData();
-    DbgUI::EndFrame();
-
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_colorRT.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
-
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
-
-    cmdBuffer.CmdBeginRendering(renderingInfo);
-        DbgUI::Render(cmdBuffer);
-    cmdBuffer.CmdEndRendering();
-}
-
-
 void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", 100, 250, 250, 255);
 
     CmdPipelineImageBarrier(
         cmdBuffer,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT_KHR,
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
         s_colorRT.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
@@ -4275,6 +4234,47 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
+
+    DbgUI::FillData();
+    DbgUI::EndFrame();
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        s_vkSwapchain.GetImage(s_nextImageIdx),
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.layerCount = 1;
+
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+
+    cmdBuffer.CmdBeginRendering(renderingInfo);
+        DbgUI::Render(cmdBuffer);
+    cmdBuffer.CmdEndRendering();
+}
+
+
 static void RenderScene()
 {
     if (s_renderFinishedFence.GetStatus() == VK_NOT_READY) {
@@ -4314,9 +4314,9 @@ static void RenderScene()
         GBufferRenderPass(cmdBuffer);
         DeferredLightingPass(cmdBuffer);
 
-        DebugUIRenderPass(cmdBuffer);
-        
         PostProcessingPass(cmdBuffer);
+
+        DebugUIRenderPass(cmdBuffer);
         
         CmdPipelineImageBarrier(
             cmdBuffer,
