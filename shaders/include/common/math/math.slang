@@ -144,6 +144,12 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 }
 
 
+float3 ViewPosFromDepth(in float2 uv, in float depth, in float4x4 invProjMatr)
+{
+    return InvTransformNDC(float3(UVToNDC(uv), depth), invProjMatr).xyz;
+}
+
+
 float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewProjMatr)
 {
     return InvTransformNDC(float3(UVToNDC(uv), depth), invViewProjMatr).xyz;
@@ -152,13 +158,8 @@ float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewProjMatr)
 
 float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in float4x4 invProjMatr)
 {
-    return WPosFromDepth(uv, depth, mul(invViewMatr, invProjMatr));
-}
-
-
-float3 ViewPosFromDepth(in float2 uv, in float depth, in float4x4 invProjMatr)
-{
-    return InvTransformNDC(float3(UVToNDC(uv), depth), invProjMatr).xyz;
+    const float3 viewPos = ViewPosFromDepth(uv, depth, invProjMatr);
+    return mul(invViewMatr, float4(viewPos, 1.f)).xyz;
 }
 
 

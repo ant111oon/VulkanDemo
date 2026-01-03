@@ -424,7 +424,10 @@ struct COMMON_CB_DATA
     glm::uint  COMMON_FLAGS;
     glm::uint  COMMON_DBG_FLAGS;
     glm::uint  COMMON_DBG_VIS_FLAGS;
-    glm::uint  PADDING_1;
+    glm::uint  PAD0;
+
+    glm::float3 CAM_WPOS;
+    glm::uint PAD1;
 };
 
 
@@ -3649,6 +3652,8 @@ void UpdateGPUCommonConstBuffer()
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
     pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
 
+    pCommonConstBufferData->CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
+
     s_commonConstBuffer.Unmap();
 }
 
@@ -4448,7 +4453,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 
             const glm::float3 cameraRight = glm::normalize(glm::cross(cameraDir, M3D_AXIS_Y));
 			const glm::float3 cameraUp    = glm::cross(cameraRight, cameraDir);
-            const glm::quat newRotation = glm::quatLookAt(cameraDir, cameraUp);
+            const glm::quat newRotation   = glm::normalize(glm::quatLookAt(cameraDir, cameraUp));
 
             camera.SetRotation(newRotation);
         }
@@ -4610,8 +4615,8 @@ int main(int argc, char* argv[])
 
     s_cpuTexturesData.clear();
 
-    s_camera.SetPosition(glm::float3(0.f, 2.f, 0.f));
-    s_camera.SetRotation(glm::quatLookAt(M3D_AXIS_X, M3D_AXIS_Y));
+    s_camera.SetPosition(glm::float3(0.f, 0.f, 4.f));
+    s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
     s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 10'000.f);
 
     s_pWnd->SetVisible(true);

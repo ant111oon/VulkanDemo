@@ -259,7 +259,7 @@ namespace eng
     void Camera::RecalcViewMatrix() noexcept
     {
         // Inverse camera rotation
-        const glm::float4x4 rotation = glm::mat4_cast(glm::conjugate(m_rotation));
+        const glm::float4x4 rotation = glm::mat4_cast(glm::inverse(m_rotation));
         
         // Inverse camera translation
         const glm::float4x4 translation = glm::translate(M3D_MAT4X4_IDENTITY, -m_position);

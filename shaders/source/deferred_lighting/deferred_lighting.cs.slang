@@ -23,14 +23,24 @@ struct POINT_LIGHT
 };
 
 
-static const uint G_LIGHTS_COUNT = 4;
+static const uint G_LIGHTS_COUNT = 12;
 
 static POINT_LIGHT G_LIGHTS[G_LIGHTS_COUNT] =
 {
-    { 4.f * float3(1.f, 0.f, 0.f), float3(-2.f, 1.f, -1.15f) },
-    { 4.f * float3(0.f, 1.f, 0.f), float3( 2.f, 1.f, -1.15f) },
-    { 4.f * float3(0.f, 0.f, 1.f), float3( 2.f, 1.f,  1.15f) },
-    { 4.f * float3(1.f, 1.f, 0.f), float3(-2.f, 1.f,  1.15f) },
+    { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f) },
+    { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f) },
+    { 8.f * float3(0.f, 0.f, 1.f), float3( 2.f,-2.f, -2.f) },
+    { 8.f * float3(0.f, 1.f, 1.f), float3(-2.f,-2.f, -2.f) },
+
+    { 2.f * ONEF3, float3(-2.f, 2.f, 1.5f) },
+    { 2.f * ONEF3, float3( 2.f, 2.f, 1.5f) },
+    { 2.f * ONEF3, float3( 2.f,-2.f, 1.5f) },
+    { 2.f * ONEF3, float3(-2.f,-2.f, 1.5f) },
+
+    { 2.f * ONEF3, float3(-2.f, 2.f, -4.5f) },
+    { 2.f * ONEF3, float3( 2.f, 2.f, -4.5f) },
+    { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f) },
+    { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f) },
 };
 
 
@@ -108,7 +118,8 @@ float3 ComputeLighting(in uint2 pixelCoord)
     }
 #endif
 
-    const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x, COMMON_CB.INV_VIEW_PROJ_MATRIX);
+    const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
+    const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
 
     float3 Lo = ZEROF3;
     for (uint i = 0; i < G_LIGHTS_COUNT; ++i) {

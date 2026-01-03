@@ -69,15 +69,14 @@ float3 SampleCommonSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in fl
 
 float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, in float3x3 TBN)
 {
-    float3 lnorm = M3D_AXIS_Z;
-
 #ifdef ENV_DEBUG
-    if (mtl.NORMAL_TEX_IDX >= 0)
-#endif
-    {
-        lnorm = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz;
-        lnorm = normalize((lnorm * 2.f - 1.f) * float3(FLOAT2(mtl.NORMAL_SCALE), 1.f));
+    if (mtl.NORMAL_TEX_IDX < 0) {
+        return TBN[2];
     }
+#endif
+
+    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz - 1.f;
+    lnorm = normalize(lnorm * float3(FLOAT2(mtl.NORMAL_SCALE), 1.f));
 
     return normalize(mul(lnorm, TBN));
 }
