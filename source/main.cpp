@@ -4602,7 +4602,8 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
 
     UploadGPUResources();
     WriteDescriptorSets();

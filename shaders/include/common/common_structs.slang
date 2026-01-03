@@ -32,14 +32,17 @@ struct COMMON_SURFACE
 
 float4 SampleCommonSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
 {
+    float4 albedo = ONEF4;
+
 #ifdef ENV_DEBUG
     if (mtl.ALBEDO_TEX_IDX < 0) {
-        return SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT], uv);
-    }
+        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT], uv);
+    } else
 #endif
-
-    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
-    albedo.rgb = SRGBToLinear(albedo.rgb);
+    {
+        albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
+        albedo.rgb = SRGBToLinear(albedo.rgb);
+    }
 
     albedo *= mtl.ALBEDO_MULT;
 
@@ -82,7 +85,7 @@ float3 SampleCommonSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in floa
 
 void SampleCommonSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, out float metalness, out float roughness, out float ao)
 {
-    float3 aoMetRough = float3(1.f, 0.f, 1.f);
+    float3 aoMetRough = float3(1.f, 1.f, 1.f);
 
     if (mtl.MR_TEX_IDX == mtl.AO_TEX_IDX) {
     #ifdef ENV_DEBUG
