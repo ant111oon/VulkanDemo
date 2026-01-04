@@ -48,7 +48,7 @@ using IndexType = uint32_t;
 class TextureLoadData
 {
 public:
-    enum class ComponentType
+    enum class ComponentType : uint16_t
     {
         UINT8,
         UINT16,
@@ -86,11 +86,13 @@ public:
         m_width = other.m_width;
         m_height = other.m_height;
         m_channels = other.m_channels;
+        m_mipsCount = other.m_mipsCount;
         m_type = other.m_type;
 
         other.m_width = 0;
         other.m_height = 0;
         other.m_channels = 0;
+        other.m_mipsCount = 1;
         other.m_type = ComponentType::UINT8;
 
         return *this;
@@ -133,6 +135,7 @@ public:
         m_width = width;
         m_height = height;
         m_channels = channels;
+        m_mipsCount = CalcMipsCount(m_width, m_height);
 
         m_format = EvaluateFormat(m_channels, m_type);
 
@@ -170,6 +173,7 @@ public:
         m_width = width;
         m_height = height;
         m_channels = channels;
+        m_mipsCount = CalcMipsCount(m_width, m_height);
 
         m_format = EvaluateFormat(m_channels, m_type);
 
@@ -194,6 +198,7 @@ public:
         m_width = 0;
         m_height = 0;
         m_channels = 0;
+        m_mipsCount = 1;
         m_type = ComponentType::UINT8;
     }
     
@@ -219,6 +224,7 @@ public:
     uint32_t GetWidth() const { return m_width; }
     uint32_t GetHeight() const { return m_height; }
     uint32_t GetChannels() const { return m_channels; }
+    uint16_t GetMipsCount() const { return m_mipsCount; }
 
     ComponentType GetComponentType() const { return m_type; }
     
@@ -275,6 +281,11 @@ private:
                 return VK_FORMAT_UNDEFINED;
         }
     }
+
+    static uint16_t CalcMipsCount(uint32_t width, uint32_t height)
+    {
+        return (uint16_t)glm::floor(glm::log2((float)glm::max(width, height))) + 1;
+    }
     
 private:
     static inline constexpr size_t COMP_TYPE_SIZE_IN_BYTES[] = { 1, 2, 4 };
@@ -290,6 +301,8 @@ private:
     uint32_t m_width = 0;
     uint32_t m_height = 0;
     uint32_t m_channels = 0;
+
+    uint16_t m_mipsCount = 1;
     ComponentType m_type = ComponentType::UINT8;
 };
 
@@ -1148,7 +1161,9 @@ static void CmdPipelineImageBarrier(
     VkAccessFlags2 srcAccessMask, 
     VkAccessFlags2 dstAccessMask,
     VkImage image,
-    VkImageAspectFlags aspectMask
+    VkImageAspectFlags aspectMask,
+    uint32_t baseMipLevel = 0,
+    uint32_t levelCount = VK_REMAINING_MIP_LEVELS
 ) {
     VkImageMemoryBarrier2 imageBarrier2 = {};
     imageBarrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1162,9 +1177,9 @@ static void CmdPipelineImageBarrier(
     imageBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     imageBarrier2.image = image;
     imageBarrier2.subresourceRange.aspectMask = aspectMask;
-    imageBarrier2.subresourceRange.baseMipLevel = 0;
+    imageBarrier2.subresourceRange.baseMipLevel = baseMipLevel;
+    imageBarrier2.subresourceRange.levelCount = levelCount;
     imageBarrier2.subresourceRange.baseArrayLayer = 0;
-    imageBarrier2.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
     imageBarrier2.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     VkDependencyInfo dependencyInfo = {};
@@ -3345,6 +3360,76 @@ static void UploadGPUMeshData()
 }
 
 
+static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, const TextureLoadData& loadData)
+{
+    int32_t mipWidth  = texture.GetSizeX();
+    int32_t mipHeight = texture.GetSizeY();
+
+    for (uint32_t i = 1; i < loadData.GetMipsCount(); ++i)
+    {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_ACCESS_2_TRANSFER_READ_BIT,
+            texture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            i - 1,
+            1
+        );
+
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            texture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            i,
+            1
+        );
+
+        VkImageBlit blit = {};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = i - 1;
+        blit.srcSubresource.baseArrayLayer = 0;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = i;
+        blit.dstSubresource.baseArrayLayer = 0;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[1] = {
+            mipWidth  > 1 ? mipWidth  / 2 : 1,
+            mipHeight > 1 ? mipHeight / 2 : 1,
+            1
+        };
+
+        vkCmdBlitImage(cmdBuffer.Get(),
+            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit,
+            VK_FILTER_LINEAR
+        );
+
+        if (mipWidth > 1) {
+            mipWidth /= 2;
+        }
+
+        if (mipHeight > 1) {
+            mipHeight /= 2;
+        }
+    }
+}
+
+
 static void UploadGPUTextureData()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Texture_Data", 255, 255, 0, 255);
@@ -3384,9 +3469,9 @@ static void UploadGPUTextureData()
             imageCreateInfo.extent.height = texData.GetHeight();
             imageCreateInfo.extent.depth = 1;
             imageCreateInfo.format = texData.GetFormat();
-            imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
             imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            imageCreateInfo.mipLevels = 1;
+            imageCreateInfo.mipLevels = texData.GetMipsCount();
             imageCreateInfo.arrayLayers = 1;
             imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
             imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -3416,7 +3501,7 @@ static void UploadGPUTextureData()
                     break;
                 }
 
-                vkn::Texture& image = s_commonMaterialTextures[textureIdx];
+                vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
 
                 CmdPipelineImageBarrier(
                     cmdBuffer,
@@ -3426,15 +3511,17 @@ static void UploadGPUTextureData()
                     VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                     VK_ACCESS_2_NONE,
                     VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    image.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT
+                    texture.Get(),
+                    VK_IMAGE_ASPECT_COLOR_BIT,
+                    0,
+                    1
                 );
 
                 VkCopyBufferToImageInfo2 copyInfo = {};
 
                 copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
                 copyInfo.srcBuffer = s_commonStagingBuffers[j].Get();
-                copyInfo.dstImage = image.Get();
+                copyInfo.dstImage = texture.Get();
                 copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
                 copyInfo.regionCount = 1;
 
@@ -3445,11 +3532,31 @@ static void UploadGPUTextureData()
                 texRegion.imageSubresource.mipLevel = 0;
                 texRegion.imageSubresource.baseArrayLayer = 0;
                 texRegion.imageSubresource.layerCount = 1;
-                texRegion.imageExtent = image.GetSize();
+                texRegion.imageExtent = texture.GetSize();
 
                 copyInfo.pRegions = &texRegion;
 
                 vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+
+                const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
+
+                GenerateTextureMipmaps(cmdBuffer, texture, texData);
+
+                for (uint32_t i = 1; i < texData.GetMipsCount(); ++i) {
+                    CmdPipelineImageBarrier(
+                        cmdBuffer,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT,
+                        VK_ACCESS_2_SHADER_READ_BIT,
+                        texture.Get(),
+                        VK_IMAGE_ASPECT_COLOR_BIT,
+                        i - 1,
+                        1
+                    );
+                }
 
                 CmdPipelineImageBarrier(
                     cmdBuffer,
@@ -3459,8 +3566,10 @@ static void UploadGPUTextureData()
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                     VK_ACCESS_2_TRANSFER_WRITE_BIT,
                     VK_ACCESS_2_SHADER_READ_BIT,
-                    image.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT
+                    texture.Get(),
+                    VK_IMAGE_ASPECT_COLOR_BIT,
+                    texData.GetMipsCount() - 1,
+                    1
                 );
             }
         });

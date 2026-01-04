@@ -9,9 +9,10 @@
 struct GBUFFER
 {
     float3 albedo;
-    float3 normal;
     float metalness;
+    float3 normal;
     float roughness;
+    float3 emissive;
     float ao;
 };
 
@@ -68,6 +69,8 @@ GBUFFER SampleGBuffer(in int3 texCoord)
     gbuffer.metalness = metRoughAo.r;
     gbuffer.roughness = metRoughAo.g;
     gbuffer.ao = metRoughAo.b;
+
+    gbuffer.emissive = LOAD_TEX(DEFERRED_LIGHTING_GBUFFER_3, texCoord).rgb;
 
     return gbuffer;
 }
@@ -128,7 +131,7 @@ float3 ComputeLighting(in uint2 pixelCoord)
 
     const float3 ambient = FLOAT3(0.02f) * gbuffer.albedo * gbuffer.ao;
 
-    return ambient + Lo;
+    return ambient + Lo + gbuffer.emissive;
 }
 
 
