@@ -21,28 +21,57 @@ struct POINT_LIGHT
 {
     float3 color;
     float3 wpos;
+    float radius;
 };
 
 
-static const uint G_LIGHTS_COUNT = 12;
-
-static POINT_LIGHT G_LIGHTS[G_LIGHTS_COUNT] =
+struct DIRECTIONAL_LIGHT
 {
-    { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f) },
-    { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f) },
-    { 8.f * float3(0.f, 0.f, 1.f), float3( 2.f,-2.f, -2.f) },
-    { 8.f * float3(0.f, 1.f, 1.f), float3(-2.f,-2.f, -2.f) },
-
-    { 2.f * ONEF3, float3(-2.f, 2.f, 1.5f) },
-    { 2.f * ONEF3, float3( 2.f, 2.f, 1.5f) },
-    { 2.f * ONEF3, float3( 2.f,-2.f, 1.5f) },
-    { 2.f * ONEF3, float3(-2.f,-2.f, 1.5f) },
-
-    { 2.f * ONEF3, float3(-2.f, 2.f, -4.5f) },
-    { 2.f * ONEF3, float3( 2.f, 2.f, -4.5f) },
-    { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f) },
-    { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f) },
+    float3 color;
+    float3 direction;
 };
+
+
+struct LIGHTING_RESULT
+{
+    float3 Lo;
+    // float3 D;
+    // float3 G;
+    // float3 F;
+};
+
+
+void operator+=(inout LIGHTING_RESULT a, in LIGHTING_RESULT b)
+{
+    a.Lo += b.Lo;
+    // a.D += b.D;
+    // a.F += b.F;
+    // a.G += b.G;
+}
+
+
+static const uint G_POINT_LIGHTS_COUNT = 4;
+
+static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
+{
+    { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f), 3.f },
+    { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f), 3.f },
+    { 8.f * float3(0.f, 0.f, 1.f), float3( 2.f,-2.f, -2.f), 3.f },
+    { 8.f * float3(1.f, 0.f, 1.f), float3(-2.f,-2.f, -2.f), 3.f },
+
+    // { 2.f * ONEF3, float3(-2.f, 2.f, 1.5f), 3.f },
+    // { 2.f * ONEF3, float3( 2.f, 2.f, 1.5f), 3.f },
+    // { 2.f * ONEF3, float3( 2.f,-2.f, 1.5f), 3.f },
+    // { 2.f * ONEF3, float3(-2.f,-2.f, 1.5f), 3.f },
+
+    // { 2.f * ONEF3, float3(-2.f, 2.f, -4.5f), 3.f },
+    // { 2.f * ONEF3, float3( 2.f, 2.f, -4.5f), 3.f },
+    // { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f), 3.f },
+    // { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f), 3.f },
+};
+
+
+static DIRECTIONAL_LIGHT G_DIRECTIONAL_LIGHT = { 2.f * ONEF3, normalize(2.f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z) };
 
 
 float2 PixelCoordToUV(in uint2 pixelCoord)
@@ -51,9 +80,13 @@ float2 PixelCoordToUV(in uint2 pixelCoord)
 }
 
 
-float CalcLightAttenuation(in float distToLight)
+float CalcLightAttenuation(in float distToLight, in float lightRadius)
 {
-    return rcp(distToLight * distToLight);
+    float t = distToLight / max(lightRadius, M3D_EPS);
+    t = saturate(1.f - t * t * t * t);
+    t = t * t;
+
+    return t / (distToLight * distToLight + 1.f);
 }
 
 
@@ -76,36 +109,38 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 }
 
 
-float3 ProcessLight(in GBUFFER gbuffer, in POINT_LIGHT light, in float3 wpos)
+LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 wpos, in float3 lightDir, in float3 lightColor)
 {
-    const float3 viewDir = normalize(COMMON_CAM_WPOS - wpos);
-    const float3 lightDir = normalize(light.wpos - wpos);
-    const float3 halfDir = normalize(viewDir + lightDir);
+    const float3 V = normalize(COMMON_CAM_WPOS - wpos);
+    const float3 L = -lightDir;
+    const float3 H = normalize(V + L);
 
-    const float NdotL = saturate(dot(gbuffer.normal, lightDir));
-    const float VdotH = saturate(dot(viewDir, halfDir));
-    const float NdotH = saturate(dot(gbuffer.normal, halfDir));
-    const float NdotV = saturate(dot(gbuffer.normal, viewDir));
+    const float VdotH = max(dot(V, H), 0.f);
+    const float NdotL = max(dot(gbuffer.normal, L), 0.f);
+    const float NdotH = max(dot(gbuffer.normal, H), 0.f);
+    const float NdotV = max(dot(gbuffer.normal, V), 0.f);
 
-    const float3 F0 = lerp(FLOAT3(0.04f), gbuffer.albedo, gbuffer.metalness);
+    const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
     const float3 F = F_Schlick(VdotH, F0);
 
-    const float NDF = NDF_GGX(NdotH, gbuffer.roughness);
+    const float3 D = NDF_GGX(NdotH, gbuffer.roughness);
 
-    const float k = pow(gbuffer.roughness + 1.f, 2.f) / 8.f;
-    const float G = G_Smith(NdotV, NdotL, k);
+    float k = gbuffer.roughness + 1.f;
+    k = (k * k) / 8.f;
+    const float3 G = G_Smith(NdotV, NdotL, k);
 
-    const float3 specular = (NDF * G * F) / max(4.f * NdotV * NdotL, M3D_EPS);
+    const float3 specular = (D * G * F) / max(4.f * NdotV * NdotL, M3D_EPS);
 
-    const float dist = distance(light.wpos, wpos);
-
-    const float attenuation = CalcLightAttenuation(dist);
-    const float3 radiance = light.color * attenuation * NdotL;
+    const float3 radiance = lightColor * NdotL;
 
     const float3 kD = (ONEF3 - F) * (1.f - gbuffer.metalness);
     const float3 diffuse = kD * (gbuffer.albedo / M3D_PI);
-    
-    return (diffuse + specular) * radiance; 
+
+    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+
+    result.Lo = (diffuse + specular) * radiance;
+
+    return result;
 }
 
 
@@ -124,14 +159,25 @@ float3 ComputeLighting(in uint2 pixelCoord)
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
     const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
 
-    float3 Lo = ZEROF3;
-    for (uint i = 0; i < G_LIGHTS_COUNT; ++i) {
-        Lo += ProcessLight(gbuffer, G_LIGHTS[i], wpos);
+    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+    
+    result += ProcessLight(gbuffer, wpos, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color);
+
+    for (uint i = 0; i < G_POINT_LIGHTS_COUNT; ++i) {
+        const float3 surfToLight = wpos - G_POINT_LIGHTS[i].wpos;
+        const float dist         = length(surfToLight);
+        const float3 lightDir    = surfToLight / max(dist, M3D_EPS);
+
+        LIGHTING_RESULT ptRes = ProcessLight(gbuffer, wpos, lightDir, G_POINT_LIGHTS[i].color);
+        ptRes.Lo *= CalcLightAttenuation(dist, G_POINT_LIGHTS[i].radius);
+
+        result += ptRes;
     }
 
     const float3 ambient = FLOAT3(0.02f) * gbuffer.albedo * gbuffer.ao;
+    result.Lo = ambient + result.Lo + gbuffer.emissive;
 
-    return ambient + Lo + gbuffer.emissive;
+    return result.Lo;
 }
 
 

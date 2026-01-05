@@ -976,6 +976,20 @@ namespace DbgUI
 
             ImGui::NewLine();
             ImGui::SeparatorText("Memory Info");
+
+            VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
+            vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+
+            for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+                const VmaBudget& budget = budgets[i];
+                
+                if (budget.usage > 0) {
+                    const float usageMB = budget.usage / 1024.f / 1024.f;
+                    const float budgetMB = budget.budget / 1024.f / 1024.f;
+                    ImGui::Text("Heap %u: Usage: %.2f / %.2f MB (%.2f%%)", i, usageMB, budgetMB, usageMB / budgetMB * 100.f);
+                }
+            }
+
             ImGui::Text("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
             ImGui::Text("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
 

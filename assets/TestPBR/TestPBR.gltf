@@ -462,10 +462,10 @@
     ],
     "images": [
         {
-            "uri": "Spheres_BaseColor.png"
+            "uri": "textures/Spheres_BaseColor.png"
         },
         {
-            "uri": "Spheres_MetalRough.png"
+            "uri": "textures/Spheres_MetalRough.png"
         }
     ],
     "samplers": [

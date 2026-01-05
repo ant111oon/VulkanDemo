@@ -4,9 +4,13 @@
 #include "common/math/math.slang"
 
 
+static const float3 COMMON_DIELECTRIC_F0 = FLOAT3(0.04f);
+
+
 float NDF_GGX(in float NdotH, in float roughness)
 {
-    const float a2 = roughness * roughness;
+    const float a = roughness * roughness;
+    const float a2 = a * a;
     const float NdotH2 = NdotH * NdotH;
 
     float denom = (NdotH2 * (a2 - 1.f) + 1.f);
