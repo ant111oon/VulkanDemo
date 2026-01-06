@@ -1,4 +1,4 @@
-#include "registers/common_registers.slang"
+#include "registers/gbuffer_registers.slang"
 
 #include "common/math/utils.slang"
 #include "common/dbg_vis.slang"

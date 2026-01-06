@@ -1,4 +1,4 @@
-#include "registers/common_registers.slang"
+#include "registers/gbuffer_registers.slang"
 
 #include "pass/gbuffer/vsin.slang"
 #include "pass/gbuffer/vsout.slang"
