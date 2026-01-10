@@ -53,6 +53,7 @@ public:
         UINT8,
         UINT16,
         FLOAT,
+        COUNT
     };
 
 public:
@@ -294,6 +295,8 @@ private:
     
 private:
     static inline constexpr size_t COMP_TYPE_SIZE_IN_BYTES[] = { 1, 2, 4 };
+
+    static_assert(_countof(COMP_TYPE_SIZE_IN_BYTES) == (size_t)ComponentType::COUNT);
 
 private:
 #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
@@ -1590,6 +1593,8 @@ static void ResizeDynamicRenderTargets()
 
 static void CreateSkybox(std::span<fs::path> faceDataPaths)
 {
+    Timer timer;
+
     CORE_ASSERT(faceDataPaths.size() == SKYBOX_FACE_COUNT);
 
     std::array<TextureLoadData, SKYBOX_FACE_COUNT> faceLoadDatas = {};
@@ -1723,6 +1728,8 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
             }
         });
     }
+
+    CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
