@@ -7,6 +7,12 @@
 static const float3 COMMON_DIELECTRIC_F0 = FLOAT3(0.04f);
 
 
+float3 CalcDiffuseCoef(in float3 specularCoef, in float metalness)
+{
+    return (ONEF3 - specularCoef) * (1.f - metalness);
+}
+
+
 float NDF_GGX(in float NdotH, in float roughness)
 {
     const float a = roughness * roughness;
@@ -37,6 +43,12 @@ float G_Smith(in float NdotV, in float NdotL, in float k)
 float3 F_Schlick(in float VdotH, in float3 F0)
 {
     return F0 + (1.f - F0) * pow(saturate(1.f - VdotH), 5.f);
+}
+
+
+float3 F_SchlickRoughness(in float VdotH, in float3 F0, float roughness)
+{
+    return F0 + (max(float3(1.f - roughness), F0) - F0) * pow(saturate(1.f - VdotH), 5.f);
 }
 
 #endif

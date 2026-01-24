@@ -456,8 +456,10 @@ enum COMMON_DBG_FLAG_MASKS
 {
     USE_MESH_INDIRECT_DRAW_MASK = 0x1,
     USE_MESH_GPU_CULLING_MASK = 0x2,
-    USE_ACES_TONE_MAPPING_MASK = 0x4,
-    USE_REINHARD_TONE_MAPPING_MASK = 0x8,
+    USE_REINHARD_TONE_MAPPING_MASK = 0x4,
+    USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK = 0x8,
+    USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x10,
+    USE_ACES_TONE_MAPPING_MASK = 0x20,
 };
 
 
@@ -613,14 +615,18 @@ static_assert(_countof(DBG_RT_OUTPUT_NAMES) == _countof(DBG_RT_OUTPUT_MASKS));
 
 
 static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
-    "ACES",
     "REINHARD",
+    "PARTIAL UNCHARTED 2",
+    "UNCHARTED 2",
+    "ACES",
 };
 
 
 static constexpr COMMON_DBG_FLAG_MASKS TONEMAPPING_MASKS[] = {
-    COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
     COMMON_DBG_FLAG_MASKS::USE_REINHARD_TONE_MAPPING_MASK,
+    COMMON_DBG_FLAG_MASKS::USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK,
+    COMMON_DBG_FLAG_MASKS::USE_UNCHARTED_2_TONE_MAPPING_MASK,
+    COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
 };
 
 
@@ -717,6 +723,7 @@ static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
 static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
+static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
@@ -892,13 +899,13 @@ static bool s_flyCameraMode = false;
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnMeshCount = 0;
 
-    static uint32_t s_tonemappingPreset = 0;
+    static uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
 #else
     static constexpr bool s_useMeshIndirectDraw = true;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useDepthPass = true;
 
-    static constexpr uint32_t s_tonemappingPreset = 0;
+    static constexpr uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
 
     static_assert(s_tonemappingPreset < _countof(TONEMAPPING_MASKS));
 #endif
@@ -1926,6 +1933,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -3072,6 +3080,21 @@ static void WriteDeferredLightingDescriptorSet()
     depthWrite.pImageInfo = &depthImageInfo;
 
     descWrites.emplace_back(depthWrite);
+    
+    VkDescriptorImageInfo irradianceImageInfo = {};
+    irradianceImageInfo.imageView = s_irradianceMapTextureView.Get();
+    irradianceImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet irradianceWrite = {};
+    irradianceWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    irradianceWrite.dstSet = s_deferredLightingDescriptorSet;
+    irradianceWrite.dstBinding = DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT;
+    irradianceWrite.dstArrayElement = 0;
+    irradianceWrite.descriptorCount = 1;
+    irradianceWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    irradianceWrite.pImageInfo = &irradianceImageInfo;
+
+    descWrites.emplace_back(irradianceWrite);
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -3107,7 +3130,6 @@ static void WriteSkyboxDescriptorSet()
     VkDescriptorImageInfo skyboxTexInfo = {};
     skyboxTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     skyboxTexInfo.imageView = s_skyboxTextureView.Get();
-    // skyboxTexInfo.imageView = s_irradianceMapTextureView.Get();
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

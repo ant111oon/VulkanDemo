@@ -23,6 +23,10 @@ float3 Tonemap(in float3 color)
         return ACES_Tonemap(color);
     } else if (COMMON_DBG_USE_REINHARD_TONEMAPPING) {
         return Reinhard_Tonemap(color);
+    } else if (COMMON_DBG_USE_PARTIAL_UNCHARTED_2_TONEMAPPING) {
+        return PartialUncharted2_Tonemap(color);
+    } else if (COMMON_DBG_USE_UNCHARTED_2_TONEMAPPING) {
+        return Uncharted2_Tonemap(color);
     } else {
         return float3(1.f, 0.f, 0.f); // Invalid tonemapping flag
     }
