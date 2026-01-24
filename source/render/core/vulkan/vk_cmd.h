@@ -44,6 +44,8 @@ namespace vkn
         CmdBuffer& CmdSetDepthCompareOp(VkCompareOp op);
         CmdBuffer& CmdSetDepthWriteEnable(VkBool32 enabled);
         
+        CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
         CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 
         CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);

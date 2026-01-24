@@ -5,6 +5,8 @@
 
 #include "common/lighting/brdf.slang"
 
+#include "common/common_cs.slang"
+
 
 struct GBUFFER
 {
@@ -71,13 +73,7 @@ static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
 };
 
 
-static DIRECTIONAL_LIGHT G_DIRECTIONAL_LIGHT = { 2.f * ONEF3, normalize(2.f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z) };
-
-
-float2 PixelCoordToUV(in uint2 pixelCoord)
-{
-    return float2(pixelCoord) / float2(max(COMMON_SCREEN_SIZE, ONEU2));
-}
+static DIRECTIONAL_LIGHT G_DIRECTIONAL_LIGHT = { 2.f * ONEF3, normalize(1.5f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z) };
 
 
 float CalcLightAttenuation(in float distToLight, in float lightRadius)
@@ -144,7 +140,7 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 wpos, in float3 light
 }
 
 
-float3 ComputeLighting(in uint2 pixelCoord)
+float3 ComputeLighting(in int2 pixelCoord)
 {
     const int3 texCoord = int3(pixelCoord, 0);
 
@@ -157,7 +153,9 @@ float3 ComputeLighting(in uint2 pixelCoord)
 #endif
 
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
-    const float3 wpos = WPosFromDepth(PixelCoordToUV(pixelCoord), depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
+
+    const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
+    const float3 wpos = WPosFromDepth(uv, depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
 
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
     
@@ -189,7 +187,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const uint2 pixelCoord = uint2(DTid.x, COMMON_SCREEN_SIZE.y - 1 - DTid.y);
+    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid, COMMON_SCREEN_SIZE);
 
-    DEFERRED_LIGHTING_OUTPUT_UAV[pixelCoord] = float4(ComputeLighting(pixelCoord), 1.f);
+    DEFERRED_LIGHTING_OUTPUT_UAV[pixCoord] = float4(ComputeLighting(pixCoord), 1.f);
 }

@@ -181,6 +181,16 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdDispatch(m_cmdBuffer, groupCountX, groupCountY, groupCountZ);
+
+        return *this;
+    }
+
+
     CmdBuffer& CmdBuffer::CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);

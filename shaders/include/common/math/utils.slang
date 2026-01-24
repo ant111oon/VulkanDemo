@@ -60,9 +60,40 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 }
 
 
+float3 UVFaceToDir(in float2 uv, in uint face)
+{
+    switch (face) {
+        case 0: return normalize(float3( 1.f,   uv.y, -uv.x)); // +X
+        case 1: return normalize(float3(-1.f,   uv.y,  uv.x)); // -X
+        case 2: return normalize(float3( uv.x,  1.f,  -uv.y)); // +Y
+        case 3: return normalize(float3( uv.x, -1.f,   uv.y)); // -Y
+        case 4: return normalize(float3( uv.x,  uv.y,  1.f));  // +Z
+        case 5: return normalize(float3(-uv.x,  uv.y, -1.f));  // -Z
+    }
+
+    return float3(1.f, 0.f, 0.f);
+}
+
+
+float3 PixelCoordToUV(in uint3 coord, in uint3 size)
+{
+    size = max(size, uint3(1, 1, 1));
+
+    // Pixel coords have (0, 0) in top left corner but UV (0, 0) is in bottom left corner
+    return float3(coord.x, size.y - coord.y, coord.z) / size;
+}
+
+
+float2 PixelCoordToUV(in uint2 coord, in uint2 size)
+{
+    return PixelCoordToUV(uint3(coord, 0), uint3(size, 1)).xy;
+}
+
+
 float2 UVToNDC(in float2 uv)
 {
-    return 2.f * uv - 1.f;
+    // Vulkan has Y NDC towards -Y
+    return 2.f * float2(uv.x, 1.f - uv.y) - 1.f;
 }
 
 

@@ -576,6 +576,13 @@ struct GBUFFER_BINDLESS_REGISTRY
 };
 
 
+struct IRRADIANCE_MAP_BINDLESS_REGISTRY
+{
+    glm::uvec2 ENV_MAP_FACE_SIZE;
+    glm::uvec2 PADDING;
+};
+
+
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
     "GBUFFER ALBEDO",
@@ -715,15 +722,24 @@ static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t SKYBOX_TEXTURE_DESCRIPTOR_SLOT = 0;
 
+static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
+static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
+
+
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 
 static constexpr size_t GBUFFER_RT_COUNT = 4;
-static constexpr size_t SKYBOX_FACE_COUNT = 6;
+static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
+
+static constexpr glm::uvec2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = glm::uvec2(32);
+
+static constexpr size_t IRRADIANCE_MAP_GEN_GROUP_THREAD_X = 16;
+static constexpr size_t IRRADIANCE_MAP_GEN_GROUP_THREAD_Y = 16;
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -779,6 +795,10 @@ static VkDescriptorSetLayout s_postProcessingDescriptorSetLayout = VK_NULL_HANDL
 static VkDescriptorSet       s_skyboxDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_skyboxDescriptorSetLayout = VK_NULL_HANDLE;
 
+static VkDescriptorSet       s_irradianceMapGenDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_irradianceMapGenDescriptorSetLayout = VK_NULL_HANDLE;
+
+
 static VkPipelineLayout s_meshCullingPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_meshCullingPipeline = VK_NULL_HANDLE;
 
@@ -796,6 +816,10 @@ static VkPipeline       s_postProcessingPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_skyboxPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_skyboxPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_irradianceMapGenPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_irradianceMapGenPipeline = VK_NULL_HANDLE;
+
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -823,7 +847,11 @@ static std::array<vkn::Texture, (size_t)COMMON_DBG_TEX_IDX::COUNT>     s_commonD
 static std::array<vkn::TextureView, (size_t)COMMON_DBG_TEX_IDX::COUNT> s_commonDbgTextureViews;
 
 static vkn::Texture s_skyboxTexture;
-static vkn::TextureView s_skyboxTextureView;    // type = VK_IMAGE_VIEW_TYPE_CUBE
+static vkn::TextureView s_skyboxTextureView;
+
+static vkn::Texture s_irradianceMapTexture;
+static vkn::TextureView s_irradianceMapTextureView;
+static vkn::TextureView s_irradianceMapTextureViewRW;
 
 static std::vector<Vertex> s_cpuVertexBuffer;
 static std::vector<IndexType> s_cpuIndexBuffer;
@@ -1595,9 +1623,9 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 {
     Timer timer;
 
-    CORE_ASSERT(faceDataPaths.size() == SKYBOX_FACE_COUNT);
+    CORE_ASSERT(faceDataPaths.size() == CUBEMAP_FACE_COUNT);
 
-    std::array<TextureLoadData, SKYBOX_FACE_COUNT> faceLoadDatas = {};
+    std::array<TextureLoadData, CUBEMAP_FACE_COUNT> faceLoadDatas = {};
     for (size_t i = 0; i < faceDataPaths.size(); ++i) {
         faceLoadDatas[i].Load(faceDataPaths[i]);
         CORE_ASSERT_MSG(faceLoadDatas[i].IsLoaded(), "Skybox face \'%s\' data is not loaded", faceLoadDatas[i].GetName());
@@ -1628,7 +1656,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
     createInfo.mipLevels = 1;
-    createInfo.arrayLayers = SKYBOX_FACE_COUNT;
+    createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     createInfo.pAllocInfo = &allocInfo;
@@ -1648,9 +1676,9 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
     s_skyboxTextureView.Create(viewCreateInfo).SetDebugName("COMMON_SKY_BOX_VIEW");
 
-    for (size_t i = 0; i < SKYBOX_FACE_COUNT; i += s_commonStagingBuffers.size()) {
-        for (size_t j = 0; j < s_commonStagingBuffers.size() && i < SKYBOX_FACE_COUNT; ++j) {
-            if (i + j >= SKYBOX_FACE_COUNT) {
+    for (size_t i = 0; i < CUBEMAP_FACE_COUNT; i += s_commonStagingBuffers.size()) {
+        for (size_t j = 0; j < s_commonStagingBuffers.size() && i < CUBEMAP_FACE_COUNT; ++j) {
+            if (i + j >= CUBEMAP_FACE_COUNT) {
                 break;
             }
             
@@ -1667,7 +1695,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
             for (size_t j = 0; j < s_commonStagingBuffers.size(); ++j) {
                 const uint32_t faceIdx = i + j;
                 
-                if (faceIdx >= SKYBOX_FACE_COUNT) {
+                if (faceIdx >= CUBEMAP_FACE_COUNT) {
                     break;
                 }
 
@@ -1715,7 +1743,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                     VK_ACCESS_2_TRANSFER_WRITE_BIT,
                     VK_ACCESS_2_SHADER_READ_BIT,
                     s_skyboxTexture.Get(),
@@ -1730,6 +1758,47 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     }
 
     CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void CreateIBLResources()
+{
+    vkn::AllocationInfo allocInfo = {};
+    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo createInfo = {};
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.type = VK_IMAGE_TYPE_2D;
+    createInfo.extent = { IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x, IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y, 1 };
+    createInfo.format = s_skyboxTexture.GetFormat();
+    createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
+    createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    createInfo.mipLevels = 1;
+    createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
+    createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    createInfo.pAllocInfo = &allocInfo;
+
+    s_irradianceMapTexture.Create(createInfo).SetDebugName("COMMON_IRRADIANCE_MAP");
+
+    vkn::TextureViewCreateInfo viewCreateInfo = {};
+    viewCreateInfo.pOwner = &s_irradianceMapTexture;
+    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
+    viewCreateInfo.format = createInfo.format;
+    viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewCreateInfo.subresourceRange.baseMipLevel = 0;
+    viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    s_irradianceMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW");
+
+    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+
+    s_irradianceMapTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW_RW");
 }
 
 
@@ -1889,6 +1958,20 @@ static void CreateSkyboxDescriptorSetLayout()
 }
 
 
+static void CreateIrradianceMapGenDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_irradianceMapGenDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .Build();
+
+    CORE_ASSERT(s_irradianceMapGenDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
 static void AllocateDescriptorSets()
 {
     vkn::DescriptorSetAllocator allocator;
@@ -1901,6 +1984,7 @@ static void AllocateDescriptorSets()
         std::make_pair(&s_deferredLightingDescriptorSetLayout,  &s_deferredLightingDescriptorSet),
         std::make_pair(&s_postProcessingDescriptorSetLayout,    &s_postProcessingDescriptorSet),
         std::make_pair(&s_skyboxDescriptorSetLayout,            &s_skyboxDescriptorSet),
+        std::make_pair(&s_irradianceMapGenDescriptorSetLayout,  &s_irradianceMapGenDescriptorSet),
     };
 
     std::array<VkDescriptorSet, descriptorSetsPairs.size()> descriptorSets;
@@ -1933,6 +2017,7 @@ static void CreateDesriptorSets()
     CreateDeferredLightingDescriptorSetLayout();
     CreatePostProcessingDescriptorSetLayout();
     CreateSkyboxDescriptorSetLayout();
+    CreateIrradianceMapGenDescriptorSetLayout();
 
     AllocateDescriptorSets();
 }
@@ -2016,6 +2101,20 @@ static void CreateSkyboxPipelineLayout()
         .Build();
 
     CORE_ASSERT(s_skyboxPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreateIrradianceMapGenPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_irradianceMapGenPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_BINDLESS_REGISTRY))
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_irradianceMapGenDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_irradianceMapGenPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -2274,6 +2373,25 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
 }
 
 
+static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
+
+    vkn::ComputePipelineBuilder builder;
+
+    s_irradianceMapGenPipeline = builder
+        .SetShader(shaderModule, "main")
+        .SetLayout(s_irradianceMapGenPipelineLayout)
+        .Build();
+    
+    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
+
+    CORE_ASSERT(s_irradianceMapGenPipeline != VK_NULL_HANDLE);
+}
+
+
 static void CreatePipelines()
 {
     CreateMeshCullingPipelineLayout();
@@ -2282,12 +2400,14 @@ static void CreatePipelines()
     CreateDeferredLightingPipelineLayout();
     CreatePostProcessingPipelineLayout();
     CreateSkyboxPipelineLayout();
+    CreateIrradianceMapGenPipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
     CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.cs.spv");
     CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
     CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
+    CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
 }
 
 
@@ -2987,6 +3107,7 @@ static void WriteSkyboxDescriptorSet()
     VkDescriptorImageInfo skyboxTexInfo = {};
     skyboxTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     skyboxTexInfo.imageView = s_skyboxTextureView.Get();
+    // skyboxTexInfo.imageView = s_irradianceMapTextureView.Get();
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -2998,6 +3119,41 @@ static void WriteSkyboxDescriptorSet()
     write.pImageInfo = &skyboxTexInfo;
 
     descWrites[0] = write;
+
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
+static void WriteIrradianceMapGenDescriptorSet()
+{
+    std::array<VkWriteDescriptorSet, 2> descWrites;
+
+    VkDescriptorImageInfo envMapTexInfo = {};
+    envMapTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    envMapTexInfo.imageView = s_skyboxTextureView.Get();
+
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_irradianceMapGenDescriptorSet;
+    write.dstBinding = IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = &envMapTexInfo;
+
+    descWrites[0] = write;
+
+    VkDescriptorImageInfo irrMapTexInfo = {};
+    irrMapTexInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    irrMapTexInfo.imageView = s_irradianceMapTextureViewRW.Get();
+
+    write.dstBinding = IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.pImageInfo = &irrMapTexInfo;
+
+    descWrites[1] = write;
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -3191,6 +3347,7 @@ static void WriteDescriptorSets()
     WriteDeferredLightingDescriptorSet();
     WritePostProcessingDescriptorSet();
     WriteSkyboxDescriptorSet();
+    WriteIrradianceMapGenDescriptorSet();
 }
 
 
@@ -4121,6 +4278,68 @@ void PresentImage(uint32_t imageIndex)
 }
 
 
+static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 100, 100, 100, 255);
+    Timer timer;
+
+    for (uint32_t faceIdx = 0; faceIdx < CUBEMAP_FACE_COUNT; ++faceIdx) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_SHADER_WRITE_BIT,
+            s_irradianceMapTexture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0,
+            VK_REMAINING_MIP_LEVELS,
+            faceIdx,
+            1
+        );
+    }
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_irradianceMapGenPipeline);
+    
+    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_irradianceMapGenDescriptorSet };
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_irradianceMapGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+    IRRADIANCE_MAP_BINDLESS_REGISTRY registry = {};
+    registry.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
+    registry.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
+
+    vkCmdPushConstants(cmdBuffer.Get(), s_irradianceMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_BINDLESS_REGISTRY), &registry);
+
+    cmdBuffer.CmdDispatch( 
+        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x / (float)IRRADIANCE_MAP_GEN_GROUP_THREAD_X),
+        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y / (float)IRRADIANCE_MAP_GEN_GROUP_THREAD_Y), 
+        6
+    );
+
+    for (uint32_t faceIdx = 0; faceIdx < CUBEMAP_FACE_COUNT; ++faceIdx) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_WRITE_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            s_irradianceMapTexture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0,
+            VK_REMAINING_MIP_LEVELS,
+            faceIdx,
+            1
+        );
+    }
+
+    CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
 void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
@@ -4189,7 +4408,7 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 
     vkCmdPushConstants(cmdBuffer.Get(), s_meshCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY), &registry);
 
-    vkCmdDispatch(cmdBuffer.Get(), (s_cpuInstData.size() + 63) / 64, 1, 1);
+    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / 64.f), 1, 1);
 }
 
 
@@ -4563,7 +4782,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_deferredLightingDescriptorSet };
     vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
-    vkCmdDispatch(cmdBuffer.Get(), (s_pWnd->GetWidth() + 31) / 32, (s_pWnd->GetHeight() + 31) / 32, 1);
+    cmdBuffer.CmdDispatch(ceil(s_pWnd->GetWidth() / 32.f), ceil(s_pWnd->GetHeight() / 32.f), 1);
 }
 
 
@@ -5091,7 +5310,13 @@ int main(int argc, char* argv[])
     LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
 
     UploadGPUResources();
+    CreateIBLResources();
+
     WriteDescriptorSets();
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        PrecomputeIBLIrradianceMap(cmdBuffer);
+    });
 
     s_cpuTexturesData.clear();
 
@@ -5125,6 +5350,9 @@ int main(int argc, char* argv[])
 
     vkDestroyPipeline(s_vkDevice.Get(), s_skyboxPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_skyboxPipelineLayout, nullptr);
+    
+    vkDestroyPipeline(s_vkDevice.Get(), s_irradianceMapGenPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_irradianceMapGenPipelineLayout, nullptr);
 
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_zpassDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_meshCullingDescriptorSetLayout, nullptr);
@@ -5132,6 +5360,7 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_deferredLightingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_postProcessingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_skyboxDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_irradianceMapGenDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);
