@@ -3,7 +3,7 @@
 #include "registers/post_processing_registers.slang"
 #include "registers/common_registers.slang"
 
-#include "common/common_defines.slang"
+#include "common/resource_defines.slang"
 #include "common/tonemapping.slang"
 #include "common/math/utils.slang"
 

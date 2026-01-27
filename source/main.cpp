@@ -557,28 +557,28 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 };
 
 
-struct MESH_CULLING_BINDLESS_REGISTRY
+struct MESH_CULLING_PUSH_CONSTS
 {
     glm::float3 PAD0;
     glm::uint INST_COUNT;
 };
 
 
-struct ZPASS_BINDLESS_REGISTRY
+struct ZPASS_PUSH_CONSTS
 {
     glm::float3 PAD0;
     glm::uint INST_INFO_IDX;
 };
 
 
-struct GBUFFER_BINDLESS_REGISTRY
+struct GBUFFER_PUSH_CONSTS
 {
     glm::float3 PAD0;
     glm::uint INST_INFO_IDX;
 };
 
 
-struct IRRADIANCE_MAP_BINDLESS_REGISTRY
+struct IRRADIANCE_MAP_PUSH_CONSTS
 {
     glm::uvec2 ENV_MAP_FACE_SIZE;
     glm::uvec2 PADDING;
@@ -744,9 +744,6 @@ static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
 static constexpr glm::uvec2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = glm::uvec2(32);
-
-static constexpr size_t IRRADIANCE_MAP_GEN_GROUP_THREAD_X = 16;
-static constexpr size_t IRRADIANCE_MAP_GEN_GROUP_THREAD_Y = 16;
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -2036,7 +2033,7 @@ static void CreateMeshCullingPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     s_meshCullingPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY))
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
         .AddDescriptorSetLayout(s_meshCullingDescriptorSetLayout)
         .Build();
@@ -2050,7 +2047,7 @@ static void CreateZPassPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     s_zpassPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_BINDLESS_REGISTRY))
+        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
         .AddDescriptorSetLayout(s_zpassDescriptorSetLayout)
         .Build();
@@ -2064,7 +2061,7 @@ static void CreateGBufferPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     s_gbufferRenderPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_BINDLESS_REGISTRY))
+        .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
         .AddDescriptorSetLayout(s_gbufferRenderDescriptorSetLayout)
         .Build();
@@ -2117,7 +2114,7 @@ static void CreateIrradianceMapGenPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
 
     s_irradianceMapGenPipelineLayout = builder
-        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_BINDLESS_REGISTRY))
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS))
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
         .AddDescriptorSetLayout(s_irradianceMapGenDescriptorSetLayout)
         .Build();
@@ -4328,15 +4325,15 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_irradianceMapGenDescriptorSet };
     vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_irradianceMapGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
-    IRRADIANCE_MAP_BINDLESS_REGISTRY registry = {};
-    registry.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
-    registry.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
+    IRRADIANCE_MAP_PUSH_CONSTS pushConsts = {};
+    pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
+    pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
-    vkCmdPushConstants(cmdBuffer.Get(), s_irradianceMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_BINDLESS_REGISTRY), &registry);
+    vkCmdPushConstants(cmdBuffer.Get(), s_irradianceMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS), &pushConsts);
 
     cmdBuffer.CmdDispatch( 
-        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x / (float)IRRADIANCE_MAP_GEN_GROUP_THREAD_X),
-        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y / (float)IRRADIANCE_MAP_GEN_GROUP_THREAD_Y), 
+        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x / 32.f),
+        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y / 32.f), 
         6
     );
 
@@ -4425,10 +4422,10 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_meshCullingDescriptorSet };
     vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_meshCullingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
-    MESH_CULLING_BINDLESS_REGISTRY registry = {};
-    registry.INST_COUNT = s_cpuInstData.size();
+    MESH_CULLING_PUSH_CONSTS pushConsts = {};
+    pushConsts.INST_COUNT = s_cpuInstData.size();
 
-    vkCmdPushConstants(cmdBuffer.Get(), s_meshCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_BINDLESS_REGISTRY), &registry);
+    vkCmdPushConstants(cmdBuffer.Get(), s_meshCullingPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS), &pushConsts);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / 64.f), 1, 1);
 }
@@ -4542,10 +4539,10 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
                 ++s_dbgDrawnMeshCount;
             #endif
 
-                ZPASS_BINDLESS_REGISTRY registry = {};
-                registry.INST_INFO_IDX = i;
+                ZPASS_PUSH_CONSTS pushConsts = {};
+                pushConsts.INST_INFO_IDX = i;
 
-                vkCmdPushConstants(cmdBuffer.Get(), s_zpassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_BINDLESS_REGISTRY), &registry);
+                vkCmdPushConstants(cmdBuffer.Get(), s_zpassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS), &pushConsts);
 
                 const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
@@ -4743,10 +4740,10 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
                 ++s_dbgDrawnMeshCount;
             #endif
 
-                GBUFFER_BINDLESS_REGISTRY registry = {};
-                registry.INST_INFO_IDX = i;
+                GBUFFER_PUSH_CONSTS pushConsts = {};
+                pushConsts.INST_INFO_IDX = i;
 
-                vkCmdPushConstants(cmdBuffer.Get(), s_gbufferRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_BINDLESS_REGISTRY), &registry);
+                vkCmdPushConstants(cmdBuffer.Get(), s_gbufferRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS), &pushConsts);
 
                 const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);

@@ -1,5 +1,5 @@
-#ifndef FRUSTUM_H
-#define FRUSTUM_H
+#ifndef MATH_FRUSTUM_H
+#define MATH_FRUSTUM_H
 
 #include "math.slang"
 #include "primitives.slang"

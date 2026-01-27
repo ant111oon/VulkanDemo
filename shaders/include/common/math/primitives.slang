@@ -1,5 +1,5 @@
-#ifndef PRIMITIVE_H
-#define PRIMITIVE_H
+#ifndef MATH_PRIMITIVE_H
+#define MATH_PRIMITIVE_H
 
 #include "math.slang"
 

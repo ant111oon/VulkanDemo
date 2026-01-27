@@ -1,31 +1,12 @@
 #include "registers/irradiance_map_gen_registers.slang"
 
-#include "common/math/math.slang"
-#include "common/common_defines.slang"
+#include "common/math/distribution.slang"
+#include "common/resource_defines.slang"
 
 #include "common/common_cs.slang"
 
 
 static const uint IRRADIANCE_MAP_GEN_SAMPLES_NUM = 2048;
-
-
-float RadicalInverse_VdC(in uint bits)
-{
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return float(bits) * 2.3283064365386963e-10; // 0x100000000
-}
-
-
-// Randomish sequence that has pretty evenly spaced points
-// http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-float2 Hammersley(in uint i, in uint N)
-{
-    return float2(float(i) / float(N), RadicalInverse_VdC(i));
-}
 
 
 float3 CosineSampleHemisphere(in float2 Xi)
@@ -39,7 +20,7 @@ float3 CosineSampleHemisphere(in float2 Xi)
 
 
 [shader("compute")]
-[numthreads(IRRADIANCE_MAP_GEN_GROUP_THREAD_X, IRRADIANCE_MAP_GEN_GROUP_THREAD_Y, 1)]
+[numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (any(DTid >= uint3(IRRADIANCE_MAP_GEN_OUTPUT_SIZE, 6))) {

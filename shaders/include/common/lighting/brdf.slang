@@ -51,4 +51,27 @@ float3 F_SchlickRoughness(in float VdotH, in float3 F0, float roughness)
     return F0 + (max(float3(1.f - roughness), F0) - F0) * pow(saturate(1.f - VdotH), 5.f);
 }
 
+
+float3 ImportanceSampleGGX(in float2 Xi, in float3 N, in float roughness)
+{
+    const float a = roughness * roughness;
+	
+    float phi = M3D_2_PI * Xi.x;
+    float cosTheta = sqrt((1.f - Xi.y) / (1.f + (a * a - 1.f) * Xi.y));
+    float sinTheta = sqrt(1.f - cosTheta * cosTheta);
+	
+    // from spherical coordinates to cartesian coordinates
+    float3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+	
+    // from tangent-space vector to world-space sample vector
+    float3 up        = abs(N.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
+    float3 tangent   = normalize(cross(up, N));
+    float3 bitangent = cross(N, tangent);
+	
+    return normalize(tangent * H.x + bitangent * H.y + N * H.z);
+}
+
 #endif

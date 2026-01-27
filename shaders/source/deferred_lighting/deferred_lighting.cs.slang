@@ -1,11 +1,10 @@
-#include "common/common_defines.slang"
-
 #include "registers/deferred_lighting_registers.slang"
 #include "registers/common_registers.slang"
 
 #include "common/lighting/brdf.slang"
 
 #include "common/common_cs.slang"
+#include "common/resource_defines.slang"
 
 
 struct GBUFFER

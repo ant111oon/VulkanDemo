@@ -5,13 +5,13 @@
 #include "common/common_structs.slang"
 
 
-struct ZPASS_BINDLESS_REGISTRY
+struct ZPASS_PUSH_CONSTS
 {
     uint3 PAD0;
     uint INST_INFO_IDX;
 };
 
-[[vk::push_constant]] ZPASS_BINDLESS_REGISTRY ZPASS_REGISTRY;
+[[vk::push_constant]] ZPASS_PUSH_CONSTS PUSH_CONSTS;
 
 [vk::binding(0, 1)] StructuredBuffer<uint> ZPASS_INST_INFO_IDS;
 

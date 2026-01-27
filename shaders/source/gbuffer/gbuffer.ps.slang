@@ -2,7 +2,7 @@
 
 #include "common/math/utils.slang"
 #include "common/dbg_vis.slang"
-#include "common/common_defines.slang"
+#include "common/resource_defines.slang"
 #include "common/common_structs.slang"
 
 #include "pass/gbuffer/vsout.slang"

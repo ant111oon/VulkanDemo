@@ -10,7 +10,7 @@ ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceI
     ZPASS_VS_OUTPUT result = (ZPASS_VS_OUTPUT)0;
 
 #ifdef ENV_DEBUG
-    const uint instIdx = COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED ? ZPASS_INST_INFO_IDS[drawID] : ZPASS_REGISTRY.INST_INFO_IDX;
+    const uint instIdx = COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED ? ZPASS_INST_INFO_IDS[drawID] : PUSH_CONSTS.INST_INFO_IDX;
 #else
     const uint instIdx = ZPASS_INST_INFO_IDS[drawID];
 #endif

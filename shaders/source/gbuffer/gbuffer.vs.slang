@@ -10,7 +10,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
     GBUFFER_VS_OUTPUT result = (GBUFFER_VS_OUTPUT)0;
 
 #ifdef ENV_DEBUG
-    const uint instIdx = COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED ? GBUFFER_INST_INFO_IDS[drawID] : GBUFFER_REGISTRY.INST_INFO_IDX;
+    const uint instIdx = COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED ? GBUFFER_INST_INFO_IDS[drawID] : PUSH_CONSTS.INST_INFO_IDX;
 #else
     const uint instIdx = GBUFFER_INST_INFO_IDS[drawID];
 #endif

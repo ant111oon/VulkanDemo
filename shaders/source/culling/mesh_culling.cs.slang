@@ -1,7 +1,7 @@
 #include "registers/common_registers.slang"
 #include "registers/mesh_culling_registers.slang"
 
-#include "common/common_defines.slang"
+#include "common/resource_defines.slang"
 
 
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
@@ -64,7 +64,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     const uint instID = DTid.x;
 
-    if (instID >= MESH_CULLING_REGISTRY.INST_COUNT) {
+    if (instID >= PUSH_CONSTS.INST_COUNT) {
         return;
     }
 

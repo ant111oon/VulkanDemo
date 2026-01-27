@@ -1,5 +1,5 @@
-#ifndef HALF_H
-#define HALF_H
+#ifndef MATH_HALF_H
+#define MATH_HALF_H
 
 #include "math.slang"
 

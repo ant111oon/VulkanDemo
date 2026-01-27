@@ -5,13 +5,13 @@
 #include "common/common_structs.slang"
 
 
-struct MESH_CULLING_BINDLESS_REGISTRY
+struct MESH_CULLING_PUSH_CONSTS
 {
     float3 PAD0;
     uint INST_COUNT;
 };
 
-[[vk::push_constant]] MESH_CULLING_BINDLESS_REGISTRY MESH_CULLING_REGISTRY;
+[[vk::push_constant]] MESH_CULLING_PUSH_CONSTS PUSH_CONSTS;
 
 
 [vk::binding(0, 1)] RWStructuredBuffer<COMMON_INDIRECT_DRAW_CMD> MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV;
