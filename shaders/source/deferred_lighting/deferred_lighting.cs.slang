@@ -37,18 +37,12 @@ struct DIRECTIONAL_LIGHT
 struct LIGHTING_RESULT
 {
     float3 Lo;
-    // float3 D;
-    // float3 G;
-    // float3 F;
 };
 
 
 void operator+=(inout LIGHTING_RESULT a, in LIGHTING_RESULT b)
 {
     a.Lo += b.Lo;
-    // a.D += b.D;
-    // a.F += b.F;
-    // a.G += b.G;
 }
 
 
@@ -110,10 +104,10 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
     const float3 L = -lightDir;
     const float3 H = normalize(V + L);
 
-    const float VdotH = max(dot(V, H), 0.f);
-    const float NdotL = max(dot(gbuffer.normal, L), 0.f);
-    const float NdotH = max(dot(gbuffer.normal, H), 0.f);
-    const float NdotV = max(dot(gbuffer.normal, V), 0.f);
+    const float VdotH = saturate(dot(V, H));
+    const float NdotL = saturate(dot(gbuffer.normal, L));
+    const float NdotH = saturate(dot(gbuffer.normal, H));
+    const float NdotV = saturate(dot(gbuffer.normal, V));
 
     const float3 F = F_Schlick(VdotH, F0);
 
@@ -138,6 +132,24 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
 }
 
 
+LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in float3 F0)
+{
+    const float3 kS = F_SchlickRoughness(saturate(dot(gbuffer.normal, V)), F0, gbuffer.roughness);
+    const float3 kD = CalcDiffuseCoef(kS, gbuffer.metalness);
+
+    const SamplerState irrMapSampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    const float3 irradiance = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, irrMapSampler, gbuffer.normal, 0).rgb;
+
+    const float3 diffuse = irradiance * gbuffer.albedo;
+
+    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+
+    result.Lo = (kD * diffuse) * gbuffer.ao;
+
+    return result;
+}
+
+
 float3 ComputeLighting(in int2 pixelCoord)
 {
     const int3 texCoord = int3(pixelCoord, 0);
@@ -155,10 +167,10 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
     const float3 wpos = WPosFromDepth(uv, depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
 
-    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
-
     const float3 V = normalize(COMMON_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
+
+    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
 
     result += ProcessLight(gbuffer, V, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color, F0);
 
@@ -173,16 +185,9 @@ float3 ComputeLighting(in int2 pixelCoord)
         result += ptRes;
     }
 
-    const float3 kS = F_SchlickRoughness(max(dot(gbuffer.normal, V), 0.f), F0, gbuffer.roughness);
-    const float3 kD = CalcDiffuseCoef(kS, gbuffer.metalness);
+    result += ProcessIndirectLighting(gbuffer, V, F0);
 
-    const SamplerState irrMapSampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    const float3 irradiance = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, irrMapSampler, gbuffer.normal, 0).rgb;
-
-    const float3 diffuse = irradiance * gbuffer.albedo;
-    const float3 ambient = (kD * diffuse) * gbuffer.ao;
-
-    result.Lo = ambient + result.Lo + gbuffer.emissive;
+    result.Lo += gbuffer.emissive;
 
     return result.Lo;
 }
