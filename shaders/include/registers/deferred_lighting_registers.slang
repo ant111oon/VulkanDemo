@@ -12,5 +12,7 @@
 [vk::binding(5, 1)] Texture2D DEFERRED_LIGHTING_DEPTH;
 
 [vk::binding(6, 1)] TextureCube DEFERRED_LIGHTING_IRRADIANCE_MAP;
+[vk::binding(7, 1)] TextureCube DEFERRED_LIGHTING_PREFILTERED_ENV_MAP;
+[vk::binding(8, 1)] Texture2D DEFERRED_LIGHTING_BRDF_LUT;
 
 #endif

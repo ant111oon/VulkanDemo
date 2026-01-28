@@ -1,6 +1,8 @@
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 
+#include "math.slang"
+
 
 float SRGBToLinear(in float color)
 {
@@ -71,13 +73,13 @@ float3 UVFaceToDir(in float2 uv, in uint face)
         case 5: return normalize(float3(-uv.x,  uv.y, -1.f));  // -Z
     }
 
-    return float3(1.f, 0.f, 0.f);
+    return M3D_AXIS_X;
 }
 
 
 float3 PixelCoordToUV(in uint3 coord, in uint3 size)
 {
-    size = max(size, uint3(1, 1, 1));
+    size = max(size, ONEU3);
 
     // Pixel coords have (0, 0) in top left corner but UV (0, 0) is in bottom left corner
     return float3(coord.x, size.y - coord.y, coord.z) / size;

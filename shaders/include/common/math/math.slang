@@ -1,8 +1,6 @@
 #ifndef MATH_H
 #define MATH_H
 
-#include "utils.slang"
-
 
 static const float M3D_EPS     = 0.000001f;
 static const float M3D_PI      = 3.14159265359f;

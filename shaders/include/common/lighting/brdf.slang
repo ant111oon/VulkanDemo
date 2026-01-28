@@ -1,7 +1,7 @@
 #ifndef BRDF_FX
 #define BRDF_FX
 
-#include "common/math/math.slang"
+#include "common/math/utils.slang"
 
 
 static const float3 COMMON_DIELECTRIC_F0 = FLOAT3(0.04f);
@@ -10,6 +10,19 @@ static const float3 COMMON_DIELECTRIC_F0 = FLOAT3(0.04f);
 float3 CalcDiffuseCoef(in float3 specularCoef, in float metalness)
 {
     return (ONEF3 - specularCoef) * (1.f - metalness);
+}
+
+
+float CalcDirectK(in float roughness)
+{
+    const float k = roughness + 1.f;
+    return (k * k) / 8.f;
+}
+
+
+float CalcIndirectK(in float roughness)
+{
+    return (roughness * roughness) * 0.5f;
 }
 
 

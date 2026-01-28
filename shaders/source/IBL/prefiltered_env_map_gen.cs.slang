@@ -54,7 +54,7 @@ float3 PreFilterEnvMap(in float roughness, in float3 R)
 [numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (PUSH_CONSTS.MIP >= PREFILTERED_ENV_MAP_MIPS_COUNT) {
+    if (PUSH_CONSTS.MIP >= COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT) {
         return;
     }
 

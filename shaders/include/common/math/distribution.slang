@@ -1,7 +1,7 @@
 #ifndef MATH_DISTRIBUTION_H
 #define MATH_DISTRIBUTION_H
 
-#include "math.slang"
+#include "utils.slang"
 
 
 float RadicalInverse_VdC(in uint bits)

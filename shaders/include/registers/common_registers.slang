@@ -217,6 +217,7 @@ enum COMMON_DBG_TEX_IDX
 
 
 static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
+static const uint COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
 
 
 [vk::binding(0, 0)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];

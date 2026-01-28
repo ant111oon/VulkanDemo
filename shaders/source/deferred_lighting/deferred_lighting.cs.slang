@@ -110,11 +110,10 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
 
     const float3 F = F_Schlick(VdotH, F0);
 
-    const float3 D = NDF_GGX(NdotH, gbuffer.roughness);
+    const float D = NDF_GGX(NdotH, gbuffer.roughness);
 
-    float k = gbuffer.roughness + 1.f;
-    k = (k * k) / 8.f;
-    const float3 G = G_Smith(NdotV, NdotL, k);
+    const float k = CalcDirectK(gbuffer.roughness);
+    const float G = G_Smith(NdotV, NdotL, k);
 
     const float3 specular = (D * G * F) / max(4.f * NdotV * NdotL, M3D_EPS);
 
@@ -133,17 +132,30 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
 
 LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in float3 F0)
 {
-    const float3 kS = F_SchlickRoughness(saturate(dot(gbuffer.normal, V)), F0, gbuffer.roughness);
+    const float NdotV = saturate(dot(gbuffer.normal, V));
+
+    const float3 kS = F_SchlickRoughness(NdotV, F0, gbuffer.roughness);
     const float3 kD = CalcDiffuseCoef(kS, gbuffer.metalness);
 
-    const SamplerState irrMapSampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    const float3 irradiance = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, irrMapSampler, gbuffer.normal, 0).rgb;
+    const SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    const float3 irradiance = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, sampler, gbuffer.normal, 0).rgb;
 
     const float3 diffuse = irradiance * gbuffer.albedo;
 
+    const float3 R = reflect(-V, gbuffer.normal);
+
+    const float mip = gbuffer.roughness * (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+    const float3 prefilteredColor = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, sampler, R, mip).rgb;
+
+    const float2 brdf = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, sampler, float2(NdotV, gbuffer.roughness), 0).rg;
+
+    const float3 specular = prefilteredColor * (kS * brdf.x + brdf.y);
+
+    const float3 ambient = (kD * diffuse + specular) * gbuffer.ao;
+
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
 
-    result.Lo = (kD * diffuse) * gbuffer.ao;
+    result.Lo = ambient;
 
     return result;
 }

@@ -593,6 +593,12 @@ struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 };
 
 
+struct BRDF_INTEGRATION_PUSH_CONSTS
+{
+    glm::uvec4 PADDING;
+};
+
+
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
     "GBUFFER ALBEDO",
@@ -732,6 +738,8 @@ static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
 static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
 static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
+static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
+static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
@@ -742,6 +750,8 @@ static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
+
+static constexpr size_t BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
@@ -754,13 +764,14 @@ static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
-static constexpr size_t PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
-static_assert(PREFILTERED_ENV_MAP_MIPS_COUNT > 1);
+static constexpr size_t COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
+static_assert(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT > 1);
 
-constexpr float PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+constexpr float PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static constexpr glm::uvec2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = glm::uvec2(32);
 static constexpr glm::uvec2 PREFILTERED_ENV_MAP_OUTPUT_SIZE = glm::uvec2(128);
+static constexpr glm::uvec2 BRDF_INTEGRATION_OUTPUT_SIZE = glm::uvec2(512);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -819,8 +830,11 @@ static VkDescriptorSetLayout s_skyboxDescriptorSetLayout = VK_NULL_HANDLE;
 static VkDescriptorSet       s_irradianceMapGenDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_irradianceMapGenDescriptorSetLayout = VK_NULL_HANDLE;
 
-static std::array<VkDescriptorSet, PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvGenDescriptorSets = {};
+static std::array<VkDescriptorSet, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvGenDescriptorSets = {};
 static VkDescriptorSetLayout s_prefilteredEnvMapGenDescriptorSetLayout = VK_NULL_HANDLE;
+
+static VkDescriptorSet       s_BRDFIntegrationLUTGenDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_BRDFIntegrationLUTGenDescriptorSetLayout = VK_NULL_HANDLE;
 
 
 static VkPipelineLayout s_meshCullingPipelineLayout = VK_NULL_HANDLE;
@@ -846,6 +860,9 @@ static VkPipeline       s_irradianceMapGenPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_prefilteredEnvMapGenPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_prefilteredEnvMapGenPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_BRDFIntegrationLUTGenPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_BRDFIntegrationLUTGenPipeline = VK_NULL_HANDLE;
 
 
 static vkn::Buffer s_vertexBuffer;
@@ -893,7 +910,11 @@ static vkn::TextureView s_irradianceMapTextureViewRW;
 
 static vkn::Texture     s_prefilteredEnvMapTexture;
 static vkn::TextureView s_prefilteredEnvMapTextureView;
-static std::array<vkn::TextureView, PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvMapTextureViewRWs;
+static std::array<vkn::TextureView, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvMapTextureViewRWs;
+
+static vkn::Texture     s_brdfLUTTexture;
+static vkn::TextureView s_brdfLUTTextureView;
+static vkn::TextureView s_brdfLUTTextureViewRW;
 
 static std::array<vkn::Texture, GBUFFER_RT_COUNT>     s_gbufferRTs;
 static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
@@ -1894,60 +1915,150 @@ static void CreateIBLResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::TextureCreateInfo createInfo = {};
-    createInfo.pDevice = &s_vkDevice;
-    createInfo.type = VK_IMAGE_TYPE_2D;
-    createInfo.extent = { IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x, IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y, 1 };
-    createInfo.format = s_skyboxTexture.GetFormat();
-    createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
-    createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    createInfo.mipLevels = 1;
-    createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
-    createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    createInfo.pAllocInfo = &allocInfo;
-
-    s_irradianceMapTexture.Create(createInfo).SetDebugName("COMMON_IRRADIANCE_MAP");
-
-
-    createInfo.extent = { PREFILTERED_ENV_MAP_OUTPUT_SIZE.x, PREFILTERED_ENV_MAP_OUTPUT_SIZE.y, 1 };
-    createInfo.mipLevels = PREFILTERED_ENV_MAP_MIPS_COUNT;
+    {
+        vkn::TextureCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.type = VK_IMAGE_TYPE_2D;
+        createInfo.extent = { IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x, IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y, 1 };
+        createInfo.format = s_skyboxTexture.GetFormat();
+        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
+        createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        createInfo.mipLevels = 1;
+        createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
+        createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        createInfo.pAllocInfo = &allocInfo;
     
-    s_prefilteredEnvMapTexture.Create(createInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP");
+        s_irradianceMapTexture.Create(createInfo).SetDebugName("COMMON_IRRADIANCE_MAP");
+    }
 
+    {
+        vkn::TextureCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.type = VK_IMAGE_TYPE_2D;
+        createInfo.extent = { PREFILTERED_ENV_MAP_OUTPUT_SIZE.x, PREFILTERED_ENV_MAP_OUTPUT_SIZE.y, 1 };
+        createInfo.format = s_skyboxTexture.GetFormat();
+        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
+        createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        createInfo.mipLevels = COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT;
+        createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
+        createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        createInfo.pAllocInfo = &allocInfo;
+        
+        s_prefilteredEnvMapTexture.Create(createInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP");
+    }
 
-    vkn::TextureViewCreateInfo viewCreateInfo = {};
-    viewCreateInfo.pOwner = &s_irradianceMapTexture;
-    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
-    viewCreateInfo.format = createInfo.format;
-    viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-    viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewCreateInfo.subresourceRange.baseMipLevel = 0;
-    viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    viewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    {
+        vkn::TextureCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.type = VK_IMAGE_TYPE_2D;
+        createInfo.extent = { BRDF_INTEGRATION_OUTPUT_SIZE.x, BRDF_INTEGRATION_OUTPUT_SIZE.y, 1 };
+        createInfo.format = VK_FORMAT_R16G16_SFLOAT;
+        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+        createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        createInfo.mipLevels = 1;
+        createInfo.arrayLayers = 1;
+        createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        createInfo.pAllocInfo = &allocInfo;
 
-    s_irradianceMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW");
+        s_brdfLUTTexture.Create(createInfo).SetDebugName("COMMON_BRDF_LUT");
+    }
 
-    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-
-    s_irradianceMapTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW_RW");
-
-
-    viewCreateInfo.pOwner = &s_prefilteredEnvMapTexture;
-    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_irradianceMapTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewCreateInfo.format = s_skyboxTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     
-    s_prefilteredEnvMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW");
+        s_irradianceMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW");
+    }
 
-    viewCreateInfo.format = createInfo.format;
-    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    viewCreateInfo.subresourceRange.levelCount = 1;
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_irradianceMapTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        viewCreateInfo.format = s_skyboxTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        
+        s_irradianceMapTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW_RW");
+    }
 
-    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-        viewCreateInfo.subresourceRange.baseMipLevel = mip;
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_prefilteredEnvMapTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewCreateInfo.format = s_skyboxTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        
+        s_prefilteredEnvMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW");
+    }
+    
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_prefilteredEnvMapTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        viewCreateInfo.format = s_skyboxTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-        s_prefilteredEnvMapTextureViewRWs[mip].Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_%zu", mip);
+        for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+            viewCreateInfo.subresourceRange.baseMipLevel = mip;
+            viewCreateInfo.subresourceRange.levelCount = 1;
+
+            s_prefilteredEnvMapTextureViewRWs[mip].Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_%zu", mip);
+        }
+    }
+
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_brdfLUTTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+        viewCreateInfo.format = s_brdfLUTTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        
+        s_brdfLUTTextureView.Create(viewCreateInfo).SetDebugName("COMMON_BRDF_LUT_VIEW");
+    }
+
+    {
+        vkn::TextureViewCreateInfo viewCreateInfo = {};
+        viewCreateInfo.pOwner = &s_brdfLUTTexture;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
+        viewCreateInfo.format = s_brdfLUTTexture.GetFormat();
+        viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewCreateInfo.subresourceRange.baseMipLevel = 0;
+        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        
+        s_brdfLUTTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_BRDF_LUT_VIEW_RW");
     }
 }
 
@@ -2077,6 +2188,8 @@ static void CreateDeferredLightingDescriptorSetLayout()
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2137,23 +2250,37 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
 }
 
 
+static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_BRDFIntegrationLUTGenDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .Build();
+
+    CORE_ASSERT(s_BRDFIntegrationLUTGenDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
 static void AllocateDescriptorSets()
 {
     vkn::DescriptorSetAllocator allocator;
 
     std::vector descriptorSetsPairs = {
-        std::make_pair(&s_commonDescriptorSetLayout,            &s_commonDescriptorSet),
-        std::make_pair(&s_meshCullingDescriptorSetLayout,       &s_meshCullingDescriptorSet),
-        std::make_pair(&s_zpassDescriptorSetLayout,             &s_zpassDescriptorSet),
-        std::make_pair(&s_gbufferRenderDescriptorSetLayout,     &s_gbufferRenderDescriptorSet),
-        std::make_pair(&s_deferredLightingDescriptorSetLayout,  &s_deferredLightingDescriptorSet),
-        std::make_pair(&s_postProcessingDescriptorSetLayout,    &s_postProcessingDescriptorSet),
-        std::make_pair(&s_skyboxDescriptorSetLayout,            &s_skyboxDescriptorSet),
-        std::make_pair(&s_irradianceMapGenDescriptorSetLayout,  &s_irradianceMapGenDescriptorSet),
+        std::make_pair(&s_commonDescriptorSetLayout,                &s_commonDescriptorSet),
+        std::make_pair(&s_meshCullingDescriptorSetLayout,           &s_meshCullingDescriptorSet),
+        std::make_pair(&s_zpassDescriptorSetLayout,                 &s_zpassDescriptorSet),
+        std::make_pair(&s_gbufferRenderDescriptorSetLayout,         &s_gbufferRenderDescriptorSet),
+        std::make_pair(&s_deferredLightingDescriptorSetLayout,      &s_deferredLightingDescriptorSet),
+        std::make_pair(&s_skyboxDescriptorSetLayout,                &s_skyboxDescriptorSet),
+        std::make_pair(&s_postProcessingDescriptorSetLayout,        &s_postProcessingDescriptorSet),
+        std::make_pair(&s_irradianceMapGenDescriptorSetLayout,      &s_irradianceMapGenDescriptorSet),
+        std::make_pair(&s_BRDFIntegrationLUTGenDescriptorSetLayout, &s_BRDFIntegrationLUTGenDescriptorSet),
     };
 
     for (size_t i = 0; i < s_prefilteredEnvGenDescriptorSets.size(); ++i) {
-        descriptorSetsPairs.emplace_back(std::make_pair(&s_prefilteredEnvMapGenDescriptorSetLayout,  &s_prefilteredEnvGenDescriptorSets[i]));
+        descriptorSetsPairs.emplace_back(std::make_pair(&s_prefilteredEnvMapGenDescriptorSetLayout, &s_prefilteredEnvGenDescriptorSets[i]));
     }
 
     std::vector<VkDescriptorSet> descriptorSets(descriptorSetsPairs.size());
@@ -2188,6 +2315,7 @@ static void CreateDesriptorSets()
     CreateSkyboxDescriptorSetLayout();
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
+    CreateBRDFIntegrationLUTGenDescriptorSetLayout();
 
     AllocateDescriptorSets();
 }
@@ -2299,6 +2427,20 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
         .Build();
 
     CORE_ASSERT(s_prefilteredEnvMapGenPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreateBRDFIntegrationLUTGenPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_BRDFIntegrationLUTGenPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BRDF_INTEGRATION_PUSH_CONSTS))
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_BRDFIntegrationLUTGenDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_BRDFIntegrationLUTGenPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -2595,6 +2737,25 @@ static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
 }
 
 
+static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
+
+    vkn::ComputePipelineBuilder builder;
+
+    s_BRDFIntegrationLUTGenPipeline = builder
+        .SetShader(shaderModule, "main")
+        .SetLayout(s_BRDFIntegrationLUTGenPipelineLayout)
+        .Build();
+    
+    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
+
+    CORE_ASSERT(s_BRDFIntegrationLUTGenPipeline != VK_NULL_HANDLE);
+}
+
+
 static void CreatePipelines()
 {
     CreateMeshCullingPipelineLayout();
@@ -2605,6 +2766,7 @@ static void CreatePipelines()
     CreateSkyboxPipelineLayout();
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
+    CreateBRDFIntegrationLUTGenPipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
@@ -2613,6 +2775,7 @@ static void CreatePipelines()
     CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
     CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
     CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
+    CreateBRDFIntegrationLUTGenPipeline("shaders/bin/brdf_integration_gen.cs.spv");
 }
 
 
@@ -3293,6 +3456,36 @@ static void WriteDeferredLightingDescriptorSet()
 
     descWrites.emplace_back(irradianceWrite);
 
+    VkDescriptorImageInfo prefiltImageInfo = {};
+    prefiltImageInfo.imageView = s_prefilteredEnvMapTextureView.Get();
+    prefiltImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet prefiltImageWrite = {};
+    prefiltImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    prefiltImageWrite.dstSet = s_deferredLightingDescriptorSet;
+    prefiltImageWrite.dstBinding = DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT;
+    prefiltImageWrite.dstArrayElement = 0;
+    prefiltImageWrite.descriptorCount = 1;
+    prefiltImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    prefiltImageWrite.pImageInfo = &prefiltImageInfo;
+
+    descWrites.emplace_back(prefiltImageWrite);
+
+    VkDescriptorImageInfo brdfLUTInfo = {};
+    brdfLUTInfo.imageView = s_brdfLUTTextureView.Get();
+    brdfLUTInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet brdfLUTWrite = {};
+    brdfLUTWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    brdfLUTWrite.dstSet = s_deferredLightingDescriptorSet;
+    brdfLUTWrite.dstBinding = DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT;
+    brdfLUTWrite.dstArrayElement = 0;
+    brdfLUTWrite.descriptorCount = 1;
+    brdfLUTWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    brdfLUTWrite.pImageInfo = &brdfLUTInfo;
+
+    descWrites.emplace_back(brdfLUTWrite);
+
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
@@ -3388,11 +3581,11 @@ static void WritePrefilteredEnvMapGenDescriptorSets()
     envMapTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     envMapTexInfo.imageView = s_skyboxTextureView.Get();
 
-    std::array<VkDescriptorImageInfo, PREFILTERED_ENV_MAP_MIPS_COUNT> prefiltEnvMapMipsInfos = {};
+    std::array<VkDescriptorImageInfo, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> prefiltEnvMapMipsInfos = {};
 
     VkWriteDescriptorSet write = {};
 
-    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+    for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
         VkDescriptorSet set = s_prefilteredEnvGenDescriptorSets[mip];
         
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3418,6 +3611,29 @@ static void WritePrefilteredEnvMapGenDescriptorSets()
         descWrites.emplace_back(write);
     }
     
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
+static void WriteBRDFIntegrationLUTGenDescriptorSet()
+{
+    std::array<VkWriteDescriptorSet, 1> descWrites;
+
+    VkDescriptorImageInfo imageInfo = {};
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.imageView = s_brdfLUTTextureViewRW.Get();
+
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_BRDFIntegrationLUTGenDescriptorSet;
+    write.dstBinding = BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.pImageInfo = &imageInfo;
+
+    descWrites[0] = write;
+
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
@@ -3612,6 +3828,7 @@ static void WriteDescriptorSets()
     WriteSkyboxDescriptorSet();
     WriteIrradianceMapGenDescriptorSet();
     WritePrefilteredEnvMapGenDescriptorSets();
+    WriteBRDFIntegrationLUTGenDescriptorSet();
 }
 
 
@@ -4542,12 +4759,12 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         s_prefilteredEnvMapTexture.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT,
         0,
-        PREFILTERED_ENV_MAP_MIPS_COUNT,
+        COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT,
         0,
         CUBEMAP_FACE_COUNT
     );
 
-    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+    for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
         VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_prefilteredEnvGenDescriptorSets[mip] };
         vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_prefilteredEnvMapGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
@@ -4572,12 +4789,52 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         s_prefilteredEnvMapTexture.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT,
         0,
-        PREFILTERED_ENV_MAP_MIPS_COUNT,
+        COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT,
         0,
         CUBEMAP_FACE_COUNT
     );
 
     CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", 165, 42, 42, 255);
+    Timer timer;
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_BRDFIntegrationLUTGenPipeline);
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_2_NONE,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_NONE,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        s_brdfLUTTexture.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_BRDFIntegrationLUTGenDescriptorSet };
+    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_BRDFIntegrationLUTGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+    cmdBuffer.CmdDispatch((uint32_t)ceil(BRDF_INTEGRATION_OUTPUT_SIZE.x / 32.f), (uint32_t)ceil(BRDF_INTEGRATION_OUTPUT_SIZE.x / 32.f), 1U);
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        s_brdfLUTTexture.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT
+    );
+
+    CORE_LOG_INFO("BRDF LUT generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5558,6 +5815,7 @@ int main(int argc, char* argv[])
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         PrecomputeIBLIrradianceMap(cmdBuffer);
         PrecomputeIBLPrefilteredEnvMap(cmdBuffer);
+        PrecomputeIBLBRDFIntergrationLUT(cmdBuffer);
     });
 
     s_cpuTexturesData.clear();
@@ -5598,6 +5856,9 @@ int main(int argc, char* argv[])
 
     vkDestroyPipeline(s_vkDevice.Get(), s_prefilteredEnvMapGenPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenPipelineLayout, nullptr);
+    
+    vkDestroyPipeline(s_vkDevice.Get(), s_BRDFIntegrationLUTGenPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_BRDFIntegrationLUTGenPipelineLayout, nullptr);
 
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_zpassDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_meshCullingDescriptorSetLayout, nullptr);
@@ -5607,6 +5868,7 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_skyboxDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_irradianceMapGenDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_BRDFIntegrationLUTGenDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);
