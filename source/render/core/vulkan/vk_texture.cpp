@@ -200,6 +200,8 @@ namespace vkn
         std::swap(m_type, image.m_type);
         std::swap(m_extent, image.m_extent);
         std::swap(m_format, image.m_format);
+        std::swap(m_mipCount, image.m_mipCount);
+        std::swap(m_layersCount, image.m_layersCount);
 
         std::swap(m_pDevice, image.m_pDevice);
 
@@ -256,6 +258,8 @@ namespace vkn
         m_type = info.type;
         m_extent = info.extent;
         m_format = info.format;
+        m_mipCount = info.mipLevels;
+        m_layersCount = info.arrayLayers;
 
         return *this;
     }
@@ -278,6 +282,8 @@ namespace vkn
         m_type = {};
         m_extent = {};
         m_format = {};
+        m_mipCount = 1;
+        m_layersCount = 1;
 
         Object::Destroy();
 

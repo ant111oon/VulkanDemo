@@ -184,6 +184,9 @@ namespace vkn
         const uint32_t GetSizeY() const { return GetSize().height; }
         const uint32_t GetSizeZ() const { return GetSize().depth; }
 
+        const uint32_t GetMipCount() const { return m_mipCount; }
+        const uint32_t GetLayersCount() const { return m_layersCount; }
+
         template <typename... Args>
         Texture& SetDebugName(const char* pFmt, Args&&... args)
         {
@@ -202,6 +205,9 @@ namespace vkn
         VkImageType m_type = {};
         VkExtent3D m_extent = {};
         VkFormat m_format = {};
+
+        uint32_t m_mipCount = 1;
+        uint32_t m_layersCount = 1;
     };
 
 

@@ -585,6 +585,14 @@ struct IRRADIANCE_MAP_PUSH_CONSTS
 };
 
 
+struct PREFILTERED_ENV_MAP_PUSH_CONSTS
+{
+    glm::uvec2 ENV_MAP_FACE_SIZE;
+    glm::uint  MIP;
+    glm::uint  PADDING;
+};
+
+
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
     "GBUFFER ALBEDO",
@@ -732,6 +740,9 @@ static constexpr size_t SKYBOX_TEXTURE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
+static constexpr size_t PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
+static constexpr size_t PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
+
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
@@ -743,7 +754,13 @@ static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
+static constexpr size_t PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
+static_assert(PREFILTERED_ENV_MAP_MIPS_COUNT > 1);
+
+constexpr float PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+
 static constexpr glm::uvec2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = glm::uvec2(32);
+static constexpr glm::uvec2 PREFILTERED_ENV_MAP_OUTPUT_SIZE = glm::uvec2(128);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -758,7 +775,7 @@ static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
 
 static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
-static vkn::Device&         s_vkDevice = vkn::GetDevice();
+static vkn::Device& s_vkDevice = vkn::GetDevice();
 
 static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
 
@@ -767,7 +784,7 @@ static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 static vkn::CmdPool s_commonCmdPool;
 
 static vkn::CmdBuffer s_immediateSubmitCmdBuffer;
-static vkn::Fence s_immediateSubmitFinishedFence;
+static vkn::Fence     s_immediateSubmitFinishedFence;
 
 static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
 static vkn::Semaphore s_presentFinishedSemaphore;
@@ -802,6 +819,9 @@ static VkDescriptorSetLayout s_skyboxDescriptorSetLayout = VK_NULL_HANDLE;
 static VkDescriptorSet       s_irradianceMapGenDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_irradianceMapGenDescriptorSetLayout = VK_NULL_HANDLE;
 
+static std::array<VkDescriptorSet, PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvGenDescriptorSets = {};
+static VkDescriptorSetLayout s_prefilteredEnvMapGenDescriptorSetLayout = VK_NULL_HANDLE;
+
 
 static VkPipelineLayout s_meshCullingPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_meshCullingPipeline = VK_NULL_HANDLE;
@@ -823,6 +843,9 @@ static VkPipeline       s_skyboxPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_irradianceMapGenPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_irradianceMapGenPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_prefilteredEnvMapGenPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_prefilteredEnvMapGenPipeline = VK_NULL_HANDLE;
 
 
 static vkn::Buffer s_vertexBuffer;
@@ -847,16 +870,6 @@ static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
 static std::vector<vkn::Sampler>     s_commonSamplers;
 
-static std::array<vkn::Texture, (size_t)COMMON_DBG_TEX_IDX::COUNT>     s_commonDbgTextures;
-static std::array<vkn::TextureView, (size_t)COMMON_DBG_TEX_IDX::COUNT> s_commonDbgTextureViews;
-
-static vkn::Texture s_skyboxTexture;
-static vkn::TextureView s_skyboxTextureView;
-
-static vkn::Texture s_irradianceMapTexture;
-static vkn::TextureView s_irradianceMapTextureView;
-static vkn::TextureView s_irradianceMapTextureViewRW;
-
 static std::vector<Vertex> s_cpuVertexBuffer;
 static std::vector<IndexType> s_cpuIndexBuffer;
 
@@ -868,13 +881,27 @@ static std::vector<glm::float4x4>    s_cpuTransformData;
 static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
 
-static std::array<vkn::Texture, GBUFFER_RT_COUNT> s_gbufferRTs;
+static std::array<vkn::Texture, (size_t)COMMON_DBG_TEX_IDX::COUNT>     s_commonDbgTextures;
+static std::array<vkn::TextureView, (size_t)COMMON_DBG_TEX_IDX::COUNT> s_commonDbgTextureViews;
+
+static vkn::Texture     s_skyboxTexture;
+static vkn::TextureView s_skyboxTextureView;
+
+static vkn::Texture     s_irradianceMapTexture;
+static vkn::TextureView s_irradianceMapTextureView;
+static vkn::TextureView s_irradianceMapTextureViewRW;
+
+static vkn::Texture     s_prefilteredEnvMapTexture;
+static vkn::TextureView s_prefilteredEnvMapTextureView;
+static std::array<vkn::TextureView, PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvMapTextureViewRWs;
+
+static std::array<vkn::Texture, GBUFFER_RT_COUNT>     s_gbufferRTs;
 static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
 
-static vkn::Texture s_commonDepthRT;
+static vkn::Texture     s_commonDepthRT;
 static vkn::TextureView s_commonDepthRTView;
 
-static vkn::Texture s_colorRT;
+static vkn::Texture     s_colorRT;
 static vkn::TextureView s_colorRTView;
 
 static eng::Camera s_camera;
@@ -1623,6 +1650,98 @@ static void ResizeDynamicRenderTargets()
 }
 
 
+static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, const TextureLoadData& loadData, uint32_t layerIdx = 0)
+{
+    CORE_ASSERT(layerIdx < texture.GetLayersCount());
+
+    int32_t mipWidth  = texture.GetSizeX();
+    int32_t mipHeight = texture.GetSizeY();
+
+    for (uint32_t mip = 1; mip < loadData.GetMipsCount(); ++mip) {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_ACCESS_2_TRANSFER_READ_BIT,
+            texture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            mip - 1,
+            1,
+            layerIdx,
+            1
+        );
+
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_ACCESS_2_NONE,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            texture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            mip,
+            1,
+            layerIdx,
+            1
+        );
+
+        VkImageBlit blit = {};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = mip - 1;
+        blit.srcSubresource.baseArrayLayer = layerIdx;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = mip;
+        blit.dstSubresource.baseArrayLayer = layerIdx;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[1] = {
+            mipWidth  > 1 ? mipWidth  / 2 : 1,
+            mipHeight > 1 ? mipHeight / 2 : 1,
+            1
+        };
+
+        vkCmdBlitImage(cmdBuffer.Get(),
+            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit,
+            VK_FILTER_LINEAR
+        );
+
+        if (mipWidth > 1) {
+            mipWidth /= 2;
+        }
+
+        if (mipHeight > 1) {
+            mipHeight /= 2;
+        }
+    }
+
+    // Add this barrier to get all mips in same VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL layout
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        texture.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        loadData.GetMipsCount() - 1,
+        1,
+        layerIdx,
+        1
+    );
+}
+
+
 static void CreateSkybox(std::span<fs::path> faceDataPaths)
 {
     Timer timer;
@@ -1637,6 +1756,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
     const uint32_t faceWidth = faceLoadDatas[0].GetWidth();
     const uint32_t faceHeight = faceLoadDatas[0].GetHeight();
+    const uint32_t mipsCount = faceLoadDatas[0].GetMipsCount();
     const VkFormat format = faceLoadDatas[0].GetFormat();
 
 #ifdef ENG_ASSERT_ENABLED
@@ -1644,6 +1764,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
         CORE_ASSERT_MSG(faceWidth == data.GetWidth(), "Skybox face \'%s\' width is not the same as others", data.GetName());
         CORE_ASSERT_MSG(faceHeight == data.GetHeight(), "Skybox face \'%s\' width is not the same as others", data.GetName());
         CORE_ASSERT_MSG(format == data.GetFormat(), "Skybox face \'%s\' format is not the same as others", data.GetName());
+        CORE_ASSERT_MSG(mipsCount == data.GetMipsCount(), "Skybox face \'%s\' mip count is not the same as others", data.GetName());
     }
 #endif
 
@@ -1656,10 +1777,10 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     createInfo.type = VK_IMAGE_TYPE_2D;
     createInfo.extent = { faceWidth, faceHeight, 1 };
     createInfo.format = format;
-    createInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
+    createInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
     createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    createInfo.mipLevels = 1;
+    createInfo.mipLevels = mipsCount;
     createInfo.arrayLayers = CUBEMAP_FACE_COUNT;
     createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -1716,7 +1837,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
                     s_skyboxTexture.Get(),
                     VK_IMAGE_ASPECT_COLOR_BIT,
                     0,
-                    VK_REMAINING_MIP_LEVELS,
+                    1,
                     faceIdx,
                     1
                 );
@@ -1741,25 +1862,27 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
                 copyInfo.pRegions = &texRegion;
 
                 vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
-
-                CmdPipelineImageBarrier(
-                    cmdBuffer,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    VK_ACCESS_2_SHADER_READ_BIT,
-                    s_skyboxTexture.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT,
-                    0,
-                    VK_REMAINING_MIP_LEVELS,
-                    faceIdx,
-                    1
-                );
             }
         });
     }
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        for (uint32_t layerIdx = 0; layerIdx < s_skyboxTexture.GetLayersCount(); ++layerIdx) {
+            GenerateTextureMipmaps(cmdBuffer, s_skyboxTexture, faceLoadDatas[layerIdx], layerIdx);
+        }
+
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            s_skyboxTexture.Get(),
+            VK_IMAGE_ASPECT_COLOR_BIT
+        );
+    });
 
     CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -1787,6 +1910,13 @@ static void CreateIBLResources()
 
     s_irradianceMapTexture.Create(createInfo).SetDebugName("COMMON_IRRADIANCE_MAP");
 
+
+    createInfo.extent = { PREFILTERED_ENV_MAP_OUTPUT_SIZE.x, PREFILTERED_ENV_MAP_OUTPUT_SIZE.y, 1 };
+    createInfo.mipLevels = PREFILTERED_ENV_MAP_MIPS_COUNT;
+    
+    s_prefilteredEnvMapTexture.Create(createInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP");
+
+
     vkn::TextureViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.pOwner = &s_irradianceMapTexture;
     viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
@@ -1803,6 +1933,22 @@ static void CreateIBLResources()
     viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
     s_irradianceMapTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW_RW");
+
+
+    viewCreateInfo.pOwner = &s_prefilteredEnvMapTexture;
+    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_CUBE;
+    
+    s_prefilteredEnvMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW");
+
+    viewCreateInfo.format = createInfo.format;
+    viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    viewCreateInfo.subresourceRange.levelCount = 1;
+
+    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+        viewCreateInfo.subresourceRange.baseMipLevel = mip;
+
+        s_prefilteredEnvMapTextureViewRWs[mip].Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_%zu", mip);
+    }
 }
 
 
@@ -1839,7 +1985,7 @@ static void CreateCommonDescriptorPool()
 
     builder
         // .SetFlags(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT)
-        .SetMaxDescriptorSetsCount(10);
+        .SetMaxDescriptorSetsCount(25);
         
     s_commonDescriptorSetPool = builder
         .AddResource(VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT)
@@ -1977,11 +2123,25 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
 }
 
 
+static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_prefilteredEnvMapGenDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .Build();
+
+    CORE_ASSERT(s_prefilteredEnvMapGenDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
 static void AllocateDescriptorSets()
 {
     vkn::DescriptorSetAllocator allocator;
 
-    std::array descriptorSetsPairs = {
+    std::vector descriptorSetsPairs = {
         std::make_pair(&s_commonDescriptorSetLayout,            &s_commonDescriptorSet),
         std::make_pair(&s_meshCullingDescriptorSetLayout,       &s_meshCullingDescriptorSet),
         std::make_pair(&s_zpassDescriptorSetLayout,             &s_zpassDescriptorSet),
@@ -1992,7 +2152,11 @@ static void AllocateDescriptorSets()
         std::make_pair(&s_irradianceMapGenDescriptorSetLayout,  &s_irradianceMapGenDescriptorSet),
     };
 
-    std::array<VkDescriptorSet, descriptorSetsPairs.size()> descriptorSets;
+    for (size_t i = 0; i < s_prefilteredEnvGenDescriptorSets.size(); ++i) {
+        descriptorSetsPairs.emplace_back(std::make_pair(&s_prefilteredEnvMapGenDescriptorSetLayout,  &s_prefilteredEnvGenDescriptorSets[i]));
+    }
+
+    std::vector<VkDescriptorSet> descriptorSets(descriptorSetsPairs.size());
 
     allocator.SetPool(s_commonDescriptorSetPool);
 
@@ -2023,6 +2187,7 @@ static void CreateDesriptorSets()
     CreatePostProcessingDescriptorSetLayout();
     CreateSkyboxDescriptorSetLayout();
     CreateIrradianceMapGenDescriptorSetLayout();
+    CreatePrefilteredEnvMapGenDescriptorSetLayout();
 
     AllocateDescriptorSets();
 }
@@ -2120,6 +2285,20 @@ static void CreateIrradianceMapGenPipelineLayout()
         .Build();
 
     CORE_ASSERT(s_irradianceMapGenPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreatePrefilteredEnvMapGenPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_prefilteredEnvMapGenPipelineLayout = builder
+        .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS))
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_prefilteredEnvMapGenDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_prefilteredEnvMapGenPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -2397,6 +2576,25 @@ static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
 }
 
 
+static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
+
+    vkn::ComputePipelineBuilder builder;
+
+    s_prefilteredEnvMapGenPipeline = builder
+        .SetShader(shaderModule, "main")
+        .SetLayout(s_prefilteredEnvMapGenPipelineLayout)
+        .Build();
+    
+    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
+    shaderModule = VK_NULL_HANDLE;
+
+    CORE_ASSERT(s_prefilteredEnvMapGenPipeline != VK_NULL_HANDLE);
+}
+
+
 static void CreatePipelines()
 {
     CreateMeshCullingPipelineLayout();
@@ -2406,6 +2604,7 @@ static void CreatePipelines()
     CreatePostProcessingPipelineLayout();
     CreateSkyboxPipelineLayout();
     CreateIrradianceMapGenPipelineLayout();
+    CreatePrefilteredEnvMapGenPipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
@@ -2413,6 +2612,7 @@ static void CreatePipelines()
     CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
     CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
     CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
+    CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
 }
 
 
@@ -3127,6 +3327,8 @@ static void WriteSkyboxDescriptorSet()
     VkDescriptorImageInfo skyboxTexInfo = {};
     skyboxTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     skyboxTexInfo.imageView = s_skyboxTextureView.Get();
+    // skyboxTexInfo.imageView = s_prefilteredEnvMapTextureView.Get();
+    // skyboxTexInfo.imageView = s_irradianceMapTextureView.Get();
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3174,6 +3376,48 @@ static void WriteIrradianceMapGenDescriptorSet()
 
     descWrites[1] = write;
 
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
+static void WritePrefilteredEnvMapGenDescriptorSets()
+{
+    std::vector<VkWriteDescriptorSet> descWrites;
+
+    VkDescriptorImageInfo envMapTexInfo = {};
+    envMapTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    envMapTexInfo.imageView = s_skyboxTextureView.Get();
+
+    std::array<VkDescriptorImageInfo, PREFILTERED_ENV_MAP_MIPS_COUNT> prefiltEnvMapMipsInfos = {};
+
+    VkWriteDescriptorSet write = {};
+
+    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+        VkDescriptorSet set = s_prefilteredEnvGenDescriptorSets[mip];
+        
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = set;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        
+        write.dstBinding = PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write.pImageInfo = &envMapTexInfo;
+
+        descWrites.emplace_back(write);
+
+        VkDescriptorImageInfo& mipInfo = prefiltEnvMapMipsInfos[mip];
+
+        mipInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        mipInfo.imageView = s_prefilteredEnvMapTextureViewRWs[mip].Get();
+
+        write.dstBinding = PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write.pImageInfo = &mipInfo;
+
+        descWrites.emplace_back(write);
+    }
+    
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
@@ -3367,6 +3611,7 @@ static void WriteDescriptorSets()
     WritePostProcessingDescriptorSet();
     WriteSkyboxDescriptorSet();
     WriteIrradianceMapGenDescriptorSet();
+    WritePrefilteredEnvMapGenDescriptorSets();
 }
 
 
@@ -3822,76 +4067,6 @@ static void UploadGPUMeshData()
 }
 
 
-static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, const TextureLoadData& loadData)
-{
-    int32_t mipWidth  = texture.GetSizeX();
-    int32_t mipHeight = texture.GetSizeY();
-
-    for (uint32_t i = 1; i < loadData.GetMipsCount(); ++i)
-    {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            VK_ACCESS_2_TRANSFER_READ_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            i - 1,
-            1
-        );
-
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            i,
-            1
-        );
-
-        VkImageBlit blit = {};
-        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.srcSubresource.mipLevel = i - 1;
-        blit.srcSubresource.baseArrayLayer = 0;
-        blit.srcSubresource.layerCount = 1;
-        blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
-
-        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.dstSubresource.mipLevel = i;
-        blit.dstSubresource.baseArrayLayer = 0;
-        blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[1] = {
-            mipWidth  > 1 ? mipWidth  / 2 : 1,
-            mipHeight > 1 ? mipHeight / 2 : 1,
-            1
-        };
-
-        vkCmdBlitImage(cmdBuffer.Get(),
-            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit,
-            VK_FILTER_LINEAR
-        );
-
-        if (mipWidth > 1) {
-            mipWidth /= 2;
-        }
-
-        if (mipHeight > 1) {
-            mipHeight /= 2;
-        }
-    }
-}
-
-
 static void UploadGPUTextureData()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Texture_Data", 255, 255, 0, 255);
@@ -4004,7 +4179,7 @@ static void UploadGPUTextureData()
 
                 GenerateTextureMipmaps(cmdBuffer, texture, texData);
 
-                for (uint32_t i = 1; i < texData.GetMipsCount(); ++i) {
+                for (uint32_t i = 0; i < texData.GetMipsCount(); ++i) {
                     CmdPipelineImageBarrier(
                         cmdBuffer,
                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -4015,24 +4190,10 @@ static void UploadGPUTextureData()
                         VK_ACCESS_2_SHADER_READ_BIT,
                         texture.Get(),
                         VK_IMAGE_ASPECT_COLOR_BIT,
-                        i - 1,
+                        i,
                         1
                     );
                 }
-
-                CmdPipelineImageBarrier(
-                    cmdBuffer,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    VK_ACCESS_2_SHADER_READ_BIT,
-                    texture.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT,
-                    texData.GetMipsCount() - 1,
-                    1
-                );
             }
         });
     }
@@ -4299,7 +4460,7 @@ void PresentImage(uint32_t imageIndex)
 
 static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 100, 100, 100, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 165, 42, 42, 255);
     Timer timer;
 
     for (uint32_t faceIdx = 0; faceIdx < CUBEMAP_FACE_COUNT; ++faceIdx) {
@@ -4356,6 +4517,67 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     }
 
     CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", 165, 42, 42, 255);
+    Timer timer;
+
+    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_prefilteredEnvMapGenPipeline);
+
+    PREFILTERED_ENV_MAP_PUSH_CONSTS pushConsts = {};
+    pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
+    pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_2_NONE,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_NONE,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        s_prefilteredEnvMapTexture.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0,
+        PREFILTERED_ENV_MAP_MIPS_COUNT,
+        0,
+        CUBEMAP_FACE_COUNT
+    );
+
+    for (size_t mip = 0; mip < PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+        VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_prefilteredEnvGenDescriptorSets[mip] };
+        vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_prefilteredEnvMapGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+        pushConsts.MIP = mip;
+
+        vkCmdPushConstants(cmdBuffer.Get(), s_prefilteredEnvMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
+
+        const uint32_t sizeX = PREFILTERED_ENV_MAP_OUTPUT_SIZE.x >> mip;
+        const uint32_t sizeY = PREFILTERED_ENV_MAP_OUTPUT_SIZE.y >> mip;
+
+        cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6U);
+    }
+
+    CmdPipelineImageBarrier(
+        cmdBuffer,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        s_prefilteredEnvMapTexture.Get(),
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0,
+        PREFILTERED_ENV_MAP_MIPS_COUNT,
+        0,
+        CUBEMAP_FACE_COUNT
+    );
+
+    CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5335,6 +5557,7 @@ int main(int argc, char* argv[])
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         PrecomputeIBLIrradianceMap(cmdBuffer);
+        PrecomputeIBLPrefilteredEnvMap(cmdBuffer);
     });
 
     s_cpuTexturesData.clear();
@@ -5373,6 +5596,9 @@ int main(int argc, char* argv[])
     vkDestroyPipeline(s_vkDevice.Get(), s_irradianceMapGenPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_irradianceMapGenPipelineLayout, nullptr);
 
+    vkDestroyPipeline(s_vkDevice.Get(), s_prefilteredEnvMapGenPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenPipelineLayout, nullptr);
+
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_zpassDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_meshCullingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferRenderDescriptorSetLayout, nullptr);
@@ -5380,6 +5606,7 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_postProcessingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_skyboxDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_irradianceMapGenDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);

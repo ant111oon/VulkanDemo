@@ -97,6 +97,13 @@ float2 UVToNDC(in float2 uv)
 }
 
 
+float2 NDCToUV(in float2 ndc)
+{
+    // Vulkan has Y NDC towards -Y
+    return 0.5f * float2(ndc.x, -ndc.y) + 0.5f;
+}
+
+
 float4 NDCToView(in float3 NDC, in float4x4 invProjMatr)
 {
     float4 result = mul(invProjMatr, float4(NDC, 1.f));

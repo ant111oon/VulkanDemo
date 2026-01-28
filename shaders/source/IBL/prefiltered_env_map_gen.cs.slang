@@ -12,23 +12,25 @@ static const uint SAMPLES_NUM = 1024;
 
 float3 PreFilterEnvMap(in float roughness, in float3 R)
 {
-    float3 normal = normalize(R);
-    float3 toEye = normal;
+    float3 N = normalize(R);
+    float3 V = N;
 
     SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
 
-    float3 res = ZEROF3;
+    float3 result = ZEROF3;
     float totalWeight = 0.f;
 
     for (uint i = 0; i < SAMPLES_NUM; ++i) {
         float2 xi = Hammersley(i, SAMPLES_NUM);
 
-        float3 H = ImportanceSampleGGX(xi, normal, roughness);
-        float3 lightVec = 2.f * dot(toEye, H) * H - toEye;
+        float3 H = ImportanceSampleGGX(xi, N, roughness);
 
-        const float NdotL = saturate(dot(normal, lightVec));
-        const float NdotH = saturate(dot(normal, H));
-        const float HdotV = saturate(dot(H, toEye));
+        const float HdotV = saturate(dot(H, V));
+
+        float3 lightVec = normalize(2.f * HdotV * H - V);
+
+        const float NdotL = saturate(dot(N, lightVec));
+        const float NdotH = saturate(dot(N, H));
 
         if (NdotL > 0) {
             float D = NDF_GGX(roughness, NdotH);
@@ -39,12 +41,12 @@ float3 PreFilterEnvMap(in float roughness, in float3 R)
              
             float mipLevel = M3D_IS_ZERO(roughness) ? 0.f : 0.5f * log2(saSample / saTexel);
 
-            res += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, sampler, lightVec, mipLevel).rgb * NdotL;     
+            result += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, sampler, lightVec, mipLevel).rgb * NdotL; 
             totalWeight += NdotL;
         }
     }
 
-    return res / max(totalWeight, M3D_EPS);
+    return result / max(totalWeight, M3D_EPS);
 }
 
 
@@ -52,16 +54,25 @@ float3 PreFilterEnvMap(in float roughness, in float3 R)
 [numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (any(DTid >= uint3(PREFILTERED_ENV_MAP_OUTPUT_SIZE, 6))) {
+    if (PUSH_CONSTS.MIP >= PREFILTERED_ENV_MAP_MIPS_COUNT) {
         return;
     }
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, PREFILTERED_ENV_MAP_OUTPUT_SIZE);
+    uint2 outputSize = ZEROU2;
+    outputSize.xy = PREFILTERED_ENV_MAP_OUTPUT_SIZE >> PUSH_CONSTS.MIP;
 
-    float2 uv = 2.f * PixelCoordToUV(pixCoord, PREFILTERED_ENV_MAP_OUTPUT_SIZE) - 1.f;
+    if (any(DTid.xy >= outputSize)) {
+        return;
+    }
+
+    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, outputSize.xy);
+
+    float2 uv = 2.f * PixelCoordToUV(pixCoord, outputSize.xy) - 1.f;
     const uint face = DTid.z;
 
-    const float3 result = PreFilterEnvMap(PUSH_CONSTS.ROUGHNESS, UVFaceToDir(uv, face));
+    const float roughness = saturate(PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PUSH_CONSTS.MIP);
+
+    const float3 result = PreFilterEnvMap(roughness, UVFaceToDir(uv, face));
 
     PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV[uint3(pixCoord, face)] = float4(result, 1.f);
 }
