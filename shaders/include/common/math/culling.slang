@@ -1,5 +1,5 @@
-#ifndef MATH_FRUSTUM_H
-#define MATH_FRUSTUM_H
+#ifndef MATH_CULLING_H
+#define MATH_CULLING_H
 
 
 struct SPHERE

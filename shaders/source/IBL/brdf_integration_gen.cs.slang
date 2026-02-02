@@ -14,14 +14,12 @@ float2 IntegrateBRDF(in float NdotV, in float roughness)
 {
     const float3 vView = float3(sqrt(1.f - NdotV * NdotV), 0.f, NdotV);
 
-    float A = 0.f;
-    float B = 0.f;
-
     const float3 vNorm = M3D_AXIS_Z;
 
-    const float3 vUp = abs(vNorm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
-    const float3 vTang = normalize(cross(vUp, vNorm));
-    const float3 vBitang = cross(vNorm, vTang);
+    float3 vTang, vBitang;
+    CalcTangBitang(vNorm, vTang, vBitang);
+
+    float2 result = ZEROF2;
 
     for (uint i = 0u; i < SAMPLES_NUM; ++i) {
         const float2 Xi = Hammersley(i, SAMPLES_NUM);
@@ -32,24 +30,21 @@ float2 IntegrateBRDF(in float NdotV, in float roughness)
         const float3 vLight = normalize(2.f * VdotH * vHalf - vView);
 
         float NdotL = max(vLight.z, 0.f);
-        float NdotH = max(vHalf.z, 0.f);
+        float NdotH = max(vHalf.z, M3D_EPS);
 
         if (NdotL > 0.f) {
             const float k = CalcIndirectK(roughness);
             const float G = G_Smith(NdotV, NdotL, k);
-        
-            const float G_Vis = (G * VdotH) / (NdotH * NdotV);
+
+            const float G_Vis = (G * VdotH) / max(NdotH * NdotV, M3D_EPS);
             const float Fc = pow(1.f - VdotH, 5.f);
 
-            A += (1.f - Fc) * G_Vis;
-            B += Fc * G_Vis;
+            result.x += (1.f - Fc) * G_Vis;
+            result.y += Fc * G_Vis;
         }
     }
 
-    A /= float(SAMPLES_NUM);
-    B /= float(SAMPLES_NUM);
-
-    return float2(A, B);
+    return result / SAMPLES_NUM;
 }
 
 
@@ -65,5 +60,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float2 uv = PixelCoordToUV(pixCoord, COMMON_BRDF_INTEGRATION_LUT_SIZE);
 
-    BRDF_INTEGRATION_GEN_OUTPUT_UAV[pixCoord] = float4(IntegrateBRDF(uv.x, uv.y), ZEROF2);
+    BRDF_INTEGRATION_GEN_OUTPUT_UAV[pixCoord] = float4(IntegrateBRDF(uv.x, uv.y), 0.f, 0.f);
 }

@@ -33,17 +33,15 @@ float NDF_GGX(in float NdotH, in float roughness)
     const float NdotH2 = NdotH * NdotH;
 
     float denom = (NdotH2 * (a2 - 1.f) + 1.f);
-    denom = max(M3D_PI * denom * denom, M3D_EPS);
+    denom = M3D_PI * denom * denom;
 
-    return a2 / denom;
+    return a2 / max(denom, M3D_EPS);
 }
 
 
 float G_GGX(in float NdotV, in float k)
 {
-    const float denom = max(NdotV * (1.f - k) + k, M3D_EPS);
-
-    return NdotV / denom;
+    return NdotV / max(NdotV * (1.f - k) + k, M3D_EPS);
 }
 
 
@@ -69,14 +67,17 @@ float3 ImportanceSampleGGX(in float2 Xi, in float roughness, in float3 tang, in 
 {
     const float a = roughness * roughness;
 	
-    float phi = M3D_2_PI * Xi.x;
-    float cosTheta = sqrt((1.f - Xi.y) / (1.f + (a * a - 1.f) * Xi.y));
-    float sinTheta = sqrt(1.f - cosTheta * cosTheta);
-	
+    const float phi = M3D_2_PI * Xi.x;
+    const float cosTheta = sqrt((1.f - Xi.y) / (1.f + (a * a - 1.f) * Xi.y));
+    const float sinTheta = sqrt(1.f - cosTheta * cosTheta);
+
+    float sinPhi, cosPhi;
+    sincos(phi, sinPhi, cosPhi);
+
     // from spherical coordinates to cartesian coordinates
     float3 H;
-    H.x = cos(phi) * sinTheta;
-    H.y = sin(phi) * sinTheta;
+    H.x = cosPhi * sinTheta;
+    H.y = sinPhi * sinTheta;
     H.z = cosTheta;
 
     return normalize(tang * H.x + bitang * H.y + normal * H.z);

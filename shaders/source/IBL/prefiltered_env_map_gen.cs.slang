@@ -10,14 +10,13 @@
 static const uint SAMPLES_NUM = 32;
 
 
-float3 PreFilterEnvMap(in float roughness, in float3 R)
+float3 PreFilterEnvMap(in float roughness, in float3 vReflect)
 {
-    const float3 vNorm = normalize(R);
+    const float3 vNorm = normalize(vReflect);
     const float3 vView = vNorm;
 
-    const float3 vUp = abs(vNorm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
-    const float3 vTang = normalize(cross(vUp, vNorm));
-    const float3 vBitang = cross(vNorm, vTang);
+    float3 vTang, vBitang;
+    CalcTangBitang(vNorm, vTang, vBitang);
 
     float3 result = ZEROF3;
     float totalWeight = 0.f;

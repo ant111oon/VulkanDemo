@@ -130,6 +130,27 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
 }
 
 
+float3 GetIndirectDiffuse(in float3 albedo, in float3 normal)
+{
+    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
+}
+
+
+float3 GetIndirectPrefiltColor(in float3 viewDir, in float3 normal, in float roughness)
+{
+    const float3 reflectDir = reflect(-viewDir, normal);
+    const float mip = roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
+}
+
+
+float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
+{
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
+}
+
+
 LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in float3 F0)
 {
     const float NdotV = saturate(dot(gbuffer.normal, V));
@@ -137,24 +158,15 @@ LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in floa
     const float3 kS = F_SchlickRoughness(NdotV, F0, gbuffer.roughness);
     const float3 kD = CalcDiffuseCoef(kS, gbuffer.metalness);
 
-    const SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    const float3 irradiance = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, sampler, gbuffer.normal, 0).rgb;
+    const float3 diffuse          = GetIndirectDiffuse(gbuffer.albedo, gbuffer.normal);
+    const float3 prefilteredColor = GetIndirectPrefiltColor(V, gbuffer.normal, gbuffer.roughness);
+    const float2 brdfScaleBias    = GetIndirectBRDFScaleBias(NdotV, gbuffer.roughness);
 
-    const float3 diffuse = irradiance * gbuffer.albedo;
-
-    const float3 R = reflect(-V, gbuffer.normal);
-
-    const float mip = gbuffer.roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
-    const float3 prefilteredColor = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, sampler, R, mip).rgb;
-
-    const float2 brdf = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, sampler, float2(NdotV, gbuffer.roughness), 0).rg;
-
-    const float3 specular = prefilteredColor * (kS * brdf.x + brdf.y);
+    const float3 specular = prefilteredColor * (kS * brdfScaleBias.x + brdfScaleBias.y);
 
     const float3 ambient = (kD * diffuse + specular) * gbuffer.ao;
 
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
-
     result.Lo = ambient;
 
     return result;

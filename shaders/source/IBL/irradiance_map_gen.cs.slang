@@ -15,7 +15,10 @@ float3 CosineSampleHemisphere(in float2 Xi)
     const float cosTheta = 1.f - 2.f * Xi.y;
     const float sinTheta = sqrt(1.f - cosTheta * cosTheta);
 
-    return normalize(float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta));
+    float sinPhi, cosPhi;
+    sincos(phi, sinPhi, cosPhi);
+
+    return normalize(float3(cosPhi * sinTheta, sinPhi * sinTheta, cosTheta));
 }
 
 
