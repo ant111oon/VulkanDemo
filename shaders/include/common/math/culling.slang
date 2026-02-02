@@ -1,8 +1,12 @@
 #ifndef MATH_FRUSTUM_H
 #define MATH_FRUSTUM_H
 
-#include "math.slang"
-#include "primitives.slang"
+
+struct SPHERE
+{
+    float3 position;
+    float radius;
+};
 
 
 struct FRUSTUM_PLANE

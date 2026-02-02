@@ -7,41 +7,45 @@
 #include "registers/prefiltered_env_map_gen_registers.slang"
 
 
-static const uint SAMPLES_NUM = 1024;
+static const uint SAMPLES_NUM = 32;
 
 
 float3 PreFilterEnvMap(in float roughness, in float3 R)
 {
-    float3 N = normalize(R);
-    float3 V = N;
+    const float3 vNorm = normalize(R);
+    const float3 vView = vNorm;
 
-    SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
+    const float3 vUp = abs(vNorm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
+    const float3 vTang = normalize(cross(vUp, vNorm));
+    const float3 vBitang = cross(vNorm, vTang);
 
     float3 result = ZEROF3;
     float totalWeight = 0.f;
 
     for (uint i = 0; i < SAMPLES_NUM; ++i) {
-        float2 xi = Hammersley(i, SAMPLES_NUM);
+        const float2 vXi = Hammersley(i, SAMPLES_NUM);
 
-        float3 H = ImportanceSampleGGX(xi, N, roughness);
+        const float3 vHalf = ImportanceSampleGGX(vXi, roughness, vTang, vBitang, vNorm);
+        const float VdotH = saturate(dot(vView, vHalf));
 
-        const float HdotV = saturate(dot(H, V));
+        const float3 vLight = normalize(2.f * VdotH * vHalf - vView);
 
-        float3 lightVec = normalize(2.f * HdotV * H - V);
-
-        const float NdotL = saturate(dot(N, lightVec));
-        const float NdotH = saturate(dot(N, H));
+        const float NdotL = saturate(dot(vNorm, vLight));
 
         if (NdotL > 0) {
-            float D = NDF_GGX(roughness, NdotH);
-            float pdf = (D * NdotH / (4.f * HdotV)) + M3D_EPS;
+            const float NdotH = saturate(dot(vNorm, vHalf));
 
-            float saTexel = 4.f * M3D_PI / (6.f * PUSH_CONSTS.ENV_MAP_FACE_SIZE.x * PUSH_CONSTS.ENV_MAP_FACE_SIZE.y);
-            float saSample = 1.f / (SAMPLES_NUM * pdf + M3D_EPS);
-             
-            float mipLevel = M3D_IS_ZERO(roughness) ? 0.f : 0.5f * log2(saSample / saTexel);
+            const float pdf = (NDF_GGX(roughness, NdotH) * NdotH / (4.f * VdotH));
 
-            result += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, sampler, lightVec, mipLevel).rgb * NdotL; 
+            // Solid angle covered by 1 pixel with 6 faces that are EnvMapSize X EnvMapSize
+            const float saTexel = 4.f * M3D_PI / max(6.f * PUSH_CONSTS.ENV_MAP_FACE_SIZE.x * PUSH_CONSTS.ENV_MAP_FACE_SIZE.y, M3D_EPS);
+            // Solid angle represented by this sample
+            const float saSample = 1.f / max(SAMPLES_NUM * pdf, M3D_EPS);
+
+            const float mipBias = 1.f;
+            const float mipLevel = M3D_IS_ZERO(roughness) ? 0.f : max(0.5f * log2(saSample / saTexel) + mipBias, 0.f);
+
+            result += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), vLight, mipLevel).rgb * NdotL; 
             totalWeight += NdotL;
         }
     }
@@ -59,7 +63,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     uint2 outputSize = ZEROU2;
-    outputSize.xy = PREFILTERED_ENV_MAP_OUTPUT_SIZE >> PUSH_CONSTS.MIP;
+    outputSize.xy = COMMON_PREFILTERED_ENV_MAP_SIZE >> PUSH_CONSTS.MIP;
 
     if (any(DTid.xy >= outputSize)) {
         return;
@@ -70,7 +74,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 uv = 2.f * PixelCoordToUV(pixCoord, outputSize.xy) - 1.f;
     const uint face = DTid.z;
 
-    const float roughness = saturate(PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PUSH_CONSTS.MIP);
+    const float roughness = saturate(COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PUSH_CONSTS.MIP);
 
     const float3 result = PreFilterEnvMap(roughness, UVFaceToDir(uv, face));
 

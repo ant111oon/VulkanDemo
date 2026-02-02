@@ -4,10 +4,6 @@
 #include "common_registers.slang"
 
 
-static const uint2 PREFILTERED_ENV_MAP_OUTPUT_SIZE = uint2(128);
-static const float PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
-
-
 struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 {
     uint2 ENV_MAP_FACE_SIZE;

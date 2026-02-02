@@ -4,9 +4,6 @@
 #include "common_registers.slang"
 
 
-static const uint2 BRDF_INTEGRATION_OUTPUT_SIZE = uint2(512);
-
-
 struct BRDF_INTEGRATION_PUSH_CONSTS
 {
     uint4 PADDING; // Free for now

@@ -764,14 +764,13 @@ static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
-static constexpr size_t COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
-static_assert(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT > 1);
 
-constexpr float PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+static constexpr glm::uvec2 COMMON_IRRADIANCE_MAP_SIZE = glm::uvec2(32);
+static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE = glm::uvec2(256);
+static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
-static constexpr glm::uvec2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = glm::uvec2(32);
-static constexpr glm::uvec2 PREFILTERED_ENV_MAP_OUTPUT_SIZE = glm::uvec2(128);
-static constexpr glm::uvec2 BRDF_INTEGRATION_OUTPUT_SIZE = glm::uvec2(512);
+static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = (glm::uint)math::CalcMipsCount(COMMON_PREFILTERED_ENV_MAP_SIZE.x);
+static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -1919,7 +1918,7 @@ static void CreateIBLResources()
         vkn::TextureCreateInfo createInfo = {};
         createInfo.pDevice = &s_vkDevice;
         createInfo.type = VK_IMAGE_TYPE_2D;
-        createInfo.extent = { IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x, IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y, 1 };
+        createInfo.extent = { COMMON_IRRADIANCE_MAP_SIZE.x, COMMON_IRRADIANCE_MAP_SIZE.y, 1 };
         createInfo.format = s_skyboxTexture.GetFormat();
         createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
         createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1937,7 +1936,7 @@ static void CreateIBLResources()
         vkn::TextureCreateInfo createInfo = {};
         createInfo.pDevice = &s_vkDevice;
         createInfo.type = VK_IMAGE_TYPE_2D;
-        createInfo.extent = { PREFILTERED_ENV_MAP_OUTPUT_SIZE.x, PREFILTERED_ENV_MAP_OUTPUT_SIZE.y, 1 };
+        createInfo.extent = { COMMON_PREFILTERED_ENV_MAP_SIZE.x, COMMON_PREFILTERED_ENV_MAP_SIZE.y, 1 };
         createInfo.format = s_skyboxTexture.GetFormat();
         createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT; 
         createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1955,7 +1954,7 @@ static void CreateIBLResources()
         vkn::TextureCreateInfo createInfo = {};
         createInfo.pDevice = &s_vkDevice;
         createInfo.type = VK_IMAGE_TYPE_2D;
-        createInfo.extent = { BRDF_INTEGRATION_OUTPUT_SIZE.x, BRDF_INTEGRATION_OUTPUT_SIZE.y, 1 };
+        createInfo.extent = { COMMON_BRDF_INTEGRATION_LUT_SIZE.x, COMMON_BRDF_INTEGRATION_LUT_SIZE.y, 1 };
         createInfo.format = VK_FORMAT_R16G16_SFLOAT;
         createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
         createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -4710,8 +4709,8 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     vkCmdPushConstants(cmdBuffer.Get(), s_irradianceMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS), &pushConsts);
 
     cmdBuffer.CmdDispatch( 
-        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.x / 32.f),
-        ceil(IRRADIANCE_MAP_GEN_OUTPUT_SIZE.y / 32.f), 
+        ceil(COMMON_IRRADIANCE_MAP_SIZE.x / 32.f),
+        ceil(COMMON_IRRADIANCE_MAP_SIZE.y / 32.f), 
         6
     );
 
@@ -4772,8 +4771,8 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
         vkCmdPushConstants(cmdBuffer.Get(), s_prefilteredEnvMapGenPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
 
-        const uint32_t sizeX = PREFILTERED_ENV_MAP_OUTPUT_SIZE.x >> mip;
-        const uint32_t sizeY = PREFILTERED_ENV_MAP_OUTPUT_SIZE.y >> mip;
+        const uint32_t sizeX = COMMON_PREFILTERED_ENV_MAP_SIZE.x >> mip;
+        const uint32_t sizeY = COMMON_PREFILTERED_ENV_MAP_SIZE.y >> mip;
 
         cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6U);
     }
@@ -4820,7 +4819,7 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_BRDFIntegrationLUTGenDescriptorSet };
     vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_BRDFIntegrationLUTGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
-    cmdBuffer.CmdDispatch((uint32_t)ceil(BRDF_INTEGRATION_OUTPUT_SIZE.x / 32.f), (uint32_t)ceil(BRDF_INTEGRATION_OUTPUT_SIZE.x / 32.f), 1U);
+    cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1U);
 
     CmdPipelineImageBarrier(
         cmdBuffer,

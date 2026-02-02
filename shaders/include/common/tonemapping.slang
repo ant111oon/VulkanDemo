@@ -1,7 +1,7 @@
 #ifndef TONEMAPPING_H
 #define TONEMAPPING_H
 
-#include "common/math/math.slang"
+#include "common/math/constants.slang"
 
 
 float3 Reinhard_Tonemap(in float3 color)

@@ -1,7 +1,47 @@
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 
-#include "math.slang"
+#include "constants.slang"
+
+
+#define M3D_IS_ZERO(x)     IsZero(x)
+#define M3D_IS_EQUAL(l, r) M3D_IS_ZERO((l) - (r))
+
+
+bool IsZero(in float value)
+{
+    return abs(value) < M3D_EPS;
+}
+
+
+bool IsZero(in float2 vec)
+{
+    return IsZero(vec.x) && IsZero(vec.y);
+}
+
+
+bool IsZero(in float3 vec)
+{
+    return IsZero(vec.xy) && IsZero(vec.z);
+}
+
+
+bool IsZero(in float4 vec)
+{
+    return IsZero(vec.xyz) && IsZero(vec.w);
+}
+
+
+bool IsFlagSet(uint value, uint mask)
+{
+    return (value & mask) != 0;
+}
+
+
+bool IsBitSet(uint value, uint bit)
+{
+    return IsFlagSet(value, uint(1) << bit);
+}
 
 
 float SRGBToLinear(in float color)
@@ -32,6 +72,15 @@ float3 LinearToSRGB(in float3 color)
 float3 LinearToSRGBFast(in float3 color)
 {
     return pow(saturate(color), 1.f / 2.2f);
+}
+
+
+void CalcTangBitang(in float3 norm, out float3 tang, out float3 bitang)
+{
+    const float3 up = abs(norm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
+    
+    tang = normalize(cross(up, norm));
+    bitang = cross(norm, tang);
 }
 
 

@@ -144,7 +144,7 @@ LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in floa
 
     const float3 R = reflect(-V, gbuffer.normal);
 
-    const float mip = gbuffer.roughness * (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+    const float mip = gbuffer.roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
     const float3 prefilteredColor = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, sampler, R, mip).rgb;
 
     const float2 brdf = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, sampler, float2(NdotV, gbuffer.roughness), 0).rg;

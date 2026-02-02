@@ -1,8 +1,8 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
-#include "common/math/frustum.slang"
-#include "common/math/math.slang"
+#include "common/math/constants.slang"
+#include "common/math/culling.slang"
 
 
 enum COMMON_MATERIAL_FLAGS
@@ -201,6 +201,8 @@ enum COMMON_SAMPLER_IDX
     COUNT
 };
 
+#define GET_COMMON_SAMPLER(SMP) COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::SMP]
+
 
 enum COMMON_DBG_TEX_IDX
 {
@@ -217,7 +219,13 @@ enum COMMON_DBG_TEX_IDX
 
 
 static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
-static const uint COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 5;
+
+static const uint2 COMMON_IRRADIANCE_MAP_SIZE = UINT2(32);
+static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(256);
+static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
+
+static const uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = (uint)log2((float)COMMON_PREFILTERED_ENV_MAP_SIZE.x) + 1;
+static const float COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 
 [vk::binding(0, 0)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];

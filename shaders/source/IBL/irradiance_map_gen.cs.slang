@@ -19,34 +19,36 @@ float3 CosineSampleHemisphere(in float2 Xi)
 }
 
 
-[shader("compute")]
-[numthreads(32, 32, 1)]
-void main(uint3 DTid : SV_DispatchThreadID)
-{
-    if (any(DTid >= uint3(IRRADIANCE_MAP_GEN_OUTPUT_SIZE, 6))) {
-        return;
-    }
-
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, IRRADIANCE_MAP_GEN_OUTPUT_SIZE);
-
-    float2 uv = 2.f * PixelCoordToUV(pixCoord, IRRADIANCE_MAP_GEN_OUTPUT_SIZE) - 1.f;
-    const uint face = DTid.z;
-
-    const float3 normal = UVFaceToDir(uv, face);
-
+float3 CalcIrradiance(in float3 normal)
+{    
     float3 irradiance = ZEROF3;
-
-    SamplerState sampler = COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
 
     for (uint i = 0; i < IRRADIANCE_MAP_GEN_SAMPLES_NUM; ++i) {
         const float2 Xi = Hammersley(i, IRRADIANCE_MAP_GEN_SAMPLES_NUM);
         const float3 L = CosineSampleHemisphere(Xi);
 
         const float NdotL = max(dot(normal, L), 0.f);
-        irradiance += SAMPLE_TEX_LEVEL(IRRADIANCE_MAP_GEN_ENV_MAP, sampler, L, 0).rgb * NdotL;
+        irradiance += SAMPLE_TEX_LEVEL(IRRADIANCE_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), L, 0).rgb * NdotL;
     }
 
-    irradiance *= (4.f * M3D_PI / IRRADIANCE_MAP_GEN_SAMPLES_NUM);
+    return irradiance * (4.f * M3D_PI / IRRADIANCE_MAP_GEN_SAMPLES_NUM);
+}
 
-    IRRADIANCE_MAP_GEN_OUTPUT_UAV[uint3(pixCoord, face)] = float4(irradiance, 1.f);
+
+[shader("compute")]
+[numthreads(32, 32, 1)]
+void main(uint3 DTid : SV_DispatchThreadID)
+{
+    if (any(DTid >= uint3(COMMON_IRRADIANCE_MAP_SIZE, 6))) {
+        return;
+    }
+
+    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, COMMON_IRRADIANCE_MAP_SIZE);
+
+    float2 uv = 2.f * PixelCoordToUV(pixCoord, COMMON_IRRADIANCE_MAP_SIZE) - 1.f;
+    const uint face = DTid.z;
+
+    const float3 normal = UVFaceToDir(uv, face);
+
+    IRRADIANCE_MAP_GEN_OUTPUT_UAV[uint3(pixCoord, face)] = float4(CalcIrradiance(normal), 1.f);
 }

@@ -13,6 +13,7 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+#include <bit>
 
 #include "core/utils/assert.h"
 
@@ -89,5 +90,11 @@ namespace math
     constexpr inline bool IsEqual(float left, float right) noexcept
     {
         return glm::abs(left - right) < M3D_EPS;
+    }
+
+
+    constexpr inline uint32_t CalcMipsCount(uint32_t size) noexcept
+    {
+        return std::bit_width(size);
     }
 }

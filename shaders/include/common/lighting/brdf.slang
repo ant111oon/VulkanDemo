@@ -65,7 +65,7 @@ float3 F_SchlickRoughness(in float VdotH, in float3 F0, float roughness)
 }
 
 
-float3 ImportanceSampleGGX(in float2 Xi, in float3 N, in float roughness)
+float3 ImportanceSampleGGX(in float2 Xi, in float roughness, in float3 tang, in float3 bitang, in float3 normal)
 {
     const float a = roughness * roughness;
 	
@@ -78,13 +78,8 @@ float3 ImportanceSampleGGX(in float2 Xi, in float3 N, in float roughness)
     H.x = cos(phi) * sinTheta;
     H.y = sin(phi) * sinTheta;
     H.z = cosTheta;
-	
-    // from tangent-space vector to world-space sample vector
-    float3 up        = abs(N.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
-    float3 tangent   = normalize(cross(up, N));
-    float3 bitangent = cross(N, tangent);
-	
-    return normalize(tangent * H.x + bitangent * H.y + N * H.z);
+
+    return normalize(tang * H.x + bitang * H.y + normal * H.z);
 }
 
 #endif

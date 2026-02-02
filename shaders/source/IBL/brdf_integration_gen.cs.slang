@@ -12,23 +12,27 @@ static const uint SAMPLES_NUM = 1024;
 
 float2 IntegrateBRDF(in float NdotV, in float roughness)
 {
-    const float3 V = float3(sqrt(1.f - NdotV * NdotV), 0.f, NdotV);
+    const float3 vView = float3(sqrt(1.f - NdotV * NdotV), 0.f, NdotV);
 
     float A = 0.f;
     float B = 0.f;
 
-    float3 N = M3D_AXIS_Z;
+    const float3 vNorm = M3D_AXIS_Z;
+
+    const float3 vUp = abs(vNorm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
+    const float3 vTang = normalize(cross(vUp, vNorm));
+    const float3 vBitang = cross(vNorm, vTang);
 
     for (uint i = 0u; i < SAMPLES_NUM; ++i) {
         const float2 Xi = Hammersley(i, SAMPLES_NUM);
-        const float3 H = ImportanceSampleGGX(Xi, N, roughness);
+        const float3 vHalf = ImportanceSampleGGX(Xi, roughness, vTang, vBitang, vNorm);
 
-        const float VdotH = saturate(dot(V, H));
+        const float VdotH = saturate(dot(vView, vHalf));
 
-        const float3 L = normalize(2.f * VdotH * H - V);
+        const float3 vLight = normalize(2.f * VdotH * vHalf - vView);
 
-        float NdotL = max(L.z, 0.f);
-        float NdotH = max(H.z, 0.f);
+        float NdotL = max(vLight.z, 0.f);
+        float NdotH = max(vHalf.z, 0.f);
 
         if (NdotL > 0.f) {
             const float k = CalcIndirectK(roughness);
@@ -53,13 +57,13 @@ float2 IntegrateBRDF(in float NdotV, in float roughness)
 [numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (any(DTid.xy >= BRDF_INTEGRATION_OUTPUT_SIZE)) {
+    if (any(DTid.xy >= COMMON_BRDF_INTEGRATION_LUT_SIZE)) {
         return;
     }
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, BRDF_INTEGRATION_OUTPUT_SIZE);
+    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, COMMON_BRDF_INTEGRATION_LUT_SIZE);
 
-    float2 uv = PixelCoordToUV(pixCoord, BRDF_INTEGRATION_OUTPUT_SIZE);
+    float2 uv = PixelCoordToUV(pixCoord, COMMON_BRDF_INTEGRATION_LUT_SIZE);
 
     BRDF_INTEGRATION_GEN_OUTPUT_UAV[pixCoord] = float4(IntegrateBRDF(uv.x, uv.y), ZEROF2);
 }

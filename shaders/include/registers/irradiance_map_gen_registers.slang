@@ -4,9 +4,6 @@
 #include "common_registers.slang"
 
 
-static const uint2 IRRADIANCE_MAP_GEN_OUTPUT_SIZE = uint2(32);
-
-
 struct IRRADIANCE_MAP_PUSH_CONSTS
 {
     uint2 ENV_MAP_FACE_SIZE;
