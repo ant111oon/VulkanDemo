@@ -33,16 +33,21 @@ COMMON_INDIRECT_DRAW_CMD CreateCommonIndirectCmd(in uint firstIndex, in uint ind
 }
 
 
-void PushCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID, in bool isTransp)
+void PushCmd(in COMMON_MATERIAL material, in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount, in uint instID)
 {
-    if (isTransp) {
-        uint idx = 0;
+    uint idx = 0;
+
+    if (IS_COMMON_MATERIAL_ALPHA_BLEND(material)) {
         InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
 
         MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
+    } else if (IS_COMMON_MATERIAL_ALPHA_KILL(material)) {
+        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
+
+        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
+        MESH_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
     } else {
-        uint idx = 0;
         InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
 
         MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
@@ -57,6 +62,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
         InterlockedExchange(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
+        InterlockedExchange(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
         InterlockedExchange(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
     }
 
@@ -73,13 +79,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
-    // TODO: make 3 queues: opaque, alpha kill and transparent
-    // For now only opaque objects are supported
-    const bool isTranspMtl = IS_COMMON_MATERIAL_ALPHA_KILL(material) || IS_COMMON_MATERIAL_ALPHA_BLEND(material);
-
 #ifdef ENV_DEBUG
     if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {
-        PushCmd(meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID, isTranspMtl);
+        PushCmd(material, meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID);
         return;
     }
 #endif
@@ -88,5 +90,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    PushCmd(meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID, isTranspMtl);
+    PushCmd(material, meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID);
 }

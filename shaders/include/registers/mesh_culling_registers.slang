@@ -15,12 +15,15 @@ struct MESH_CULLING_PUSH_CONSTS
 
 
 [vk::binding(0, 1)] RWStructuredBuffer<COMMON_INDIRECT_DRAW_CMD> MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(1, 1)] RWStructuredBuffer<uint> MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV;
-
+[vk::binding(1, 1)] RWStructuredBuffer<COMMON_INDIRECT_DRAW_CMD> MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV;
 [vk::binding(2, 1)] RWStructuredBuffer<COMMON_INDIRECT_DRAW_CMD> MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV;
-[vk::binding(3, 1)] RWStructuredBuffer<uint> MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV;
 
-[vk::binding(4, 1)] RWStructuredBuffer<uint> MESH_CULL_OPAQUE_INST_INFO_IDS_UAV;
-[vk::binding(5, 1)] RWStructuredBuffer<uint> MESH_CULL_TRANSP_INST_INFO_IDS_UAV;
+[vk::binding(3, 1)] RWStructuredBuffer<uint> MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV;
+[vk::binding(4, 1)] RWStructuredBuffer<uint> MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV;
+[vk::binding(5, 1)] RWStructuredBuffer<uint> MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV;
+
+[vk::binding(6, 1)] RWStructuredBuffer<uint> MESH_CULL_OPAQUE_INST_INFO_IDS_UAV;
+[vk::binding(7, 1)] RWStructuredBuffer<uint> MESH_CULL_AKILL_INST_INFO_IDS_UAV;
+[vk::binding(8, 1)] RWStructuredBuffer<uint> MESH_CULL_TRANSP_INST_INFO_IDS_UAV;
 
 #endif

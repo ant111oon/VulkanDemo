@@ -452,7 +452,7 @@ struct COMMON_CB_DATA
 };
 
 
-enum COMMON_DBG_FLAG_MASKS
+enum class COMMON_DBG_FLAG_MASKS
 {
     USE_MESH_INDIRECT_DRAW_MASK = 0x1,
     USE_MESH_GPU_CULLING_MASK = 0x2,
@@ -460,10 +460,11 @@ enum COMMON_DBG_FLAG_MASKS
     USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK = 0x8,
     USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x10,
     USE_ACES_TONE_MAPPING_MASK = 0x20,
+    USE_INDIRECT_LIGHTING_MASK = 0x40,
 };
 
 
-enum COMMON_DBG_VIS_FLAG_MASKS
+enum class COMMON_DBG_VIS_FLAG_MASKS
 {
     DBG_VIS_NONE_MASK = 0x1,
     DBG_VIS_GBUFFER_ALBEDO_MASK = 0x2,
@@ -566,14 +567,16 @@ struct MESH_CULLING_PUSH_CONSTS
 
 struct ZPASS_PUSH_CONSTS
 {
-    glm::float3 PAD0;
+    glm::uvec2 PAD0;
+    glm::uint IS_AKILL_PASS;
     glm::uint INST_INFO_IDX;
 };
 
 
 struct GBUFFER_PUSH_CONSTS
 {
-    glm::float3 PAD0;
+    glm::uvec2 PAD0;
+    glm::uint IS_AKILL_PASS;
     glm::uint INST_INFO_IDX;
 };
 
@@ -612,16 +615,16 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
 };
 
 
-static constexpr COMMON_DBG_VIS_FLAG_MASKS DBG_RT_OUTPUT_MASKS[] = {
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_NONE_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_NORMAL_MASK,
-    COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_TANGENT_MASK,
+static constexpr uint32_t DBG_RT_OUTPUT_MASKS[] = {
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_NONE_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_NORMAL_MASK,
+    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_TANGENT_MASK,
 };
 
 
@@ -636,11 +639,11 @@ static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
 };
 
 
-static constexpr COMMON_DBG_FLAG_MASKS TONEMAPPING_MASKS[] = {
-    COMMON_DBG_FLAG_MASKS::USE_REINHARD_TONE_MAPPING_MASK,
-    COMMON_DBG_FLAG_MASKS::USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK,
-    COMMON_DBG_FLAG_MASKS::USE_UNCHARTED_2_TONE_MAPPING_MASK,
-    COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
+static constexpr uint32_t TONEMAPPING_MASKS[] = {
+    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_REINHARD_TONE_MAPPING_MASK,
+    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK,
+    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_UNCHARTED_2_TONE_MAPPING_MASK,
+    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
 };
 
 
@@ -721,15 +724,20 @@ static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
 static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 3;
-static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 5;
+static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT = 5;
+static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 6;
+static constexpr size_t MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 7;
+static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 8;
 
-static constexpr size_t ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
 
-static constexpr size_t GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
@@ -878,6 +886,10 @@ static vkn::Buffer s_commonOpaqueMeshDrawCmdBuffer;
 static vkn::Buffer s_commonOpaqueMeshDrawCmdCountBuffer;
 static vkn::Buffer s_commonCulledOpaqueInstInfoIDsBuffer;
 
+static vkn::Buffer s_commonAKillMeshDrawCmdBuffer;
+static vkn::Buffer s_commonAKillMeshDrawCmdCountBuffer;
+static vkn::Buffer s_commonCulledAKillInstInfoIDsBuffer;
+
 static vkn::Buffer s_commonTranspMeshDrawCmdBuffer;
 static vkn::Buffer s_commonTranspMeshDrawCmdCountBuffer;
 static vkn::Buffer s_commonCulledTranspInstInfoIDsBuffer;
@@ -939,15 +951,19 @@ static bool s_flyCameraMode = false;
     static bool s_useMeshIndirectDraw = true;
     static bool s_useMeshCulling = true;
     static bool s_useDepthPass = true;
+    static bool s_useIndirectLighting = true;
 
     // Uses for debug purposes during CPU frustum culling
-    static size_t s_dbgDrawnMeshCount = 0;
+    static size_t s_dbgDrawnOpaqueMeshCount = 0;
+    static size_t s_dbgDrawnAkillMeshCount = 0;
+    static size_t s_dbgDrawnTranspMeshCount = 0;
 
     static uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
 #else
     static constexpr bool s_useMeshIndirectDraw = true;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useDepthPass = true;
+    static constexpr bool s_useIndirectLighting = true;
 
     static constexpr uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
 
@@ -1118,11 +1134,17 @@ namespace DbgUI
             ImGui::SameLine(); ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
             
             if (!s_useMeshIndirectDraw) {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Mesh Count: %zu)", s_dbgDrawnMeshCount);
+                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Opaque Mesh Count: %zu)", s_dbgDrawnOpaqueMeshCount);
+                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn AKill Mesh Count: %zu)", s_dbgDrawnAkillMeshCount);
+                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Transparent Mesh Count: %zu)", s_dbgDrawnTranspMeshCount);
             }
-            ImGui::NewLine();
 
+            ImGui::NewLine();
+            ImGui::SeparatorText("Deferred Lighting Pass");
+            ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
+            ImGui::SameLine(); ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
+            
+            ImGui::NewLine();
             ImGui::SeparatorText("Tonemapping");
             if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
                 for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
@@ -1138,7 +1160,6 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
-        #endif
 
             ImGui::NewLine();
             ImGui::SeparatorText("Debug Output");
@@ -1156,6 +1177,7 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
+        #endif
         } ImGui::End();
 
         ImGui::Render();
@@ -1166,6 +1188,24 @@ namespace DbgUI
     {
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
     }
+}
+
+
+static bool IsAKillMaterial(const COMMON_MATERIAL& material)
+{
+    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
+}
+
+
+static bool IsTransparentMaterial(const COMMON_MATERIAL& material)
+{
+    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_BLEND) != 0;
+}
+
+
+static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
+{
+    return !IsAKillMaterial(material) && !IsTransparentMaterial(material);
 }
 
 
@@ -2136,7 +2176,8 @@ static void CreateZPassDescriptorSetLayout()
 
     s_zpassDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_zpassDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2150,10 +2191,13 @@ static void CreateMeshCullingDescriptorSetLayout()
     s_meshCullingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
         .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
@@ -2167,7 +2211,8 @@ static void CreateGBufferDescriptorSetLayout()
 
     s_gbufferRenderDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_gbufferRenderDescriptorSetLayout != VK_NULL_HANDLE);
@@ -3010,6 +3055,21 @@ static void CreateCullingResources()
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
     createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
+    s_commonAKillMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_BUFFER");
+
+    createInfo.size = sizeof(glm::uint);
+
+    s_commonAKillMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_COUNT_BUFFER");
+
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    
+    s_commonCulledAKillInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_AKILL_INST_INFO_IDS_BUFFER");
+
+
+    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+
     s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_BUFFER");
 
     createInfo.size = sizeof(glm::uint);
@@ -3265,21 +3325,34 @@ static void WriteZPassDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
-    VkDescriptorBufferInfo culledInstInfosIDsBuffInfo = {};
-    culledInstInfosIDsBuffInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
-    culledInstInfosIDsBuffInfo.offset = 0;
-    culledInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
-
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = s_zpassDescriptorSet;
-    write.dstBinding = ZPASS_INST_INFO_IDS_DESCRIPTOR_SLOT;
     write.dstArrayElement = 0;
     write.descriptorCount = 1;
     write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write.pBufferInfo = &culledInstInfosIDsBuffInfo;
+
+    VkDescriptorBufferInfo culledOpaqueInstInfosIDsBuffInfo = {};
+    culledOpaqueInstInfosIDsBuffInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
+    culledOpaqueInstInfosIDsBuffInfo.offset = 0;
+    culledOpaqueInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
+    
+    write.dstBinding = ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledOpaqueInstInfosIDsBuffInfo;
 
     descWrites.emplace_back(write);
+
+
+    VkDescriptorBufferInfo culledAKillInstInfosIDsBuffInfo = {};
+    culledAKillInstInfosIDsBuffInfo.buffer = s_commonCulledAKillInstInfoIDsBuffer.Get();
+    culledAKillInstInfosIDsBuffInfo.offset = 0;
+    culledAKillInstInfosIDsBuffInfo.range = VK_WHOLE_SIZE;
+    
+    write.dstBinding = ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledAKillInstInfosIDsBuffInfo;
+
+    descWrites.emplace_back(write);
+
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -3289,42 +3362,32 @@ static void WriteMeshCullingDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_meshCullingDescriptorSet;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
     VkDescriptorBufferInfo opaqueMeshDrawCmdBufferInfo = {};
     opaqueMeshDrawCmdBufferInfo.buffer = s_commonOpaqueMeshDrawCmdBuffer.Get();
     opaqueMeshDrawCmdBufferInfo.offset = 0;
     opaqueMeshDrawCmdBufferInfo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet write = {};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = s_meshCullingDescriptorSet;
     write.dstBinding = MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
-    write.dstArrayElement = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     write.pBufferInfo = &opaqueMeshDrawCmdBufferInfo;
 
     descWrites.emplace_back(write);
 
-    VkDescriptorBufferInfo opaqueMeshDrawCmdCountBufferInfo = {};
-    opaqueMeshDrawCmdCountBufferInfo.buffer = s_commonOpaqueMeshDrawCmdCountBuffer.Get();
-    opaqueMeshDrawCmdCountBufferInfo.offset = 0;
-    opaqueMeshDrawCmdCountBufferInfo.range = VK_WHOLE_SIZE;
+    VkDescriptorBufferInfo akillMeshDrawCmdBufferInfo = {};
+    akillMeshDrawCmdBufferInfo.buffer = s_commonAKillMeshDrawCmdBuffer.Get();
+    akillMeshDrawCmdBufferInfo.offset = 0;
+    akillMeshDrawCmdBufferInfo.range = VK_WHOLE_SIZE;
 
-    write.dstBinding = MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
-    write.pBufferInfo = &opaqueMeshDrawCmdCountBufferInfo;
-
-    descWrites.emplace_back(write);
-
-    VkDescriptorBufferInfo culledOpaqueInstInfoIDsBufferInfo = {};
-    culledOpaqueInstInfoIDsBufferInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
-    culledOpaqueInstInfoIDsBufferInfo.offset = 0;
-    culledOpaqueInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
-
-    write.dstBinding = MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
-    write.pBufferInfo = &culledOpaqueInstInfoIDsBufferInfo;
+    write.dstBinding = MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &akillMeshDrawCmdBufferInfo;
 
     descWrites.emplace_back(write);
-
 
     VkDescriptorBufferInfo transpMeshDrawCmdBufferInfo = {};
     transpMeshDrawCmdBufferInfo.buffer = s_commonTranspMeshDrawCmdBuffer.Get();
@@ -3336,6 +3399,27 @@ static void WriteMeshCullingDescriptorSet()
 
     descWrites.emplace_back(write);
 
+
+    VkDescriptorBufferInfo opaqueMeshDrawCmdCountBufferInfo = {};
+    opaqueMeshDrawCmdCountBufferInfo.buffer = s_commonOpaqueMeshDrawCmdCountBuffer.Get();
+    opaqueMeshDrawCmdCountBufferInfo.offset = 0;
+    opaqueMeshDrawCmdCountBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &opaqueMeshDrawCmdCountBufferInfo;
+
+    descWrites.emplace_back(write);
+
+    VkDescriptorBufferInfo akillMeshDrawCmdCountBufferInfo = {};
+    akillMeshDrawCmdCountBufferInfo.buffer = s_commonAKillMeshDrawCmdCountBuffer.Get();
+    akillMeshDrawCmdCountBufferInfo.offset = 0;
+    akillMeshDrawCmdCountBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &akillMeshDrawCmdCountBufferInfo;
+
+    descWrites.emplace_back(write);
+
     VkDescriptorBufferInfo transpMeshDrawCmdCountBufferInfo = {};
     transpMeshDrawCmdCountBufferInfo.buffer = s_commonTranspMeshDrawCmdCountBuffer.Get();
     transpMeshDrawCmdCountBufferInfo.offset = 0;
@@ -3343,6 +3427,27 @@ static void WriteMeshCullingDescriptorSet()
 
     write.dstBinding = MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV_DESCRIPTOR_SLOT;
     write.pBufferInfo = &transpMeshDrawCmdCountBufferInfo;
+
+    descWrites.emplace_back(write);
+
+
+    VkDescriptorBufferInfo culledOpaqueInstInfoIDsBufferInfo = {};
+    culledOpaqueInstInfoIDsBufferInfo.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
+    culledOpaqueInstInfoIDsBufferInfo.offset = 0;
+    culledOpaqueInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledOpaqueInstInfoIDsBufferInfo;
+
+    descWrites.emplace_back(write);    
+
+    VkDescriptorBufferInfo culledAKillInstInfoIDsBufferInfo = {};
+    culledAKillInstInfoIDsBufferInfo.buffer = s_commonCulledAKillInstInfoIDsBuffer.Get();
+    culledAKillInstInfoIDsBufferInfo.offset = 0;
+    culledAKillInstInfoIDsBufferInfo.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledAKillInstInfoIDsBufferInfo;
 
     descWrites.emplace_back(write);
 
@@ -3365,21 +3470,34 @@ static void WriteGBufferDescriptorSet()
 {
     std::vector<VkWriteDescriptorSet> descWrites;
 
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = s_gbufferRenderDescriptorSet;
+    write.dstArrayElement = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    
     VkDescriptorBufferInfo culledOpaqueInstInfoIDsBuffer = {};
     culledOpaqueInstInfoIDsBuffer.buffer = s_commonCulledOpaqueInstInfoIDsBuffer.Get();
     culledOpaqueInstInfoIDsBuffer.offset = 0;
     culledOpaqueInstInfoIDsBuffer.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet write = {};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = s_gbufferRenderDescriptorSet;
-    write.dstBinding = GBUFFER_INST_INFO_IDS_DESCRIPTOR_SLOT;
-    write.dstArrayElement = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.dstBinding = GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT;
     write.pBufferInfo = &culledOpaqueInstInfoIDsBuffer;
 
     descWrites.emplace_back(write);
+
+
+    VkDescriptorBufferInfo culledAKillInstInfoIDsBuffer = {};
+    culledAKillInstInfoIDsBuffer.buffer = s_commonCulledAKillInstInfoIDsBuffer.Get();
+    culledAKillInstInfoIDsBuffer.offset = 0;
+    culledAKillInstInfoIDsBuffer.range = VK_WHOLE_SIZE;
+
+    write.dstBinding = GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT;
+    write.pBufferInfo = &culledAKillInstInfoIDsBuffer;
+
+    descWrites.emplace_back(write);
+
 
     vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
 }
@@ -4149,14 +4267,8 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     
                     CORE_ASSERT(primitive.materialIndex.has_value());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
-    
-                    // TODO: support alpha kill and transparent objects rendering
-                    if (primitive.materialIndex.has_value()) {
-                        if (asset.materials[primitive.materialIndex.value()].alphaMode == gltf::AlphaMode::Opaque) {
-                            s_cpuInstData.emplace_back(instInfo);
-                        }
-                    }
 
+                    s_cpuInstData.emplace_back(instInfo);
                     ++meshIdx;
                 }
             }
@@ -4593,9 +4705,10 @@ void UpdateGPUCommonConstBuffer()
     uint32_t dbgVisFlags = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     uint32_t dbgFlags = 0;
 
-    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
-    dbgFlags |= s_useMeshCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
+    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
+    dbgFlags |= s_useMeshCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
+    dbgFlags |= s_useIndirectLighting ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
 
     pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
     pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
@@ -4856,16 +4969,7 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonOpaqueMeshDrawCmdCountBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+        s_commonAKillMeshDrawCmdBuffer.Get()
     );
 
     CmdPipelineBufferBarrier(
@@ -4883,7 +4987,43 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonAKillMeshDrawCmdCountBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
         s_commonTranspMeshDrawCmdCountBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+    );
+
+    CmdPipelineBufferBarrier(
+        cmdBuffer, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT,
+        s_commonCulledAKillInstInfoIDsBuffer.Get()
     );
 
     CmdPipelineBufferBarrier(
@@ -4909,21 +5049,19 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void DepthPass(vkn::CmdBuffer& cmdBuffer)
+void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 {
     if (!s_useDepthPass) {
         return;
     }
 
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", 128, 128, 128, 255);
-
     CmdPipelineImageBarrier(
         cmdBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
+        isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_NONE,
+        isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_ACCESS_2_NONE,
+        isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         s_commonDepthRT.Get(),
         VK_IMAGE_ASPECT_DEPTH_BIT
@@ -4936,7 +5074,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
             VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
             VK_ACCESS_2_MEMORY_WRITE_BIT,
             VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonOpaqueMeshDrawCmdBuffer.Get()
+            isAKillPass ? s_commonAKillMeshDrawCmdBuffer.Get() : s_commonOpaqueMeshDrawCmdBuffer.Get()
         );
 
         CmdPipelineBufferBarrier(
@@ -4945,7 +5083,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
             VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
             VK_ACCESS_2_MEMORY_WRITE_BIT,
             VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+            isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer.Get() : s_commonOpaqueMeshDrawCmdCountBuffer.Get()
         );
     }
 
@@ -4955,7 +5093,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
         s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT,
-        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer.Get() : s_commonCulledOpaqueInstInfoIDsBuffer.Get()
     );
 
     VkRenderingInfo renderingInfo = {};
@@ -4965,11 +5103,11 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
     renderingInfo.layerCount = 1;
 
     VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_commonDepthRTView.Get();
+    depthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.imageView   = s_commonDepthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depthAttachment.loadOp      = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
 #ifdef ENG_REVERSED_Z
     depthAttachment.clearValue.depthStencil.depth = 0.f;
 #else
@@ -4997,27 +5135,34 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
+        ZPASS_PUSH_CONSTS pushConsts = {};
+        pushConsts.IS_AKILL_PASS = isAKillPass;
+
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            vkCmdPushConstants(cmdBuffer.Get(), s_zpassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS), &pushConsts);
+
+            if (isAKillPass) {
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, 0, s_commonAKillMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            } else {
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", 50, 255, 50, 255);
 
-        #ifdef ENG_BUILD_DEBUG
-            s_dbgDrawnMeshCount = 0;
-        #endif
-
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
+                const COMMON_INST_INFO& instInfo = s_cpuInstData[i];
+                const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
+
+                if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
+                    continue;
+                }
+
                 if (s_useMeshCulling) {
-                    if (!IsInstVisible(s_cpuInstData[i])) {
+                    if (!IsInstVisible(instInfo)) {
                         continue;
                     }
                 }
 
-            #ifdef ENG_BUILD_DEBUG
-                ++s_dbgDrawnMeshCount;
-            #endif
-
-                ZPASS_PUSH_CONSTS pushConsts = {};
                 pushConsts.INST_INFO_IDX = i;
 
                 vkCmdPushConstants(cmdBuffer.Get(), s_zpassPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS), &pushConsts);
@@ -5042,18 +5187,31 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
+void DepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Render_Pass", 50, 200, 50, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", 128, 128, 128, 255);
 
+    {
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Opaque", 128, 128, 128, 255);
+        RenderPass_Depth(cmdBuffer, false);
+    }
+    {
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_AKill", 128, 128, 128, 255);
+        RenderPass_Depth(cmdBuffer, true);
+    }
+}
+
+
+void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
+{
     for (vkn::Texture& colorRT : s_gbufferRTs) {
         CmdPipelineImageBarrier(
             cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
+            isAKillPass ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
+            isAKillPass ? VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT : VK_PIPELINE_STAGE_2_NONE,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_ACCESS_2_NONE,
+            isAKillPass ? VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             colorRT.Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
@@ -5067,7 +5225,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
             VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
             VK_ACCESS_2_MEMORY_WRITE_BIT,
             VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonOpaqueMeshDrawCmdBuffer.Get()
+            isAKillPass ? s_commonAKillMeshDrawCmdBuffer.Get() : s_commonOpaqueMeshDrawCmdBuffer.Get()
         );
 
         CmdPipelineBufferBarrier(
@@ -5076,7 +5234,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
             VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
             VK_ACCESS_2_MEMORY_WRITE_BIT,
             VK_ACCESS_2_MEMORY_READ_BIT,
-            s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+            isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer.Get() : s_commonOpaqueMeshDrawCmdCountBuffer.Get()
         );
     }
 
@@ -5086,17 +5244,17 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
         s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT,
-        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
+        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer.Get() : s_commonCulledOpaqueInstInfoIDsBuffer.Get()
     );
 
     if (s_useDepthPass) {
         CmdPipelineImageBarrier(
             cmdBuffer,
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
             s_commonDepthRT.Get(),
             VK_IMAGE_ASPECT_DEPTH_BIT
@@ -5104,11 +5262,11 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     } else {
         CmdPipelineImageBarrier(
             cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
+            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
+            isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            VK_ACCESS_2_NONE,
+            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             s_commonDepthRT.Get(),
             VK_IMAGE_ASPECT_DEPTH_BIT
@@ -5130,9 +5288,9 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 #ifdef ENG_BUILD_DEBUG
     if (s_useDepthPass) {
-        depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     } else {
-        depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
 
         #ifdef ENG_REVERSED_Z
             depthAttachment.clearValue.depthStencil.depth = 0.f;
@@ -5154,7 +5312,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
         attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachment.imageView = s_gbufferRTViews[i].Get();
         attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachment.clearValue.color.float32[0] = 0.f;
         attachment.clearValue.color.float32[1] = 0.f;
@@ -5198,27 +5356,50 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdSetDepthWriteEnable(s_useDepthPass ? VK_FALSE : VK_TRUE);
     #endif
 
+        GBUFFER_PUSH_CONSTS pushConsts = {};
+        pushConsts.IS_AKILL_PASS = isAKillPass;
+
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            vkCmdPushConstants(cmdBuffer.Get(), s_gbufferRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS), &pushConsts);
+
+            if (isAKillPass) {
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, 0, s_commonAKillMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            } else {
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+            }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", 50, 255, 50, 255);
 
         #ifdef ENG_BUILD_DEBUG
-            s_dbgDrawnMeshCount = 0;
+            if (isAKillPass) {
+                s_dbgDrawnAkillMeshCount = 0;
+            } else {
+                s_dbgDrawnOpaqueMeshCount = 0;
+            }
         #endif
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
+                const COMMON_INST_INFO& instInfo = s_cpuInstData[i];
+                const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
+
+                if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
+                    continue;
+                }
+
                 if (s_useMeshCulling) {
-                    if (!IsInstVisible(s_cpuInstData[i])) {
+                    if (!IsInstVisible(instInfo)) {
                         continue;
                     }
                 }
 
             #ifdef ENG_BUILD_DEBUG
-                ++s_dbgDrawnMeshCount;
+                if (isAKillPass) {
+                    ++s_dbgDrawnAkillMeshCount;
+                } else {
+                    ++s_dbgDrawnOpaqueMeshCount;
+                }
             #endif
 
-                GBUFFER_PUSH_CONSTS pushConsts = {};
                 pushConsts.INST_INFO_IDX = i;
 
                 vkCmdPushConstants(cmdBuffer.Get(), s_gbufferRenderPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS), &pushConsts);
@@ -5228,6 +5409,21 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
             }
         }
     cmdBuffer.CmdEndRendering();
+}
+
+
+void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", 50, 200, 50, 255);
+
+    {
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", 50, 200, 50, 255);
+        RenderPass_GBuffer(cmdBuffer, false);
+    }
+    {
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", 50, 200, 50, 255);
+        RenderPass_GBuffer(cmdBuffer, true);
+    }
 }
 
 
@@ -5803,8 +5999,8 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
 
     UploadGPUResources();
     CreateIBLResources();

@@ -4,11 +4,13 @@
 
 struct ZPASS_VS_OUTPUT_INTERP
 {
+    [[vk::location(0)]] float2 uv;
 };
 
 
 struct ZPASS_VS_OUTPUT_NO_INTERP
 {
+    [[vk::location(1)]] uint instID;
 };
 
 

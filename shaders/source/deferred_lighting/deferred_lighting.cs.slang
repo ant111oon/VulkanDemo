@@ -208,7 +208,12 @@ float3 ComputeLighting(in int2 pixelCoord)
         result += ptRes;
     }
 
-    result += ProcessIndirectLighting(gbuffer, V, F0);
+#ifdef ENV_DEBUG
+    if (COMMON_DBG_USE_INDIRECT_LIGHTING)
+#endif
+    {
+        result += ProcessIndirectLighting(gbuffer, V, F0);
+    }
 
     result.Lo += gbuffer.emissive;
 
