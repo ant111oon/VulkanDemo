@@ -1,5 +1,5 @@
-#ifndef TONEMAPPING_H
-#define TONEMAPPING_H
+#ifndef TONEMAPPING_INCL_H
+#define TONEMAPPING_INCL_H
 
 #include "common/math/constants.slang"
 

@@ -3,7 +3,7 @@
 #include "common/math/utils.slang"
 #include "common/dbg_vis.slang"
 #include "common/resource_defines.slang"
-#include "common/common_structs.slang"
+#include "common/gbuffer_incl.slang"
 
 #include "pass/gbuffer/vsout.slang"
 
@@ -30,7 +30,7 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
     const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
-    COMMON_SURFACE surf = SampleCommonSurface(material, TBN, input.data.uv);
+    GBUFFER_SURFACE surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
     const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
     const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)).xyz);
