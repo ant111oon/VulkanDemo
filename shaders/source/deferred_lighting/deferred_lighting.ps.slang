@@ -1,10 +1,12 @@
+#include "pass/deferred_lighting/vsout.slang"
+
 #include "registers/deferred_lighting_registers.slang"
 #include "registers/common_registers.slang"
 
-#include "common/lighting/brdf.slang"
-
-#include "common/common_cs.slang"
 #include "common/resource_defines.slang"
+#include "common/math/utils.slang"
+
+#include "common/lighting/brdf.slang"
 
 
 struct GBUFFER
@@ -221,15 +223,18 @@ float3 ComputeLighting(in int2 pixelCoord)
 }
 
 
-[shader("compute")]
-[numthreads(32, 32, 1)]
-void main(uint2 DTid : SV_DispatchThreadID)
+struct DEFERRED_LIGHTING_PS_OUTPUT
 {
-    if (any(DTid >= COMMON_SCREEN_SIZE)) {
-        return;
-    }
+    [[vk::location(0)]] float4 color;
+};
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid, COMMON_SCREEN_SIZE);
 
-    DEFERRED_LIGHTING_OUTPUT_UAV[pixCoord] = float4(ComputeLighting(pixCoord), 1.f);
+[shader("fragment")]
+DEFERRED_LIGHTING_PS_OUTPUT main(DEFERRED_LIGHTING_VS_OUTPUT input, uint2 pixCoord : SV_Position)
+{
+    DEFERRED_LIGHTING_PS_OUTPUT result = (DEFERRED_LIGHTING_PS_OUTPUT)0;
+
+    result.color = float4(ComputeLighting(pixCoord), 1.f);
+
+    return result;
 }

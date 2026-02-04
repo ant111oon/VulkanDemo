@@ -2225,15 +2225,15 @@ static void CreateDeferredLightingDescriptorSetLayout()
 
     s_deferredLightingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        .AddBinding(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
+        .AddBinding(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .AddBinding(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
     CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
@@ -2619,20 +2619,51 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
 }
 
 
-static void CreateDeferredLightingPipeline(const fs::path& csPath)
+static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
     std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
+    std::array shaderModules = {
+        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
+        CreateVkShaderModule(psPath, &shaderCodeBuffer),
+    };
 
-    vkn::ComputePipelineBuilder builder;
+    const std::array shaderModuleStages = {
+        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    static_assert(shaderModules.size() == shaderModuleStages.size());
+    const size_t shadersCount = shaderModules.size();
+
+    vkn::GraphicsPipelineBuilder builder;
+
+    for (size_t i = 0; i < shadersCount; ++i) {
+        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    }
+
+    VkPipelineColorBlendAttachmentState blendState = {};
+    blendState.blendEnable = VK_FALSE;
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     s_deferredLightingPipeline = builder
-        .SetShader(shaderModule, "main")
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetStencilTestState(VK_FALSE, {}, {})
+        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
+        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetRasterizerLineWidth(1.f)
+        .AddColorAttachmentFormat(s_colorRT.GetFormat())
+        .AddColorBlendAttachment(blendState)
         .SetLayout(s_deferredLightingPipelineLayout)
         .Build();
     
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
+    for (VkShaderModule& shader : shaderModules) {
+        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
+        shader = VK_NULL_HANDLE;
+    }
 
     CORE_ASSERT(s_deferredLightingPipeline != VK_NULL_HANDLE);
 }
@@ -2814,7 +2845,7 @@ static void CreatePipelines()
     CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
-    CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.cs.spv");
+    CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.vs.spv", "shaders/bin/deferred_lighting.ps.spv");
     CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
     CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
     CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
@@ -5448,11 +5479,11 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     CmdPipelineImageBarrier(
         cmdBuffer,
         VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_NONE,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         s_colorRT.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
@@ -5462,20 +5493,52 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         s_useDepthPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         s_commonDepthRT.Get(),
         VK_IMAGE_ASPECT_DEPTH_BIT
     );
     
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = VkExtent2D { s_colorRT.GetSizeX(), s_colorRT.GetSizeY() };
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.layerCount = 1;
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipeline);
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = s_colorRTView.Get();
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color.float32[0] = 0.f;
+    colorAttachment.clearValue.color.float32[1] = 0.f;
+    colorAttachment.clearValue.color.float32[2] = 0.f;
+    colorAttachment.clearValue.color.float32[3] = 0.f;
     
-    VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_deferredLightingDescriptorSet };
-    vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_deferredLightingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
 
-    cmdBuffer.CmdDispatch(ceil(s_pWnd->GetWidth() / 32.f), ceil(s_pWnd->GetHeight() / 32.f), 1);
+    cmdBuffer.CmdBeginRendering(renderingInfo);
+        VkViewport viewport = {};
+        viewport.width = renderingInfo.renderArea.extent.width;
+        viewport.height = renderingInfo.renderArea.extent.height;
+        viewport.minDepth = 0.f;
+        viewport.maxDepth = 1.f;
+        cmdBuffer.CmdSetViewport(0, 1, &viewport); 
+
+        VkRect2D scissor = {};
+        scissor.extent = renderingInfo.renderArea.extent;
+        cmdBuffer.CmdSetScissor(0, 1, &scissor);
+
+        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_deferredLightingPipeline);
+        
+        VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_deferredLightingDescriptorSet };
+        vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_deferredLightingPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+        cmdBuffer.CmdDraw(6, 1, 0, 0);        
+    cmdBuffer.CmdEndRendering();
 }
 
 
@@ -5485,11 +5548,11 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     CmdPipelineImageBarrier(
         cmdBuffer,
-        VK_IMAGE_LAYOUT_GENERAL,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         s_colorRT.Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
@@ -5999,8 +6062,8 @@ int main(int argc, char* argv[])
     s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
 
     UploadGPUResources();
     CreateIBLResources();

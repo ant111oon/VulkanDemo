@@ -1,0 +1,23 @@
+#ifndef DEFERRED_LIGHTING_VS_OUT_H
+#define DEFERRED_LIGHTING_VS_OUT_H
+
+
+struct DEFERRED_LIGHTING_VS_OUTPUT_INTERP
+{
+};
+
+
+struct DEFERRED_LIGHTING_VS_OUTPUT_NO_INTERP
+{
+};
+
+
+struct DEFERRED_LIGHTING_VS_OUTPUT
+{
+    DEFERRED_LIGHTING_VS_OUTPUT_INTERP data;
+    nointerpolation DEFERRED_LIGHTING_VS_OUTPUT_NO_INTERP flatData;
+
+    float4 hpos : SV_Position;
+};
+
+#endif
