@@ -4,6 +4,10 @@
 #include "constants.slang"
 
 
+#define IS_FLAG_SET(VALUE, MASK) (((uint)(VALUE) & (uint)(MASK)) != 0u)
+#define IS_BIT_SET(VALUE, BIT)   IS_FLAG_SET((uint)(VALUE), 1u << (uint)(BIT))
+
+
 #define M3D_IS_ZERO(x)     IsZero(x)
 #define M3D_IS_EQUAL(l, r) M3D_IS_ZERO((l) - (r))
 
@@ -29,18 +33,6 @@ bool IsZero(in float3 vec)
 bool IsZero(in float4 vec)
 {
     return IsZero(vec.xyz) && IsZero(vec.w);
-}
-
-
-bool IsFlagSet(uint value, uint mask)
-{
-    return (value & mask) != 0;
-}
-
-
-bool IsBitSet(uint value, uint bit)
-{
-    return IsFlagSet(value, uint(1) << bit);
 }
 
 

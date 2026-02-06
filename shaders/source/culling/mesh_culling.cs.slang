@@ -38,17 +38,17 @@ void PushCmd(in COMMON_MATERIAL material, in uint firstIndex, in uint indexCount
     uint idx = 0;
 
     if (IS_COMMON_MATERIAL_ALPHA_BLEND(material)) {
-        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
 
         MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
     } else if (IS_COMMON_MATERIAL_ALPHA_KILL(material)) {
-        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
 
         MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
     } else {
-        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
 
         MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
@@ -61,9 +61,9 @@ void PushCmd(in COMMON_MATERIAL material, in uint firstIndex, in uint indexCount
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     if (DTid.x == 0) {
-        InterlockedExchange(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
-        InterlockedExchange(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
-        InterlockedExchange(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNT_UAV[0], 0);
+        InterlockedExchange(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
+        InterlockedExchange(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
+        InterlockedExchange(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
     }
 
     AllMemoryBarrier();
