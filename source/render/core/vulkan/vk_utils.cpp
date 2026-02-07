@@ -24,4 +24,20 @@ namespace vkn::utils
 
         VK_CHECK(vkSetDebugUtilsObjectName(device.Get(), &dbgUtilsObjNameInfo));
     }
+
+
+    VkImageViewType ImageTypeToViewType(VkImageType type)
+    {
+        switch(type) {
+            case VK_IMAGE_TYPE_1D:
+                return VK_IMAGE_VIEW_TYPE_1D;
+            case VK_IMAGE_TYPE_2D:
+                return VK_IMAGE_VIEW_TYPE_2D;
+            case VK_IMAGE_TYPE_3D:
+                return VK_IMAGE_VIEW_TYPE_3D;
+            default:
+                VK_ASSERT_FAIL("Invalid Vulkan image type");
+                return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+        }
+    }
 }

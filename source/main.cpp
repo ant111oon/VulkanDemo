@@ -1016,7 +1016,7 @@ namespace DbgUI
         imGuiInitInfo.Queue = s_vkDevice.GetQueue();
         imGuiInitInfo.DescriptorPoolSize = 1000;
         imGuiInitInfo.MinImageCount = 2;
-        imGuiInitInfo.ImageCount = s_vkSwapchain.GetImageCount();
+        imGuiInitInfo.ImageCount = s_vkSwapchain.GetTextureCount();
         imGuiInitInfo.PipelineCache = VK_NULL_HANDLE;
 
         imGuiInitInfo.UseDynamicRendering = true;
@@ -1025,7 +1025,7 @@ namespace DbgUI
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat fmt = s_vkSwapchain.GetImageFormat();
+        const VkFormat fmt = s_vkSwapchain.GetTextureFormat();
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
@@ -2673,7 +2673,7 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
         .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_vkSwapchain.GetImageFormat())
+        .AddColorAttachmentFormat(s_vkSwapchain.GetTextureFormat())
         .AddColorBlendAttachment(blendState)
         .SetLayout(s_postProcessingPipelineLayout)
         .Build();
@@ -5501,7 +5501,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_NONE,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_vkSwapchain.GetImage(s_nextImageIdx),
+        s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
 
@@ -5513,8 +5513,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    // colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
-    colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
+    colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5563,7 +5562,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_vkSwapchain.GetImage(s_nextImageIdx),
+        s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
         VK_IMAGE_ASPECT_COLOR_BIT
     );
 
@@ -5575,8 +5574,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    // colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
-    colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
+    colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5644,7 +5642,7 @@ static void RenderScene()
             VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
             VK_ACCESS_2_SHADER_WRITE_BIT,
             VK_ACCESS_2_NONE,
-            s_vkSwapchain.GetImage(s_nextImageIdx),
+            s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
             VK_IMAGE_ASPECT_COLOR_BIT
         );
 
@@ -5913,7 +5911,7 @@ int main(int argc, char* argv[])
 
     DbgUI::Init();
 
-    const size_t swapchainImageCount = s_vkSwapchain.GetImageCount();
+    const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
 
     s_renderFinishedSemaphores.resize(swapchainImageCount);
     for (size_t i = 0; i < swapchainImageCount; ++i) {

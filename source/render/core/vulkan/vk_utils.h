@@ -7,4 +7,6 @@
 namespace vkn::utils
 {
     void SetObjectName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pObjectName);
+
+    VkImageViewType ImageTypeToViewType(VkImageType type);
 }

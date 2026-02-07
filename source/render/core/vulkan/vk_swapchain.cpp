@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "vk_swapchain.h"
+#include "vk_utils.h"
 
 
 namespace vkn
@@ -117,6 +118,147 @@ namespace vkn
     }
 
 
+    SCTexture::~SCTexture()
+    {
+        Destroy();
+    }
+
+
+    SCTexture& SCTexture::Create(Device* pDevice, VkImage image, VkImageType type, VkExtent2D extent, VkFormat format)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Recreation of swapchain texture %s", GetDebugName());
+            Destroy();
+        }
+
+        VK_ASSERT(pDevice && pDevice->IsCreated());
+        VK_ASSERT(image != VK_NULL_HANDLE);
+
+        m_pDevice = pDevice;
+        m_image = image;        
+        m_type = type;
+        m_extent = extent;
+        m_format = format;
+
+        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        m_currAccessMask = VK_ACCESS_2_NONE;
+
+        SetCreated(true);
+
+        return *this;
+    }
+
+
+    SCTexture& SCTexture::Destroy()
+    {
+        if (!IsCreated()) {
+            return *this;
+        }
+
+        m_pDevice = nullptr;
+        m_image = VK_NULL_HANDLE;
+        m_type = {};
+        m_extent = {};
+        m_format = {};
+
+        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        m_currAccessMask = VK_ACCESS_2_NONE;
+
+        Object::Destroy();
+
+        return *this;        
+    }
+
+
+    void SCTexture::Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
+    {
+        VK_ASSERT(IsCreated());
+        
+        m_currLayout = dstLayout;
+        m_currStageMask = dstStageMask;
+        m_currAccessMask = dstAccessMask;
+    }
+
+
+    SCTextureView::~SCTextureView()
+    {
+        Destroy();
+    }
+
+
+    Device* SCTextureView::GetDevice() const
+    {
+        VK_ASSERT(IsValid());
+        return m_pOwner->GetDevice();
+    }
+
+
+    bool SCTextureView::IsValid() const
+    {
+        return IsCreated() && m_pOwner->IsCreated();
+    }
+
+
+    SCTextureView& SCTextureView::Create(const SCTexture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Recreation of swapchain texture view %s", GetDebugName());
+            Destroy();
+        }
+
+        const SCTexture* pOwner = &texture;
+
+        VK_ASSERT(pOwner && pOwner->IsCreated());
+
+        VkImageViewCreateInfo imageViewCreateInfo = {};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.image = pOwner->Get();
+        imageViewCreateInfo.viewType = utils::ImageTypeToViewType(pOwner->GetType());
+        imageViewCreateInfo.format = pOwner->GetFormat();
+        imageViewCreateInfo.components = mapping;
+        imageViewCreateInfo.subresourceRange = subresourceRange;
+
+        m_view = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateImageView(pOwner->GetDevice()->Get(), &imageViewCreateInfo, nullptr, &m_view));
+
+        VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan swapchain texture view");
+
+        SetCreated(true);
+
+        m_pOwner = pOwner;
+
+        m_type = imageViewCreateInfo.viewType;
+        m_format = imageViewCreateInfo.format;
+        m_components = imageViewCreateInfo.components;
+        m_subresourceRange = imageViewCreateInfo.subresourceRange;
+
+        return *this;
+    }
+
+
+    SCTextureView& SCTextureView::Destroy()
+    {
+        if (!IsCreated()) {
+            return *this;
+        }
+
+        vkDestroyImageView(GetDevice()->Get(), m_view, nullptr);
+        m_view = VK_NULL_HANDLE;
+
+        m_pOwner = nullptr;
+        m_type = {};
+        m_format = {};
+        m_components = {};
+        m_subresourceRange = {};
+
+        Object::Destroy();
+
+        return *this;
+    }
+
+
     Swapchain::~Swapchain()
     {
         Destroy();
@@ -141,8 +283,8 @@ namespace vkn
             return *this;
         }
 
-        DestroyImageViews();
-        ClearImages();
+        DestroyTextureViews();
+        DestroyTextures();
 
         vkDestroySwapchainKHR(m_pDevice->Get(), m_swapchain, nullptr);
         m_swapchain = VK_NULL_HANDLE;
@@ -152,11 +294,12 @@ namespace vkn
         
         m_flags = {};
         m_minImageCount = {};
-        m_imageFormat = {};
-        m_imageColorSpace = {};
-        m_imageExtent = {};
-        m_imageArrayLayers = {};
-        m_imageUsage = {};
+        m_currImageCount = {};
+        m_textureFormat = {};
+        m_textureColorSpace = {};
+        m_textureExtent = {};
+        m_textureArrayLayers = {};
+        m_textureUsage = {};
         m_transform = {};
         m_compositeAlpha = {};
         m_presentMode = {};
@@ -178,7 +321,7 @@ namespace vkn
             return *this;
         }
 
-        if (newExtent.width == m_imageExtent.width && newExtent.height == m_imageExtent.height) {
+        if (newExtent.width == m_textureExtent.width && newExtent.height == m_textureExtent.height) {
             succeded = true;
             return *this;
         }
@@ -208,18 +351,18 @@ namespace vkn
 
         m_flags = swapchainCreateInfo.flags;
         m_minImageCount = swapchainCreateInfo.minImageCount;
-        m_imageFormat = swapchainCreateInfo.imageFormat;
-        m_imageColorSpace = swapchainCreateInfo.imageColorSpace;
-        m_imageExtent = swapchainCreateInfo.imageExtent;
-        m_imageArrayLayers = swapchainCreateInfo.imageArrayLayers;
-        m_imageUsage = swapchainCreateInfo.imageUsage;
+        m_textureFormat = swapchainCreateInfo.imageFormat;
+        m_textureColorSpace = swapchainCreateInfo.imageColorSpace;
+        m_textureExtent = swapchainCreateInfo.imageExtent;
+        m_textureArrayLayers = swapchainCreateInfo.imageArrayLayers;
+        m_textureUsage = swapchainCreateInfo.imageUsage;
         m_transform = swapchainCreateInfo.preTransform;
         m_compositeAlpha = swapchainCreateInfo.compositeAlpha;
         m_presentMode = swapchainCreateInfo.presentMode;
 
-        DestroyImageViews();
-        PullImages();
-        CreateImageViews();
+        DestroyTextureViews();
+        PullTextures();
+        CreateTextureViews();
 
         return *this;
     }
@@ -242,10 +385,10 @@ namespace vkn
 
         createInfo.flags = m_flags;
         createInfo.minImageCount = m_minImageCount;
-        createInfo.imageFormat = m_imageFormat;
-        createInfo.imageColorSpace = m_imageColorSpace;
-        createInfo.imageArrayLayers = m_imageArrayLayers;
-        createInfo.imageUsage = m_imageUsage;
+        createInfo.imageFormat = m_textureFormat;
+        createInfo.imageColorSpace = m_textureColorSpace;
+        createInfo.imageArrayLayers = m_textureArrayLayers;
+        createInfo.imageUsage = m_textureUsage;
         createInfo.transform = m_transform;
         createInfo.compositeAlpha = m_compositeAlpha;
         createInfo.presentMode = m_presentMode;
@@ -254,67 +397,59 @@ namespace vkn
     }
 
 
-    void Swapchain::PullImages()
+    void Swapchain::PullTextures()
     {
         VkDevice vkDevice = m_pDevice->Get();
 
         VK_ASSERT(vkDevice != VK_NULL_HANDLE);
         VK_ASSERT(m_swapchain != VK_NULL_HANDLE);
 
-        uint32_t swapchainImagesCount = 0;
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &swapchainImagesCount, nullptr));
-        m_images.resize(swapchainImagesCount);
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &swapchainImagesCount, m_images.data()));
+        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &m_currImageCount, nullptr));
+        
+        std::vector<VkImage> images(m_currImageCount);
+        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &m_currImageCount, images.data()));
+
+        for (uint32_t i = 0; i < m_currImageCount; ++i) {
+            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat)
+                .SetDebugName("SWAPCHAIN_TEXTURE_%u", i);
+        }
     }
 
 
-    void Swapchain::ClearImages()
+    void Swapchain::DestroyTextures()
     {
-        m_images.clear();
+        for (uint32_t i = 0; i < m_currImageCount; ++i) {
+            m_textures[i].Destroy();
+        }
     }
 
 
-    void Swapchain::CreateImageViews()
+    void Swapchain::CreateTextureViews()
     {
-        VK_ASSERT(!m_images.empty());
+        VK_ASSERT(!m_textures.empty());
 
         VkDevice vkDevice = m_pDevice->Get();
         VK_ASSERT(vkDevice != VK_NULL_HANDLE);
-        
-        m_imageViews.resize(m_images.size());
 
-        for (size_t i = 0; i < m_images.size(); ++i) {
-            VkImageViewCreateInfo imageViewCreateInfo = {};
-            imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            imageViewCreateInfo.image = m_images[i];
-            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            imageViewCreateInfo.format = m_imageFormat;
-            imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-            imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-            imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-            imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-            imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-            imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-            imageViewCreateInfo.subresourceRange.layerCount = 1;
-            imageViewCreateInfo.subresourceRange.levelCount = 1;
+        for (size_t i = 0; i < m_currImageCount; ++i) {
+            const VkComponentMapping components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
-            VkImageView& view = m_imageViews[i];
+            VkImageSubresourceRange subresourceRange = {};
+            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresourceRange.baseArrayLayer = 0;
+            subresourceRange.baseMipLevel = 0;
+            subresourceRange.layerCount = 1;
+            subresourceRange.levelCount = 1;
 
-            VK_CHECK(vkCreateImageView(vkDevice, &imageViewCreateInfo, nullptr, &view));
+            m_textureViews[i].Create(m_textures[i], components, subresourceRange).SetDebugName("SWAPCHAIN_TEXTURE_VIEW_%u", i);
         }
     }
 
 
-    void Swapchain::DestroyImageViews()
+    void Swapchain::DestroyTextureViews()
     {
-        VkDevice vkDevice = m_pDevice->Get();
-
-        for (VkImageView& view : m_imageViews) {
-            vkDestroyImageView(vkDevice, view, nullptr);
-            view = VK_NULL_HANDLE;
+        for (uint32_t i = 0; i < m_currImageCount; ++i) {
+            m_textureViews[i].Destroy();
         }
-
-        m_imageViews.clear();
     }
 }

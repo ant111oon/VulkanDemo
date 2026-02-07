@@ -6,22 +6,6 @@
 
 namespace vkn
 {
-    static constexpr VkImageViewType ImageTypeToViewType(VkImageType type)
-    {
-        switch(type) {
-            case VK_IMAGE_TYPE_1D:
-                return VK_IMAGE_VIEW_TYPE_1D;
-            case VK_IMAGE_TYPE_2D:
-                return VK_IMAGE_VIEW_TYPE_2D;
-            case VK_IMAGE_TYPE_3D:
-                return VK_IMAGE_VIEW_TYPE_3D;
-            default:
-                VK_ASSERT_FAIL("Invalid Vulkan image type");
-                return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
-        }
-    }
-
-
     TextureView& TextureView::SetDebugName(const char* pName)
     {
         Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
@@ -127,7 +111,7 @@ namespace vkn
 
         TextureViewCreateInfo createInfo = {};
         createInfo.pOwner = &texture;
-        createInfo.type = ImageTypeToViewType(texture.GetType());
+        createInfo.type = utils::ImageTypeToViewType(texture.GetType());
         createInfo.format = texture.GetFormat();
         createInfo.components = mapping;
         createInfo.subresourceRange = subresourceRange;
@@ -264,6 +248,10 @@ namespace vkn
         m_format = info.format;
         m_mipCount = info.mipLevels;
         m_layersCount = info.arrayLayers;
+
+        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        m_currAccessMask = VK_ACCESS_2_NONE;
 
         return *this;
     }

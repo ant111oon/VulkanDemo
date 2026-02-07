@@ -192,21 +192,21 @@ namespace vkn
             return m_extent;    
         }
 
-        const uint32_t GetMipCount() const
+        uint32_t GetMipCount() const
         {
             VK_ASSERT(IsCreated());
             return m_mipCount;
         }
 
-        const uint32_t GetLayersCount() const
+        uint32_t GetLayersCount() const
         {
             VK_ASSERT(IsCreated());
             return m_layersCount;
         }
 
-        const uint32_t GetSizeX() const { return GetSize().width; }
-        const uint32_t GetSizeY() const { return GetSize().height; }
-        const uint32_t GetSizeZ() const { return GetSize().depth; }
+        uint32_t GetSizeX() const { return GetSize().width; }
+        uint32_t GetSizeY() const { return GetSize().height; }
+        uint32_t GetSizeZ() const { return GetSize().depth; }
 
     private:
         void Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
