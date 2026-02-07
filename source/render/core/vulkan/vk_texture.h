@@ -39,15 +39,15 @@ namespace vkn
         
         TextureView& Destroy();
 
+        TextureView& SetDebugName(const char* pName);
+        const char* GetDebugName() const;
+
         template <typename... Args>
         TextureView& SetDebugName(const char* pFmt, Args&&... args)
         {
             Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
             return *this;
         }
-
-        TextureView& SetDebugName(const char* pName);
-        const char* GetDebugName() const;
 
         const Texture* GetOwner() const
         {
@@ -122,6 +122,8 @@ namespace vkn
 
     class Texture : public Object
     {
+        friend class CmdBuffer;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Texture);
 
@@ -136,7 +138,17 @@ namespace vkn
         Texture& Create(const TextureCreateInfo& info);
         Texture& Destroy();
 
-        const char* GetDebugName() const;
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("Texture");
+        }
+
+        template <typename... Args>
+        Texture& SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+            return *this;
+        }
 
         Device* GetDevice() const
         {
@@ -180,18 +192,41 @@ namespace vkn
             return m_extent;    
         }
 
+        const uint32_t GetMipCount() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_mipCount;
+        }
+
+        const uint32_t GetLayersCount() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_layersCount;
+        }
+
         const uint32_t GetSizeX() const { return GetSize().width; }
         const uint32_t GetSizeY() const { return GetSize().height; }
         const uint32_t GetSizeZ() const { return GetSize().depth; }
 
-        const uint32_t GetMipCount() const { return m_mipCount; }
-        const uint32_t GetLayersCount() const { return m_layersCount; }
+    private:
+        void Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
 
-        template <typename... Args>
-        Texture& SetDebugName(const char* pFmt, Args&&... args)
+        VkImageLayout GetLayout() const
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
-            return *this;
+            VK_ASSERT(IsCreated());
+            return m_currLayout;
+        }
+
+        VkPipelineStageFlags2 GetStageMask() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_currStageMask;
+        }
+
+        VkAccessFlags2 GetAccessMask() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_currAccessMask;
         }
 
     private:
@@ -208,6 +243,10 @@ namespace vkn
 
         uint32_t m_mipCount = 1;
         uint32_t m_layersCount = 1;
+ 
+        VkImageLayout         m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED; 
+        VkPipelineStageFlags2 m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        VkAccessFlags2        m_currAccessMask = VK_ACCESS_2_NONE;
     };
 
 

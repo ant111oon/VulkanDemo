@@ -9,6 +9,88 @@ namespace vkn
     class CmdPool;
     class QueryPool;
     class Buffer;
+    class Texture;
+
+
+    class BarrierList
+    {
+        friend class CmdBuffer;
+
+    private:
+        enum StateFlags
+        {
+            FLAG_IS_STARTED,
+            FLAG_COUNT,
+        };
+
+        struct BufferBarrierData
+        {
+            Buffer*               pBuffer;
+            VkPipelineStageFlags2 dstStageMask;
+            VkAccessFlags2        dstAccessMask;
+            VkDeviceSize          offset;
+            VkDeviceSize          size;
+        };
+
+        struct TextureBarrierData
+        {
+            Texture*              pTexture;
+            VkImageLayout         dstLayout;
+            VkPipelineStageFlags2 dstStageMask;
+            VkAccessFlags2        dstAccessMask;
+            VkImageAspectFlags    dstAspectMask;
+            uint32_t              baseMipLevel;
+            uint32_t              levelCount;
+            uint32_t              baseArrayLayer;
+            uint32_t              layerCount;
+        };
+
+    public:
+        ENG_DECL_CLASS_NO_COPIABLE(BarrierList);
+
+        BarrierList() = default;
+
+        BarrierList& Begin();
+
+        BarrierList& AddBufferBarrier(
+            Buffer* pBuffer,
+            VkPipelineStageFlags2 dstStageMask,
+            VkAccessFlags2 dstAccessMask, 
+            VkDeviceSize offset = 0,
+            VkDeviceSize size = VK_WHOLE_SIZE);
+
+        BarrierList& AddTextureBarrier(
+            Texture* pTexture,
+            VkImageLayout dstLayout,
+            VkPipelineStageFlags2 dstStageMask,
+            VkAccessFlags2 dstAccessMask, 
+            VkImageAspectFlags aspectMask, 
+            uint32_t baseMipLevel = 0, 
+            uint32_t levelCount = VK_REMAINING_MIP_LEVELS,
+            uint32_t baseArrayLayer = 0, 
+            uint32_t layerCount = VK_REMAINING_ARRAY_LAYERS);
+
+        size_t GetBufferBarriersCount() const { return m_bufferBarriers.size(); }
+        size_t GetTextureBarriersCount() const { return m_textureBarriers.size(); }
+        
+        bool IsStarted() const { return m_state.test(FLAG_IS_STARTED); }
+
+    private:
+        BarrierList(BarrierList&& list) noexcept = default;
+        BarrierList& operator=(BarrierList&& list) noexcept = default;
+
+        BarrierList& Reset();
+        BarrierList& End();
+
+        const BufferBarrierData& GetBufferBarrierByIdx(size_t i) const;
+        const TextureBarrierData& GetTextureBarrierByIdx(size_t i) const;
+
+    private:
+        std::vector<BufferBarrierData> m_bufferBarriers;
+        std::vector<TextureBarrierData> m_textureBarriers;
+
+        std::bitset<FLAG_COUNT> m_state = {};
+    };
 
 
     class CmdBuffer : public Object
@@ -28,7 +110,8 @@ namespace vkn
 
         CmdBuffer& Begin(const VkCommandBufferBeginInfo& beginInfo);
         CmdBuffer& End();
-        
+
+        // TODO: Remove
         CmdBuffer& CmdPipelineBarrier2(const VkDependencyInfo& depInfo);
 
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool, uint32_t firstQuery, uint32_t queryCount);
@@ -52,6 +135,12 @@ namespace vkn
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
         
+        BarrierList& GetBarrierList();
+        // Post list of barriers to command buffer 
+        CmdBuffer& CmdPushBarrierList();
+
+        Device* GetDevice() const;
+
         template <typename... Args>
         CmdBuffer& SetDebugName(const char* pFmt, Args&&... args)
         {
@@ -59,9 +148,10 @@ namespace vkn
             return *this;
         }
 
-        const char* GetDebugName() const;
-
-        Device* GetDevice() const;
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("CommandBuffer");
+        }
 
         CmdPool* GetOwnerPool() const
         {
@@ -87,6 +177,7 @@ namespace vkn
             return m_state.test(FLAG_IS_RENDERING_STARTED);
         }
 
+
         bool IsValid() const;
 
     private:
@@ -106,6 +197,8 @@ namespace vkn
     private:
         CmdPool* m_pOwner = nullptr;
         VkCommandBuffer m_cmdBuffer = VK_NULL_HANDLE;
+
+        BarrierList m_barrierList;
 
         std::bitset<FLAG_COUNT> m_state = {};
     };
@@ -148,7 +241,10 @@ namespace vkn
             return *this;
         }
 
-        const char* GetDebugName() const;
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("CommandPool");
+        }
 
         Device* GetDevice() const
         {

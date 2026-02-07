@@ -6,6 +6,13 @@
 
 namespace vkn
 {
+    Buffer::Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo)
+        : Object()
+    {
+        Create(pDevice, size, usage, pAllocInfo);
+    }
+
+
     Buffer::Buffer(const BufferCreateInfo& info)
         : Object()
     {
@@ -43,11 +50,26 @@ namespace vkn
         
         std::swap(m_deviceAddress, buffer.m_deviceAddress);
 
+        std::swap(m_currStageMask, buffer.m_currStageMask);
+        std::swap(m_currAccessMask, buffer.m_currAccessMask);
+
         std::swap(m_state, buffer.m_state);
 
         Object::operator=(std::move(buffer));
 
         return *this; 
+    }
+
+
+    Buffer& Buffer::Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo)
+    {
+        BufferCreateInfo createInfo = {};
+        createInfo.pDevice = pDevice;
+        createInfo.size = size;
+        createInfo.usage = usage;
+        createInfo.pAllocInfo = pAllocInfo;
+
+        return Create(createInfo);
     }
 
 
@@ -112,6 +134,9 @@ namespace vkn
 
         m_deviceAddress = 0;
 
+        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        m_currAccessMask = VK_ACCESS_2_NONE;
+
         m_pDevice = nullptr;
         m_state.reset();
 
@@ -163,5 +188,14 @@ namespace vkn
     const char* Buffer::GetDebugName() const
     {
         return Object::GetDebugName("Buffer");
+    }
+
+
+    void Buffer::Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask)
+    {
+        VK_ASSERT(IsCreated());
+
+        m_currStageMask = dstStage;
+        m_currAccessMask = dstAccessMask;
     }
 }

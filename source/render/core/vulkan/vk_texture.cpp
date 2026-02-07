@@ -203,6 +203,10 @@ namespace vkn
         std::swap(m_mipCount, image.m_mipCount);
         std::swap(m_layersCount, image.m_layersCount);
 
+        std::swap(m_currLayout, image.m_currLayout);
+        std::swap(m_currStageMask, image.m_currStageMask);
+        std::swap(m_currAccessMask, image.m_currAccessMask);
+
         std::swap(m_pDevice, image.m_pDevice);
 
         Object::operator=(std::move(image));
@@ -285,15 +289,23 @@ namespace vkn
         m_mipCount = 1;
         m_layersCount = 1;
 
+        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        m_currAccessMask = VK_ACCESS_2_NONE;
+
         Object::Destroy();
 
         return *this;
     }
 
 
-    const char* Texture::GetDebugName() const
-    { 
-        return Object::GetDebugName("Texture");
+    void Texture::Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
+    {
+        VK_ASSERT(IsCreated());
+        
+        m_currLayout = dstLayout;
+        m_currStageMask = dstStageMask;
+        m_currAccessMask = dstAccessMask;
     }
 
 

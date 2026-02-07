@@ -3,6 +3,7 @@
 #include "vk_cmd.h"
 #include "vk_query.h"
 #include "vk_buffer.h"
+#include "vk_texture.h"
 
 
 namespace vkn
@@ -13,6 +14,80 @@ namespace vkn
     #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
         VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
         VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+
+
+    BarrierList& BarrierList::Begin()
+    {
+        VK_ASSERT_MSG(!IsStarted(), "Attempt to begin already started barrier list");
+        
+        m_state.set(FLAG_IS_STARTED, true);
+        
+        return *this;
+    }
+
+
+    BarrierList& BarrierList::Reset()
+    {
+        m_bufferBarriers.clear();
+        m_textureBarriers.clear();
+
+        m_state = {};
+
+        return *this;
+    }
+
+
+    BarrierList& BarrierList::End()
+    {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to end barrier list which wasn't started");
+        
+        Reset();
+        
+        return *this;
+    }
+
+
+    const BarrierList::BufferBarrierData& BarrierList::GetBufferBarrierByIdx(size_t i) const
+    {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to get element from barrier list which wasn't started");
+        VK_ASSERT(i < GetBufferBarriersCount());
+
+        return m_bufferBarriers.at(i);
+    }
+
+
+    const BarrierList::TextureBarrierData& BarrierList::GetTextureBarrierByIdx(size_t i) const
+    {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to get element from barrier list which wasn't started");
+        VK_ASSERT(i < GetTextureBarriersCount());
+
+        return m_textureBarriers.at(i);
+    }
+
+
+    BarrierList& BarrierList::AddBufferBarrier(Buffer* pBuffer, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask, VkDeviceSize offset, VkDeviceSize size)
+    {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
+        VK_ASSERT(pBuffer && pBuffer->IsCreated());
+
+        m_bufferBarriers.emplace_back(BufferBarrierData{ pBuffer, dstStageMask, dstAccessMask, offset, size });
+
+        return *this;
+    }
+
+
+    BarrierList& BarrierList::AddTextureBarrier(Texture* pTexture, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask,
+        VkImageAspectFlags aspectMask, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount
+    ) {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
+        VK_ASSERT(pTexture && pTexture->IsCreated());
+
+        m_textureBarriers.emplace_back(
+            TextureBarrierData{ pTexture, dstLayout, dstStageMask, dstAccessMask, aspectMask, baseMipLevel, levelCount, baseArrayLayer, layerCount }
+        );
+
+        return *this;
+    }
 
     
     bool CmdBuffer::IsValid() const
@@ -48,6 +123,9 @@ namespace vkn
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
         std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
         std::swap(m_state, cmdBuffer.m_state);
+        
+        m_barrierList = std::move(cmdBuffer.m_barrierList);
+        cmdBuffer.m_barrierList.Reset();
 
         return *this;
     }
@@ -69,6 +147,7 @@ namespace vkn
     CmdBuffer& CmdBuffer::End()
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT_MSG(!m_barrierList.IsStarted(), "Attempt to end command buffer with started buffer barrier list");
 
         VK_CHECK(vkEndCommandBuffer(m_cmdBuffer));
 
@@ -231,18 +310,92 @@ namespace vkn
     }
 
 
+    BarrierList& CmdBuffer::GetBarrierList()
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        return m_barrierList;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdPushBarrierList()
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        VK_ASSERT_MSG(m_barrierList.IsStarted(), "Attempt to push buffer barrier list which wasn't started");
+
+        static std::vector<VkBufferMemoryBarrier2> bufferBarriers(m_barrierList.GetBufferBarriersCount());
+        bufferBarriers.clear();
+
+        for (size_t i = 0; i < m_barrierList.GetBufferBarriersCount(); ++i) {
+            const BarrierList::BufferBarrierData& data = m_barrierList.GetBufferBarrierByIdx(i);
+
+            VkBufferMemoryBarrier2 barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+            barrier.buffer = data.pBuffer->Get();
+            barrier.srcStageMask = data.pBuffer->GetStageMask();
+            barrier.srcAccessMask = data.pBuffer->GetAccessMask();
+            barrier.dstStageMask = data.dstStageMask;
+            barrier.dstAccessMask = data.dstAccessMask;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.offset = data.offset;
+            barrier.size = data.size;
+
+            data.pBuffer->Transit(data.dstStageMask, data.dstAccessMask);
+
+            bufferBarriers.emplace_back(barrier);
+        }
+
+        static std::vector<VkImageMemoryBarrier2> textureBarriers(m_barrierList.GetTextureBarriersCount());
+        textureBarriers.clear();
+
+        for (size_t i = 0; i < m_barrierList.GetTextureBarriersCount(); ++i) {
+            const BarrierList::TextureBarrierData& data = m_barrierList.GetTextureBarrierByIdx(i);
+
+            VkImageMemoryBarrier2 barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            barrier.image = data.pTexture->Get();
+            barrier.srcStageMask = data.pTexture->GetStageMask();
+            barrier.srcAccessMask = data.pTexture->GetAccessMask();
+            barrier.oldLayout = data.pTexture->GetLayout();
+            barrier.dstStageMask = data.dstStageMask;
+            barrier.dstAccessMask = data.dstAccessMask;
+            barrier.newLayout = data.dstLayout;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.subresourceRange.aspectMask = data.dstAspectMask;
+            barrier.subresourceRange.baseMipLevel = data.baseMipLevel;
+            barrier.subresourceRange.levelCount = data.levelCount;
+            barrier.subresourceRange.baseArrayLayer = data.baseArrayLayer;
+            barrier.subresourceRange.layerCount = data.layerCount;
+
+            data.pTexture->Transit(data.dstLayout, data.dstStageMask, data.dstAccessMask);
+
+            textureBarriers.emplace_back(barrier);
+        }
+
+        VkDependencyInfo dependencyInfo = {};
+        dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dependencyInfo.bufferMemoryBarrierCount = bufferBarriers.size();
+        dependencyInfo.pBufferMemoryBarriers = bufferBarriers.data();
+        dependencyInfo.imageMemoryBarrierCount = textureBarriers.size();
+        dependencyInfo.pImageMemoryBarriers = textureBarriers.data();
+
+        vkCmdPipelineBarrier2(m_cmdBuffer, &dependencyInfo);
+
+        m_barrierList.End();
+
+        return *this;
+    }
+
+
     CmdBuffer& CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
         VK_ASSERT(IsValid());
         VK_CHECK(vkResetCommandBuffer(m_cmdBuffer, flags));
 
         return *this;
-    }
-
-
-    const char* CmdBuffer::GetDebugName() const
-    {
-        return Object::GetDebugName("CommandBuffer");
     }
 
     
@@ -419,11 +572,5 @@ namespace vkn
         cmdBuffer.Free();
 
         return *this;
-    }
-
-
-    const char* CmdPool::GetDebugName() const
-    {
-        return Object::GetDebugName("CommandBuffer");
     }
 }

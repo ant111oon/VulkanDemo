@@ -12,7 +12,7 @@ namespace vkn
         Device* pDevice;
 
         VkDeviceSize size;
-        VkBufferUsageFlags usage;
+        VkBufferUsageFlags2 usage;
 
         const AllocationInfo* pAllocInfo;
     };
@@ -20,10 +20,13 @@ namespace vkn
 
     class Buffer : public Object
     {
+        friend class CmdBuffer;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Buffer);
 
         Buffer() = default;
+        Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo);
         Buffer(const BufferCreateInfo& info);
 
         ~Buffer();
@@ -31,23 +34,12 @@ namespace vkn
         Buffer(Buffer&& buffer) noexcept;
         Buffer& operator=(Buffer&& buffer) noexcept;
 
+        Buffer& Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo);
         Buffer& Create(const BufferCreateInfo& info);
         Buffer& Destroy();
 
-        template<typename T>
-        T* Map() { return static_cast<T*>(Map(0, VK_WHOLE_SIZE)); }
-
-        template<typename T>
-        Buffer& Map(T** ppData)
-        {
-            VK_ASSERT(ppData);
-            *ppData = Map<T>();
-
-            return *this;
-        }
-
-        void* Map(VkDeviceSize offset, VkDeviceSize size);
-        Buffer& Map(void** ppData, VkDeviceSize offset, VkDeviceSize size);
+        void* Map(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
+        Buffer& Map(void** ppData, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
 
         Buffer& Unmap();
 
@@ -97,6 +89,21 @@ namespace vkn
         }
 
     private:
+        void Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask);
+
+        VkPipelineStageFlags2 GetStageMask() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_currStageMask;
+        }
+
+        VkAccessFlags2 GetAccessMask() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_currAccessMask;
+        }
+
+    private:
         enum StateBits
         {
             BIT_IS_MAPPED,
@@ -112,6 +119,9 @@ namespace vkn
         VmaAllocationInfo m_allocInfo = {};
 
         VkDeviceAddress m_deviceAddress = 0;
+
+        VkPipelineStageFlags2 m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
+        VkAccessFlags2        m_currAccessMask = VK_ACCESS_2_NONE;
 
         std::bitset<BIT_COUNT> m_state = {};
     };

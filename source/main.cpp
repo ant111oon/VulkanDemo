@@ -1345,38 +1345,6 @@ static void CmdPipelineImageBarrier(
     cmdBuffer.CmdPipelineBarrier2(dependencyInfo);
 }
 
-
-static void CmdPipelineBufferBarrier(
-    vkn::CmdBuffer& cmdBuffer,
-    VkPipelineStageFlags2 srcStageMask, 
-    VkPipelineStageFlags2 dstStageMask,
-    VkAccessFlags2 srcAccessMask, 
-    VkAccessFlags2 dstAccessMask,
-    VkBuffer buffer,
-    VkDeviceSize offset = 0,
-    VkDeviceSize size = VK_WHOLE_SIZE
-) {
-    VkBufferMemoryBarrier2 bufferBarrier2 = {};
-    bufferBarrier2.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-    bufferBarrier2.srcStageMask = srcStageMask;
-    bufferBarrier2.srcAccessMask = srcAccessMask;
-    bufferBarrier2.dstStageMask = dstStageMask;
-    bufferBarrier2.dstAccessMask = dstAccessMask;
-    bufferBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    bufferBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    bufferBarrier2.buffer = buffer;
-    bufferBarrier2.offset = offset;
-    bufferBarrier2.size = size;
-
-    VkDependencyInfo dependencyInfo = {};
-    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dependencyInfo.bufferMemoryBarrierCount = 1;
-    dependencyInfo.pBufferMemoryBarriers = &bufferBarrier2;
-
-    cmdBuffer.CmdPipelineBarrier2(dependencyInfo);
-}
-
-
 static void SubmitVkQueue(VkQueue vkQueue,
     VkCommandBuffer vkCmdBuffer,
     VkFence vkFinishFence,
@@ -1580,7 +1548,7 @@ static void CreateCommonStagingBuffers()
     vkn::BufferCreateInfo stagingBufCreateInfo = {};
     stagingBufCreateInfo.pDevice = &s_vkDevice;
     stagingBufCreateInfo.size = STAGING_BUFFER_SIZE;
-    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT;
     stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
@@ -1871,7 +1839,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
             const TextureLoadData& loadData = faceLoadDatas[i + j];
 
-            void* pData = stagingBuffer.Map<uint8_t>();
+            void* pData = stagingBuffer.Map();
             memcpy(pData, loadData.GetData(), loadData.GetMemorySize());
             stagingBuffer.Unmap();
         }
@@ -2964,7 +2932,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& redImageStagingBuffer = s_commonStagingBuffers[0];
 
-    uint8_t* pRedImageData = (uint8_t*)redImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pRedImageData = (uint8_t*)redImageStagingBuffer.Map();
     pRedImageData[0] = 255;
     pRedImageData[1] = 0;
     pRedImageData[2] = 0;
@@ -2973,7 +2941,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& greenImageStagingBuffer = s_commonStagingBuffers[1];
 
-    uint8_t* pGreenImageData = (uint8_t*)greenImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pGreenImageData = (uint8_t*)greenImageStagingBuffer.Map();
     pGreenImageData[0] = 0;
     pGreenImageData[1] = 255;
     pGreenImageData[2] = 0;
@@ -2990,7 +2958,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& blueImageStagingBuffer = s_commonStagingBuffers[0];
 
-    uint8_t* pBlueImageData = (uint8_t*)blueImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pBlueImageData = (uint8_t*)blueImageStagingBuffer.Map();
     pBlueImageData[0] = 0;
     pBlueImageData[1] = 0;
     pBlueImageData[2] = 255;
@@ -2999,7 +2967,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& blackImageStagingBuffer = s_commonStagingBuffers[1];
 
-    uint8_t* pBlackImageData = (uint8_t*)blackImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pBlackImageData = (uint8_t*)blackImageStagingBuffer.Map();
     pBlackImageData[0] = 0;
     pBlackImageData[1] = 0;
     pBlackImageData[2] = 0;
@@ -3014,7 +2982,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& whiteImageStagingBuffer = s_commonStagingBuffers[0];
 
-    uint8_t* pWhiteImageData = (uint8_t*)whiteImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pWhiteImageData = (uint8_t*)whiteImageStagingBuffer.Map();
     pWhiteImageData[0] = 255;
     pWhiteImageData[1] = 255;
     pWhiteImageData[2] = 255;
@@ -3023,7 +2991,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Buffer& greyImageStagingBuffer = s_commonStagingBuffers[1];
 
-    uint8_t* pGreyImageData = (uint8_t*)greyImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint8_t* pGreyImageData = (uint8_t*)greyImageStagingBuffer.Map();
     pGreyImageData[0] = 128;
     pGreyImageData[1] = 128;
     pGreyImageData[2] = 128;
@@ -3040,7 +3008,7 @@ static void UploadGPUDbgTextures()
 
     vkn::Texture& checkerboardTex = s_commonDbgTextures[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD];
 
-    uint32_t* pCheckerboardImageData = (uint32_t*)checkerboardImageStagingBuffer.Map(0, VK_WHOLE_SIZE);
+    uint32_t* pCheckerboardImageData = (uint32_t*)checkerboardImageStagingBuffer.Map();
 
     const uint32_t whiteColorU32 = glm::packUnorm4x8(glm::float4(1.f));
     const uint32_t blackColorU32 = glm::packUnorm4x8(glm::float4(0.f, 0.f, 0.f, 1.f));
@@ -3068,7 +3036,7 @@ static void CreateCullingResources()
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
     s_commonOpaqueMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_BUFFER");
@@ -3077,14 +3045,14 @@ static void CreateCullingResources()
 
     s_commonOpaqueMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_COUNT_BUFFER");
 
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
     
     s_commonCulledOpaqueInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_OPAQUE_INST_INFO_IDS_BUFFER");
 
 
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
 
     s_commonAKillMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_BUFFER");
 
@@ -3092,14 +3060,14 @@ static void CreateCullingResources()
 
     s_commonAKillMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_COUNT_BUFFER");
 
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
     
     s_commonCulledAKillInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_AKILL_INST_INFO_IDS_BUFFER");
 
 
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
 
     s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_BUFFER");
 
@@ -3107,7 +3075,7 @@ static void CreateCullingResources()
 
     s_commonTranspMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_COUNT_BUFFER");
 
-    createInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
     
     s_commonCulledTranspInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_TRANSP_INST_INFO_IDS_BUFFER");
@@ -4323,7 +4291,7 @@ static void UploadGPUMeshData()
     const size_t gpuVertBufferSize = s_cpuVertexBuffer.size() * sizeof(Vertex);
     CORE_ASSERT(gpuVertBufferSize <= stagingVertBuffer.GetMemorySize());
 
-    void* pVertexBufferData = stagingVertBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pVertexBufferData = stagingVertBuffer.Map();
     memcpy(pVertexBufferData, s_cpuVertexBuffer.data(), gpuVertBufferSize);
     stagingVertBuffer.Unmap();
 
@@ -4332,7 +4300,7 @@ static void UploadGPUMeshData()
     const size_t gpuIndexBufferSize = s_cpuIndexBuffer.size() * sizeof(IndexType);
     CORE_ASSERT(gpuIndexBufferSize <= stagingIndexBuffer.GetMemorySize());
 
-    void* pIndexBufferData = stagingIndexBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pIndexBufferData = stagingIndexBuffer.Map();
     memcpy(pIndexBufferData, s_cpuIndexBuffer.data(), gpuIndexBufferSize);
     stagingIndexBuffer.Unmap();
 
@@ -4343,7 +4311,7 @@ static void UploadGPUMeshData()
     vkn::BufferCreateInfo vertBufCreateInfo = {};
     vertBufCreateInfo.pDevice = &s_vkDevice;
     vertBufCreateInfo.size = gpuVertBufferSize;
-    vertBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vertBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
     s_vertexBuffer.Create(vertBufCreateInfo).SetDebugName("COMMON_VB");
@@ -4355,7 +4323,7 @@ static void UploadGPUMeshData()
     vkn::BufferCreateInfo idxBufCreateInfo = {};
     idxBufCreateInfo.pDevice = &s_vkDevice;
     idxBufCreateInfo.size = gpuIndexBufferSize;
-    idxBufCreateInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    idxBufCreateInfo.usage = VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
     s_indexBuffer.Create(idxBufCreateInfo).SetDebugName("COMMON_IB");
@@ -4375,7 +4343,7 @@ static void UploadGPUMeshData()
     const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH_INFO);
     CORE_ASSERT(meshDataBufferSize <= stagingMeshInfosBuffer.GetMemorySize());
 
-    void* pMeshBufferData = stagingMeshInfosBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pMeshBufferData = stagingMeshInfosBuffer.Map();
     memcpy(pMeshBufferData, s_cpuMeshData.data(), meshDataBufferSize);
     stagingMeshInfosBuffer.Unmap();
 
@@ -4386,7 +4354,7 @@ static void UploadGPUMeshData()
     vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
     meshInfosBufCreateInfo.pDevice = &s_vkDevice;
     meshInfosBufCreateInfo.size = meshDataBufferSize;
-    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
     s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo).SetDebugName("COMMON_MESH_DATA");
@@ -4396,7 +4364,7 @@ static void UploadGPUMeshData()
     const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
     CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
 
-    void* pData = stagingTransformDataBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pData = stagingTransformDataBuffer.Map();
     memcpy(pData, s_cpuTransformData.data(), trsDataBufferSize);
     stagingTransformDataBuffer.Unmap();
 
@@ -4407,7 +4375,7 @@ static void UploadGPUMeshData()
     vkn::BufferCreateInfo commonTrsBufCreateInfo = {};
     commonTrsBufCreateInfo.pDevice = &s_vkDevice;
     commonTrsBufCreateInfo.size = trsDataBufferSize;
-    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
 
     s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo).SetDebugName("COMMON_TRANSFORM_DATA");
@@ -4449,7 +4417,7 @@ static void UploadGPUTextureData()
             vkn::Buffer& stagingTexBuffer = s_commonStagingBuffers[j];
             CORE_ASSERT(texSizeInBytes <= stagingTexBuffer.GetMemorySize());
 
-            void* pImageData = stagingTexBuffer.Map(0, VK_WHOLE_SIZE);
+            void* pImageData = stagingTexBuffer.Map();
             memcpy(pImageData, texData.GetData(), texSizeInBytes);
             stagingTexBuffer.Unmap();
 
@@ -4570,7 +4538,7 @@ static void UploadGPUMaterialData()
     const size_t mtlDataBufferSize = s_cpuMaterialData.size() * sizeof(COMMON_MATERIAL);
     CORE_ASSERT(mtlDataBufferSize <= stagingMtlDataBuffer.GetMemorySize());
 
-    void* pData = stagingMtlDataBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pData = stagingMtlDataBuffer.Map();
     memcpy(pData, s_cpuMaterialData.data(), mtlDataBufferSize);
     stagingMtlDataBuffer.Unmap();
 
@@ -4581,7 +4549,7 @@ static void UploadGPUMaterialData()
     vkn::BufferCreateInfo mtlBufCreateInfo = {};
     mtlBufCreateInfo.pDevice = &s_vkDevice;
     mtlBufCreateInfo.size = mtlDataBufferSize;
-    mtlBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    mtlBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
 
     s_commonMaterialDataBuffer.Create(mtlBufCreateInfo).SetDebugName("COMMON_MATERIAL_DATA");
@@ -4608,7 +4576,7 @@ static void UploadGPUInstData()
     const size_t bufferSize = s_cpuInstData.size() * sizeof(COMMON_INST_INFO);
     CORE_ASSERT(bufferSize <= stagingBuffer.GetMemorySize());
 
-    void* pData = stagingBuffer.Map(0, VK_WHOLE_SIZE);
+    void* pData = stagingBuffer.Map();
     memcpy(pData, s_cpuInstData.data(), bufferSize);
     stagingBuffer.Unmap();
 
@@ -4619,7 +4587,7 @@ static void UploadGPUInstData()
     vkn::BufferCreateInfo instInfosBufCreateInfo = {};
     instInfosBufCreateInfo.pDevice = &s_vkDevice;
     instInfosBufCreateInfo.size = bufferSize;
-    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
     s_commonInstDataBuffer.Create(instInfosBufCreateInfo).SetDebugName("COMMON_INSTANCE_DATA");
@@ -4700,7 +4668,7 @@ static void CreateCommonConstBuffer()
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
     createInfo.size = sizeof(COMMON_CB_DATA);
-    createInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
     s_commonConstBuffer.Create(createInfo).SetDebugName("COMMON_CB");
@@ -4711,7 +4679,7 @@ void UpdateGPUCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
 
-    COMMON_CB_DATA* pCommonConstBufferData = s_commonConstBuffer.Map<COMMON_CB_DATA>();
+    COMMON_CB_DATA* pCommonConstBufferData = (COMMON_CB_DATA*)s_commonConstBuffer.Map();
 
     const glm::float4x4& viewMatrix = s_camera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_camera.GetProjMatrix();
@@ -4823,8 +4791,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 165, 42, 42, 255);
     Timer timer;
 
-    for (uint32_t faceIdx = 0; faceIdx < CUBEMAP_FACE_COUNT; ++faceIdx) {
-        CmdPipelineImageBarrier(
+    CmdPipelineImageBarrier(
             cmdBuffer,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_GENERAL,
@@ -4833,13 +4800,8 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_NONE,
             VK_ACCESS_2_SHADER_WRITE_BIT,
             s_irradianceMapTexture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            0,
-            VK_REMAINING_MIP_LEVELS,
-            faceIdx,
-            1
+            VK_IMAGE_ASPECT_COLOR_BIT
         );
-    }
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_irradianceMapGenPipeline);
     
@@ -4858,8 +4820,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
         6
     );
 
-    for (uint32_t faceIdx = 0; faceIdx < CUBEMAP_FACE_COUNT; ++faceIdx) {
-        CmdPipelineImageBarrier(
+    CmdPipelineImageBarrier(
             cmdBuffer,
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -4868,13 +4829,8 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_SHADER_WRITE_BIT,
             VK_ACCESS_2_SHADER_READ_BIT,
             s_irradianceMapTexture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            0,
-            VK_REMAINING_MIP_LEVELS,
-            faceIdx,
-            1
+            VK_IMAGE_ASPECT_COLOR_BIT
         );
-    }
 
     CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4900,11 +4856,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         VK_ACCESS_2_NONE,
         VK_ACCESS_2_SHADER_WRITE_BIT,
         s_prefilteredEnvMapTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        0,
-        COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT,
-        0,
-        CUBEMAP_FACE_COUNT
+        VK_IMAGE_ASPECT_COLOR_BIT
     );
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
@@ -4930,11 +4882,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         VK_ACCESS_2_SHADER_WRITE_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         s_prefilteredEnvMapTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        0,
-        COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT,
-        0,
-        CUBEMAP_FACE_COUNT
+        VK_IMAGE_ASPECT_COLOR_BIT
     );
 
     CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -4985,86 +4933,18 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
 
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonOpaqueMeshDrawCmdBuffer.Get()
-    );
+    cmdBuffer.GetBarrierList().Begin()
+        .AddBufferBarrier(&s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonOpaqueMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonAKillMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonTranspMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(&s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT);
 
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonAKillMeshDrawCmdBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonTranspMeshDrawCmdBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonOpaqueMeshDrawCmdCountBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonAKillMeshDrawCmdCountBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonTranspMeshDrawCmdCountBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonCulledOpaqueInstInfoIDsBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonCulledAKillInstInfoIDsBuffer.Get()
-    );
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        s_commonCulledTranspInstInfoIDsBuffer.Get()
-    );
+    cmdBuffer.CmdPushBarrierList();
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_meshCullingPipeline);
     
@@ -5086,46 +4966,39 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         return;
     }
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        s_commonDepthRT.Get(),
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
-
-    if (s_useMeshIndirectDraw) {
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            isAKillPass ? s_commonAKillMeshDrawCmdBuffer.Get() : s_commonOpaqueMeshDrawCmdBuffer.Get()
+    {
+        CmdPipelineImageBarrier(
+            cmdBuffer,
+            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            s_commonDepthRT.Get(),
+            VK_IMAGE_ASPECT_DEPTH_BIT
         );
 
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer.Get() : s_commonOpaqueMeshDrawCmdCountBuffer.Get()
+        vkn::BarrierList& barrierList = cmdBuffer.GetBarrierList().Begin();
+    
+        if (s_useMeshIndirectDraw) {
+            vkn::Buffer* pDrawCmdBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdBuffer : &s_commonOpaqueMeshDrawCmdBuffer;
+            vkn::Buffer* pCounterBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdCountBuffer : &s_commonOpaqueMeshDrawCmdCountBuffer;
+    
+            barrierList.AddBufferBarrier(pDrawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+            barrierList.AddBufferBarrier(pCounterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        }
+    
+        vkn::Buffer* pInstInfoIDBuffer = isAKillPass ? &s_commonCulledAKillInstInfoIDsBuffer : &s_commonCulledOpaqueInstInfoIDsBuffer;
+    
+        barrierList.AddBufferBarrier(
+            pInstInfoIDBuffer, 
+            s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+            VK_ACCESS_2_MEMORY_READ_BIT
         );
+        
+        cmdBuffer.CmdPushBarrierList();
     }
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer.Get() : s_commonCulledOpaqueInstInfoIDsBuffer.Get()
-    );
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5249,35 +5122,6 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         );
     }
 
-    if (s_useMeshIndirectDraw) {
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            isAKillPass ? s_commonAKillMeshDrawCmdBuffer.Get() : s_commonOpaqueMeshDrawCmdBuffer.Get()
-        );
-
-        CmdPipelineBufferBarrier(
-            cmdBuffer, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-            VK_ACCESS_2_MEMORY_WRITE_BIT,
-            VK_ACCESS_2_MEMORY_READ_BIT,
-            isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer.Get() : s_commonOpaqueMeshDrawCmdCountBuffer.Get()
-        );
-    }
-
-    CmdPipelineBufferBarrier(
-        cmdBuffer, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT,
-        VK_ACCESS_2_MEMORY_READ_BIT,
-        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer.Get() : s_commonCulledOpaqueInstInfoIDsBuffer.Get()
-    );
-
     if (s_useDepthPass) {
         CmdPipelineImageBarrier(
             cmdBuffer,
@@ -5303,7 +5147,26 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             VK_IMAGE_ASPECT_DEPTH_BIT
         );
     }
+ 
+    vkn::BarrierList& barrierList = cmdBuffer.GetBarrierList().Begin();
     
+    if (s_useMeshIndirectDraw) {
+        vkn::Buffer* pDrawCmdBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdBuffer : &s_commonOpaqueMeshDrawCmdBuffer;
+        vkn::Buffer* pCounterBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdCountBuffer : &s_commonOpaqueMeshDrawCmdCountBuffer;
+
+        barrierList.AddBufferBarrier(pDrawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(pCounterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+    }
+
+    vkn::Buffer* pInstInfoIDBuffer = isAKillPass ? &s_commonCulledAKillInstInfoIDsBuffer : &s_commonCulledOpaqueInstInfoIDsBuffer;
+
+    barrierList.AddBufferBarrier(
+        pInstInfoIDBuffer, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT
+    );
+
+    cmdBuffer.CmdPushBarrierList();    
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5650,6 +5513,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    // colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
     colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -5711,6 +5575,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    // colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
     colorAttachment.imageView = s_vkSwapchain.GetImageView(s_nextImageIdx);
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
