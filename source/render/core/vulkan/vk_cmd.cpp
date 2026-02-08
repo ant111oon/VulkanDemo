@@ -6,6 +6,8 @@
 #include "vk_texture.h"
 #include "vk_swapchain.h"
 
+#include "core/profiler/cpu_profiler.h"
+
 
 namespace vkn
 {
@@ -67,6 +69,7 @@ namespace vkn
     {
         m_bufferBarriers.clear();
         m_textureBarriers.clear();
+        m_scTextureBarriers.clear();
 
         m_state = {};
 
@@ -386,6 +389,8 @@ namespace vkn
 
     CmdBuffer& CmdBuffer::CmdPushBarrierList()
     {
+        ENG_PROFILE_SCOPED_MARKER_C("CmdBuffer::CmdPushBarrierList", 255, 255, 0, 255);
+
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
         VK_ASSERT_MSG(m_barrierList.IsStarted(), "Attempt to push buffer barrier list which wasn't started");
