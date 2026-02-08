@@ -74,18 +74,6 @@ namespace vkn
             VK_ASSERT(IsValid());
             return m_format;
         }
-        
-        VkComponentMapping GetComponentMapping() const
-        {
-            VK_ASSERT(IsValid());
-            return m_components;
-        }
-
-        VkImageSubresourceRange GetSubresoureRange() const
-        {
-            VK_ASSERT(IsValid());
-            return m_subresourceRange;
-        }
 
         bool IsValid() const;
 
@@ -96,8 +84,6 @@ namespace vkn
 
         VkImageViewType         m_type = {};
         VkFormat                m_format = {};
-        VkComponentMapping      m_components = {};
-        VkImageSubresourceRange m_subresourceRange = {};
     };
 
 
@@ -124,21 +110,7 @@ namespace vkn
     {
         friend class CmdBuffer;
 
-    private:
-        struct AccessState
-        {
-            bool operator==(const AccessState& state) const
-            {
-                return layout == state.layout && stageMask == state.stageMask && accessMask == state.accessMask;
-            }
-
-            VkImageLayout         layout = VK_IMAGE_LAYOUT_UNDEFINED; 
-            VkPipelineStageFlags2 stageMask = VK_PIPELINE_STAGE_2_NONE;
-            VkAccessFlags2        accessMask = VK_ACCESS_2_NONE;
-        };
-
-        using AccessStateMipChain = std::vector<AccessState>;
-        using AccessStateLayerMipChain = std::vector<AccessStateMipChain>;
+        struct AccessState;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Texture);
@@ -233,6 +205,21 @@ namespace vkn
         const AccessState& GetAccessState(uint32_t layer, uint32_t mip) const;
 
     private:
+        struct AccessState
+        {
+            bool operator==(const AccessState& state) const
+            {
+                return layout == state.layout && stageMask == state.stageMask && accessMask == state.accessMask;
+            }
+
+            VkImageLayout         layout = VK_IMAGE_LAYOUT_UNDEFINED; 
+            VkPipelineStageFlags2 stageMask = VK_PIPELINE_STAGE_2_NONE;
+            VkAccessFlags2        accessMask = VK_ACCESS_2_NONE;
+        };
+
+        using AccessStateArray = std::vector<AccessState>;
+
+    private:
         Device* m_pDevice = nullptr;
 
         VkImage m_image = VK_NULL_HANDLE;
@@ -247,10 +234,7 @@ namespace vkn
         uint32_t m_mipCount = 1;
         uint32_t m_layersCount = 1;
  
-        // one layer, one mip -> no dyn allocations
-        // one layer, N mip -> one dyn allocation
-        // N layer, M mip -> N + 1 dyn allocation
-        std::variant<AccessState, AccessStateMipChain, AccessStateLayerMipChain> m_accessStates = AccessState{};
+        std::variant<AccessState, AccessStateArray> m_accessStates = AccessState{};
     };
 
 

@@ -59,8 +59,6 @@ namespace vkn
         std::swap(m_view, view.m_view);
         std::swap(m_type, view.m_type);
         std::swap(m_format, view.m_format);
-        std::swap(m_components, view.m_components);
-        std::swap(m_subresourceRange, view.m_subresourceRange);
 
         Object::operator=(std::move(view));
 
@@ -98,8 +96,6 @@ namespace vkn
 
         m_type = info.type;
         m_format = info.format;
-        m_components = info.components;
-        m_subresourceRange = info.subresourceRange;
 
         return *this;
     }
@@ -132,8 +128,6 @@ namespace vkn
         m_pOwner = nullptr;
         m_type = {};
         m_format = {};
-        m_components = {};
-        m_subresourceRange = {};
 
         Object::Destroy();
 
@@ -302,22 +296,17 @@ namespace vkn
         if (std::holds_alternative<AccessState>(m_accessStates)) {
             AccessState& state = std::get<AccessState>(m_accessStates);
             FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
-        } else if (std::holds_alternative<AccessStateMipChain>(m_accessStates)) {
-            AccessStateMipChain& mipChain = std::get<AccessStateMipChain>(m_accessStates);
-
-            for (uint32_t i = 0; i < mipCount; ++i) {
-                AccessState& state = mipChain[baseMip + i];
-                FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
-            }
         } else {
-            AccessStateLayerMipChain& layerMipChains = std::get<AccessStateLayerMipChain>(m_accessStates);
+            AccessStateArray& states = std::get<AccessStateArray>(m_accessStates);
 
             for (uint32_t i = 0; i < layerCount; ++i) {
-                AccessStateMipChain& mipChain = layerMipChains[baseLayer + i];
+                const uint32_t layer = baseLayer + i;
 
                 for (uint32_t j = 0; j < mipCount; ++j) {
-                    AccessState& state = mipChain[baseMip + j];
-                    FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
+                    const uint32_t mip = baseMip + j;
+                    const uint32_t index = layer * m_mipCount + mip;
+
+                    FillAccessState(states[index], dstLayout, dstStageMask, dstAccessMask);
                 }
             }
         }
@@ -328,16 +317,8 @@ namespace vkn
     {
         if (info.arrayLayers == 1 && info.mipLevels == 1) {
             m_accessStates = AccessState { info.initialLayout, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
-        } else if (info.arrayLayers == 1 && info.mipLevels > 1) {
-            m_accessStates = AccessStateMipChain(info.mipLevels);
-        } else if (info.arrayLayers > 1 && info.mipLevels >= 1) {
-            m_accessStates = AccessStateLayerMipChain(info.arrayLayers);
-
-            for (AccessStateMipChain& mipChain : std::get<AccessStateLayerMipChain>(m_accessStates)) {
-                mipChain.resize(info.mipLevels);
-            } 
         } else {
-            VK_ASSERT_FAIL("Invalid texture layers and mips count data");
+            m_accessStates = AccessStateArray(info.arrayLayers * info.mipLevels);
         }
     }
 
@@ -351,11 +332,8 @@ namespace vkn
 
         if (std::holds_alternative<AccessState>(m_accessStates)) {
             return std::get<AccessState>(m_accessStates);
-        } else if (std::holds_alternative<AccessStateMipChain>(m_accessStates)) {
-            return std::get<AccessStateMipChain>(m_accessStates)[mip];
         } else {
-            const AccessStateMipChain& mipChain = std::get<AccessStateLayerMipChain>(m_accessStates)[layer];
-            return mipChain[mip];
+            return std::get<AccessStateArray>(m_accessStates)[layer * m_mipCount + mip];
         }
     }
 
