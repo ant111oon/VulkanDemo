@@ -1305,46 +1305,6 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 }
 
 
-static void CmdPipelineImageBarrier(
-    vkn::CmdBuffer& cmdBuffer, 
-    VkImageLayout oldLayout, 
-    VkImageLayout newLayout,
-    VkPipelineStageFlags2 srcStageMask, 
-    VkPipelineStageFlags2 dstStageMask,
-    VkAccessFlags2 srcAccessMask, 
-    VkAccessFlags2 dstAccessMask,
-    VkImage image,
-    VkImageAspectFlags aspectMask,
-    uint32_t baseMipLevel = 0,
-    uint32_t levelCount = VK_REMAINING_MIP_LEVELS,
-    uint32_t baseArrayLayer = 0,
-    uint32_t layerCount = VK_REMAINING_ARRAY_LAYERS
-) {
-    VkImageMemoryBarrier2 imageBarrier2 = {};
-    imageBarrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    imageBarrier2.srcStageMask = srcStageMask;
-    imageBarrier2.srcAccessMask = srcAccessMask;
-    imageBarrier2.dstStageMask = dstStageMask;
-    imageBarrier2.dstAccessMask = dstAccessMask;
-    imageBarrier2.oldLayout = oldLayout;
-    imageBarrier2.newLayout = newLayout;
-    imageBarrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageBarrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageBarrier2.image = image;
-    imageBarrier2.subresourceRange.aspectMask = aspectMask;
-    imageBarrier2.subresourceRange.baseMipLevel = baseMipLevel;
-    imageBarrier2.subresourceRange.levelCount = levelCount;
-    imageBarrier2.subresourceRange.baseArrayLayer = baseArrayLayer;
-    imageBarrier2.subresourceRange.layerCount = layerCount;
-
-    VkDependencyInfo dependencyInfo = {};
-    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dependencyInfo.imageMemoryBarrierCount = 1;
-    dependencyInfo.pImageMemoryBarriers = &imageBarrier2;
-
-    cmdBuffer.CmdPipelineBarrier2(dependencyInfo);
-}
-
 static void SubmitVkQueue(VkQueue vkQueue,
     VkCommandBuffer vkCmdBuffer,
     VkFence vkFinishFence,
@@ -1632,17 +1592,9 @@ static void CreateDynamicRenderTargets()
     s_colorRTView.Create(s_colorRT, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_NONE,
-            s_colorRT.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        cmdBuffer.BeginBarrierList()
+            .AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
+        cmdBuffer.CmdPushBarrierList();
     });
 
 
@@ -1680,43 +1632,19 @@ static void ResizeDynamicRenderTargets()
 
 static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, const TextureLoadData& loadData, uint32_t layerIdx = 0)
 {
-    CORE_ASSERT(layerIdx < texture.GetLayersCount());
+    CORE_ASSERT(layerIdx < texture.GetLayerCount());
 
     int32_t mipWidth  = texture.GetSizeX();
     int32_t mipHeight = texture.GetSizeY();
 
     for (uint32_t mip = 1; mip < loadData.GetMipsCount(); ++mip) {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            VK_ACCESS_2_TRANSFER_READ_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            mip - 1,
-            1,
-            layerIdx,
-            1
-        );
-
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            mip,
-            1,
-            layerIdx,
-            1
-        );
+        cmdBuffer.BeginBarrierList()
+            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 1, layerIdx, 1)
+            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1);
+        
+        cmdBuffer.CmdPushBarrierList();
 
         VkImageBlit blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1752,21 +1680,11 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
     }
 
     // Add this barrier to get all mips in same VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL layout
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        VK_ACCESS_2_TRANSFER_READ_BIT,
-        texture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        loadData.GetMipsCount() - 1,
-        1,
-        layerIdx,
-        1
-    );
+    cmdBuffer.BeginBarrierList()
+        .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
+            VK_IMAGE_ASPECT_COLOR_BIT, loadData.GetMipsCount() - 1, 1, layerIdx, 1);
+    
+    cmdBuffer.CmdPushBarrierList();
 }
 
 
@@ -1845,6 +1763,12 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
         }
 
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+            cmdBuffer.BeginBarrierList()
+                .AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
+
+            cmdBuffer.CmdPushBarrierList();
+
             for (size_t j = 0; j < s_commonStagingBuffers.size(); ++j) {
                 const uint32_t faceIdx = i + j;
                 
@@ -1853,22 +1777,6 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
                 }
 
                 vkn::Buffer& stagingBuffer = s_commonStagingBuffers[j];
-
-                CmdPipelineImageBarrier(
-                    cmdBuffer,
-                    VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_NONE,
-                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_ACCESS_2_NONE,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    s_skyboxTexture.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT,
-                    0,
-                    1,
-                    faceIdx,
-                    1
-                );
 
                 VkCopyBufferToImageInfo2 copyInfo = {};
 
@@ -1895,21 +1803,14 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     }
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        for (uint32_t layerIdx = 0; layerIdx < s_skyboxTexture.GetLayersCount(); ++layerIdx) {
+        for (uint32_t layerIdx = 0; layerIdx < s_skyboxTexture.GetLayerCount(); ++layerIdx) {
             GenerateTextureMipmaps(cmdBuffer, s_skyboxTexture, faceLoadDatas[layerIdx], layerIdx);
         }
 
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            VK_ACCESS_2_SHADER_READ_BIT,
-            s_skyboxTexture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        cmdBuffer.BeginBarrierList().AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        
+        cmdBuffer.CmdPushBarrierList();
     });
 
     CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2884,17 +2785,10 @@ static void UploadGPUDbgTextures()
     {
         vkn::Texture& texture = s_commonDbgTextures[texIdx];
 
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        
+        cmdBuffer.CmdPushBarrierList();
 
         VkCopyBufferToImageInfo2 copyInfo = {};
 
@@ -2917,17 +2811,10 @@ static void UploadGPUDbgTextures()
 
         vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
     
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_SHADER_READ_BIT,
-            texture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        
+        cmdBuffer.CmdPushBarrierList();
     };
 
     vkn::Buffer& redImageStagingBuffer = s_commonStagingBuffers[0];
@@ -4467,19 +4354,9 @@ static void UploadGPUTextureData()
 
                 vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
 
-                CmdPipelineImageBarrier(
-                    cmdBuffer,
-                    VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_NONE,
-                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_ACCESS_2_NONE,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    texture.Get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT,
-                    0,
-                    1
-                );
+                cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
+                cmdBuffer.CmdPushBarrierList();
 
                 VkCopyBufferToImageInfo2 copyInfo = {};
 
@@ -4506,21 +4383,9 @@ static void UploadGPUTextureData()
 
                 GenerateTextureMipmaps(cmdBuffer, texture, texData);
 
-                for (uint32_t i = 0; i < texData.GetMipsCount(); ++i) {
-                    CmdPipelineImageBarrier(
-                        cmdBuffer,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                        VK_ACCESS_2_TRANSFER_READ_BIT,
-                        VK_ACCESS_2_SHADER_READ_BIT,
-                        texture.Get(),
-                        VK_IMAGE_ASPECT_COLOR_BIT,
-                        i,
-                        1
-                    );
-                }
+                cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+                cmdBuffer.CmdPushBarrierList();
             }
         });
     }
@@ -4791,17 +4656,9 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 165, 42, 42, 255);
     Timer timer;
 
-    CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_NONE,
-            VK_ACCESS_2_SHADER_WRITE_BIT,
-            s_irradianceMapTexture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_irradianceMapGenPipeline);
     
@@ -4820,17 +4677,9 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
         6
     );
 
-    CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_WRITE_BIT,
-            VK_ACCESS_2_SHADER_READ_BIT,
-            s_irradianceMapTexture.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4847,17 +4696,9 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
     pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_NONE,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
-        s_prefilteredEnvMapTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
         VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_prefilteredEnvGenDescriptorSets[mip] };
@@ -4873,17 +4714,9 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6U);
     }
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        s_prefilteredEnvMapTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4896,34 +4729,18 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
     vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_BRDFIntegrationLUTGenPipeline);
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_NONE,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
-        s_brdfLUTTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_BRDFIntegrationLUTGenDescriptorSet };
     vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_BRDFIntegrationLUTGenPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
 
     cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1U);
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_GENERAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_WRITE_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        s_brdfLUTTexture.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     CORE_LOG_INFO("BRDF LUT generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4934,15 +4751,15 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
 
     cmdBuffer.GetBarrierList().Begin()
-        .AddBufferBarrier(&s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonOpaqueMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonAKillMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonTranspMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(&s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT);
+        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonAKillMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonTranspMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT);
 
     cmdBuffer.CmdPushBarrierList();
 
@@ -4966,39 +4783,27 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         return;
     }
 
-    {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
-            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            s_commonDepthRT.Get(),
-            VK_IMAGE_ASPECT_DEPTH_BIT
-        );
 
-        vkn::BarrierList& barrierList = cmdBuffer.GetBarrierList().Begin();
-    
-        if (s_useMeshIndirectDraw) {
-            vkn::Buffer* pDrawCmdBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdBuffer : &s_commonOpaqueMeshDrawCmdBuffer;
-            vkn::Buffer* pCounterBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdCountBuffer : &s_commonOpaqueMeshDrawCmdCountBuffer;
-    
-            barrierList.AddBufferBarrier(pDrawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
-            barrierList.AddBufferBarrier(pCounterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
-        }
-    
-        vkn::Buffer* pInstInfoIDBuffer = isAKillPass ? &s_commonCulledAKillInstInfoIDsBuffer : &s_commonCulledOpaqueInstInfoIDsBuffer;
-    
-        barrierList.AddBufferBarrier(
-            pInstInfoIDBuffer, 
-            s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
-            VK_ACCESS_2_MEMORY_READ_BIT
-        );
-        
-        cmdBuffer.CmdPushBarrierList();
+    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
+
+    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    if (s_useMeshIndirectDraw) {
+        vkn::Buffer& drawCmdBuffer = isAKillPass ? s_commonAKillMeshDrawCmdBuffer : s_commonOpaqueMeshDrawCmdBuffer;
+        vkn::Buffer& counterBuffer = isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer : s_commonOpaqueMeshDrawCmdCountBuffer;
+
+        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(counterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
     }
+
+    barrierList.AddBufferBarrier(
+        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer : s_commonCulledOpaqueInstInfoIDsBuffer, 
+        s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+        VK_ACCESS_2_MEMORY_READ_BIT
+    );
+    
+    cmdBuffer.CmdPushBarrierList();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5077,17 +4882,9 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         }
     cmdBuffer.CmdEndRendering();
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        s_commonDepthRT.Get(),
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    cmdBuffer.CmdPushBarrierList();
 }
 
 
@@ -5108,60 +4905,31 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
 
 void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 {
+    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
+ 
     for (vkn::Texture& colorRT : s_gbufferRTs) {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            isAKillPass ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            isAKillPass ? VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT : VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            isAKillPass ? VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            colorRT.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        barrierList.AddTextureBarrier(colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     if (s_useDepthPass) {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-            s_commonDepthRT.Get(),
-            VK_IMAGE_ASPECT_DEPTH_BIT
-        );
+        barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
     } else {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            isAKillPass ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-            isAKillPass ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_NONE,
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-            isAKillPass ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_NONE,
-            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            s_commonDepthRT.Get(),
-            VK_IMAGE_ASPECT_DEPTH_BIT
-        );
+        barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
     }
- 
-    vkn::BarrierList& barrierList = cmdBuffer.GetBarrierList().Begin();
-    
+
     if (s_useMeshIndirectDraw) {
-        vkn::Buffer* pDrawCmdBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdBuffer : &s_commonOpaqueMeshDrawCmdBuffer;
-        vkn::Buffer* pCounterBuffer = isAKillPass ? &s_commonAKillMeshDrawCmdCountBuffer : &s_commonOpaqueMeshDrawCmdCountBuffer;
+        vkn::Buffer& drawCmdBuffer = isAKillPass ? s_commonAKillMeshDrawCmdBuffer : s_commonOpaqueMeshDrawCmdBuffer;
+        vkn::Buffer& counterBuffer = isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer : s_commonOpaqueMeshDrawCmdCountBuffer;
 
-        barrierList.AddBufferBarrier(pDrawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
-        barrierList.AddBufferBarrier(pCounterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(counterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
     }
-
-    vkn::Buffer* pInstInfoIDBuffer = isAKillPass ? &s_commonCulledAKillInstInfoIDsBuffer : &s_commonCulledOpaqueInstInfoIDsBuffer;
 
     barrierList.AddBufferBarrier(
-        pInstInfoIDBuffer, 
+        isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer : s_commonCulledOpaqueInstInfoIDsBuffer, 
         s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT
     );
@@ -5325,43 +5093,19 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", 250, 250, 40, 255);
 
-    for (vkn::Texture& colorRT : s_gbufferRTs) {
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-            colorRT.Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
+
+    for (vkn::Texture& gbufferRT : s_gbufferRTs) {
+        barrierList.AddTextureBarrier(gbufferRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_NONE,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_colorRT.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        s_useDepthPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        s_commonDepthRT.Get(),
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
+    cmdBuffer.CmdPushBarrierList();
     
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5409,29 +5153,14 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", 255, 165, 10, 255);
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_colorRT.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        s_commonDepthRT.Get(),
-        VK_IMAGE_ASPECT_DEPTH_BIT
-    );
+    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    
+    cmdBuffer.CmdPushBarrierList();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5481,29 +5210,14 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", 100, 250, 250, 255);
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-        s_colorRT.Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_NONE,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barrierList.AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    
+    cmdBuffer.CmdPushBarrierList();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5554,17 +5268,9 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     DbgUI::FillData();
     DbgUI::EndFrame();
 
-    CmdPipelineImageBarrier(
-        cmdBuffer,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
-        VK_IMAGE_ASPECT_COLOR_BIT
-    );
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5634,17 +5340,9 @@ static void RenderScene()
 
         DebugUIRenderPass(cmdBuffer);
         
-        CmdPipelineImageBarrier(
-            cmdBuffer,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-            VK_ACCESS_2_SHADER_WRITE_BIT,
-            VK_ACCESS_2_NONE,
-            s_vkSwapchain.GetTexture(s_nextImageIdx).Get(),
-            VK_IMAGE_ASPECT_COLOR_BIT
-        );
+        cmdBuffer.BeginBarrierList().AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 
+            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
+        cmdBuffer.CmdPushBarrierList();
 
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
     }

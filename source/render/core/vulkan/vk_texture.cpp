@@ -187,9 +187,7 @@ namespace vkn
         std::swap(m_mipCount, image.m_mipCount);
         std::swap(m_layersCount, image.m_layersCount);
 
-        std::swap(m_currLayout, image.m_currLayout);
-        std::swap(m_currStageMask, image.m_currStageMask);
-        std::swap(m_currAccessMask, image.m_currAccessMask);
+        std::swap(m_accessStates, image.m_accessStates);
 
         std::swap(m_pDevice, image.m_pDevice);
 
@@ -207,8 +205,10 @@ namespace vkn
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
-        VK_ASSERT(GetAllocator().IsCreated());
         VK_ASSERT(info.pAllocInfo);
+        VK_ASSERT(info.mipLevels >= 1);
+        VK_ASSERT(info.arrayLayers >= 1);
+        VK_ASSERT(GetAllocator().IsCreated());
 
         VkDevice vkDevice = info.pDevice->Get();
 
@@ -239,8 +239,6 @@ namespace vkn
         VK_ASSERT_MSG(m_image != VK_NULL_HANDLE, "Failed to create Vulkan texture");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
-        SetCreated(true);
-
         m_pDevice = info.pDevice;
 
         m_type = info.type;
@@ -249,9 +247,9 @@ namespace vkn
         m_mipCount = info.mipLevels;
         m_layersCount = info.arrayLayers;
 
-        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        m_currAccessMask = VK_ACCESS_2_NONE;
+        InitAccessStates(info);
+
+        SetCreated(true);
 
         return *this;
     }
@@ -277,9 +275,7 @@ namespace vkn
         m_mipCount = 1;
         m_layersCount = 1;
 
-        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        m_currAccessMask = VK_ACCESS_2_NONE;
+        m_accessStates = AccessState{};
 
         Object::Destroy();
 
@@ -287,13 +283,80 @@ namespace vkn
     }
 
 
-    void Texture::Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
+    void Texture::Transit(uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount,
+            VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask
+    ) {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(mipCount >= 1);
+        VK_ASSERT(layerCount >= 1);
+        VK_ASSERT(baseMip + mipCount <= m_mipCount);
+        VK_ASSERT(baseLayer + layerCount <= m_layersCount);
+
+        auto FillAccessState = [](AccessState& outState, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
+        {
+            outState.layout = dstLayout;
+            outState.stageMask = dstStageMask;
+            outState.accessMask = dstAccessMask;
+        };
+
+        if (std::holds_alternative<AccessState>(m_accessStates)) {
+            AccessState& state = std::get<AccessState>(m_accessStates);
+            FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
+        } else if (std::holds_alternative<AccessStateMipChain>(m_accessStates)) {
+            AccessStateMipChain& mipChain = std::get<AccessStateMipChain>(m_accessStates);
+
+            for (uint32_t i = 0; i < mipCount; ++i) {
+                AccessState& state = mipChain[baseMip + i];
+                FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
+            }
+        } else {
+            AccessStateLayerMipChain& layerMipChains = std::get<AccessStateLayerMipChain>(m_accessStates);
+
+            for (uint32_t i = 0; i < layerCount; ++i) {
+                AccessStateMipChain& mipChain = layerMipChains[baseLayer + i];
+
+                for (uint32_t j = 0; j < mipCount; ++j) {
+                    AccessState& state = mipChain[baseMip + j];
+                    FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
+                }
+            }
+        }
+    }
+
+
+    void Texture::InitAccessStates(const TextureCreateInfo& info)
+    {
+        if (info.arrayLayers == 1 && info.mipLevels == 1) {
+            m_accessStates = AccessState { info.initialLayout, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
+        } else if (info.arrayLayers == 1 && info.mipLevels > 1) {
+            m_accessStates = AccessStateMipChain(info.mipLevels);
+        } else if (info.arrayLayers > 1 && info.mipLevels >= 1) {
+            m_accessStates = AccessStateLayerMipChain(info.arrayLayers);
+
+            for (AccessStateMipChain& mipChain : std::get<AccessStateLayerMipChain>(m_accessStates)) {
+                mipChain.resize(info.mipLevels);
+            } 
+        } else {
+            VK_ASSERT_FAIL("Invalid texture layers and mips count data");
+        }
+    }
+
+
+    const Texture::AccessState& Texture::GetAccessState(uint32_t layer, uint32_t mip) const
     {
         VK_ASSERT(IsCreated());
-        
-        m_currLayout = dstLayout;
-        m_currStageMask = dstStageMask;
-        m_currAccessMask = dstAccessMask;
+
+        VK_ASSERT(mip < m_mipCount);
+        VK_ASSERT(layer < m_layersCount);
+
+        if (std::holds_alternative<AccessState>(m_accessStates)) {
+            return std::get<AccessState>(m_accessStates);
+        } else if (std::holds_alternative<AccessStateMipChain>(m_accessStates)) {
+            return std::get<AccessStateMipChain>(m_accessStates)[mip];
+        } else {
+            const AccessStateMipChain& mipChain = std::get<AccessStateLayerMipChain>(m_accessStates)[layer];
+            return mipChain[mip];
+        }
     }
 
 

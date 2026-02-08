@@ -4,6 +4,7 @@
 #include "vk_query.h"
 #include "vk_buffer.h"
 #include "vk_texture.h"
+#include "vk_swapchain.h"
 
 
 namespace vkn
@@ -14,6 +15,42 @@ namespace vkn
     #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
         VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
         VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+
+
+    static VkImageMemoryBarrier2 CreateImageMemoryBarrier2Data(
+        VkImage image, 
+        VkPipelineStageFlags2 srcStageMask, 
+        VkPipelineStageFlags2 dstStageMask, 
+        VkAccessFlags2 srcAccessMask, 
+        VkAccessFlags2 dstAccessMask, 
+        VkImageLayout srcLayout,
+        VkImageLayout dstLayout,
+        VkImageAspectFlags aspectMask,
+        uint32_t baseMipLevel,
+        uint32_t mipCount,
+        uint32_t baseArrayLayer,
+        uint32_t layerCount
+    ) {
+        VkImageMemoryBarrier2 barrier = {};
+
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.image = image;
+        barrier.srcStageMask = srcStageMask;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.oldLayout = srcLayout;
+        barrier.dstStageMask = dstStageMask;
+        barrier.dstAccessMask = dstAccessMask;
+        barrier.newLayout = dstLayout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = aspectMask;
+        barrier.subresourceRange.baseMipLevel = baseMipLevel;
+        barrier.subresourceRange.levelCount = mipCount;
+        barrier.subresourceRange.baseArrayLayer = baseArrayLayer;
+        barrier.subresourceRange.layerCount = layerCount;
+
+        return barrier;
+    }
 
 
     BarrierList& BarrierList::Begin()
@@ -65,25 +102,58 @@ namespace vkn
     }
 
 
-    BarrierList& BarrierList::AddBufferBarrier(Buffer* pBuffer, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask, VkDeviceSize offset, VkDeviceSize size)
+    const BarrierList::SCTextureBarrierData& BarrierList::GetSCTextureBarrierByIdx(size_t i) const
+    {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to get element from barrier list which wasn't started");
+        VK_ASSERT(i < GetSCTextureBarriersCount());
+
+        return m_scTextureBarriers.at(i);
+    }
+
+
+    BarrierList& BarrierList::AddBufferBarrier(Buffer& buffer, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask, VkDeviceSize offset, VkDeviceSize size)
     {
         VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
-        VK_ASSERT(pBuffer && pBuffer->IsCreated());
+        VK_ASSERT(buffer.IsCreated());
 
-        m_bufferBarriers.emplace_back(BufferBarrierData{ pBuffer, dstStageMask, dstAccessMask, offset, size });
+        m_bufferBarriers.emplace_back(BufferBarrierData{ &buffer, dstStageMask, dstAccessMask, offset, size });
 
         return *this;
     }
 
 
-    BarrierList& BarrierList::AddTextureBarrier(Texture* pTexture, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask,
-        VkImageAspectFlags aspectMask, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount
+    BarrierList& BarrierList::AddTextureBarrier(Texture& texture, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask,
+        VkImageAspectFlags aspectMask, uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount
     ) {
         VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
-        VK_ASSERT(pTexture && pTexture->IsCreated());
+        VK_ASSERT(texture.IsCreated());
 
         m_textureBarriers.emplace_back(
-            TextureBarrierData{ pTexture, dstLayout, dstStageMask, dstAccessMask, aspectMask, baseMipLevel, levelCount, baseArrayLayer, layerCount }
+            TextureBarrierData{ 
+                dstLayout, 
+                dstStageMask, 
+                dstAccessMask, 
+                aspectMask, 
+                baseMip, 
+                mipCount == VK_REMAINING_MIP_LEVELS ? texture.GetMipCount() : mipCount, 
+                baseLayer, 
+                layerCount == VK_REMAINING_ARRAY_LAYERS ? texture.GetLayerCount() : layerCount, 
+                &texture
+            }
+        );
+
+        return *this;
+    }
+
+
+    BarrierList& BarrierList::AddTextureBarrier(SCTexture& texture, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask,
+        VkAccessFlags2 dstAccessMask, VkImageAspectFlags aspectMask
+    ) {
+        VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
+        VK_ASSERT(texture.IsCreated());
+
+        m_scTextureBarriers.emplace_back(
+            SCTextureBarrierData{ dstLayout, dstStageMask, dstAccessMask, aspectMask, &texture }
         );
 
         return *this;
@@ -152,16 +222,6 @@ namespace vkn
         VK_CHECK(vkEndCommandBuffer(m_cmdBuffer));
 
         m_state.set(FLAG_IS_STARTED, false);
-
-        return *this;
-    }
-
-
-    CmdBuffer& CmdBuffer::CmdPipelineBarrier2(const VkDependencyInfo& depInfo)
-    {
-        VK_CHECK_CMD_BUFFER_STARTED(this);
-
-        vkCmdPipelineBarrier2(m_cmdBuffer, &depInfo);
 
         return *this;
     }
@@ -318,6 +378,12 @@ namespace vkn
     }
 
 
+    BarrierList& CmdBuffer::BeginBarrierList()
+    {
+        return GetBarrierList().Begin();
+    }
+
+
     CmdBuffer& CmdBuffer::CmdPushBarrierList()
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
@@ -347,28 +413,48 @@ namespace vkn
             bufferBarriers.emplace_back(barrier);
         }
 
-        static std::vector<VkImageMemoryBarrier2> textureBarriers(m_barrierList.GetTextureBarriersCount());
+        static std::vector<VkImageMemoryBarrier2> textureBarriers(m_barrierList.GetTextureBarriersCount() + m_barrierList.GetSCTextureBarriersCount());
         textureBarriers.clear();
 
         for (size_t i = 0; i < m_barrierList.GetTextureBarriersCount(); ++i) {
             const BarrierList::TextureBarrierData& data = m_barrierList.GetTextureBarrierByIdx(i);
 
-            VkImageMemoryBarrier2 barrier = {};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            barrier.image = data.pTexture->Get();
-            barrier.srcStageMask = data.pTexture->GetStageMask();
-            barrier.srcAccessMask = data.pTexture->GetAccessMask();
-            barrier.oldLayout = data.pTexture->GetLayout();
-            barrier.dstStageMask = data.dstStageMask;
-            barrier.dstAccessMask = data.dstAccessMask;
-            barrier.newLayout = data.dstLayout;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.subresourceRange.aspectMask = data.dstAspectMask;
-            barrier.subresourceRange.baseMipLevel = data.baseMipLevel;
-            barrier.subresourceRange.levelCount = data.levelCount;
-            barrier.subresourceRange.baseArrayLayer = data.baseArrayLayer;
-            barrier.subresourceRange.layerCount = data.layerCount;
+            Texture* pTexture = data.pTexture;
+            const Texture::AccessState& currState = pTexture->GetAccessState(data.baseLayer, data.baseMip);
+
+        #ifdef ENG_BUILD_DEBUG
+            for (uint32_t layer = 0; layer < data.layerCount; ++layer) {
+                for (uint32_t mip = 0; mip < data.mipCount; ++mip) {
+                    VK_ASSERT_MSG(currState == pTexture->GetAccessState(data.baseLayer + layer, data.baseMip + mip),
+                        "Texture %s has different access state fro required layers and mips", pTexture->GetDebugName());
+                }
+            }
+        #endif
+
+            VkImageMemoryBarrier2 barrier = CreateImageMemoryBarrier2Data(
+                pTexture->Get(),
+                currState.stageMask, data.dstStageMask,
+                currState.accessMask, data.dstAccessMask,
+                currState.layout, data.dstLayout,
+                data.dstAspectMask, data.baseMip, data.mipCount, data.baseLayer, data.layerCount
+            );
+
+            pTexture->Transit(data.baseMip, data.mipCount, data.baseLayer, data.layerCount, 
+                data.dstLayout, data.dstStageMask, data.dstAccessMask);
+
+            textureBarriers.emplace_back(barrier);
+        }
+
+        for (size_t i = 0; i < m_barrierList.GetSCTextureBarriersCount(); ++i) {
+            const BarrierList::SCTextureBarrierData& data = m_barrierList.GetSCTextureBarrierByIdx(i);
+
+            VkImageMemoryBarrier2 barrier = CreateImageMemoryBarrier2Data(
+                data.pTexture->Get(),
+                data.pTexture->GetStageMask(), data.dstStageMask,
+                data.pTexture->GetAccessMask(), data.dstAccessMask,
+                data.pTexture->GetLayout(), data.dstLayout,
+                data.dstAspectMask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
+            );
 
             data.pTexture->Transit(data.dstLayout, data.dstStageMask, data.dstAccessMask);
 

@@ -10,6 +10,7 @@ namespace vkn
     class QueryPool;
     class Buffer;
     class Texture;
+    class SCTexture;
 
 
     class BarrierList
@@ -32,17 +33,26 @@ namespace vkn
             VkDeviceSize          size;
         };
 
-        struct TextureBarrierData
+        struct TextureBarrierDataBase
         {
-            Texture*              pTexture;
             VkImageLayout         dstLayout;
             VkPipelineStageFlags2 dstStageMask;
             VkAccessFlags2        dstAccessMask;
             VkImageAspectFlags    dstAspectMask;
-            uint32_t              baseMipLevel;
-            uint32_t              levelCount;
-            uint32_t              baseArrayLayer;
-            uint32_t              layerCount;
+        };
+
+        struct TextureBarrierData : TextureBarrierDataBase
+        {
+            uint32_t baseMip;
+            uint32_t mipCount;
+            uint32_t baseLayer;
+            uint32_t layerCount;
+            Texture* pTexture;
+        };
+
+        struct SCTextureBarrierData : TextureBarrierDataBase
+        {
+            SCTexture* pTexture;
         };
 
     public:
@@ -53,25 +63,33 @@ namespace vkn
         BarrierList& Begin();
 
         BarrierList& AddBufferBarrier(
-            Buffer* pBuffer,
+            Buffer& buffer,
             VkPipelineStageFlags2 dstStageMask,
             VkAccessFlags2 dstAccessMask, 
             VkDeviceSize offset = 0,
             VkDeviceSize size = VK_WHOLE_SIZE);
 
         BarrierList& AddTextureBarrier(
-            Texture* pTexture,
+            Texture& texture,
             VkImageLayout dstLayout,
             VkPipelineStageFlags2 dstStageMask,
             VkAccessFlags2 dstAccessMask, 
             VkImageAspectFlags aspectMask, 
-            uint32_t baseMipLevel = 0, 
-            uint32_t levelCount = VK_REMAINING_MIP_LEVELS,
-            uint32_t baseArrayLayer = 0, 
+            uint32_t baseMip = 0, 
+            uint32_t mipCount = VK_REMAINING_MIP_LEVELS,
+            uint32_t baseLayer = 0, 
             uint32_t layerCount = VK_REMAINING_ARRAY_LAYERS);
+
+        BarrierList& AddTextureBarrier(
+            SCTexture& texture,
+            VkImageLayout dstLayout,
+            VkPipelineStageFlags2 dstStageMask,
+            VkAccessFlags2 dstAccessMask, 
+            VkImageAspectFlags aspectMask);
 
         size_t GetBufferBarriersCount() const { return m_bufferBarriers.size(); }
         size_t GetTextureBarriersCount() const { return m_textureBarriers.size(); }
+        size_t GetSCTextureBarriersCount() const { return m_scTextureBarriers.size(); }
         
         bool IsStarted() const { return m_state.test(FLAG_IS_STARTED); }
 
@@ -84,10 +102,12 @@ namespace vkn
 
         const BufferBarrierData& GetBufferBarrierByIdx(size_t i) const;
         const TextureBarrierData& GetTextureBarrierByIdx(size_t i) const;
+        const SCTextureBarrierData& GetSCTextureBarrierByIdx(size_t i) const;
 
     private:
         std::vector<BufferBarrierData> m_bufferBarriers;
         std::vector<TextureBarrierData> m_textureBarriers;
+        std::vector<SCTextureBarrierData> m_scTextureBarriers;
 
         std::bitset<FLAG_COUNT> m_state = {};
     };
@@ -111,9 +131,6 @@ namespace vkn
         CmdBuffer& Begin(const VkCommandBufferBeginInfo& beginInfo);
         CmdBuffer& End();
 
-        // TODO: Remove
-        CmdBuffer& CmdPipelineBarrier2(const VkDependencyInfo& depInfo);
-
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool, uint32_t firstQuery, uint32_t queryCount);
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool);
         CmdBuffer& CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex);
@@ -136,6 +153,7 @@ namespace vkn
         CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
         
         BarrierList& GetBarrierList();
+        BarrierList& BeginBarrierList();
         // Post list of barriers to command buffer 
         CmdBuffer& CmdPushBarrierList();
 

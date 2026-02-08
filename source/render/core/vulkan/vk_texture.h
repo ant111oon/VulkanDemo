@@ -124,6 +124,22 @@ namespace vkn
     {
         friend class CmdBuffer;
 
+    private:
+        struct AccessState
+        {
+            bool operator==(const AccessState& state) const
+            {
+                return layout == state.layout && stageMask == state.stageMask && accessMask == state.accessMask;
+            }
+
+            VkImageLayout         layout = VK_IMAGE_LAYOUT_UNDEFINED; 
+            VkPipelineStageFlags2 stageMask = VK_PIPELINE_STAGE_2_NONE;
+            VkAccessFlags2        accessMask = VK_ACCESS_2_NONE;
+        };
+
+        using AccessStateMipChain = std::vector<AccessState>;
+        using AccessStateLayerMipChain = std::vector<AccessStateMipChain>;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Texture);
 
@@ -198,7 +214,7 @@ namespace vkn
             return m_mipCount;
         }
 
-        uint32_t GetLayersCount() const
+        uint32_t GetLayerCount() const
         {
             VK_ASSERT(IsCreated());
             return m_layersCount;
@@ -209,25 +225,12 @@ namespace vkn
         uint32_t GetSizeZ() const { return GetSize().depth; }
 
     private:
-        void Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
+        void Transit(uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount,
+            VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
 
-        VkImageLayout GetLayout() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currLayout;
-        }
+        void InitAccessStates(const TextureCreateInfo& info);
 
-        VkPipelineStageFlags2 GetStageMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currStageMask;
-        }
-
-        VkAccessFlags2 GetAccessMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currAccessMask;
-        }
+        const AccessState& GetAccessState(uint32_t layer, uint32_t mip) const;
 
     private:
         Device* m_pDevice = nullptr;
@@ -244,9 +247,10 @@ namespace vkn
         uint32_t m_mipCount = 1;
         uint32_t m_layersCount = 1;
  
-        VkImageLayout         m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED; 
-        VkPipelineStageFlags2 m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        VkAccessFlags2        m_currAccessMask = VK_ACCESS_2_NONE;
+        // one layer, one mip -> no dyn allocations
+        // one layer, N mip -> one dyn allocation
+        // N layer, M mip -> N + 1 dyn allocation
+        std::variant<AccessState, AccessStateMipChain, AccessStateLayerMipChain> m_accessStates = AccessState{};
     };
 
 
