@@ -125,10 +125,21 @@ namespace vkn
 
     struct BlitInfo
     {
-        VkImageSubresourceLayers    srcSubresource;
-        VkOffset3D                  srcOffsets[2];
-        VkImageSubresourceLayers    dstSubresource;
-        VkOffset3D                  dstOffsets[2];
+        VkImageSubresourceLayers srcSubresource;
+        VkOffset3D               srcOffsets[2];
+        VkImageSubresourceLayers dstSubresource;
+        VkOffset3D               dstOffsets[2];
+    };
+
+
+    struct BufferToTextureCopyInfo
+    {
+        VkDeviceSize             bufOffset;
+        uint32_t                 bufRowLength;
+        uint32_t                 bufImageHeight;
+        VkImageSubresourceLayers texSubresource;
+        VkOffset3D               texOffset;
+        VkExtent3D               texExtent;
     };
 
 
@@ -165,6 +176,14 @@ namespace vkn
 
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const BlitInfo> regions, VkFilter filter);
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const BlitInfo& region, VkFilter filter);
+        
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, std::span<const VkBufferCopy> regions);
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, const VkBufferCopy& region);
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, VkDeviceSize size, VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer);
+
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, std::span<const BufferToTextureCopyInfo> regions);
+        CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, const BufferToTextureCopyInfo& region);
         
         CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
@@ -251,6 +270,7 @@ namespace vkn
         BarrierList m_barrierList;
 
         std::vector<VkImageBlit2> m_blitCache;
+        std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
 
         ID m_ID = INVALID_ID;
 

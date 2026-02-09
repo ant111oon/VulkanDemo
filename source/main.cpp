@@ -1764,26 +1764,14 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
                 vkn::Buffer& stagingBuffer = s_commonStagingBuffers[j];
 
-                VkCopyBufferToImageInfo2 copyInfo = {};
+                vkn::BufferToTextureCopyInfo copyInfo = {};
+                copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                copyInfo.texSubresource.mipLevel = 0;
+                copyInfo.texSubresource.baseArrayLayer = faceIdx;
+                copyInfo.texSubresource.layerCount = 1;
+                copyInfo.texExtent = s_skyboxTexture.GetSize();
 
-                copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
-                copyInfo.srcBuffer = stagingBuffer.Get();
-                copyInfo.dstImage = s_skyboxTexture.Get();
-                copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                copyInfo.regionCount = 1;
-
-                VkBufferImageCopy2 texRegion = {};
-
-                texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
-                texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                texRegion.imageSubresource.mipLevel = 0;
-                texRegion.imageSubresource.baseArrayLayer = faceIdx;
-                texRegion.imageSubresource.layerCount = 1;
-                texRegion.imageExtent = s_skyboxTexture.GetSize();
-
-                copyInfo.pRegions = &texRegion;
-
-                vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+                cmdBuffer.CmdCopyBuffer(stagingBuffer, s_skyboxTexture, copyInfo);
             }
         });
     }
@@ -2775,26 +2763,14 @@ static void UploadGPUDbgTextures()
         
         cmdBuffer.CmdPushBarrierList();
 
-        VkCopyBufferToImageInfo2 copyInfo = {};
+        vkn::BufferToTextureCopyInfo copyInfo = {};
+        copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyInfo.texSubresource.mipLevel = 0;
+        copyInfo.texSubresource.baseArrayLayer = 0;
+        copyInfo.texSubresource.layerCount = 1;
+        copyInfo.texExtent = texture.GetSize();
 
-        copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
-        copyInfo.srcBuffer = s_commonStagingBuffers[stagingBufIdx].Get();
-        copyInfo.dstImage = texture.Get();
-        copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        copyInfo.regionCount = 1;
-
-        VkBufferImageCopy2 texRegion = {};
-
-        texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
-        texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        texRegion.imageSubresource.mipLevel = 0;
-        texRegion.imageSubresource.baseArrayLayer = 0;
-        texRegion.imageSubresource.layerCount = 1;
-        texRegion.imageExtent = texture.GetSize();
-
-        copyInfo.pRegions = &texRegion;
-
-        vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffers[stagingBufIdx], texture, copyInfo);
     
         cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -4201,13 +4177,8 @@ static void UploadGPUMeshData()
     s_indexBuffer.Create(idxBufCreateInfo).SetDebugName("COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        VkBufferCopy bufferRegion = {};
-        
-        bufferRegion.size = gpuVertBufferSize;
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingVertBuffer.Get(), s_vertexBuffer.Get(), 1, &bufferRegion);
-
-        bufferRegion.size = gpuIndexBufferSize;
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingIndexBuffer.Get(), s_indexBuffer.Get(), 1, &bufferRegion);    
+        cmdBuffer.CmdCopyBuffer(stagingVertBuffer, s_vertexBuffer, gpuVertBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingIndexBuffer, s_indexBuffer, gpuIndexBufferSize);    
     });
 
     vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
@@ -4253,13 +4224,8 @@ static void UploadGPUMeshData()
     s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo).SetDebugName("COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        VkBufferCopy bufferRegion = {};
-                
-        bufferRegion.size = meshDataBufferSize;
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMeshInfosBuffer.Get(), s_commonMeshDataBuffer.Get(), 1, &bufferRegion);
-
-        bufferRegion.size = trsDataBufferSize;
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingTransformDataBuffer.Get(), s_commonTransformDataBuffer.Get(), 1, &bufferRegion);
+        cmdBuffer.CmdCopyBuffer(stagingMeshInfosBuffer, s_commonMeshDataBuffer, meshDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingTransformDataBuffer, s_commonTransformDataBuffer, trsDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Mesh data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -4343,26 +4309,14 @@ static void UploadGPUTextureData()
                     VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
                 cmdBuffer.CmdPushBarrierList();
 
-                VkCopyBufferToImageInfo2 copyInfo = {};
+                vkn::BufferToTextureCopyInfo copyInfo = {};
+                copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                copyInfo.texSubresource.mipLevel = 0;
+                copyInfo.texSubresource.baseArrayLayer = 0;
+                copyInfo.texSubresource.layerCount = 1;
+                copyInfo.texExtent = texture.GetSize();
 
-                copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
-                copyInfo.srcBuffer = s_commonStagingBuffers[j].Get();
-                copyInfo.dstImage = texture.Get();
-                copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                copyInfo.regionCount = 1;
-
-                VkBufferImageCopy2 texRegion = {};
-
-                texRegion.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
-                texRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                texRegion.imageSubresource.mipLevel = 0;
-                texRegion.imageSubresource.baseArrayLayer = 0;
-                texRegion.imageSubresource.layerCount = 1;
-                texRegion.imageExtent = texture.GetSize();
-
-                copyInfo.pRegions = &texRegion;
-
-                vkCmdCopyBufferToImage2(cmdBuffer.Get(), &copyInfo);
+                cmdBuffer.CmdCopyBuffer(s_commonStagingBuffers[j], texture, copyInfo);
 
                 const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
 
@@ -4405,10 +4359,7 @@ static void UploadGPUMaterialData()
     s_commonMaterialDataBuffer.Create(mtlBufCreateInfo).SetDebugName("COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        VkBufferCopy bufferRegion = {};
-                
-        bufferRegion.size = mtlDataBufferSize;
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingMtlDataBuffer.Get(), s_commonMaterialDataBuffer.Get(), 1, &bufferRegion);
+        cmdBuffer.CmdCopyBuffer(stagingMtlDataBuffer, s_commonMaterialDataBuffer, mtlDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Material data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -4443,10 +4394,7 @@ static void UploadGPUInstData()
     s_commonInstDataBuffer.Create(instInfosBufCreateInfo).SetDebugName("COMMON_INSTANCE_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        VkBufferCopy bufferRegion = {};
-        bufferRegion.size = bufferSize;
-        
-        vkCmdCopyBuffer(cmdBuffer.Get(), stagingBuffer.Get(), s_commonInstDataBuffer.Get(), 1, &bufferRegion);
+        cmdBuffer.CmdCopyBuffer(stagingBuffer, s_commonInstDataBuffer, bufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Instance data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());

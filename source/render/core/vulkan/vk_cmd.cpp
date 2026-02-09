@@ -198,6 +198,7 @@ namespace vkn
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
         std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
+        std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
         std::swap(m_state, cmdBuffer.m_state);
 
         return *this;
@@ -341,15 +342,17 @@ namespace vkn
 
         m_blitCache.resize(regions.size());
         for (size_t i = 0; i < m_blitCache.size(); ++i) {
+            const BlitInfo& region = regions[i];
             VkImageBlit2& blit = m_blitCache[i];
+
             blit.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
             blit.pNext = nullptr;
-            blit.srcSubresource = regions[i].srcSubresource;
-            blit.srcOffsets[0] = regions[i].srcOffsets[0];
-            blit.srcOffsets[1] = regions[i].srcOffsets[1];
-            blit.dstSubresource = regions[i].dstSubresource;
-            blit.dstOffsets[0] = regions[i].dstOffsets[0];
-            blit.dstOffsets[1] = regions[i].dstOffsets[1];
+            blit.srcSubresource = region.srcSubresource;
+            blit.srcOffsets[0] = region.srcOffsets[0];
+            blit.srcOffsets[1] = region.srcOffsets[1];
+            blit.dstSubresource = region.dstSubresource;
+            blit.dstOffsets[0] = region.dstOffsets[0];
+            blit.dstOffsets[1] = region.dstOffsets[1];
         }
 
         blitInfo.regionCount = regions.size();
@@ -369,6 +372,97 @@ namespace vkn
 
         std::span<const BlitInfo> regions(&region, 1);
         return CmdBlitTexture(srcTexture, dstTexture, regions, filter);
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, std::span<const VkBufferCopy> regions)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(regions.size() >= 1);
+
+    #ifdef ENG_BUILD_DEBUG
+        const VkDeviceSize srcBuffSize = srcBuffer.GetMemorySize();
+        const VkDeviceSize dstBuffSize = dstBuffer.GetMemorySize();
+
+        for (size_t i = 0; i < regions.size(); ++i) {
+            const VkBufferCopy& region = regions[i];
+
+            VK_ASSERT_MSG(region.srcOffset + region.size <= srcBuffSize, "COPY REGION %zu: src offset + size > src buffer size", i);
+            VK_ASSERT_MSG(region.dstOffset + region.size <= dstBuffSize, "COPY REGION %zu: dst offset + size > dst buffer size", i);
+        }
+    #endif
+
+        vkCmdCopyBuffer(m_cmdBuffer, srcBuffer.Get(), dstBuffer.Get(), regions.size(), regions.data());
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, const VkBufferCopy& region)
+    {
+        std::span<const VkBufferCopy> regions(&region, 1);
+        return CmdCopyBuffer(srcBuffer, dstBuffer, regions);
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, VkDeviceSize size, VkDeviceSize srcOffset, VkDeviceSize dstOffset)
+    {
+        VkBufferCopy region = {};
+        region.size = size;
+        region.srcOffset = srcOffset;
+        region.dstOffset = dstOffset;
+
+        return CmdCopyBuffer(srcBuffer, dstBuffer, region);
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer)
+    {
+        return CmdCopyBuffer(srcBuffer, dstBuffer, srcBuffer.GetMemorySize());
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, std::span<const BufferToTextureCopyInfo> regions)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(regions.size() >= 1);
+
+        VkCopyBufferToImageInfo2 copyInfo = {};
+        copyInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+        copyInfo.srcBuffer = srcBuffer.Get();
+        copyInfo.dstImage = dstTexture.Get();
+
+        const VkImageSubresourceLayers& dstSubres = regions[0].texSubresource;
+        copyInfo.dstImageLayout = dstTexture.GetAccessState(dstSubres.baseArrayLayer, dstSubres.mipLevel).layout;
+
+        m_bufImageCopyCache.resize(regions.size());
+        for (size_t i = 0; i < m_bufImageCopyCache.size(); ++i) {
+            const BufferToTextureCopyInfo& region = regions[i];
+            VkBufferImageCopy2& copy = m_bufImageCopyCache[i];
+
+            copy.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+            copy.pNext = nullptr;
+            copy.bufferOffset = region.bufOffset;
+            copy.bufferRowLength = region.bufRowLength;
+            copy.bufferImageHeight = region.bufImageHeight;
+            copy.imageSubresource = region.texSubresource;
+            copy.imageOffset = region.texOffset;
+            copy.imageExtent = region.texExtent;
+        }
+
+        copyInfo.regionCount = m_bufImageCopyCache.size();
+        copyInfo.pRegions = m_bufImageCopyCache.data();
+
+        vkCmdCopyBufferToImage2(m_cmdBuffer, &copyInfo);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, const BufferToTextureCopyInfo& region)
+    {
+        std::span<const BufferToTextureCopyInfo> regions(&region, 1);
+        return CmdCopyBuffer(srcBuffer, dstTexture, regions);
     }
 
 
@@ -594,7 +688,9 @@ namespace vkn
         m_cmdBuffer = VK_NULL_HANDLE;
 
         m_barrierList = {};
+
         m_blitCache = {};
+        m_bufImageCopyCache = {};
 
         m_pOwner = nullptr;
         m_ID = INVALID_ID;
