@@ -1,7 +1,9 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_device.h"
+#include "core/core.h"
+
+#include <span>
 
 
 namespace vkn
@@ -104,12 +106,29 @@ namespace vkn
         const TextureBarrierData& GetTextureBarrierByIdx(size_t i) const;
         const SCTextureBarrierData& GetSCTextureBarrierByIdx(size_t i) const;
 
+        BarrierList& Swap(BarrierList& list) noexcept
+        {
+            std::swap(m_bufferBarriers, list.m_bufferBarriers);
+            std::swap(m_textureBarriers, list.m_textureBarriers);
+            std::swap(m_scTextureBarriers, list.m_scTextureBarriers);
+            std::swap(m_state, list.m_state);
+        }
+
     private:
         std::vector<BufferBarrierData> m_bufferBarriers;
         std::vector<TextureBarrierData> m_textureBarriers;
         std::vector<SCTextureBarrierData> m_scTextureBarriers;
 
         std::bitset<FLAG_COUNT> m_state = {};
+    };
+
+
+    struct BlitInfo
+    {
+        VkImageSubresourceLayers    srcSubresource;
+        VkOffset3D                  srcOffsets[2];
+        VkImageSubresourceLayers    dstSubresource;
+        VkOffset3D                  dstOffsets[2];
     };
 
 
@@ -143,6 +162,9 @@ namespace vkn
 
         CmdBuffer& CmdSetDepthCompareOp(VkCompareOp op);
         CmdBuffer& CmdSetDepthWriteEnable(VkBool32 enabled);
+
+        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const BlitInfo> regions, VkFilter filter);
+        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const BlitInfo& region, VkFilter filter);
         
         CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
@@ -199,12 +221,6 @@ namespace vkn
         bool IsValid() const;
 
     private:
-        CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level);
-
-        CmdBuffer& Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level);
-        CmdBuffer& Free();
-
-    private:
         enum StateFlags
         {
             FLAG_IS_STARTED,
@@ -212,11 +228,31 @@ namespace vkn
             FLAG_COUNT,
         };
 
+        using ID = uint16_t;
+
+    private:
+        static inline bool IsValidID(ID id) { return id != INVALID_ID; }
+
+    private:
+        CmdBuffer(CmdPool* pOwnerPool, VkCommandBufferLevel level, ID id);
+
+        CmdBuffer& Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level, ID id);
+        CmdBuffer& Free();
+
+        ID GetID() const { return m_ID; }
+
+    private:
+        static constexpr ID INVALID_ID = static_cast<ID>(-1);
+
     private:
         CmdPool* m_pOwner = nullptr;
         VkCommandBuffer m_cmdBuffer = VK_NULL_HANDLE;
 
         BarrierList m_barrierList;
+
+        std::vector<VkImageBlit2> m_blitCache;
+
+        ID m_ID = INVALID_ID;
 
         std::bitset<FLAG_COUNT> m_state = {};
     };
@@ -226,8 +262,10 @@ namespace vkn
     {
         Device* pDevice;
 
-        uint32_t queueFamilyIndex;
         VkCommandPoolCreateFlags flags;
+        uint32_t queueFamilyIndex;
+        
+        uint16_t size;
     };
 
 
@@ -249,7 +287,7 @@ namespace vkn
 
         CmdPool& Reset(VkCommandPoolResetFlags flags = 0);
 
-        CmdBuffer AllocCmdBuffer(VkCommandBufferLevel level);
+        CmdBuffer* AllocCmdBuffer(VkCommandBufferLevel level);
         CmdPool& FreeCmdBuffer(CmdBuffer& cmdBuffer);
 
         template <typename... Args>
@@ -277,7 +315,17 @@ namespace vkn
         }
 
     private:
+        using BufferID = CmdBuffer::ID;
+
+    private:
+        BufferID AllocCmdBufferID();
+        void FreeCmdBufferID(BufferID id);
+
+    private:
         Device* m_pDevice = nullptr;
         VkCommandPool m_pool = VK_NULL_HANDLE;
+
+        std::vector<CmdBuffer> m_allocatedBuffers;
+        std::vector<BufferID> m_freeIds;
     };
 }

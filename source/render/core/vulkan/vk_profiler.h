@@ -41,7 +41,7 @@ namespace vkn
         Device* m_pDevice = nullptr;
 
         CmdPool m_cmdPool;
-        CmdBuffer m_cmdBuffer;
+        CmdBuffer* m_pCmdBuffer;
 
         TracyVkCtx m_context = nullptr;
 

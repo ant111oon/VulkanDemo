@@ -28,6 +28,7 @@ namespace vkn
         cmdPoolCreateInfo.pDevice = m_pDevice;
         cmdPoolCreateInfo.queueFamilyIndex = m_pDevice->GetQueueFamilyIndex();
         cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        cmdPoolCreateInfo.size = 1;
 
         m_vkCmdBeginDebugUtilsLabelFunc = (PFN_vkCmdBeginDebugUtilsLabelEXT)m_pDevice->GetPhysDevice()->GetInstance()->GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
         m_vkCmdEndDebugUtilsLabelFunc = (PFN_vkCmdEndDebugUtilsLabelEXT)m_pDevice->GetPhysDevice()->GetInstance()->GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
@@ -36,11 +37,10 @@ namespace vkn
         CORE_ASSERT(m_cmdPool.IsCreated());
         m_cmdPool.SetDebugName("PROFILER_CMD_POOL");
 
-        m_cmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        CORE_ASSERT(m_cmdBuffer.IsCreated());
-        m_cmdBuffer.SetDebugName("PROFILER_CMD_BUFFER");
+        m_pCmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        m_pCmdBuffer->SetDebugName("PROFILER_CMD_BUFFER");
 
-        m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue(), m_cmdBuffer.Get());
+        m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue(), m_pCmdBuffer->Get());
 
         CORE_ASSERT_MSG(m_context != nullptr, "Failed to create Vulkan profiler");
 
@@ -62,7 +62,7 @@ namespace vkn
         TracyVkDestroy(m_context);
         m_context = nullptr;
 
-        m_cmdPool.FreeCmdBuffer(m_cmdBuffer);
+        m_cmdPool.FreeCmdBuffer(*m_pCmdBuffer);
         m_cmdPool.Destroy();
 
         m_pDevice = nullptr;

@@ -801,13 +801,13 @@ static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
 
 static vkn::CmdPool s_commonCmdPool;
 
-static vkn::CmdBuffer s_immediateSubmitCmdBuffer;
-static vkn::Fence     s_immediateSubmitFinishedFence;
+static vkn::CmdBuffer* s_pImmediateSubmitCmdBuffer;
+static vkn::Fence      s_immediateSubmitFinishedFence;
 
 static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
-static vkn::Semaphore s_presentFinishedSemaphore;
-static vkn::Fence     s_renderFinishedFence;
-static vkn::CmdBuffer s_renderCmdBuffer;
+static vkn::Semaphore  s_presentFinishedSemaphore;
+static vkn::Fence      s_renderFinishedFence;
+static vkn::CmdBuffer* s_pRenderCmdBuffer;
 
 static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 
@@ -1281,19 +1281,19 @@ template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
 {   
     s_immediateSubmitFinishedFence.Reset();
-    s_immediateSubmitCmdBuffer.Reset();
+    s_pImmediateSubmitCmdBuffer->Reset();
 
     VkCommandBufferBeginInfo cmdBI = {};
     cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    s_immediateSubmitCmdBuffer.Begin(cmdBI);
-        func(s_immediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    s_immediateSubmitCmdBuffer.End();
+    s_pImmediateSubmitCmdBuffer->Begin(cmdBI);
+        func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    s_pImmediateSubmitCmdBuffer->End();
 
     SubmitVkQueue(
         vkQueue, 
-        s_immediateSubmitCmdBuffer.Get(), 
+        s_pImmediateSubmitCmdBuffer->Get(), 
         s_immediateSubmitFinishedFence.Get(), 
         VK_NULL_HANDLE, 
         VK_PIPELINE_STAGE_2_NONE,
@@ -1645,7 +1645,7 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
                 VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1);
         cmdBuffer.CmdPushBarrierList();
 
-        VkImageBlit blit = {};
+        vkn::BlitInfo blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         blit.srcSubresource.mipLevel = mip - 1;
         blit.srcSubresource.baseArrayLayer = layerIdx;
@@ -1656,18 +1656,9 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
         blit.dstSubresource.mipLevel = mip;
         blit.dstSubresource.baseArrayLayer = layerIdx;
         blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[1] = {
-            mipWidth  > 1 ? mipWidth  / 2 : 1,
-            mipHeight > 1 ? mipHeight / 2 : 1,
-            1
-        };
+        blit.dstOffsets[1] = { mipWidth  > 1 ? mipWidth  / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
 
-        vkCmdBlitImage(cmdBuffer.Get(),
-            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            texture.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit,
-            VK_FILTER_LINEAR
-        );
+        cmdBuffer.CmdBlitTexture(texture, texture, blit, VK_FILTER_LINEAR);
 
         if (mipWidth > 1) {
             mipWidth /= 2;
@@ -5310,7 +5301,7 @@ static void RenderScene()
     }
 
     vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[s_nextImageIdx];
-    vkn::CmdBuffer& cmdBuffer = s_renderCmdBuffer;
+    vkn::CmdBuffer& cmdBuffer = *s_pRenderCmdBuffer;
 
     cmdBuffer.Reset();
 
@@ -5571,12 +5562,13 @@ int main(int argc, char* argv[])
     vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
     cmdPoolCreateInfo.pDevice = &s_vkDevice;
     cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
-    cmdPoolCreateInfo.flags =  VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdPoolCreateInfo.size = 2;
     
     s_commonCmdPool.Create(cmdPoolCreateInfo).SetDebugName("COMMON_CMD_POOL");
     
-    s_immediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_immediateSubmitCmdBuffer.SetDebugName("IMMEDIATE_CMD_BUFFER");
+    s_pImmediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    s_pImmediateSubmitCmdBuffer->SetDebugName("IMMEDIATE_CMD_BUFFER");
 
     s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 
@@ -5613,8 +5605,8 @@ int main(int argc, char* argv[])
 
     s_renderFinishedFence.Create(&s_vkDevice).SetDebugName("RND_FINISH_FENCE");
     
-    s_renderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_renderCmdBuffer.SetDebugName("RND_CMD_BUFFER");
+    s_pRenderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    s_pRenderCmdBuffer->SetDebugName("RND_CMD_BUFFER");
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
