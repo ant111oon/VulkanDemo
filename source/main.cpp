@@ -751,6 +751,8 @@ static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
+static constexpr size_t BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
+
 static constexpr size_t SKYBOX_TEXTURE_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
@@ -831,6 +833,9 @@ static VkDescriptorSetLayout s_deferredLightingDescriptorSetLayout = VK_NULL_HAN
 static VkDescriptorSet       s_postProcessingDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_postProcessingDescriptorSetLayout = VK_NULL_HANDLE;
 
+static VkDescriptorSet       s_backBufferDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSetLayout s_backBufferDescriptorSetLayout = VK_NULL_HANDLE;
+
 static VkDescriptorSet       s_skyboxDescriptorSet = VK_NULL_HANDLE;
 static VkDescriptorSetLayout s_skyboxDescriptorSetLayout = VK_NULL_HANDLE;
 
@@ -858,6 +863,9 @@ static VkPipeline       s_deferredLightingPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_postProcessingPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_postProcessingPipeline = VK_NULL_HANDLE;
+
+static VkPipelineLayout s_backBufferPipelineLayout = VK_NULL_HANDLE;
+static VkPipeline       s_backBufferPipeline = VK_NULL_HANDLE;
 
 static VkPipelineLayout s_skyboxPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_skyboxPipeline = VK_NULL_HANDLE;
@@ -933,8 +941,11 @@ static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
 static vkn::Texture     s_commonDepthRT;
 static vkn::TextureView s_commonDepthRTView;
 
-static vkn::Texture     s_colorRT;
-static vkn::TextureView s_colorRTView;
+static vkn::Texture     s_colorRT8U;
+static vkn::TextureView s_colorRTView8U;
+
+static vkn::Texture     s_colorRT16F;
+static vkn::TextureView s_colorRTView16F;
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
@@ -1016,7 +1027,7 @@ namespace DbgUI
         imGuiInitInfo.Queue = s_vkDevice.GetQueue();
         imGuiInitInfo.DescriptorPoolSize = 1000;
         imGuiInitInfo.MinImageCount = 2;
-        imGuiInitInfo.ImageCount = s_vkSwapchain.GetTextureCount();
+        imGuiInitInfo.ImageCount = 2;
         imGuiInitInfo.PipelineCache = VK_NULL_HANDLE;
 
         imGuiInitInfo.UseDynamicRendering = true;
@@ -1025,7 +1036,7 @@ namespace DbgUI
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
         
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat fmt = s_vkSwapchain.GetTextureFormat();
+        const VkFormat fmt = s_colorRT8U.GetFormat();
         imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
     #else
         #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
@@ -1277,34 +1288,6 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
-template <typename Func, typename... Args>
-static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
-{   
-    s_immediateSubmitFinishedFence.Reset();
-    s_pImmediateSubmitCmdBuffer->Reset();
-
-    VkCommandBufferBeginInfo cmdBI = {};
-    cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    s_pImmediateSubmitCmdBuffer->Begin(cmdBI);
-        func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    s_pImmediateSubmitCmdBuffer->End();
-
-    SubmitVkQueue(
-        vkQueue, 
-        s_pImmediateSubmitCmdBuffer->Get(), 
-        s_immediateSubmitFinishedFence.Get(), 
-        VK_NULL_HANDLE, 
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_NULL_HANDLE, 
-        VK_PIPELINE_STAGE_2_NONE
-    );
-
-    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
-}
-
-
 static void SubmitVkQueue(VkQueue vkQueue,
     VkCommandBuffer vkCmdBuffer,
     VkFence vkFinishFence,
@@ -1342,6 +1325,34 @@ static void SubmitVkQueue(VkQueue vkQueue,
     submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
 
     VK_CHECK(vkQueueSubmit2(vkQueue, 1, &submitInfo2, vkFinishFence));
+}
+
+
+template <typename Func, typename... Args>
+static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
+{   
+    s_immediateSubmitFinishedFence.Reset();
+    s_pImmediateSubmitCmdBuffer->Reset();
+
+    VkCommandBufferBeginInfo cmdBI = {};
+    cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    s_pImmediateSubmitCmdBuffer->Begin(cmdBI);
+        func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    s_pImmediateSubmitCmdBuffer->End();
+
+    SubmitVkQueue(
+        vkQueue, 
+        s_pImmediateSubmitCmdBuffer->Get(), 
+        s_immediateSubmitFinishedFence.Get(), 
+        VK_NULL_HANDLE, 
+        VK_PIPELINE_STAGE_2_NONE,
+        VK_NULL_HANDLE, 
+        VK_PIPELINE_STAGE_2_NONE
+    );
+
+    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
 }
 
 
@@ -1585,15 +1596,22 @@ static void CreateDynamicRenderTargets()
     gbuffRT3View.Create(gbuffRT3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
 
 
+    rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    s_colorRT8U.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT_U8");
+    s_colorRTView8U.Create(s_colorRT8U, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT_VIEW_U8");
+
+
     rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    s_colorRT.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT");
-    s_colorRTView.Create(s_colorRT, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT");
+    s_colorRT16F.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT_16F");
+    s_colorRTView16F.Create(s_colorRT16F, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT_VIEW_16F");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.BeginBarrierList()
-            .AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
+            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
         cmdBuffer.CmdPushBarrierList();
     });
 
@@ -1618,8 +1636,11 @@ static void DestroyDynamicRenderTargets()
     s_commonDepthRTView.Destroy();
     s_commonDepthRT.Destroy();
 
-    s_colorRTView.Destroy();
-    s_colorRT.Destroy();
+    s_colorRTView16F.Destroy();
+    s_colorRT16F.Destroy();
+
+    s_colorRTView8U.Destroy();
+    s_colorRT8U.Destroy();
 }
 
 
@@ -2095,6 +2116,19 @@ static void CreatePostProcessingDescriptorSetLayout()
 }
 
 
+static void CreateBackbufferPassDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutBuilder builder;
+
+    s_backBufferDescriptorSetLayout = builder
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        .AddBinding(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .Build();
+
+    CORE_ASSERT(s_backBufferDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
 static void CreateSkyboxDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutBuilder builder;
@@ -2161,6 +2195,7 @@ static void AllocateDescriptorSets()
         std::make_pair(&s_deferredLightingDescriptorSetLayout,      &s_deferredLightingDescriptorSet),
         std::make_pair(&s_skyboxDescriptorSetLayout,                &s_skyboxDescriptorSet),
         std::make_pair(&s_postProcessingDescriptorSetLayout,        &s_postProcessingDescriptorSet),
+        std::make_pair(&s_backBufferDescriptorSetLayout,            &s_backBufferDescriptorSet),
         std::make_pair(&s_irradianceMapGenDescriptorSetLayout,      &s_irradianceMapGenDescriptorSet),
         std::make_pair(&s_BRDFIntegrationLUTGenDescriptorSetLayout, &s_BRDFIntegrationLUTGenDescriptorSet),
     };
@@ -2198,6 +2233,7 @@ static void CreateDesriptorSets()
     CreateGBufferDescriptorSetLayout();
     CreateDeferredLightingDescriptorSetLayout();
     CreatePostProcessingDescriptorSetLayout();
+    CreateBackbufferPassDescriptorSetLayout();
     CreateSkyboxDescriptorSetLayout();
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
@@ -2272,6 +2308,19 @@ static void CreatePostProcessingPipelineLayout()
         .Build();
 
     CORE_ASSERT(s_postProcessingPipelineLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreateBackbufferPassPipelineLayout()
+{
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+
+    s_backBufferPipelineLayout = builder
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_backBufferDescriptorSetLayout)
+        .Build();
+
+    CORE_ASSERT(s_backBufferPipelineLayout != VK_NULL_HANDLE);
 }
 
 
@@ -2497,7 +2546,7 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
         .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_colorRT.GetFormat())
+        .AddColorAttachmentFormat(s_colorRT16F.GetFormat())
         .AddColorBlendAttachment(blendState)
         .SetLayout(s_deferredLightingPipelineLayout)
         .Build();
@@ -2547,7 +2596,7 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
         .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_vkSwapchain.GetTextureFormat())
+        .AddColorAttachmentFormat(s_colorRT8U.GetFormat())
         .AddColorBlendAttachment(blendState)
         .SetLayout(s_postProcessingPipelineLayout)
         .Build();
@@ -2558,6 +2607,56 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
     }
 
     CORE_ASSERT(s_postProcessingPipeline != VK_NULL_HANDLE);
+}
+
+
+static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path& psPath)
+{
+    std::vector<uint8_t> shaderCodeBuffer;
+    std::array shaderModules = {
+        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
+        CreateVkShaderModule(psPath, &shaderCodeBuffer),
+    };
+
+    const std::array shaderModuleStages = {
+        VK_SHADER_STAGE_VERTEX_BIT,
+        VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+
+    static_assert(shaderModules.size() == shaderModuleStages.size());
+    const size_t shadersCount = shaderModules.size();
+
+    vkn::GraphicsPipelineBuilder builder;
+
+    for (size_t i = 0; i < shadersCount; ++i) {
+        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    }
+
+    VkPipelineColorBlendAttachmentState blendState = {};
+    blendState.blendEnable = VK_FALSE;
+    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    
+    s_backBufferPipeline = builder
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetStencilTestState(VK_FALSE, {}, {})
+        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
+        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetRasterizerLineWidth(1.f)
+        .AddColorAttachmentFormat(s_vkSwapchain.GetTextureFormat())
+        .AddColorBlendAttachment(blendState)
+        .SetLayout(s_backBufferPipelineLayout)
+        .Build();
+
+    for (VkShaderModule& shader : shaderModules) {
+        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
+        shader = VK_NULL_HANDLE;
+    }
+
+    CORE_ASSERT(s_backBufferPipeline != VK_NULL_HANDLE);
 }
 
 
@@ -2601,7 +2700,7 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_colorRT.GetFormat())
+        .AddColorAttachmentFormat(s_colorRT16F.GetFormat())
         .AddColorBlendAttachment(blendState)
         .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat())
         .SetLayout(s_skyboxPipelineLayout)
@@ -2680,6 +2779,7 @@ static void CreatePipelines()
     CreateGBufferPipelineLayout();
     CreateDeferredLightingPipelineLayout();
     CreatePostProcessingPipelineLayout();
+    CreateBackbufferPassPipelineLayout();
     CreateSkyboxPipelineLayout();
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
@@ -2689,6 +2789,7 @@ static void CreatePipelines()
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
     CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.vs.spv", "shaders/bin/deferred_lighting.ps.spv");
     CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
+    CreateBackbufferPassPipeline("shaders/bin/backbuffer.vs.spv", "shaders/bin/backbuffer.ps.spv");
     CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
     CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
     CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
@@ -3356,7 +3457,7 @@ static void WriteDeferredLightingDescriptorSet()
 
     VkDescriptorImageInfo lightingOutputWriteInfo = {};
     lightingOutputWriteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    lightingOutputWriteInfo.imageView = s_colorRTView.Get();
+    lightingOutputWriteInfo.imageView = s_colorRTView16F.Get();
 
     VkWriteDescriptorSet lightingOutputWrite = {};
     lightingOutputWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3460,7 +3561,7 @@ static void WritePostProcessingDescriptorSet()
 
     VkDescriptorImageInfo postProcInputWriteInfo = {};
     postProcInputWriteInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    postProcInputWriteInfo.imageView = s_colorRTView.Get();
+    postProcInputWriteInfo.imageView = s_colorRTView16F.Get();
 
     VkWriteDescriptorSet postProcInputWrite = {};
     postProcInputWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3477,6 +3578,29 @@ static void WritePostProcessingDescriptorSet()
 }
 
 
+static void WriteBackbufferPassDescriptorSet()
+{
+    std::array<VkWriteDescriptorSet, 1> descWrites = {};
+
+    VkDescriptorImageInfo backbuffInputWriteInfo = {};
+    backbuffInputWriteInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    backbuffInputWriteInfo.imageView = s_colorRTView8U.Get();
+
+    VkWriteDescriptorSet backbuffInputWrite = {};
+    backbuffInputWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    backbuffInputWrite.dstSet = s_backBufferDescriptorSet;
+    backbuffInputWrite.dstBinding = BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT;
+    backbuffInputWrite.dstArrayElement = 0;
+    backbuffInputWrite.descriptorCount = 1;
+    backbuffInputWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    backbuffInputWrite.pImageInfo = &backbuffInputWriteInfo;
+
+    descWrites[0] = backbuffInputWrite;
+
+    vkUpdateDescriptorSets(s_vkDevice.Get(), descWrites.size(), descWrites.data(), 0, nullptr);
+}
+
+
 static void WriteSkyboxDescriptorSet()
 {
     std::array<VkWriteDescriptorSet, 1> descWrites = {};
@@ -3484,8 +3608,6 @@ static void WriteSkyboxDescriptorSet()
     VkDescriptorImageInfo skyboxTexInfo = {};
     skyboxTexInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     skyboxTexInfo.imageView = s_skyboxTextureView.Get();
-    // skyboxTexInfo.imageView = s_prefilteredEnvMapTextureView.Get();
-    // skyboxTexInfo.imageView = s_irradianceMapTextureView.Get();
 
     VkWriteDescriptorSet write = {};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3789,6 +3911,7 @@ static void WriteDescriptorSets()
     WriteGBufferDescriptorSet();
     WriteDeferredLightingDescriptorSet();
     WritePostProcessingDescriptorSet();
+    WriteBackbufferPassDescriptorSet();
     WriteSkyboxDescriptorSet();
     WriteIrradianceMapGenDescriptorSet();
     WritePrefilteredEnvMapGenDescriptorSets();
@@ -5033,7 +5156,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -5042,13 +5165,13 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = VkExtent2D { s_colorRT.GetSizeX(), s_colorRT.GetSizeY() };
+    renderingInfo.renderArea.extent = VkExtent2D { s_colorRT16F.GetSizeX(), s_colorRT16F.GetSizeY() };
     renderingInfo.renderArea.offset = {0, 0};
     renderingInfo.layerCount = 1;
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView.Get();
+    colorAttachment.imageView = s_colorRTView16F.Get();
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5088,7 +5211,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
-    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -5103,7 +5226,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView.Get(),
+    colorAttachment.imageView = s_colorRTView16F.Get(),
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5145,9 +5268,9 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
-    barrierList.AddTextureBarrier(s_colorRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barrierList.AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     
     cmdBuffer.CmdPushBarrierList();
@@ -5160,7 +5283,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
+    colorAttachment.imageView = s_colorRTView8U.Get();
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5201,7 +5324,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     DbgUI::FillData();
     DbgUI::EndFrame();
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     cmdBuffer.CmdPushBarrierList();
 
@@ -5213,7 +5336,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo colorAttachment = {};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_vkSwapchain.GetTextureView(s_nextImageIdx).Get();
+    colorAttachment.imageView = s_colorRTView8U.Get();
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5224,6 +5347,66 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBeginRendering(renderingInfo);
         DbgUI::Render(cmdBuffer);
     cmdBuffer.CmdEndRendering();
+}
+
+
+void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Resolve_To_Backbuffer_Pass", 100, 100, 100, 255);
+
+    vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
+    vkn::SCTextureView& scTextureView = s_vkSwapchain.GetTextureView(s_nextImageIdx);
+
+    cmdBuffer.BeginBarrierList()
+        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
+
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.layerCount = 1;
+
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = scTextureView.Get();
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color.float32[0] = 0.f;
+    colorAttachment.clearValue.color.float32[1] = 0.f;
+    colorAttachment.clearValue.color.float32[2] = 0.f;
+    colorAttachment.clearValue.color.float32[3] = 0.f;
+    
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+
+    cmdBuffer.CmdBeginRendering(renderingInfo);
+        VkViewport viewport = {};
+        viewport.width = renderingInfo.renderArea.extent.width;
+        viewport.height = renderingInfo.renderArea.extent.height;
+        viewport.minDepth = 0.f;
+        viewport.maxDepth = 1.f;
+        cmdBuffer.CmdSetViewport(0, 1, &viewport); 
+
+        VkRect2D scissor = {};
+        scissor.extent = renderingInfo.renderArea.extent;
+        cmdBuffer.CmdSetScissor(0, 1, &scissor);
+
+        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_backBufferPipeline);
+        
+        VkDescriptorSet descSets[] = { s_commonDescriptorSet, s_backBufferDescriptorSet };
+        vkCmdBindDescriptorSets(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_backBufferPipelineLayout, 0, _countof(descSets), descSets, 0, nullptr);
+
+        cmdBuffer.CmdDraw(6, 1, 0, 0);        
+    cmdBuffer.CmdEndRendering();
+
+    cmdBuffer.BeginBarrierList().AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 
+        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
 }
 
 
@@ -5273,9 +5456,7 @@ static void RenderScene()
 
         DebugUIRenderPass(cmdBuffer);
         
-        cmdBuffer.BeginBarrierList().AddTextureBarrier(s_vkSwapchain.GetTexture(s_nextImageIdx), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 
-            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
-        cmdBuffer.CmdPushBarrierList();
+        ResolveToBackbufferPass(cmdBuffer);
 
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
     }
@@ -5406,12 +5587,8 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 }
 
 
-void ProcessWndEvent(const WndEvent& event)
+bool AppProcessWndEvent(const WndEvent& event)
 {
-    if (event.Is<WndResizeEvent>()) {
-        s_swapchainRecreateRequired = true;
-    }
-
     if (event.Is<WndKeyEvent>()) {
         const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
 
@@ -5424,6 +5601,30 @@ void ProcessWndEvent(const WndEvent& event)
     if (s_flyCameraMode) {
         CameraProcessWndEvent(s_camera, event);
     }
+
+    if (event.Is<WndResizeEvent>()) {
+        s_swapchainRecreateRequired = true;
+    }
+
+    if (s_pWnd->IsMinimized() || s_pWnd->GetWidth() == 0 || s_pWnd->GetHeight() == 0) {
+        return false;
+    }
+
+    if (s_swapchainRecreateRequired) {
+        if (ResizeVkSwapchain(s_pWnd)) {
+            return false;
+        }
+
+        s_vkDevice.WaitIdle();
+
+        ResizeDynamicRenderTargets();
+
+        WriteDeferredLightingDescriptorSet();
+        WritePostProcessingDescriptorSet();
+        WriteBackbufferPassDescriptorSet();
+    }
+
+    return true;
 }
 
 
@@ -5434,32 +5635,19 @@ void ProcessFrame()
     static Timer timer;
     timer.End().GetDuration<float, std::milli>(s_frameTime).Reset();
 
-    s_pWnd->ProcessEvents();
+    s_pWnd->PullEvents();
     
     WndEvent event;
     while(s_pWnd->PopEvent(event)) {
-        ProcessWndEvent(event);
-    }
-
-    if (s_pWnd->IsMinimized()) {
-        return;
-    }
-
-    if (s_swapchainRecreateRequired) {
-        if (ResizeVkSwapchain(s_pWnd)) {
+        if (!AppProcessWndEvent(event)) {
             return;
         }
-
-        s_vkDevice.WaitIdle();
-
-        ResizeDynamicRenderTargets();
-
-        WriteDeferredLightingDescriptorSet();
-        WritePostProcessingDescriptorSet();
     }
 
-    UpdateScene();
-    RenderScene();
+    if (!s_pWnd->IsMinimized() && s_pWnd->GetWidth() > 0 && s_pWnd->GetHeight() > 0) {
+        UpdateScene();
+        RenderScene();
+    }
 
     ++s_frameNumber;
 
@@ -5600,6 +5788,9 @@ int main(int argc, char* argv[])
     
     vkDestroyPipeline(s_vkDevice.Get(), s_postProcessingPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_postProcessingPipelineLayout, nullptr);
+    
+    vkDestroyPipeline(s_vkDevice.Get(), s_backBufferPipeline, nullptr);
+    vkDestroyPipelineLayout(s_vkDevice.Get(), s_backBufferPipelineLayout, nullptr);
 
     vkDestroyPipeline(s_vkDevice.Get(), s_skyboxPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_skyboxPipelineLayout, nullptr);
@@ -5618,6 +5809,7 @@ int main(int argc, char* argv[])
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferRenderDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_deferredLightingDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_postProcessingDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_backBufferDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_skyboxDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_irradianceMapGenDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenDescriptorSetLayout, nullptr);

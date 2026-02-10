@@ -20,7 +20,7 @@ public:
     bool Create(const WindowInitInfo& initInfo) override;
     void Destroy() override;
 
-    void ProcessEvents() override;
+    void PullEvents() override;
     
     void* GetNativeHandle() override { return m_HWND; }
     const void* GetNativeHandle() const override { return m_HWND; }

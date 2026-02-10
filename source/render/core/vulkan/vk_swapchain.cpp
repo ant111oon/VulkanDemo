@@ -127,7 +127,9 @@ namespace vkn
     SCTexture& SCTexture::Create(Device* pDevice, VkImage image, VkImageType type, VkExtent2D extent, VkFormat format)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of swapchain texture %s", GetDebugName());
+            VK_LOG_WARN("Recreation of swapchain texture %s, Old Size: [%u, %u]; New Size: [%u, %u]", 
+                GetDebugName(), m_extent.width, m_extent.height, extent.width, extent.height);
+            
             Destroy();
         }
 

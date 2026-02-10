@@ -36,7 +36,7 @@ public:
         m_state.reset();
     }
 
-    virtual void ProcessEvents() = 0;
+    virtual void PullEvents() = 0;
     
     virtual void* GetNativeHandle() = 0;
     virtual const void* GetNativeHandle() const = 0;

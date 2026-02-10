@@ -453,7 +453,7 @@ void Win32Window::Destroy()
 }
 
 
-void Win32Window::ProcessEvents()
+void Win32Window::PullEvents()
 {
     WIN32_ASSERT(IsInitialized());
 
