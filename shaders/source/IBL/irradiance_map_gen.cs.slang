@@ -31,7 +31,7 @@ float3 CalcIrradiance(in float3 normal)
         const float3 L = CosineSampleHemisphere(Xi);
 
         const float NdotL = max(dot(normal, L), 0.f);
-        irradiance += SAMPLE_TEX_LEVEL(IRRADIANCE_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), L, 0).rgb * NdotL;
+        irradiance += SAMPLE_TEX_LEVEL(IRRADIANCE_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), L, 0).rgb * NdotL;
     }
 
     return irradiance * (4.f * M3D_PI / IRRADIANCE_MAP_GEN_SAMPLES_NUM);

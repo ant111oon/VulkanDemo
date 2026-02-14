@@ -134,7 +134,7 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
 
 float3 GetIndirectDiffuse(in float3 albedo, in float3 normal)
 {
-    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
+    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
 }
 
 
@@ -143,13 +143,13 @@ float3 GetIndirectPrefiltColor(in float3 viewDir, in float3 normal, in float rou
     const float3 reflectDir = reflect(-viewDir, normal);
     const float mip = roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
 }
 
 
 float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 {
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
 }
 
 

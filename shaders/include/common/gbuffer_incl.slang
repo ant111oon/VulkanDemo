@@ -23,9 +23,9 @@ float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
     float4 albedo = ONEF4;
 
     if (mtl.ALBEDO_TEX_IDX < 0) {
-        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), GET_COMMON_SAMPLER(ANISO_2X_NEAREST_REPEAT), uv);
+        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT), uv);
     } else {
-        albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv);
+        albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv);
         albedo.rgb = SRGBToLinear(albedo.rgb);
     }
 
@@ -41,7 +41,7 @@ float3 SampleGBufferSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in f
         return ZEROF3;
     }
 
-    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).rgb;
+    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.EMISSIVE_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv).rgb;
     emissive = SRGBToLinear(emissive);
 
     emissive *= mtl.EMISSIVE_MULT;
@@ -56,7 +56,7 @@ float3 SampleGBufferSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
         return TBN[2];
     }
 
-    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).xyz - 1.f;
+    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.NORMAL_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv).xyz - 1.f;
     lnorm = normalize(lnorm * float3(FLOAT2(mtl.NORMAL_SCALE), 1.f));
 
     return normalize(mul(lnorm, TBN));
@@ -69,15 +69,15 @@ void SampleGBufferSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in f
 
     if (mtl.MR_TEX_IDX == mtl.AO_TEX_IDX) {
         if (mtl.MR_TEX_IDX >= 0) {
-            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).rgb;
+            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv).rgb;
         }
     } else {
         if (mtl.AO_TEX_IDX >= 0) {
-            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).r;
+            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.AO_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv).r;
         }
 
         if (mtl.MR_TEX_IDX >= 0) {
-            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, COMMON_SAMPLERS[smpIdx], uv).bg;
+            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.MR_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv).bg;
         }
     }
 
