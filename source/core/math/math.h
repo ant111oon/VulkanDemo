@@ -97,4 +97,8 @@ namespace math
     {
         return std::bit_width(size);
     }
+
+
+    #define MATH_IS_FLAG_SET(VALUE, MASK) ((uint64_t(VALUE) & uint64_t(MASK)) != 0)
+    #define MATH_IS_BIT_SET(VALUE, BIT)   MATH_IS_FLAG_SET(VALUE, uint64_t(1) << uint64_t(BIT))
 }

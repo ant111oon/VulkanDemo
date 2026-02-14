@@ -19,6 +19,7 @@
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_texture.h"
 #include "render/core/vulkan/vk_pso.h"
+#include "render/core/vulkan/vk_descriptor.h"
 #include "render/core/vulkan/vk_query.h"
 
 #include "render/core/vulkan/vk_memory.h"
@@ -815,38 +816,29 @@ static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 
 static VkDescriptorPool      s_commonDescriptorSetPool = VK_NULL_HANDLE;
 
-static VkDescriptorSet       s_commonDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_commonDescriptorSetLayout = VK_NULL_HANDLE;
+static vkn::DescriptorSetLayout s_commonDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_meshCullingDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_zpassDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_gbufferRenderDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_deferredLightingDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_postProcessingDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_backBufferDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_skyboxDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_irradianceMapGenDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_prefilteredEnvMapGenDescriptorSetLayout;
+static vkn::DescriptorSetLayout s_BRDFIntegrationLUTGenDescriptorSetLayout;
 
-static VkDescriptorSet       s_meshCullingDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_meshCullingDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_zpassDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_zpassDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_gbufferRenderDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_gbufferRenderDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_deferredLightingDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_deferredLightingDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_postProcessingDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_postProcessingDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_backBufferDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_backBufferDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_skyboxDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_skyboxDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_irradianceMapGenDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_irradianceMapGenDescriptorSetLayout = VK_NULL_HANDLE;
-
-static std::array<VkDescriptorSet, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvGenDescriptorSets = {};
-static VkDescriptorSetLayout s_prefilteredEnvMapGenDescriptorSetLayout = VK_NULL_HANDLE;
-
-static VkDescriptorSet       s_BRDFIntegrationLUTGenDescriptorSet = VK_NULL_HANDLE;
-static VkDescriptorSetLayout s_BRDFIntegrationLUTGenDescriptorSetLayout = VK_NULL_HANDLE;
+static VkDescriptorSet s_commonDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_meshCullingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_zpassDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_gbufferRenderDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_deferredLightingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_postProcessingDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_backBufferDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_skyboxDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_irradianceMapGenDescriptorSet = VK_NULL_HANDLE;
+static VkDescriptorSet s_BRDFIntegrationLUTGenDescriptorSet = VK_NULL_HANDLE;
+static std::array<VkDescriptorSet, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvGenDescriptorSets = { VK_NULL_HANDLE };
 
 
 static VkPipelineLayout s_meshCullingPipelineLayout = VK_NULL_HANDLE;
@@ -880,7 +872,7 @@ static VkPipelineLayout s_BRDFIntegrationLUTGenPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_BRDFIntegrationLUTGenPipeline = VK_NULL_HANDLE;
 
 
-static vkn::Buffer s_descriptorBuffer;
+// static vkn::Buffer s_descriptorBuffer;
 
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
@@ -2029,228 +2021,227 @@ static void CreateCommonDescriptorPool()
 
 static void CreateCommonDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_commonDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(COMMON_SAMPLERS_DESCRIPTOR_SLOT,     VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
-        .AddBinding(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT)
-        .AddBinding(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_commonDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
+        vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_commonDescriptorSetLayout.Create(createInfo).SetDebugName("COMMON_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateZPassDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_zpassDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_zpassDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_zpassDescriptorSetLayout.Create(createInfo).SetDebugName("ZPASS_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateMeshCullingDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_meshCullingDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_meshCullingDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_meshCullingDescriptorSetLayout.Create(createInfo).SetDebugName("MESH_CULLING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateGBufferDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_gbufferRenderDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_gbufferRenderDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_gbufferRenderDescriptorSetLayout.Create(createInfo).SetDebugName("GBUFFER_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateDeferredLightingDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_deferredLightingDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .AddBinding(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_deferredLightingDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_deferredLightingDescriptorSetLayout.Create(createInfo).SetDebugName("DEFERRED_LIGHTING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreatePostProcessingDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_postProcessingDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_postProcessingDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_postProcessingDescriptorSetLayout.Create(createInfo).SetDebugName("POST_PROCESSING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateBackbufferPassDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_backBufferDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_backBufferDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_backBufferDescriptorSetLayout.Create(createInfo).SetDebugName("BACK_BUFFER_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateSkyboxDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_skyboxDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(SKYBOX_TEXTURE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_skyboxDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(SKYBOX_TEXTURE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_skyboxDescriptorSetLayout.Create(createInfo).SetDebugName("SKYBOX_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateIrradianceMapGenDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_irradianceMapGenDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_irradianceMapGenDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_irradianceMapGenDescriptorSetLayout.Create(createInfo).SetDebugName("IRRADIANCE_MAP_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_prefilteredEnvMapGenDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .AddBinding(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_prefilteredEnvMapGenDescriptorSetLayout != VK_NULL_HANDLE);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_prefilteredEnvMapGenDescriptorSetLayout.Create(createInfo).SetDebugName("PREFILT_ENV_MAP_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 {
-    vkn::DescriptorSetLayoutBuilder builder;
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
-    s_BRDFIntegrationLUTGenDescriptorSetLayout = builder
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
-        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddBinding(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
-        .Build();
+    createInfo.pDevice = &s_vkDevice;
+    // createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
-    CORE_ASSERT(s_BRDFIntegrationLUTGenDescriptorSetLayout != VK_NULL_HANDLE);
-}
-
-
-static void CreateDescriptorBuffer()
-{
-    auto GetAlignedSize = [](VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
-    {
-        return (value + alignment - 1) & ~(alignment - 1);
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
-    std::array layouts = {
-        s_commonDescriptorSetLayout,
-        s_meshCullingDescriptorSetLayout,
-        s_zpassDescriptorSetLayout,
-        s_gbufferRenderDescriptorSetLayout,
-        s_deferredLightingDescriptorSetLayout,
-        s_postProcessingDescriptorSetLayout,
-        s_backBufferDescriptorSetLayout,
-        s_skyboxDescriptorSetLayout,
-        s_irradianceMapGenDescriptorSetLayout,
-        s_prefilteredEnvMapGenDescriptorSetLayout,
-        s_BRDFIntegrationLUTGenDescriptorSetLayout,
-    };
+    createInfo.descriptorInfos = descriptors;
 
-    auto GetDescriptorSetLayoutSize = (PFN_vkGetDescriptorSetLayoutSizeEXT)s_vkDevice.GetProcAddr("vkGetDescriptorSetLayoutSizeEXT");
-
-    const VkDeviceSize descriptorBufferOffsetAlignment = s_vkPhysDevice.GetDescBufferProperties().descriptorBufferOffsetAlignment;
-
-    VkDeviceSize size = 0;
-    for (VkDescriptorSetLayout layout : layouts) {
-        VkDeviceSize setSize = 0;
-
-        GetDescriptorSetLayoutSize(s_vkDevice.Get(), layout, &setSize);
-        setSize = GetAlignedSize(setSize, descriptorBufferOffsetAlignment);
-
-        size += setSize;
-    }
-
-    VkBufferUsageFlags2 usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    vkn::AllocationInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-
-    s_descriptorBuffer.Create(&s_vkDevice, size, usage, allocInfo).SetDebugName("COMMON_DESCRIPTOR_BUFFER");
+    s_BRDFIntegrationLUTGenDescriptorSetLayout.Create(createInfo).SetDebugName("BRDF_INTEGRATION_LUT_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2280,7 +2271,7 @@ static void AllocateDescriptorSets()
     allocator.SetPool(s_commonDescriptorSetPool);
 
     for (auto& [pLayout, pSet] : descriptorSetsPairs) {
-        allocator.AddLayout(*pLayout);
+        allocator.AddLayout(pLayout->Get());
     }
     
     allocator.Allocate(descriptorSets);
@@ -2310,8 +2301,6 @@ static void CreateDescriptorSets()
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
 
-    // CreateDescriptorBuffer();
-
     AllocateDescriptorSets();
 }
 
@@ -2322,8 +2311,8 @@ static void CreateMeshCullingPipelineLayout()
 
     s_meshCullingPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_meshCullingDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_meshCullingDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_meshCullingPipelineLayout != VK_NULL_HANDLE);
@@ -2336,8 +2325,8 @@ static void CreateZPassPipelineLayout()
 
     s_zpassPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_zpassDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_zpassDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_zpassPipelineLayout != VK_NULL_HANDLE);
@@ -2350,8 +2339,8 @@ static void CreateGBufferPipelineLayout()
 
     s_gbufferRenderPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_gbufferRenderDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_gbufferRenderDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_gbufferRenderPipelineLayout != VK_NULL_HANDLE);
@@ -2363,8 +2352,8 @@ static void CreateDeferredLightingPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_deferredLightingPipelineLayout = builder
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_deferredLightingDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_deferredLightingDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_deferredLightingPipelineLayout != VK_NULL_HANDLE);
@@ -2376,8 +2365,8 @@ static void CreatePostProcessingPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_postProcessingPipelineLayout = builder
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_postProcessingDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_postProcessingDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_postProcessingPipelineLayout != VK_NULL_HANDLE);
@@ -2389,8 +2378,8 @@ static void CreateBackbufferPassPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_backBufferPipelineLayout = builder
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_backBufferDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_backBufferDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_backBufferPipelineLayout != VK_NULL_HANDLE);
@@ -2402,8 +2391,8 @@ static void CreateSkyboxPipelineLayout()
     vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_skyboxPipelineLayout = builder
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_skyboxDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_skyboxDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_skyboxPipelineLayout != VK_NULL_HANDLE);
@@ -2416,8 +2405,8 @@ static void CreateIrradianceMapGenPipelineLayout()
 
     s_irradianceMapGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_irradianceMapGenDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_irradianceMapGenDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_irradianceMapGenPipelineLayout != VK_NULL_HANDLE);
@@ -2430,8 +2419,8 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
 
     s_prefilteredEnvMapGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_prefilteredEnvMapGenDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_prefilteredEnvMapGenDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_prefilteredEnvMapGenPipelineLayout != VK_NULL_HANDLE);
@@ -2444,8 +2433,8 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
 
     s_BRDFIntegrationLUTGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BRDF_INTEGRATION_PUSH_CONSTS))
-        .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
-        .AddDescriptorSetLayout(s_BRDFIntegrationLUTGenDescriptorSetLayout)
+        .AddDescriptorSetLayout(s_commonDescriptorSetLayout.Get())
+        .AddDescriptorSetLayout(s_BRDFIntegrationLUTGenDescriptorSetLayout.Get())
         .Build();
 
     CORE_ASSERT(s_BRDFIntegrationLUTGenPipelineLayout != VK_NULL_HANDLE);
@@ -5876,18 +5865,6 @@ int main(int argc, char* argv[])
     
     vkDestroyPipeline(s_vkDevice.Get(), s_BRDFIntegrationLUTGenPipeline, nullptr);
     vkDestroyPipelineLayout(s_vkDevice.Get(), s_BRDFIntegrationLUTGenPipelineLayout, nullptr);
-
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_zpassDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_meshCullingDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_gbufferRenderDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_deferredLightingDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_postProcessingDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_backBufferDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_skyboxDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_irradianceMapGenDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_prefilteredEnvMapGenDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_BRDFIntegrationLUTGenDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(s_vkDevice.Get(), s_commonDescriptorSetLayout, nullptr);
     
     vkDestroyDescriptorPool(s_vkDevice.Get(), s_commonDescriptorSetPool, nullptr);
 
