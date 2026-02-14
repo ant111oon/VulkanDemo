@@ -156,4 +156,16 @@ namespace vkn
 
         return *this;
     }
+
+
+    PFN_vkVoidFunction Device::GetProcAddr(const char* pFuncName) const
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(pFuncName != nullptr);
+
+        PFN_vkVoidFunction pFunc = vkGetDeviceProcAddr(m_device, pFuncName);
+        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", pFuncName);
+
+        return pFunc;
+    }
 }

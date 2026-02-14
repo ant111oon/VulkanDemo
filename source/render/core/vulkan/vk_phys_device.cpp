@@ -9,7 +9,7 @@ namespace vkn
         VkPhysicalDevice vkPhysDevice, 
         const PhysicalDeviceFeaturesRequirenments& featuresReq, 
         const PhysicalDevicePropertiesRequirenments& propsReq,
-        VkPhysicalDeviceProperties& outDeviceProps,
+        VkPhysicalDeviceProperties2& outDeviceProps,
         VkPhysicalDeviceMemoryProperties& outMemoryProps,
         VkPhysicalDeviceFeatures2& outFeatures2
     ) {
@@ -32,6 +32,10 @@ namespace vkn
         const auto pFeatures11 = static_cast<VkPhysicalDeviceVulkan11Features*>(outFeatures2.pNext);
         const auto pFeatures12 = static_cast<VkPhysicalDeviceVulkan12Features*>(pFeatures11->pNext);
         const auto pFeatures13 = static_cast<VkPhysicalDeviceVulkan13Features*>(pFeatures12->pNext);
+
+        if (featuresReq.descriptorIndexing && featuresReq.descriptorIndexing != pFeatures12->descriptorIndexing) {
+            return false;
+        }
 
         if (featuresReq.descriptorBindingPartiallyBound && featuresReq.descriptorBindingPartiallyBound != pFeatures12->descriptorBindingPartiallyBound) {
             return false;
@@ -61,9 +65,9 @@ namespace vkn
             return false;
         }
 
-        vkGetPhysicalDeviceProperties(vkPhysDevice, &outDeviceProps);
+        vkGetPhysicalDeviceProperties2(vkPhysDevice, &outDeviceProps);
 
-        if (propsReq.deviceType != outDeviceProps.deviceType) {
+        if (propsReq.deviceType != outDeviceProps.properties.deviceType) {
             return false;
         }
 
@@ -116,15 +120,15 @@ namespace vkn
         m_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
         m_features2.pNext = &m_features11;
 
+        m_deviceDescBufferProps = {};
+        m_deviceDescBufferProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
+
+        m_deviceProps = {};
+        m_deviceProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        m_deviceProps.pNext = &m_deviceDescBufferProps;
+
         for (VkPhysicalDevice vkPhysDevice : vkPhysDevices) {
-            if (IsPhysicalDeviceSuitable(
-                vkPhysDevice, 
-                *info.pFeaturesRequirenments, 
-                *info.pPropertiesRequirenments, 
-                m_deviceProps,
-                m_memoryProps,
-                m_features2)
-            ) {
+            if (IsPhysicalDeviceSuitable(vkPhysDevice, *info.pFeaturesRequirenments, *info.pPropertiesRequirenments, m_deviceProps, m_memoryProps, m_features2)) {
                 m_physDevice = vkPhysDevice;
                 isPicked = true;
 
@@ -150,6 +154,7 @@ namespace vkn
 
         m_memoryProps = {};
         m_deviceProps = {};
+        m_deviceDescBufferProps = {};
         
         m_features13 = {};
         m_features12 = {};

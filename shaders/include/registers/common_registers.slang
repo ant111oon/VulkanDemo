@@ -222,8 +222,6 @@ enum COMMON_SAMPLER_IDX
 #define GET_COMMON_SAMPLER(SMP_IDX) COMMON_SAMPLERS[(uint)COMMON_SAMPLER_IDX::SMP_IDX]
 
 
-static const uint COMMON_BINDLESS_TEXTURES_COUNT = 1024;
-
 static const uint2 COMMON_IRRADIANCE_MAP_SIZE = UINT2(32);
 static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(256);
 static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
@@ -237,9 +235,9 @@ static const float COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMO
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 [vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
-[vk::binding(3, 0)] StructuredBuffer<float4x4> COMMON_TRANSFORMS;
+[vk::binding(3, 0)] StructuredBuffer<float4x4>         COMMON_TRANSFORMS;
 [vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
-[vk::binding(5, 0)] Texture2D COMMON_MTL_TEXTURES[];
+[vk::binding(5, 0)] Texture2D                          COMMON_MTL_TEXTURES[];
 
 [vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 

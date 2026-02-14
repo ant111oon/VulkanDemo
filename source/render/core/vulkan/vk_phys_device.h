@@ -11,6 +11,7 @@ namespace vkn
         bool independentBlend;
         bool descriptorBindingPartiallyBound;
         bool runtimeDescriptorArray;
+        bool descriptorIndexing;
         bool samplerAnisotropy;
         bool samplerMirrorClampToEdge;
         bool drawIndirectCount;
@@ -60,10 +61,16 @@ namespace vkn
             return m_memoryProps;
         }
 
-        const VkPhysicalDeviceProperties& GetProperties() const
+        const VkPhysicalDeviceProperties2& GetProperties() const
         {
             VK_ASSERT(IsCreated());
             return m_deviceProps;
+        }
+
+        const VkPhysicalDeviceDescriptorBufferPropertiesEXT& GetDescBufferProperties() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_deviceDescBufferProps;
         }
 
         const VkPhysicalDeviceVulkan11Features& GetFeatures11() const
@@ -110,7 +117,8 @@ namespace vkn
         VkPhysicalDevice m_physDevice = VK_NULL_HANDLE;
 
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};
-        VkPhysicalDeviceProperties m_deviceProps = {};
+        VkPhysicalDeviceProperties2 m_deviceProps = {};
+        VkPhysicalDeviceDescriptorBufferPropertiesEXT m_deviceDescBufferProps = {};
 
         VkPhysicalDeviceVulkan13Features m_features13 = {};
         VkPhysicalDeviceVulkan12Features m_features12 = {};

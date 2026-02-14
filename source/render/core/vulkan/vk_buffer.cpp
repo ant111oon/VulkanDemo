@@ -6,10 +6,10 @@
 
 namespace vkn
 {
-    Buffer::Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo)
+    Buffer::Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo)
         : Object()
     {
-        Create(pDevice, size, usage, pAllocInfo);
+        Create(pDevice, size, usage, allocInfo);
     }
 
 
@@ -61,13 +61,13 @@ namespace vkn
     }
 
 
-    Buffer& Buffer::Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo* pAllocInfo)
+    Buffer& Buffer::Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo)
     {
         BufferCreateInfo createInfo = {};
         createInfo.pDevice = pDevice;
         createInfo.size = size;
         createInfo.usage = usage;
-        createInfo.pAllocInfo = pAllocInfo;
+        createInfo.pAllocInfo = &allocInfo;
 
         return Create(createInfo);
     }

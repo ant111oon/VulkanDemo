@@ -18,7 +18,7 @@
 #include "render/core/vulkan/vk_cmd.h"
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_texture.h"
-#include "render/core/vulkan/vk_pipeline.h"
+#include "render/core/vulkan/vk_pso.h"
 #include "render/core/vulkan/vk_query.h"
 
 #include "render/core/vulkan/vk_memory.h"
@@ -880,6 +880,8 @@ static VkPipelineLayout s_BRDFIntegrationLUTGenPipelineLayout = VK_NULL_HANDLE;
 static VkPipeline       s_BRDFIntegrationLUTGenPipeline = VK_NULL_HANDLE;
 
 
+static vkn::Buffer s_descriptorBuffer;
+
 static vkn::Buffer s_vertexBuffer;
 static vkn::Buffer s_indexBuffer;
 
@@ -1433,11 +1435,17 @@ static void CreateVkPhysAndLogicalDevices()
 {
     vkn::PhysicalDeviceFeaturesRequirenments physDeviceFeturesReq = {};
     physDeviceFeturesReq.independentBlend = true;
-    physDeviceFeturesReq.descriptorBindingPartiallyBound = true;
-    physDeviceFeturesReq.runtimeDescriptorArray = true;
+    physDeviceFeturesReq.descriptorIndexing = true;
+    physDeviceFeturesReq.descriptorBindingPartiallyBound = true; // Allow to left dome descriptors unwriten
+    physDeviceFeturesReq.runtimeDescriptorArray = true;          // Allows to use unsised arrays in shader
     physDeviceFeturesReq.samplerAnisotropy = true;
     physDeviceFeturesReq.samplerMirrorClampToEdge = true;
     physDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
+    physDeviceFeturesReq.bufferDeviceAddress = true;
+
+#ifndef ENG_BUILD_RETAIL
+    physDeviceFeturesReq.bufferDeviceAddressCaptureReplay = VK_TRUE;
+#endif
 
     vkn::PhysicalDevicePropertiesRequirenments physDevicePropsReq = {};
     physDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -1451,24 +1459,24 @@ static void CreateVkPhysAndLogicalDevices()
     CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
 
     constexpr std::array deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
     };
+
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT descBuffFeatures = {};
+    descBuffFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
+    descBuffFeatures.descriptorBuffer = VK_TRUE;
+
+#ifndef ENG_BUILD_RETAIL
+    descBuffFeatures.descriptorBufferCaptureReplay = VK_TRUE;
+#endif
 
     // Is used since ImGui hardcoded blend state count to 1 in it's pipeline, so validation layers complain
     // that ImGui pipeline has one blend state but VkRenderingInfo has more than one color attachments
     // TODO: Disable this feature/ Render ImGui in the end with separate pass with one color attachement
     VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynRendUnusedAttachmentsFeature = {};
     dynRendUnusedAttachmentsFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-
-    {
-        VkPhysicalDeviceFeatures2 features2 = {};
-        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        features2.pNext = &dynRendUnusedAttachmentsFeature;
-    
-        vkGetPhysicalDeviceFeatures2(s_vkPhysDevice.Get(), &features2);
-        CORE_ASSERT_MSG(dynRendUnusedAttachmentsFeature.dynamicRenderingUnusedAttachments == VK_TRUE, "Unused attachmets physical device feature is not supported!");
-    }
-
+    dynRendUnusedAttachmentsFeature.pNext = &descBuffFeatures;
 
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -1480,12 +1488,19 @@ static void CreateVkPhysAndLogicalDevices()
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     features12.pNext = &features13;
+    
+    features12.samplerMirrorClampToEdge = VK_TRUE;
+    
     features12.bufferDeviceAddress = VK_TRUE;
+#ifndef ENG_BUILD_RETAIL
     features12.bufferDeviceAddressCaptureReplay = VK_TRUE;
+#endif
+
+    features12.drawIndirectCount = VK_TRUE;
+
+    features12.descriptorIndexing = VK_TRUE;
     features12.descriptorBindingPartiallyBound = VK_TRUE;
     features12.runtimeDescriptorArray = VK_TRUE;
-    features12.samplerMirrorClampToEdge = VK_TRUE;
-    features12.drawIndirectCount = VK_TRUE;
 
     VkPhysicalDeviceVulkan11Features features11 = {};
     features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -2018,6 +2033,7 @@ static void CreateCommonDescriptorSetLayout()
 
     s_commonDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(COMMON_SAMPLERS_DESCRIPTOR_SLOT,     VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL)
         .AddBinding(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL)
@@ -2039,6 +2055,7 @@ static void CreateZPassDescriptorSetLayout()
 
     s_zpassDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
@@ -2053,6 +2070,7 @@ static void CreateMeshCullingDescriptorSetLayout()
 
     s_meshCullingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT)
@@ -2074,6 +2092,7 @@ static void CreateGBufferDescriptorSetLayout()
 
     s_gbufferRenderDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
@@ -2088,6 +2107,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
 
     s_deferredLightingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .AddBinding(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -2109,6 +2129,7 @@ static void CreatePostProcessingDescriptorSetLayout()
 
     s_postProcessingDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
@@ -2122,6 +2143,7 @@ static void CreateBackbufferPassDescriptorSetLayout()
 
     s_backBufferDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
@@ -2135,6 +2157,7 @@ static void CreateSkyboxDescriptorSetLayout()
 
     s_skyboxDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(SKYBOX_TEXTURE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
         .Build();
 
@@ -2148,6 +2171,7 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
 
     s_irradianceMapGenDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
@@ -2162,6 +2186,7 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
 
     s_prefilteredEnvMapGenDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .AddBinding(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
@@ -2176,10 +2201,56 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 
     s_BRDFIntegrationLUTGenDescriptorSetLayout = builder
         // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT)
+        // .SetFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddBinding(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT)
         .Build();
 
     CORE_ASSERT(s_BRDFIntegrationLUTGenDescriptorSetLayout != VK_NULL_HANDLE);
+}
+
+
+static void CreateDescriptorBuffer()
+{
+    auto GetAlignedSize = [](VkDeviceSize value, VkDeviceSize alignment) -> VkDeviceSize
+    {
+        return (value + alignment - 1) & ~(alignment - 1);
+    };
+
+    std::array layouts = {
+        s_commonDescriptorSetLayout,
+        s_meshCullingDescriptorSetLayout,
+        s_zpassDescriptorSetLayout,
+        s_gbufferRenderDescriptorSetLayout,
+        s_deferredLightingDescriptorSetLayout,
+        s_postProcessingDescriptorSetLayout,
+        s_backBufferDescriptorSetLayout,
+        s_skyboxDescriptorSetLayout,
+        s_irradianceMapGenDescriptorSetLayout,
+        s_prefilteredEnvMapGenDescriptorSetLayout,
+        s_BRDFIntegrationLUTGenDescriptorSetLayout,
+    };
+
+    auto GetDescriptorSetLayoutSize = (PFN_vkGetDescriptorSetLayoutSizeEXT)s_vkDevice.GetProcAddr("vkGetDescriptorSetLayoutSizeEXT");
+
+    const VkDeviceSize descriptorBufferOffsetAlignment = s_vkPhysDevice.GetDescBufferProperties().descriptorBufferOffsetAlignment;
+
+    VkDeviceSize size = 0;
+    for (VkDescriptorSetLayout layout : layouts) {
+        VkDeviceSize setSize = 0;
+
+        GetDescriptorSetLayoutSize(s_vkDevice.Get(), layout, &setSize);
+        setSize = GetAlignedSize(setSize, descriptorBufferOffsetAlignment);
+
+        size += setSize;
+    }
+
+    VkBufferUsageFlags2 usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+    vkn::AllocationInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+
+    s_descriptorBuffer.Create(&s_vkDevice, size, usage, allocInfo).SetDebugName("COMMON_DESCRIPTOR_BUFFER");
 }
 
 
@@ -2223,7 +2294,7 @@ static void AllocateDescriptorSets()
 }
 
 
-static void CreateDesriptorSets()
+static void CreateDescriptorSets()
 {
     CreateCommonDescriptorPool();
 
@@ -2239,13 +2310,15 @@ static void CreateDesriptorSets()
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
 
+    // CreateDescriptorBuffer();
+
     AllocateDescriptorSets();
 }
 
 
 static void CreateMeshCullingPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_meshCullingPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS))
@@ -2259,7 +2332,7 @@ static void CreateMeshCullingPipelineLayout()
 
 static void CreateZPassPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_zpassPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS))
@@ -2273,7 +2346,7 @@ static void CreateZPassPipelineLayout()
 
 static void CreateGBufferPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_gbufferRenderPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS))
@@ -2287,7 +2360,7 @@ static void CreateGBufferPipelineLayout()
 
 static void CreateDeferredLightingPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_deferredLightingPipelineLayout = builder
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
@@ -2300,7 +2373,7 @@ static void CreateDeferredLightingPipelineLayout()
 
 static void CreatePostProcessingPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_postProcessingPipelineLayout = builder
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
@@ -2313,7 +2386,7 @@ static void CreatePostProcessingPipelineLayout()
 
 static void CreateBackbufferPassPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_backBufferPipelineLayout = builder
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
@@ -2326,7 +2399,7 @@ static void CreateBackbufferPassPipelineLayout()
 
 static void CreateSkyboxPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_skyboxPipelineLayout = builder
         .AddDescriptorSetLayout(s_commonDescriptorSetLayout)
@@ -2339,7 +2412,7 @@ static void CreateSkyboxPipelineLayout()
 
 static void CreateIrradianceMapGenPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_irradianceMapGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS))
@@ -2353,7 +2426,7 @@ static void CreateIrradianceMapGenPipelineLayout()
 
 static void CreatePrefilteredEnvMapGenPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_prefilteredEnvMapGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS))
@@ -2367,7 +2440,7 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
 
 static void CreateBRDFIntegrationLUTGenPipelineLayout()
 {
-    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().limits.maxPushConstantsSize);
+    vkn::PipelineLayoutBuilder builder(s_vkPhysDevice.GetProperties().properties.limits.maxPushConstantsSize);
 
     s_BRDFIntegrationLUTGenPipelineLayout = builder
         .AddPushConstantRange(VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BRDF_INTEGRATION_PUSH_CONSTS))
@@ -5688,7 +5761,7 @@ int main(int argc, char* argv[])
     vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
     vkAllocatorCreateInfo.pDevice = &s_vkDevice;
     // RenderDoc doesn't work with buffer device address if you use VMA :(
-    // vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
     s_vkAllocator.Create(vkAllocatorCreateInfo);
     CORE_ASSERT(s_vkAllocator.IsCreated());
@@ -5716,7 +5789,7 @@ int main(int argc, char* argv[])
     CreateCommonConstBuffer();
     CreateCullingResources();
     CreateCommonDbgTextures();
-    CreateDesriptorSets();
+    CreateDescriptorSets();
     CreatePipelines();
 
     std::array skyBoxFaceFilepaths = {

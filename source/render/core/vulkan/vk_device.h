@@ -39,6 +39,8 @@ namespace vkn
 
         const Device& WaitIdle() const;
 
+        PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
+
         VkDevice Get() const
         {
             VK_ASSERT(IsCreated());
