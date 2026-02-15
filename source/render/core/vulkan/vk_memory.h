@@ -40,7 +40,7 @@ namespace vkn
         Allocator& Create(const AllocatorCreateInfo& info);
         Allocator& Destroy();
 
-        VmaAllocator Get() const
+        const VmaAllocator& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_allocator;

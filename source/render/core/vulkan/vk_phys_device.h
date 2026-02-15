@@ -49,7 +49,7 @@ namespace vkn
         PhysicalDevice& Create(const PhysicalDeviceCreateInfo& info);
         PhysicalDevice& Destroy();
 
-        VkPhysicalDevice Get() const
+        const VkPhysicalDevice& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_physDevice;

@@ -218,7 +218,7 @@ namespace vkn
             return m_pOwner;
         }
 
-        VkCommandBuffer Get() const
+        const VkCommandBuffer& Get() const
         {
             VK_ASSERT(IsValid());
             return m_cmdBuffer;
@@ -328,7 +328,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkCommandPool Get() const
+        const VkCommandPool& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_pool;

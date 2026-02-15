@@ -26,7 +26,7 @@ namespace vkn
         Surface& Create(const SurfaceCreateInfo& info);
         Surface& Destroy();
 
-        VkSurfaceKHR Get() const
+        const VkSurfaceKHR& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_surface;

@@ -53,7 +53,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkFence Get() const
+        const VkFence& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_fence;

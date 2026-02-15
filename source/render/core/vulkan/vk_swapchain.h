@@ -32,7 +32,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkImage Get() const
+        const VkImage& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_image;
@@ -127,7 +127,7 @@ namespace vkn
 
         Device* GetDevice() const;
 
-        VkImageView Get() const
+        const VkImageView& Get() const
         {
             VK_ASSERT(IsValid());
             return m_view;
@@ -218,7 +218,7 @@ namespace vkn
         Swapchain& Recreate(const SwapchainCreateInfo& info, bool& succeded);
         Swapchain& Resize(uint32_t width, uint32_t height, bool& succeded);
 
-        VkSwapchainKHR Get() const
+        const VkSwapchainKHR& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_swapchain;

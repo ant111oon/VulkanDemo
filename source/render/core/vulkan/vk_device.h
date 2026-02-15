@@ -41,7 +41,7 @@ namespace vkn
 
         PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
 
-        VkDevice Get() const
+        const VkDevice& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_device;

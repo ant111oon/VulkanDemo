@@ -105,7 +105,7 @@ namespace vkn
         VK_ASSERT_MSG(m_buffer != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
-        if ((info.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0) {
+        if ((info.usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0) {
             VkBufferDeviceAddressInfo addressInfo = {};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = m_buffer;
@@ -113,6 +113,24 @@ namespace vkn
         }
 
         m_pDevice = info.pDevice;
+
+        if ((info.usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
+            m_state.set(BIT_IS_UNIFORM_BUFFER, true);
+        } else if ((info.usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) != 0) {
+            m_state.set(BIT_IS_STORAGE_BUFFER, true);
+        } else if ((info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0) {
+            m_state.set(BIT_IS_INDEX_BUFFER, true);
+        } else {
+            VK_ASSERT_FAIL("Invalid buffer usage type");
+        }
+
+        if ((info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
+            m_state.set(BIT_IS_DESCRIPTOR_BUFFER, true);
+        }
+
+        if ((info.pAllocInfo->flags & VMA_ALLOCATION_CREATE_MAPPED_BIT) != 0) {
+            m_state.set(BIT_IS_PERSISTANTLY_MAPPED, true);
+        }
 
         SetCreated(true);
 
@@ -125,6 +143,8 @@ namespace vkn
         if (!IsCreated()) {
             return *this;
         }
+
+        VK_ASSERT(!IsMapped());
 
         vmaDestroyBuffer(GetAllocator().Get(), m_buffer, m_allocation);
         m_allocation = VK_NULL_HANDLE;
@@ -149,11 +169,16 @@ namespace vkn
     void* Buffer::Map(VkDeviceSize offset, VkDeviceSize size)
     {
         VK_ASSERT(IsCreated());
-        VK_ASSERT(!IsMapped());
 
         size = size == VK_WHOLE_SIZE ? GetMemorySize() : size;
         VK_ASSERT(offset + size <= GetMemorySize());
 
+        if (IsPersistentlyMapped()) {
+            return (void*)((uint8_t*)(m_allocInfo.pMappedData) + offset);
+        }
+        
+        VK_ASSERT(!IsMapped());
+    
         void* pData = nullptr;
         VK_CHECK(vmaMapMemory(GetAllocator().Get(), m_allocation, &pData));
 
@@ -175,6 +200,12 @@ namespace vkn
     Buffer& Buffer::Unmap()
     {
         VK_ASSERT(IsCreated());
+
+        if (IsPersistentlyMapped()) {
+            VK_LOG_WARN("Attempt to unmap persistently mapped buffer %s", GetDebugName());
+            return *this;
+        }
+
         VK_ASSERT(IsMapped());
 
         vmaUnmapMemory(GetAllocator().Get(), m_allocation);

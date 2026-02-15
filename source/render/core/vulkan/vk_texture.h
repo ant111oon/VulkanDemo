@@ -57,7 +57,7 @@ namespace vkn
 
         Device* GetDevice() const;
 
-        VkImageView Get() const
+        const VkImageView& Get() const
         {
             VK_ASSERT(IsValid());
             return m_view;
@@ -109,6 +109,7 @@ namespace vkn
     class Texture : public Object
     {
         friend class CmdBuffer;
+        friend class DescriptorBuffer;
 
         struct AccessState;
 
@@ -144,7 +145,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkImage Get() const
+        const VkImage& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_image;
@@ -292,7 +293,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkSampler Get() const
+        const VkSampler& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_sampler;

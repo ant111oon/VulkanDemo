@@ -71,7 +71,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkQueryPool Get() const
+        const VkQueryPool& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_pool;

@@ -47,7 +47,7 @@ namespace vkn
             return m_pDevice;
         }
 
-        VkSemaphore Get() const
+        const VkSemaphore& Get() const
         {
             VK_ASSERT(IsCreated());
             return m_semaphore;
