@@ -170,6 +170,15 @@ namespace vkn
         DescriptorBuffer& WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const TextureView& texture);
         DescriptorBuffer& WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Sampler& sampler);
 
+        VkDeviceSize GetSetOffset(uint32_t index) const;
+        const DescriptorSetLayout* GetDescriptorSetLayout(uint32_t index) const;
+
+        size_t GetSetCount() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_entries.size();
+        }
+
         const char* GetDebugName() const
         {
             return m_buffer.GetDebugName();

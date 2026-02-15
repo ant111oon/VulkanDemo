@@ -13,6 +13,7 @@ namespace vkn
     class Buffer;
     class Texture;
     class SCTexture;
+    class DescriptorBuffer;
 
 
     class BarrierList
@@ -193,10 +194,13 @@ namespace vkn
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
         
+        CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
+        // TODO: replace pipeline layout with separate class
+        CmdBuffer& CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet = 0, uint32_t setCount = 1);
+
         BarrierList& GetBarrierList();
         BarrierList& BeginBarrierList();
-        // Post list of barriers to command buffer 
-        CmdBuffer& CmdPushBarrierList();
+        CmdBuffer& CmdPushBarrierList(); // Post list of barriers to command buffer
 
         Device* GetDevice() const;
 
@@ -271,6 +275,8 @@ namespace vkn
 
         std::vector<VkImageBlit2> m_blitCache;
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
+        std::vector<VkDeviceSize> m_setBindOffsets;
+        DescriptorBuffer* m_pDescrBufferBindingCache;
 
         ID m_ID = INVALID_ID;
 

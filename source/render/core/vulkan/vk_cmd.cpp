@@ -5,6 +5,7 @@
 #include "vk_buffer.h"
 #include "vk_texture.h"
 #include "vk_swapchain.h"
+#include "vk_descriptor.h"
 
 #include "core/profiler/cpu_profiler.h"
 
@@ -17,6 +18,9 @@ namespace vkn
     #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
         VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
         VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+
+    static PFN_vkCmdBindDescriptorBuffersEXT vkCmdBindDescriptorBuffers = nullptr;
+    static PFN_vkCmdSetDescriptorBufferOffsetsEXT vkCmdSetDescriptorBufferOffsets = nullptr;
 
 
     static VkImageMemoryBarrier2 CreateImageMemoryBarrier2Data(
@@ -199,6 +203,8 @@ namespace vkn
         std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
+        std::swap(m_setBindOffsets, cmdBuffer.m_setBindOffsets);
+        std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
         std::swap(m_state, cmdBuffer.m_state);
 
         return *this;
@@ -516,6 +522,51 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdBindDescriptorBuffer(DescriptorBuffer& buffer)
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+        VK_ASSERT(buffer.IsCreated());
+
+        if (vkCmdBindDescriptorBuffers == nullptr) {
+            vkCmdBindDescriptorBuffers = (PFN_vkCmdBindDescriptorBuffersEXT)GetDevice()->GetProcAddr("vkCmdBindDescriptorBuffersEXT");
+        }
+
+        m_pDescrBufferBindingCache = &buffer;
+
+        VkDescriptorBufferBindingInfoEXT bindingInfo = {};
+        bindingInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+        bindingInfo.address = buffer.Get().GetDeviceAddress();
+        bindingInfo.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+        vkCmdBindDescriptorBuffers(m_cmdBuffer, 1, &bindingInfo);
+
+        return *this;
+    }
+
+    
+    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t setCount)
+    {
+        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+
+        if (!vkCmdSetDescriptorBufferOffsets) {
+            vkCmdSetDescriptorBufferOffsets = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)GetDevice()->GetProcAddr("vkCmdSetDescriptorBufferOffsetsEXT");
+        }
+
+        VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdSetDescriptorBufferOffset");
+        VK_ASSERT(firstSet + setCount <= m_pDescrBufferBindingCache->GetSetCount());
+
+        m_setBindOffsets.resize(setCount);
+        for (uint32_t i = 0; i < setCount; ++i) {
+            m_setBindOffsets[i] = m_pDescrBufferBindingCache->GetSetOffset(firstSet + i);
+        }
+
+        constexpr uint32_t bufferIdx = 0;
+        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout, firstSet, setCount, &bufferIdx, m_setBindOffsets.data());
+
+        return *this;
+    }
+
+
     BarrierList& CmdBuffer::GetBarrierList()
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
@@ -691,6 +742,8 @@ namespace vkn
 
         m_blitCache = {};
         m_bufImageCopyCache = {};
+        m_setBindOffsets = {};
+        m_pDescrBufferBindingCache = nullptr;
 
         m_pOwner = nullptr;
         m_ID = INVALID_ID;

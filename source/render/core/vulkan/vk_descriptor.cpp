@@ -429,4 +429,22 @@ namespace vkn
 
         return *this;
     }
+
+
+    VkDeviceSize DescriptorBuffer::GetSetOffset(uint32_t index) const
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(index < m_entries.size());
+
+        return m_entries[index].offset;
+    }
+
+
+    const DescriptorSetLayout* DescriptorBuffer::GetDescriptorSetLayout(uint32_t index) const
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(index < m_entries.size());
+
+        return m_entries[index].pLayout;
+    }
 }
