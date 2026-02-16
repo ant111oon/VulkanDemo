@@ -203,7 +203,6 @@ namespace vkn
         std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
-        std::swap(m_setBindOffsets, cmdBuffer.m_setBindOffsets);
         std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
         std::swap(m_state, cmdBuffer.m_state);
 
@@ -218,6 +217,7 @@ namespace vkn
 
         VK_CHECK(vkBeginCommandBuffer(m_cmdBuffer, &beginInfo));
 
+        ResetCache();
         m_state.set(FLAG_IS_STARTED, true);
 
         return *this;
@@ -524,7 +524,7 @@ namespace vkn
 
     CmdBuffer& CmdBuffer::CmdBindDescriptorBuffer(DescriptorBuffer& buffer)
     {
-        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+        VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(buffer.IsCreated());
 
         if (vkCmdBindDescriptorBuffers == nullptr) {
@@ -544,24 +544,21 @@ namespace vkn
     }
 
     
-    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t setCount)
+    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t setIdx, uint32_t dstSetIdx)
     {
-        VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
+        VK_CHECK_CMD_BUFFER_STARTED(this);
 
         if (!vkCmdSetDescriptorBufferOffsets) {
             vkCmdSetDescriptorBufferOffsets = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)GetDevice()->GetProcAddr("vkCmdSetDescriptorBufferOffsetsEXT");
         }
 
         VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdSetDescriptorBufferOffset");
-        VK_ASSERT(firstSet + setCount <= m_pDescrBufferBindingCache->GetSetCount());
+        VK_ASSERT(setIdx < m_pDescrBufferBindingCache->GetSetCount());
 
-        m_setBindOffsets.resize(setCount);
-        for (uint32_t i = 0; i < setCount; ++i) {
-            m_setBindOffsets[i] = m_pDescrBufferBindingCache->GetSetOffset(firstSet + i);
-        }
+        const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(setIdx);
 
         constexpr uint32_t bufferIdx = 0;
-        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout, firstSet, setCount, &bufferIdx, m_setBindOffsets.data());
+        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout, dstSetIdx, 1, &bufferIdx, &offset);
 
         return *this;
     }
@@ -742,7 +739,6 @@ namespace vkn
 
         m_blitCache = {};
         m_bufImageCopyCache = {};
-        m_setBindOffsets = {};
         m_pDescrBufferBindingCache = nullptr;
 
         m_pOwner = nullptr;
@@ -751,6 +747,16 @@ namespace vkn
         m_state.reset();
 
         Object::Destroy();
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::ResetCache()
+    {
+        m_blitCache.clear();
+        m_bufImageCopyCache.clear();
+        m_pDescrBufferBindingCache = nullptr;
 
         return *this;
     }

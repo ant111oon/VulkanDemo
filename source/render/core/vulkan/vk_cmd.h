@@ -195,8 +195,11 @@ namespace vkn
         CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
         
         CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
+        
         // TODO: replace pipeline layout with separate class
-        CmdBuffer& CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet = 0, uint32_t setCount = 1);
+        // setIdx    - index of set inside descriptor buffer
+        // dstSetIdx - index of set inside in shader
+        CmdBuffer& CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t setIdx, uint32_t dstSetIdx);
 
         BarrierList& GetBarrierList();
         BarrierList& BeginBarrierList();
@@ -262,6 +265,8 @@ namespace vkn
         CmdBuffer& Allocate(CmdPool* pOwnerPool, VkCommandBufferLevel level, ID id);
         CmdBuffer& Free();
 
+        CmdBuffer& ResetCache();
+
         ID GetID() const { return m_ID; }
 
     private:
@@ -275,7 +280,6 @@ namespace vkn
 
         std::vector<VkImageBlit2> m_blitCache;
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
-        std::vector<VkDeviceSize> m_setBindOffsets;
         DescriptorBuffer* m_pDescrBufferBindingCache;
 
         ID m_ID = INVALID_ID;

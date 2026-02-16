@@ -48,6 +48,8 @@ namespace vkn
         std::swap(m_allocation, buffer.m_allocation);
         std::swap(m_allocInfo, buffer.m_allocInfo);
         
+        std::swap(m_size, buffer.m_size);
+
         std::swap(m_deviceAddress, buffer.m_deviceAddress);
 
         std::swap(m_currStageMask, buffer.m_currStageMask);
@@ -106,6 +108,8 @@ namespace vkn
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
         if ((info.usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0) {
+            m_state.set(BIT_IS_DEVICE_ADDRESS, true);
+
             VkBufferDeviceAddressInfo addressInfo = {};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = m_buffer;
@@ -113,6 +117,11 @@ namespace vkn
         }
 
         m_pDevice = info.pDevice;
+        m_size = info.size;
+
+        if ((info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
+            m_state.set(BIT_IS_DESCRIPTOR_BUFFER, true);
+        }
 
         if ((info.usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
             m_state.set(BIT_IS_UNIFORM_BUFFER, true);
@@ -121,7 +130,7 @@ namespace vkn
         } else if ((info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0) {
             m_state.set(BIT_IS_INDEX_BUFFER, true);
         } else {
-            VK_ASSERT_FAIL("Invalid buffer usage type");
+            VK_ASSERT_MSG(m_state.test(BIT_IS_DESCRIPTOR_BUFFER), "Invalid buffer usage type");
         }
 
         if ((info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
@@ -151,6 +160,8 @@ namespace vkn
         m_buffer = VK_NULL_HANDLE;
 
         m_allocInfo = {};
+
+        m_size = 0;
 
         m_deviceAddress = 0;
 

@@ -79,7 +79,7 @@ namespace vkn
         VkDeviceSize GetMemorySize() const
         {
             VK_ASSERT(IsCreated());
-            return m_allocInfo.size;
+            return m_size;
         }
 
         bool IsMapped() const
@@ -118,6 +118,12 @@ namespace vkn
             return m_state.test(BIT_IS_DESCRIPTOR_BUFFER);
         }
 
+        bool HasDeviceAddress() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_state.test(BIT_IS_DEVICE_ADDRESS);
+        }
+
     private:
         void Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask);
 
@@ -136,12 +142,13 @@ namespace vkn
     private:
         enum StateBits
         {
-            BIT_IS_MAPPED,
-            BIT_IS_PERSISTANTLY_MAPPED,
             BIT_IS_STORAGE_BUFFER,
             BIT_IS_UNIFORM_BUFFER,
             BIT_IS_INDEX_BUFFER,
             BIT_IS_DESCRIPTOR_BUFFER,
+            BIT_IS_MAPPED,
+            BIT_IS_PERSISTANTLY_MAPPED,
+            BIT_IS_DEVICE_ADDRESS,
             BIT_COUNT,
         };
 
@@ -152,6 +159,8 @@ namespace vkn
 
         VmaAllocation m_allocation = VK_NULL_HANDLE;
         VmaAllocationInfo m_allocInfo = {};
+
+        VkDeviceSize m_size = 0;
 
         VkDeviceAddress m_deviceAddress = 0;
 
