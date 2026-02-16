@@ -1401,7 +1401,7 @@ static void CreateVkSwapchain()
     swapchainCreateInfo.width = s_pWnd->GetWidth();
     swapchainCreateInfo.height = s_pWnd->GetHeight();
 
-    swapchainCreateInfo.minImageCount    = 2;
+    swapchainCreateInfo.minImageCount    = 3;
     swapchainCreateInfo.imageFormat      = VK_FORMAT_R8G8B8A8_SRGB;
     swapchainCreateInfo.imageColorSpace  = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     swapchainCreateInfo.imageArrayLayers = 1u;
@@ -4365,6 +4365,7 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
 void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Mesh_Culling_Pass", 50, 50, 200, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
 
     cmdBuffer.GetBarrierList().Begin()
@@ -4511,13 +4512,16 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
 void DepthPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass", 128, 128, 128, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", 128, 128, 128, 255);
 
     {
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Opaque", 128, 128, 128, 255);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Opaque", 128, 128, 128, 255);
         RenderPass_Depth(cmdBuffer, false);
     }
     {
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_AKill", 128, 128, 128, 255);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_AKill", 128, 128, 128, 255);
         RenderPass_Depth(cmdBuffer, true);
     }
@@ -4699,13 +4703,16 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", 50, 200, 50, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", 50, 200, 50, 255);
 
     {
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", 50, 200, 50, 255);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", 50, 200, 50, 255);
         RenderPass_GBuffer(cmdBuffer, false);
     }
     {
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_AKill", 50, 200, 50, 255);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", 50, 200, 50, 255);
         RenderPass_GBuffer(cmdBuffer, true);
     }
@@ -4714,6 +4721,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Deferred_Lighting_Pass", 250, 250, 40, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", 250, 250, 40, 255);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
@@ -4776,6 +4784,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
 void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Skybox_Pass", 255, 165, 10, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", 255, 165, 10, 255);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
@@ -4835,6 +4844,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
 void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Post_Processing_Pass", 100, 250, 250, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", 100, 250, 250, 255);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
@@ -4892,6 +4902,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
 static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", 200, 50, 50, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
 
     DbgUI::FillData();
@@ -4928,6 +4939,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 {
+    ENG_PROFILE_SCOPED_MARKER_C("Resolve_To_Backbuffer_Pass", 100, 100, 100, 255);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Resolve_To_Backbuffer_Pass", 100, 100, 100, 255);
 
     vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
