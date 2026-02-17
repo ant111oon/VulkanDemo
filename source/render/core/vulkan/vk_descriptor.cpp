@@ -1,3 +1,5 @@
+#include "pch.h"
+
 #include "vk_descriptor.h"
 #include "vk_texture.h"
 
@@ -235,10 +237,12 @@ namespace vkn
 
     uint64_t DescriptorSetLayout::GetDescriptorIndex(uint32_t binding) const
     {
-        for (uint64_t i = 0; i < m_descriptors.size(); ++i) {
-            if (m_descriptors[i].binding == binding) {
-                return i;
-            }
+        auto it = std::lower_bound(m_descriptors.cbegin(), m_descriptors.cend(), binding, [](const Descriptor& a, uint32_t value){
+            return a.binding < value;
+        });
+
+        if (it != m_descriptors.cend() && it->binding == binding) {
+            return static_cast<uint64_t>(it - m_descriptors.cbegin());
         }
 
         return UINT64_MAX;
