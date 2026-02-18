@@ -2,10 +2,146 @@
 
 #include "vk_pso.h"
 #include "vk_device.h"
+#include "vk_descriptor.h"
 
 
 namespace vkn
 {
+    PSOLayout::PSOLayout(const PSOLayoutCreateInfo& info)
+    {
+        Create(info);
+    }
+
+
+    PSOLayout::PSOLayout(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges, VkPipelineLayoutCreateFlags flags)
+    {
+        Create(pDevice, setLayouts, pushConstantRanges, flags);
+    }
+
+    
+    PSOLayout::~PSOLayout()
+    {
+        Destroy();
+    }
+    
+
+    PSOLayout::PSOLayout(PSOLayout&& layout) noexcept
+    {
+        *this = std::move(layout);
+    }
+
+
+    PSOLayout& PSOLayout::operator=(PSOLayout&& layout) noexcept
+    {
+        if (this == &layout) {
+            return *this;
+        }
+
+        if (IsCreated()) {
+            Destroy();
+        }
+
+        std::swap(m_pDevice, layout.m_pDevice);
+        std::swap(m_layout, layout.m_layout);
+
+        Object::operator=(std::move(layout));
+
+        return *this;
+    }
+
+
+    PSOLayout& PSOLayout::Create(const PSOLayoutCreateInfo& info)
+    {
+        return Create(info.pDevice, info.setLayouts, info.pushConstantRanges, info.flags);
+    }
+
+
+    PSOLayout& PSOLayout::Create(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges, VkPipelineLayoutCreateFlags flags)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Recreation of PSO layout %s", GetDebugName());
+            Destroy();
+        }
+
+        VK_ASSERT(pDevice && pDevice->IsCreated());
+        VK_ASSERT(!setLayouts.empty());
+
+        std::vector<VkDescriptorSetLayout> descSetLayouts(setLayouts.size());
+        
+        for (size_t i = 0; i < descSetLayouts.size(); ++i) {
+            VK_ASSERT(setLayouts[i] != nullptr && setLayouts[i]->IsCreated());
+            descSetLayouts[i] = setLayouts[i]->Get();
+        }
+
+    #ifdef ENG_BUILD_DEBUG
+        const VkDeviceSize maxPushConstantsSize = pDevice->GetPhysDevice()->GetProperties().properties.limits.maxPushConstantsSize;
+
+        for (const VkPushConstantRange& range : pushConstantRanges) {
+            VK_ASSERT_MSG(range.offset + range.size <= maxPushConstantsSize, 
+                "Out of push constant range, offset: %zu, size: %zu, max size: %zu", range.offset, range.size, maxPushConstantsSize);
+        }
+    #endif
+
+        VkPipelineLayoutCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        createInfo.flags = flags;
+        createInfo.setLayoutCount = descSetLayouts.size();
+        createInfo.pSetLayouts = descSetLayouts.data();
+        createInfo.pushConstantRangeCount = pushConstantRanges.size();
+        createInfo.pPushConstantRanges = pushConstantRanges.empty() ? nullptr : pushConstantRanges.data();
+
+        VK_CHECK(vkCreatePipelineLayout(pDevice->Get(), &createInfo, nullptr, &m_layout));
+        VK_ASSERT(m_layout != VK_NULL_HANDLE);
+
+        m_pDevice = pDevice;
+
+        SetCreated(true);
+
+        return *this;
+    }
+
+
+    PSOLayout& PSOLayout::Destroy()
+    {
+        if (!IsCreated()) {
+            return *this;
+        }
+
+        vkDestroyPipelineLayout(m_pDevice->Get(), m_layout, nullptr);
+        m_layout = VK_NULL_HANDLE;
+
+        m_pDevice = nullptr;
+
+        Object::Destroy();
+
+        return *this;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     GraphicsPipelineBuilder& GraphicsPipelineBuilder::Reset()
     {
         m_vertexInputState = {};
@@ -443,268 +579,5 @@ namespace vkn
         VK_ASSERT(pipeline != VK_NULL_HANDLE);
 
         return pipeline;
-    }
-
-
-    PipelineLayoutBuilder::PipelineLayoutBuilder(size_t maxPushConstBlockSize)
-    {
-        Reset();
-        SetMaxPushConstBlockSize(maxPushConstBlockSize);
-    }
-
-
-    PipelineLayoutBuilder& PipelineLayoutBuilder::Reset()
-    {
-        m_pushConstRanges.fill({});
-        m_pushConstRangeCount = 0;
-
-        m_layouts.fill(VK_NULL_HANDLE);
-        m_layoutCount = 0;
-
-        m_flags = {};
-        m_maxPushConstBlockSize = 0;
-
-        return *this;
-    }
-
-
-    PipelineLayoutBuilder& PipelineLayoutBuilder::SetMaxPushConstBlockSize(size_t size)
-    {
-        m_maxPushConstBlockSize = size;
-        return *this;
-    }
-
-
-    PipelineLayoutBuilder& PipelineLayoutBuilder::SetFlags(VkPipelineLayoutCreateFlags flags)
-    {
-        m_flags = flags;
-        return *this;
-    }
-
-
-    PipelineLayoutBuilder& PipelineLayoutBuilder::AddPushConstantRange(VkShaderStageFlags stages, uint32_t offset, uint32_t size)
-    {
-        VK_ASSERT(m_pushConstRangeCount + 1 <= MAX_PUSH_CONSTANT_RANGE_COUNT);
-        VK_ASSERT(offset + size <= m_maxPushConstBlockSize);
-        
-        m_pushConstRanges[m_pushConstRangeCount].stageFlags = stages;
-        m_pushConstRanges[m_pushConstRangeCount].offset = offset;
-        m_pushConstRanges[m_pushConstRangeCount].size = size;
-
-        ++m_pushConstRangeCount;
-
-        return *this;
-    }
-
-
-    PipelineLayoutBuilder& PipelineLayoutBuilder::AddDescriptorSetLayout(VkDescriptorSetLayout vkSetLayout)
-    {
-        VK_ASSERT(vkSetLayout != VK_NULL_HANDLE);
-        VK_ASSERT(m_layoutCount + 1 <= MAX_DESCRIPTOR_SET_LAYOUT_COUNT);
-        
-        m_layouts[m_layoutCount] = vkSetLayout;
-
-        ++m_layoutCount;
-
-        return *this;
-    }
-
-
-    VkPipelineLayout PipelineLayoutBuilder::Build()
-    {
-        VkPipelineLayoutCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        createInfo.flags = m_flags;
-        createInfo.setLayoutCount = m_layoutCount;
-        createInfo.pSetLayouts = m_layouts.data();
-        createInfo.pushConstantRangeCount = m_pushConstRangeCount;
-        createInfo.pPushConstantRanges = m_pushConstRanges.data();
-
-        VkPipelineLayout layout = VK_NULL_HANDLE;
-        VK_CHECK(vkCreatePipelineLayout(GetDevice().Get(), &createInfo, nullptr, &layout));
-        VK_ASSERT(layout != VK_NULL_HANDLE);
-
-        return layout;
-    }
-
-
-    DescriptorSetLayoutBuilder::DescriptorSetLayoutBuilder(size_t bindingsCount)
-    {
-        Reset();
-        m_bindings.reserve(bindingsCount);
-        m_bindingsFlags.reserve(bindingsCount);
-    }
-
-
-    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::Reset()
-    {
-        m_bindings.clear();
-        m_bindingsFlags.clear();
-        m_flags = 0;
-
-        return *this;
-    }
-
-
-    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages, VkDescriptorBindingFlags flags)
-    {
-        VK_ASSERT_MSG(!IsBindingExist(binding), "Binding %u has already been added", binding);
-
-        VkDescriptorSetLayoutBinding descriptor = {};
-        descriptor.binding = binding;
-        descriptor.descriptorType = type;
-        descriptor.descriptorCount = descriptorCount;
-        descriptor.stageFlags = stages;
-
-        m_bindings.emplace_back(descriptor);
-        m_bindingsFlags.emplace_back(flags);
-
-        return *this;
-    }
-
-
-    DescriptorSetLayoutBuilder& DescriptorSetLayoutBuilder::SetFlags(VkDescriptorSetLayoutCreateFlags flags)
-    {
-        m_flags = flags;
-        return *this;
-    }
-
-
-    VkDescriptorSetLayout DescriptorSetLayoutBuilder::Build()
-    {
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-        descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.flags = m_flags;
-        descriptorSetLayoutCreateInfo.bindingCount = m_bindings.size();
-        descriptorSetLayoutCreateInfo.pBindings = m_bindings.data();
-
-        VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = {};
-        bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
-        bindingFlagsCreateInfo.bindingCount = m_bindingsFlags.size();
-        bindingFlagsCreateInfo.pBindingFlags = m_bindingsFlags.data();
-
-        descriptorSetLayoutCreateInfo.pNext = &bindingFlagsCreateInfo;
-
-        VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateDescriptorSetLayout(GetDevice().Get(), &descriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayout));
-        VK_ASSERT(descriptorSetLayout != VK_NULL_HANDLE);
-
-        return descriptorSetLayout;
-    }
-
-    
-    bool DescriptorSetLayoutBuilder::IsBindingExist(uint32_t bindingNumber)
-    {
-        return std::find_if(m_bindings.cbegin(), m_bindings.cend(), [bindingNumber](const VkDescriptorSetLayoutBinding& binding){
-            return binding.binding == bindingNumber;
-        }) != m_bindings.cend();
-    }
-
-
-    DescriptorPoolBuilder::DescriptorPoolBuilder(size_t resourcesTypesCount)
-    {
-        Reset();
-        m_poolSizes.reserve(resourcesTypesCount);
-    }
-
-
-    DescriptorPoolBuilder& DescriptorPoolBuilder::Reset()
-    {
-        m_poolSizes.clear();
-        m_maxDescriptorSets = 0;
-        m_flags = 0;
-
-        return *this;
-    }
-
-
-    DescriptorPoolBuilder& DescriptorPoolBuilder::SetFlags(VkDescriptorPoolCreateFlags flags)
-    {
-        m_flags = flags;
-        return *this;
-    }
-
-
-    DescriptorPoolBuilder& DescriptorPoolBuilder::SetMaxDescriptorSetsCount(size_t count)
-    {
-        m_maxDescriptorSets = count;
-        return *this;
-    }
-
-
-    DescriptorPoolBuilder& DescriptorPoolBuilder::AddResource(VkDescriptorType type, uint32_t descriptorCount)
-    {
-        VkDescriptorPoolSize descPoolSize = {};
-        descPoolSize.type = type;
-        descPoolSize.descriptorCount = descriptorCount;
-
-        m_poolSizes.emplace_back(descPoolSize);
-
-        return *this;
-    }
-
-
-    VkDescriptorPool DescriptorPoolBuilder::Build()
-    {
-        VkDescriptorPoolCreateInfo descPoolCreateInfo = {};
-        descPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descPoolCreateInfo.flags = m_flags;
-        descPoolCreateInfo.maxSets = m_maxDescriptorSets;
-        descPoolCreateInfo.poolSizeCount = m_poolSizes.size();
-        descPoolCreateInfo.pPoolSizes = m_poolSizes.data();
-
-        VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateDescriptorPool(GetDevice().Get(), &descPoolCreateInfo, nullptr, &descriptorPool));
-        VK_ASSERT(descriptorPool != VK_NULL_HANDLE);
-
-        return descriptorPool;
-    }
-
-
-    DescriptorSetAllocator::DescriptorSetAllocator(uint32_t layoutsCount)
-    {
-        Reset();
-        m_layouts.reserve(layoutsCount);
-    }
-    
-
-    DescriptorSetAllocator& DescriptorSetAllocator::Reset()
-    {
-        m_layouts.clear();
-        m_vkDescPool = VK_NULL_HANDLE;
-
-        return *this;
-    }
-
-
-    DescriptorSetAllocator& DescriptorSetAllocator::SetPool(VkDescriptorPool vkPool)
-    {
-        VK_ASSERT(vkPool != VK_NULL_HANDLE);
-        m_vkDescPool = vkPool;
-        
-        return *this;
-    }
-
-
-    DescriptorSetAllocator& DescriptorSetAllocator::AddLayout(VkDescriptorSetLayout vkLayout)
-    {
-        VK_ASSERT(vkLayout != VK_NULL_HANDLE);
-        m_layouts.emplace_back(vkLayout);
-        
-        return *this;
-    }
-
-
-    void DescriptorSetAllocator::Allocate(std::span<VkDescriptorSet> outDescriptorSets)
-    {
-        VK_ASSERT(outDescriptorSets.size() >= m_layouts.size());
-
-        VkDescriptorSetAllocateInfo descSetAllocInfo = {};
-        descSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        descSetAllocInfo.descriptorPool = m_vkDescPool;
-        descSetAllocInfo.descriptorSetCount = m_layouts.size();
-        descSetAllocInfo.pSetLayouts = m_layouts.data();
-
-        VK_CHECK(vkAllocateDescriptorSets(GetDevice().Get(), &descSetAllocInfo, outDescriptorSets.data()));
     }
 }

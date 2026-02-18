@@ -412,8 +412,7 @@ namespace vkn
         VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &m_currImageCount, images.data()));
 
         for (uint32_t i = 0; i < m_currImageCount; ++i) {
-            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat)
-                .SetDebugName("SWAPCHAIN_TEXTURE_%u", i);
+            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat).SetDebugName("SWAPCHAIN_TEXTURE_%u", i);
         }
     }
 

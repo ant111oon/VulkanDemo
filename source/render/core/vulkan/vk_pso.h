@@ -1,10 +1,75 @@
 #pragma once
 
-#include "vk_core.h"
+#include "vk_object.h"
 
 
 namespace vkn
 {
+    class Device;
+    class DescriptorSetLayout;
+
+    
+    struct PSOLayoutCreateInfo
+    {
+        Device*                               pDevice;
+        std::span<const DescriptorSetLayout*> setLayouts;
+        std::span<const VkPushConstantRange>  pushConstantRanges;
+        VkPipelineLayoutCreateFlags           flags;
+    };
+
+
+    class PSOLayout : public Object
+    {
+    public:
+        ENG_DECL_CLASS_NO_COPIABLE(PSOLayout);
+
+        PSOLayout() = default;
+        PSOLayout(const PSOLayoutCreateInfo& info);
+        PSOLayout(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges = {}, VkPipelineLayoutCreateFlags flags = 0);
+        
+        ~PSOLayout();
+
+        PSOLayout(PSOLayout&& layout) noexcept;
+        PSOLayout& operator=(PSOLayout&& layout) noexcept;
+
+        PSOLayout& Create(const PSOLayoutCreateInfo& info);
+        PSOLayout& Create(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges = {}, VkPipelineLayoutCreateFlags flags = 0);
+        PSOLayout& Destroy();
+
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("PSOLayout");
+        }
+
+        template <typename... Args>
+        PSOLayout& SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, pFmt, std::forward<Args>(args)...);
+            return *this;
+        }
+
+        Device* GetDevice() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_pDevice;
+        }
+
+        const VkPipelineLayout& Get() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_layout;
+        }
+
+    private:
+        Device* m_pDevice = nullptr;
+
+        VkPipelineLayout m_layout = VK_NULL_HANDLE;
+    };
+
+
+
+
+
     class GraphicsPipelineBuilder
     {
     public:
@@ -135,100 +200,4 @@ namespace vkn
         std::array<char, MAX_SHADER_ENTRY_NAME_LENGTH + 1> m_shaderEntryName = {};
     };
 
-
-    class PipelineLayoutBuilder
-    {
-    public:
-        PipelineLayoutBuilder(size_t maxPushConstBlockSize);
-
-        PipelineLayoutBuilder& Reset();
-
-        PipelineLayoutBuilder& SetMaxPushConstBlockSize(size_t size);
-
-        PipelineLayoutBuilder& SetFlags(VkPipelineLayoutCreateFlags flags);
-
-        PipelineLayoutBuilder& AddPushConstantRange(VkShaderStageFlags stages, uint32_t offset, uint32_t size);
-
-        PipelineLayoutBuilder& AddDescriptorSetLayout(VkDescriptorSetLayout vkSetLayout);
-
-        VkPipelineLayout Build();
-
-    private:
-        static inline constexpr size_t MAX_PUSH_CONSTANT_RANGE_COUNT = 32;
-        static inline constexpr size_t MAX_DESCRIPTOR_SET_LAYOUT_COUNT = 8;
-
-    private:
-        std::array<VkPushConstantRange, MAX_PUSH_CONSTANT_RANGE_COUNT> m_pushConstRanges = {};
-        size_t m_pushConstRangeCount = 0;
-
-        std::array<VkDescriptorSetLayout, MAX_DESCRIPTOR_SET_LAYOUT_COUNT> m_layouts = {};
-        size_t m_layoutCount = 0;
-
-        VkPipelineLayoutCreateFlags m_flags = {};
-        size_t m_maxPushConstBlockSize = 0;
-    };
-
-
-    class DescriptorSetLayoutBuilder
-    {
-    public:
-        DescriptorSetLayoutBuilder(size_t bindingsCount = 1);
-
-        DescriptorSetLayoutBuilder& Reset();
-
-        DescriptorSetLayoutBuilder& AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptorCount, VkShaderStageFlags stages, VkDescriptorBindingFlags flags = 0);
-
-        DescriptorSetLayoutBuilder& SetFlags(VkDescriptorSetLayoutCreateFlags flags);
-
-        VkDescriptorSetLayout Build();
-
-    private:
-        bool IsBindingExist(uint32_t bindingNumber);
-
-    private:
-        std::vector<VkDescriptorSetLayoutBinding> m_bindings;
-        std::vector<VkDescriptorBindingFlags> m_bindingsFlags;
-        VkDescriptorSetLayoutCreateFlags m_flags = 0;
-    };
-
-
-    class DescriptorPoolBuilder
-    {
-    public:
-        DescriptorPoolBuilder(size_t resourcesTypesCount = 0);
-
-        DescriptorPoolBuilder& Reset();
-
-        DescriptorPoolBuilder& SetFlags(VkDescriptorPoolCreateFlags flags);
-
-        DescriptorPoolBuilder& SetMaxDescriptorSetsCount(size_t count);
-
-        DescriptorPoolBuilder& AddResource(VkDescriptorType type, uint32_t descriptorCount);
-
-        VkDescriptorPool Build();
-
-    private:
-        std::vector<VkDescriptorPoolSize> m_poolSizes;
-        uint32_t m_maxDescriptorSets = 0;
-        VkDescriptorPoolCreateFlags m_flags = 0;
-    };
-
-
-    class DescriptorSetAllocator
-    {
-    public:
-        DescriptorSetAllocator(uint32_t layoutsCount = 0);
-
-        DescriptorSetAllocator& Reset();
-
-        DescriptorSetAllocator& SetPool(VkDescriptorPool vkPool);
-
-        DescriptorSetAllocator& AddLayout(VkDescriptorSetLayout vkLayout);
-
-        void Allocate(std::span<VkDescriptorSet> outDescriptorSets);
-
-    private:
-        std::vector<VkDescriptorSetLayout> m_layouts;
-        VkDescriptorPool m_vkDescPool = VK_NULL_HANDLE;
-    };
 }

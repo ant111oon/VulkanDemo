@@ -14,6 +14,7 @@ namespace vkn
     class Texture;
     class SCTexture;
     class DescriptorBuffer;
+    class PSOLayout;
 
 
     class BarrierList
@@ -196,10 +197,11 @@ namespace vkn
         
         CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
         
-        // TODO: replace pipeline layout with separate class
         // setIdx    - index of set inside descriptor buffer
         // dstSetIdx - index of set inside in shader
-        CmdBuffer& CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t setIdx, uint32_t dstSetIdx);
+        CmdBuffer& CmdSetDescriptorBufferOffset(PSOLayout& layout, VkPipelineBindPoint bindPoint, uint32_t setIdx, uint32_t dstSetIdx);
+
+        CmdBuffer& CmdPushConstants(PSOLayout& layout, VkShaderStageFlags stagesMask, VkDeviceSize offset, VkDeviceSize size, const void* pData);
 
         BarrierList& GetBarrierList();
         BarrierList& BeginBarrierList();

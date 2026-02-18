@@ -275,6 +275,19 @@ namespace vkn
 
     DescriptorBuffer& DescriptorBuffer::operator=(DescriptorBuffer&& buffer) noexcept
     {
+        if (this == &buffer) {
+            return *this;
+        }
+
+        if (IsCreated()) {
+            Destroy();
+        }
+
+        std::swap(m_buffer, buffer.m_buffer);
+        std::swap(m_entries, buffer.m_entries);
+
+        Object::operator=(std::move(buffer));
+
         return *this;
     }
 

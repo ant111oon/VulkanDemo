@@ -6,6 +6,7 @@
 #include "vk_texture.h"
 #include "vk_swapchain.h"
 #include "vk_descriptor.h"
+#include "vk_pso.h"
 
 #include "core/profiler/cpu_profiler.h"
 
@@ -544,7 +545,7 @@ namespace vkn
     }
 
     
-    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t setIdx, uint32_t dstSetIdx)
+    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(PSOLayout& layout, VkPipelineBindPoint bindPoint, uint32_t setIdx, uint32_t dstSetIdx)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
@@ -558,7 +559,17 @@ namespace vkn
         const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(setIdx);
 
         constexpr uint32_t bufferIdx = 0;
-        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout, dstSetIdx, 1, &bufferIdx, &offset);
+        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout.Get(), dstSetIdx, 1, &bufferIdx, &offset);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdPushConstants(PSOLayout& layout, VkShaderStageFlags stagesMask, VkDeviceSize offset, VkDeviceSize size, const void* pData)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdPushConstants(m_cmdBuffer, layout.Get(), stagesMask, offset, size, pData);
 
         return *this;
     }

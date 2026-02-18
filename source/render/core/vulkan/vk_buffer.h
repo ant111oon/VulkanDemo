@@ -46,11 +46,14 @@ namespace vkn
         template <typename... Args>
         Buffer& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*m_pDevice, (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
-        const char* GetDebugName() const;
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("Buffer");
+        }
 
         Device* GetDevice() const
         {

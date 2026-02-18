@@ -227,12 +227,6 @@ namespace vkn
     }
 
 
-    const char* Buffer::GetDebugName() const
-    {
-        return Object::GetDebugName("Buffer");
-    }
-
-
     void Buffer::Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask)
     {
         VK_ASSERT(IsCreated());
