@@ -1,6 +1,10 @@
 #include "pch.h"
 
 #include "vk_device.h"
+#include "vk_cmd.h"
+#include "vk_fence.h"
+#include "vk_semaphore.h"
+#include "vk_swapchain.h"
 
 
 namespace vkn
@@ -24,6 +28,192 @@ namespace vkn
         (void)vkPhysDevice;
         (void)requiredExtensions;
     #endif
+    }
+
+
+    Queue::~Queue()
+    {
+        Destroy();
+    }
+
+
+    Queue& Queue::Submit(std::span<CmdBuffer*> cmdBuffers, Fence* pFinishFence, 
+        std::span<QueueSyncData> waitSemaphores,
+        std::span<QueueSyncData> signalSemaphores
+    ) {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(!cmdBuffers.empty());
+        
+        m_waitSemaphoreCache.resize(waitSemaphores.size());
+        for (size_t i = 0; i < waitSemaphores.size(); ++i) {
+            const QueueSyncData& data = waitSemaphores[i];
+            VK_ASSERT(data.pSemaphore && data.pSemaphore->IsCreated());
+
+            VkSemaphoreSubmitInfo& waitSemaphoreInfo = m_waitSemaphoreCache[i];
+            waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            waitSemaphoreInfo.semaphore = data.pSemaphore->Get();
+            waitSemaphoreInfo.value = 0;
+            waitSemaphoreInfo.stageMask = data.stage;
+            waitSemaphoreInfo.deviceIndex = 0;
+        }
+
+        m_signalSemaphoreCache.resize(signalSemaphores.size());
+        for (size_t i = 0; i < signalSemaphores.size(); ++i) {
+            const QueueSyncData& data = signalSemaphores[i];
+            VK_ASSERT(data.pSemaphore && data.pSemaphore->IsCreated());
+
+            VkSemaphoreSubmitInfo& signalSemaphoreInfo = m_signalSemaphoreCache[i];
+            signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            signalSemaphoreInfo.semaphore = data.pSemaphore->Get();
+            signalSemaphoreInfo.value = 0;
+            signalSemaphoreInfo.stageMask = data.stage;
+            signalSemaphoreInfo.deviceIndex = 0;
+        }
+
+        m_cmdBuffCache.resize(cmdBuffers.size());
+        for (size_t i = 0; i < cmdBuffers.size(); ++i) {
+            CmdBuffer* pCmdBuffer = cmdBuffers[i];
+            VK_ASSERT(pCmdBuffer && pCmdBuffer->IsCreated());
+            VK_ASSERT(!pCmdBuffer->IsStarted());
+
+            VkCommandBufferSubmitInfo& bufferSubmitInfo = m_cmdBuffCache[i];
+            bufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+            bufferSubmitInfo.commandBuffer = pCmdBuffer->Get();
+            bufferSubmitInfo.deviceMask = 0;
+        }
+
+        VkSubmitInfo2 submitInfo2 = {};
+        submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo2.commandBufferInfoCount   = m_cmdBuffCache.size();
+        submitInfo2.pCommandBufferInfos      = m_cmdBuffCache.empty() ? nullptr : m_cmdBuffCache.data();
+        submitInfo2.waitSemaphoreInfoCount   = m_waitSemaphoreCache.size();
+        submitInfo2.pWaitSemaphoreInfos      = m_waitSemaphoreCache.empty() ? nullptr : m_waitSemaphoreCache.data();
+        submitInfo2.signalSemaphoreInfoCount = m_signalSemaphoreCache.size();
+        submitInfo2.pSignalSemaphoreInfos    = m_signalSemaphoreCache.empty() ? nullptr : m_signalSemaphoreCache.data();
+        
+        VK_CHECK(vkQueueSubmit2(m_queue, 1, &submitInfo2, pFinishFence ? pFinishFence->Get() : VK_NULL_HANDLE));
+    
+        return *this;
+    }
+
+
+    Queue& Queue::Submit(CmdBuffer& cmdBuffer, Fence* pFinishFence, QueueSyncData* pWaitSemaphore, QueueSyncData* pSignalSemaphore)
+    {
+        CmdBuffer* pCmdBuffer = &cmdBuffer;
+        
+        return Submit(std::span(&pCmdBuffer, 1), pFinishFence, 
+            std::span(pWaitSemaphore, pWaitSemaphore ? 1 : 0), 
+            std::span(pSignalSemaphore, pSignalSemaphore ? 1 : 0)
+        );
+    }
+
+
+    VkResult Queue::Present(Swapchain& swapchain, uint32_t imageIndex, Semaphore* pWaitSemaphores)
+    {
+        return Present(swapchain, imageIndex, std::span(&pWaitSemaphores, pWaitSemaphores ? 1 : 0));
+    }
+
+
+    VkResult Queue::Present(Swapchain& swapchain, uint32_t imageIndex, std::span<Semaphore*> waitSemaphores)
+    {
+        VK_ASSERT(IsCreated());
+
+        m_presentSemaphoreCache.resize(waitSemaphores.size());
+        for (size_t i = 0; i < waitSemaphores.size(); ++i) {
+            VK_ASSERT(waitSemaphores[i] != nullptr);
+            m_presentSemaphoreCache[i] = waitSemaphores[i]->Get();
+        }
+
+        VkPresentInfoKHR presentInfo = {};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.pNext = nullptr;
+        presentInfo.waitSemaphoreCount = m_presentSemaphoreCache.size();
+        presentInfo.pWaitSemaphores = m_presentSemaphoreCache.empty() ? nullptr : m_presentSemaphoreCache.data();
+        presentInfo.swapchainCount = 1;
+        
+        VkSwapchainKHR vkSwapchain = swapchain.Get();
+        presentInfo.pSwapchains = &vkSwapchain;
+        
+        presentInfo.pImageIndices = &imageIndex;
+        presentInfo.pResults = nullptr;
+
+        return vkQueuePresentKHR(m_queue, &presentInfo);
+    }
+
+
+    Queue::Queue(Device* pOwner, VkQueue queue, uint32_t familyIndex)
+    {
+        Create(pOwner, queue, familyIndex);
+    }
+
+
+    Queue::Queue(Queue&& queue) noexcept
+    {
+        *this = std::move(queue);
+    }
+
+
+    Queue& Queue::operator=(Queue&& queue) noexcept
+    {
+        if (this == &queue) {
+            return *this;
+        }
+
+        if (IsCreated()) {
+            Destroy();
+        }
+
+        std::swap(m_pOwner, queue.m_pOwner);
+        std::swap(m_queue, queue.m_queue);
+        std::swap(m_familyIndex, queue.m_familyIndex);
+        std::swap(m_presentSemaphoreCache, queue.m_presentSemaphoreCache);
+        std::swap(m_cmdBuffCache, queue.m_cmdBuffCache);
+        std::swap(m_waitSemaphoreCache, queue.m_waitSemaphoreCache);
+        std::swap(m_signalSemaphoreCache, queue.m_signalSemaphoreCache);
+
+        Object::operator=(std::move(queue));
+
+        return *this;
+    }
+
+
+    Queue& Queue::Create(Device* pOwner, VkQueue queue, uint32_t familyIndex)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Recreation of queue %s", GetDebugName());
+            Destroy();
+        }
+
+        VK_ASSERT(pOwner);
+        VK_ASSERT(queue != VK_NULL_HANDLE);
+
+        m_pOwner = pOwner;
+        m_queue = queue;
+        m_familyIndex = familyIndex;
+
+        SetCreated(true);
+
+        return *this;
+    }
+
+
+    Queue& Queue::Destroy()
+    {
+        if (!IsCreated()) {
+            return *this;
+        }
+
+        m_queue = VK_NULL_HANDLE;
+        m_familyIndex = UINT32_MAX;
+        m_pOwner = nullptr;
+        m_presentSemaphoreCache = {};
+        m_cmdBuffCache = {};
+        m_waitSemaphoreCache = {};
+        m_signalSemaphoreCache = {};
+
+        Object::Destroy();
+
+        return *this;
     }
 
 
@@ -100,11 +290,11 @@ namespace vkn
         VK_ASSERT_MSG(graphicsQueueFamilyIndex == computeQueueFamilyIndex && computeQueueFamilyIndex == transferQueueFamilyIndex,
             "Queue family indices for graphics, compute and transfer must be equal, for now. TODO: process the case when they are different");
 
-        m_queueFamilyIndex = graphicsQueueFamilyIndex;
+        const uint32_t queueFamilyIndex = graphicsQueueFamilyIndex;
 
         VkDeviceQueueCreateInfo queueCreateInfo = {};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = m_queueFamilyIndex;
+        queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
         queueCreateInfo.queueCount = 1;
         queueCreateInfo.pQueuePriorities = &info.queuePriority;
 
@@ -121,10 +311,13 @@ namespace vkn
         VK_CHECK(vkCreateDevice(m_pPhysDevice->Get(), &deviceCreateInfo, nullptr, &m_device));
         VK_ASSERT(m_device != VK_NULL_HANDLE);
         
-        vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_queue);
-        VK_ASSERT(m_queue != VK_NULL_HANDLE);
+        VkQueue queue = VK_NULL_HANDLE;
+        vkGetDeviceQueue(m_device, queueFamilyIndex, 0, &queue);
+        m_queue.Create(this, queue, queueFamilyIndex);
 
         SetCreated(true);
+
+        m_queue.SetDebugName("DEVICE_GFX_CMP_TRANSFER_QUEUE");
 
         return *this;
     }
@@ -141,7 +334,7 @@ namespace vkn
 
         m_pPhysDevice = VK_NULL_HANDLE;
 
-        m_queue = VK_NULL_HANDLE;
+        m_queue.Destroy();
 
         Object::Destroy();
 

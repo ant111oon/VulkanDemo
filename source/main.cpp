@@ -853,7 +853,7 @@ static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 static std::array<vkn::DescriptorSetLayout, (size_t)SetLayoutID::COUNT> s_descSetLayouts;
 
 static std::array<vkn::PSOLayout, (size_t)PassID::COUNT> s_PSOLayouts;
-static std::array<vkn::PSO, (size_t)PassID::COUNT>       s_PSOs;
+static std::array<vkn::PSO,       (size_t)PassID::COUNT> s_PSOs;
 
 static vkn::DescriptorBuffer s_descriptorBuffer;
 
@@ -1004,8 +1004,8 @@ namespace DbgUI
         imGuiInitInfo.Instance = s_vkInstance.Get();
         imGuiInitInfo.PhysicalDevice = s_vkPhysDevice.Get();
         imGuiInitInfo.Device = s_vkDevice.Get();
-        imGuiInitInfo.QueueFamily = s_vkDevice.GetQueueFamilyIndex();
-        imGuiInitInfo.Queue = s_vkDevice.GetQueue();
+        imGuiInitInfo.QueueFamily = s_vkDevice.GetQueue().GetFamilyIndex();
+        imGuiInitInfo.Queue = s_vkDevice.GetQueue().Get();
         imGuiInitInfo.DescriptorPoolSize = 1000;
         imGuiInitInfo.MinImageCount = 2;
         imGuiInitInfo.ImageCount = 2;
@@ -1269,48 +1269,8 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
-static void SubmitVkQueue(VkQueue vkQueue,
-    VkCommandBuffer vkCmdBuffer,
-    VkFence vkFinishFence,
-    VkSemaphore vkWaitSemaphore, 
-    VkPipelineStageFlags2 waitSemaphoreStageMask,
-    VkSemaphore vkSignalSemaphore, 
-    VkPipelineStageFlags2 signalSemaphoreStageMask
-) {
-    VkSemaphoreSubmitInfo waitSemaphoreInfo = {};
-    waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    waitSemaphoreInfo.semaphore = vkWaitSemaphore;
-    waitSemaphoreInfo.value = 0;
-    waitSemaphoreInfo.stageMask = waitSemaphoreStageMask;
-    waitSemaphoreInfo.deviceIndex = 0;
-
-    VkSemaphoreSubmitInfo signalSemaphoreInfo = {};
-    signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    signalSemaphoreInfo.semaphore = vkSignalSemaphore;
-    signalSemaphoreInfo.value = 0;
-    signalSemaphoreInfo.stageMask = signalSemaphoreStageMask;
-    signalSemaphoreInfo.deviceIndex = 0;
-    
-    VkCommandBufferSubmitInfo bufferSubmitInfo = {};
-    bufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    bufferSubmitInfo.commandBuffer = vkCmdBuffer;
-    bufferSubmitInfo.deviceMask = 0;
-
-    VkSubmitInfo2 submitInfo2 = {};
-    submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo2.waitSemaphoreInfoCount = vkWaitSemaphore != VK_NULL_HANDLE ? 1 : 0;
-    submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
-    submitInfo2.commandBufferInfoCount = 1;
-    submitInfo2.pCommandBufferInfos = &bufferSubmitInfo;
-    submitInfo2.signalSemaphoreInfoCount = vkSignalSemaphore != VK_NULL_HANDLE ? 1 : 0;
-    submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
-
-    VK_CHECK(vkQueueSubmit2(vkQueue, 1, &submitInfo2, vkFinishFence));
-}
-
-
 template <typename Func, typename... Args>
-static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
+static void ImmediateSubmitQueue(vkn::Queue& queue, Func func, Args&&... args)
 {   
     s_immediateSubmitFinishedFence.Reset();
     s_pImmediateSubmitCmdBuffer->Reset();
@@ -1323,15 +1283,7 @@ static void ImmediateSubmitQueue(VkQueue vkQueue, Func func, Args&&... args)
         func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
     s_pImmediateSubmitCmdBuffer->End();
 
-    SubmitVkQueue(
-        vkQueue, 
-        s_pImmediateSubmitCmdBuffer->Get(), 
-        s_immediateSubmitFinishedFence.Get(), 
-        VK_NULL_HANDLE, 
-        VK_PIPELINE_STAGE_2_NONE,
-        VK_NULL_HANDLE, 
-        VK_PIPELINE_STAGE_2_NONE
-    );
+    queue.Submit(*s_pImmediateSubmitCmdBuffer, &s_immediateSubmitFinishedFence);
 
     s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
 }
@@ -4136,20 +4088,8 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 void PresentImage(uint32_t imageIndex)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", 50, 50, 255, 255);
-    
-    VkSwapchainKHR vkSwapchain = s_vkSwapchain.Get();
-    VkSemaphore vkWaitSemaphore = s_renderFinishedSemaphores[imageIndex].Get();
 
-    VkPresentInfoKHR presentInfo = {};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.pNext = nullptr;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &vkWaitSemaphore;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &vkSwapchain;
-    presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults = nullptr;
-    const VkResult presentResult = vkQueuePresentKHR(s_vkDevice.GetQueue(), &presentInfo);
+    const VkResult presentResult = s_vkDevice.GetQueue().Present(s_vkSwapchain, imageIndex, &s_renderFinishedSemaphores[imageIndex]);
 
     if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(presentResult);
@@ -4951,15 +4891,10 @@ static void RenderScene()
 
     s_renderFinishedFence.Reset();
 
-    SubmitVkQueue(
-        s_vkDevice.GetQueue(),
-        cmdBuffer.Get(),
-        s_renderFinishedFence.Get(),
-        s_presentFinishedSemaphore.Get(),
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        renderingFinishedSemaphore.Get(),
-        VK_PIPELINE_STAGE_2_NONE
-    );
+    vkn::QueueSyncData waitData = { &s_presentFinishedSemaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT };
+    vkn::QueueSyncData signalData = { &renderingFinishedSemaphore, VK_PIPELINE_STAGE_2_NONE };
+
+    s_vkDevice.GetQueue().Submit(cmdBuffer, &s_renderFinishedFence, &waitData, &signalData);
 
     PresentImage(s_nextImageIdx);
 }
@@ -5184,7 +5119,7 @@ int main(int argc, char* argv[])
 
     vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
     cmdPoolCreateInfo.pDevice = &s_vkDevice;
-    cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueueFamilyIndex();
+    cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueue().GetFamilyIndex();
     cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cmdPoolCreateInfo.size = 2;
     

@@ -26,7 +26,7 @@ namespace vkn
 
         CmdPoolCreateInfo cmdPoolCreateInfo = {};
         cmdPoolCreateInfo.pDevice = m_pDevice;
-        cmdPoolCreateInfo.queueFamilyIndex = m_pDevice->GetQueueFamilyIndex();
+        cmdPoolCreateInfo.queueFamilyIndex = m_pDevice->GetQueue().GetFamilyIndex();
         cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         cmdPoolCreateInfo.size = 1;
 
@@ -40,7 +40,7 @@ namespace vkn
         m_pCmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         m_pCmdBuffer->SetDebugName("PROFILER_CMD_BUFFER");
 
-        m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue(), m_pCmdBuffer->Get());
+        m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue().Get(), m_pCmdBuffer->Get());
 
         CORE_ASSERT_MSG(m_context != nullptr, "Failed to create Vulkan profiler");
 

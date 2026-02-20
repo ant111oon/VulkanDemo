@@ -10,6 +10,93 @@
 
 namespace vkn
 {
+    class CmdBuffer;
+    class Fence;
+    class Semaphore;
+    class Swapchain;
+
+
+    struct QueueSyncData
+    {
+        Semaphore*            pSemaphore = nullptr;
+        VkPipelineStageFlags2 stage = VK_PIPELINE_STAGE_2_NONE;
+    };
+
+
+    class Queue : public Object
+    {
+        friend class Device;
+    public:
+        ENG_DECL_CLASS_NO_COPIABLE(Queue);
+
+        Queue() = default;
+        ~Queue();
+
+        Queue& Submit(std::span<CmdBuffer*> cmdBuffers, Fence* pFinishFence = nullptr, 
+            std::span<QueueSyncData> waitSemaphores = {}, 
+            std::span<QueueSyncData> signalSemaphores = {}
+        );
+
+        Queue& Submit(CmdBuffer& cmdBuffer, Fence* pFinishFence = nullptr, 
+            QueueSyncData* pWaitSemaphore = nullptr, 
+            QueueSyncData* pSignalSemaphore = nullptr
+        );
+
+        VkResult Present(Swapchain& swapchain, uint32_t imageIndex, Semaphore* pWaitSemaphores);
+        VkResult Present(Swapchain& swapchain, uint32_t imageIndex, std::span<Semaphore*> waitSemaphores = {});
+
+        const char* GetDebugName() const
+        {
+            return Object::GetDebugName("Queue");
+        }
+
+        Device* GetDevice() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_pOwner;
+        }
+
+        const VkQueue& Get() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_queue;
+        }
+
+        uint32_t GetFamilyIndex() const
+        {
+            VK_ASSERT(IsCreated());
+            return m_familyIndex;
+        }
+
+    private:
+        Queue(Device* pOwner, VkQueue queue, uint32_t familyIndex);
+
+        Queue(Queue&& queue) noexcept;
+        Queue& operator=(Queue&& queue) noexcept;
+
+        Queue& Create(Device* pOwner, VkQueue queue, uint32_t familyIndex);
+        Queue& Destroy();
+
+        template <typename... Args>
+        Queue& SetDebugName(const char* pFmt, Args&&... args)
+        {
+            Object::SetDebugName(*GetDevice(), (uint64_t)m_queue, VK_OBJECT_TYPE_QUEUE, pFmt, std::forward<Args>(args)...);
+            return *this;
+        }
+
+    private:
+        Device* m_pOwner = nullptr;
+
+        VkQueue m_queue = VK_NULL_HANDLE;
+        uint32_t m_familyIndex = UINT32_MAX;
+
+        std::vector<VkSemaphore> m_presentSemaphoreCache;
+        std::vector<VkCommandBufferSubmitInfo> m_cmdBuffCache;
+        std::vector<VkSemaphoreSubmitInfo> m_waitSemaphoreCache;
+        std::vector<VkSemaphoreSubmitInfo> m_signalSemaphoreCache;
+    };
+
+
     struct DeviceCreateInfo
     {
         PhysicalDevice* pPhysDevice;
@@ -53,16 +140,16 @@ namespace vkn
             return m_pPhysDevice;
         }
 
-        VkQueue GetQueue() const
+        const Queue& GetQueue() const
         {
             VK_ASSERT(IsCreated());
             return m_queue;
         }
 
-        uint32_t GetQueueFamilyIndex() const
+        Queue& GetQueue()
         {
             VK_ASSERT(IsCreated());
-            return m_queueFamilyIndex;
+            return m_queue;
         }
 
     private:
@@ -72,8 +159,7 @@ namespace vkn
         PhysicalDevice* m_pPhysDevice = nullptr;
         VkDevice m_device = VK_NULL_HANDLE;
 
-        VkQueue m_queue = VK_NULL_HANDLE;
-        uint32_t m_queueFamilyIndex = UINT32_MAX;
+        Queue m_queue;
     };
 
 
