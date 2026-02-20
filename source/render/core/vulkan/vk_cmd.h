@@ -161,7 +161,7 @@ namespace vkn
 
         CmdBuffer& Reset(VkCommandBufferResetFlags flags = 0);
 
-        CmdBuffer& Begin(const VkCommandBufferBeginInfo& beginInfo);
+        CmdBuffer& Begin(VkCommandBufferUsageFlags flags = 0);
         CmdBuffer& End();
 
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool, uint32_t firstQuery, uint32_t queryCount);

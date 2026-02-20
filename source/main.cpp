@@ -1275,11 +1275,7 @@ static void ImmediateSubmitQueue(vkn::Queue& queue, Func func, Args&&... args)
     s_immediateSubmitFinishedFence.Reset();
     s_pImmediateSubmitCmdBuffer->Reset();
 
-    VkCommandBufferBeginInfo cmdBI = {};
-    cmdBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmdBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    s_pImmediateSubmitCmdBuffer->Begin(cmdBI);
+    s_pImmediateSubmitCmdBuffer->Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
     s_pImmediateSubmitCmdBuffer->End();
 
@@ -4861,11 +4857,7 @@ static void RenderScene()
 
     cmdBuffer.Reset();
 
-    VkCommandBufferBeginInfo cmdBeginInfo = {};
-    cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    cmdBuffer.Begin(cmdBeginInfo);
+    cmdBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", 255, 165, 0, 255);
 

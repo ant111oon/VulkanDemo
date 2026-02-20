@@ -212,10 +212,14 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::Begin(const VkCommandBufferBeginInfo& beginInfo)
+    CmdBuffer& CmdBuffer::Begin(VkCommandBufferUsageFlags flags)
     {
         VK_ASSERT(IsValid());
         VK_ASSERT(!IsStarted());
+
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = flags;
 
         VK_CHECK(vkBeginCommandBuffer(m_cmdBuffer, &beginInfo));
 
