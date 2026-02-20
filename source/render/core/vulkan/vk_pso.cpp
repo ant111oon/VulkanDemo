@@ -3,6 +3,7 @@
 #include "vk_pso.h"
 #include "vk_device.h"
 #include "vk_descriptor.h"
+#include "vk_shader.h"
 
 
 namespace vkn
@@ -118,31 +119,100 @@ namespace vkn
     }
 
 
+    PSO::PSO(PSOLayout* pLayout, VkPipeline pso, State state)
+    {
+        Create(pLayout, pso, state);
+    }
 
 
+    PSO& PSO::Create(PSOLayout* pLayout, VkPipeline pso, State state)
+    {
+        if (IsCreated()) {
+            VK_LOG_WARN("Recreation of PSO %s", GetDebugName());
+            Destroy();
+        }
+
+        VK_ASSERT(pLayout && pLayout->IsCreated());
+        VK_ASSERT(pso != VK_NULL_HANDLE);
+
+        m_pLayout = pLayout;
+        m_pso = pso;
+        m_state = state;
+
+        SetCreated(true);
+
+        return *this;
+    }
 
 
+    PSO::~PSO()
+    {
+        Destroy();
+    }
 
 
+    PSO::PSO(PSO&& pso) noexcept
+    {
+        *this = std::move(pso);
+    }
 
 
+    PSO& PSO::operator=(PSO&& pso) noexcept
+    {
+        if (this == &pso) {
+            return *this;
+        }
+
+        if (IsCreated()) {
+            Destroy();
+        }
+
+        std::swap(m_pLayout, pso.m_pLayout);
+
+        std::swap(m_pso, pso.m_pso);
+        std::swap(m_state, pso.m_state);
+
+        Object::operator=(std::move(pso));
+
+        return *this; 
+    }
 
 
+    PSO& PSO::Destroy()
+    {
+        if (!IsCreated()) {
+            return *this;
+        }
+
+        vkDestroyPipeline(m_pLayout->GetDevice()->Get(), m_pso, nullptr);
+        m_pso = VK_NULL_HANDLE;
+
+        m_pLayout = nullptr;
+
+        m_state.reset();
+
+        Object::Destroy();
+
+        return *this;
+    }
 
 
+    VkPipelineBindPoint PSO::GetBindPoint() const
+    {
+        VK_ASSERT(IsCreated());
+        
+        if (IsRasterization()) {
+            return VK_PIPELINE_BIND_POINT_GRAPHICS;
+        } else if (IsCompute()) {
+            return VK_PIPELINE_BIND_POINT_COMPUTE;
+        }
+
+        VK_ASSERT_FAIL("Unknown PSO type");
+        return VK_PIPELINE_BIND_POINT_MAX_ENUM;
+    }
 
 
-
-
-
-
-
-
-
-
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::Reset()
+    GraphicsPSOBuilder& GraphicsPSOBuilder::Reset()
     {
         m_vertexInputState = {};
         m_vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -170,69 +240,52 @@ namespace vkn
         m_renderingCreateInfo = {};
         m_renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
-        m_layout = VK_NULL_HANDLE;
+        m_pLayout = nullptr;
 
         m_flags = {};
 
-        for (VkPipelineShaderStageCreateInfo& shaderStage : m_shaderStages) {
-            shaderStage = {};
-            shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        }
-
-        for (auto& name : m_shaderEntryNames) {
-            name.fill('\0');
-        }
-
-        std::fill(m_dynamicStateValues.begin(), m_dynamicStateValues.end(), VK_DYNAMIC_STATE_MAX_ENUM);
-        m_dynamicStatesCount = 0;
-
-        m_viewportsAndScissorCount = 0;
-        m_colorAttachmentFormatsCount = 0;
-        m_colorBlendAttachmentStatesCount = 0;
+        m_shaderStages.clear();
+        m_viewports.clear();
+        m_scissors.clear();
+        m_colorAttachmentFormats.clear();
+        m_dynamicStateValues.clear();
+        m_shaderStages.clear();
+        m_colorBlendAttachmentStates.clear();
 
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetFlags(VkPipelineCreateFlags flags)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetFlags(VkPipelineCreateFlags flags)
     {
         m_flags = flags;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetLayout(VkPipelineLayout layout)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetLayout(PSOLayout& layout)
     {
-        m_layout = layout;
+        m_pLayout = &layout;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddShader(VkShaderModule shader, VkShaderStageFlagBits stage, const char* pEntryName)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::AddShader(vkn::Shader& shader)
     {
-        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
-        for (const VkPipelineShaderStageCreateInfo& shaderStage : m_shaderStages) {
-            CORE_ASSERT_MSG(shaderStage.stage != stage, "There already is shader with same shader stage: %d", stage);
-        }
-        
-        const size_t index = m_shaderStages.size();
+        VK_ASSERT(shader.IsCreated());
+        VK_ASSERT(shader.IsVertexShader() || shader.IsPixelShader());
 
-        m_shaderStages.resize(index + 1);
-        m_shaderEntryNames.resize(m_shaderStages.size());
-
-        auto& entryName = m_shaderEntryNames[index];
-        strcpy_s(entryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
-
-        VkPipelineShaderStageCreateInfo& shaderStageCreateInfo = m_shaderStages[index];
+        VkPipelineShaderStageCreateInfo& shaderStageCreateInfo = m_shaderStages.emplace_back();
         shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStageCreateInfo.module = shader;
-        shaderStageCreateInfo.stage = stage;
+        shaderStageCreateInfo.module = shader.Get();
+        shaderStageCreateInfo.stage = shader.GetStage();
+        shaderStageCreateInfo.pName = shader.GetEntryName().data();
 
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetInputAssemblyState(VkPrimitiveTopology topology, VkBool32 primitiveRestartEnable)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetInputAssemblyState(VkPrimitiveTopology topology, VkBool32 primitiveRestartEnable)
     {
         m_inputAssemblyState.topology = topology;
         m_inputAssemblyState.primitiveRestartEnable = primitiveRestartEnable;
@@ -241,16 +294,14 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddDynamicState(VkDynamicState state)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::AddDynamicState(VkDynamicState state)
     {
-        CORE_ASSERT(m_dynamicStatesCount + 1 <= MAX_DYNAMIC_STATES_COUNT);
-        m_dynamicStateValues[m_dynamicStatesCount++] = state;
-
+        m_dynamicStateValues.emplace_back(state);
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddDynamicState(const std::span<const VkDynamicState> states)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::AddDynamicState(const std::span<const VkDynamicState> states)
     {
         for (VkDynamicState state : states) {
             AddDynamicState(state);
@@ -260,64 +311,60 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddViewportAndScissor(const VkViewport& viewport, const VkRect2D& scissor)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::AddViewportAndScissor(const VkViewport& viewport, const VkRect2D& scissor)
     {
-        CORE_ASSERT(m_viewportsAndScissorCount + 1 <= MAX_VIEWPORT_AND_SCISSOR_COUNT);
-
-        m_viewports[m_viewportsAndScissorCount] = viewport;
-        m_scissors[m_viewportsAndScissorCount] = scissor;
-        
-        ++m_viewportsAndScissorCount;
+        m_viewports.emplace_back(viewport);
+        m_scissors.emplace_back(scissor);
 
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerLineWidth(float lineWidth)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerLineWidth(float lineWidth)
     {
         m_rasterizationState.lineWidth = lineWidth;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerDepthClampEnabled(VkBool32 enabled)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDepthClamp()
     {
-        m_rasterizationState.depthClampEnable = enabled;
+        m_rasterizationState.depthClampEnable = VK_TRUE;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerDiscardEnabled(VkBool32 enabled)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDiscard()
     {
-        m_rasterizationState.rasterizerDiscardEnable = enabled;
+        m_rasterizationState.rasterizerDiscardEnable = VK_TRUE;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerPolygonMode(VkPolygonMode polygonMode)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerPolygonMode(VkPolygonMode polygonMode)
     {
         m_rasterizationState.polygonMode = polygonMode;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerCullMode(VkCullModeFlags cullMode)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerCullMode(VkCullModeFlags cullMode)
     {
         m_rasterizationState.cullMode = cullMode;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerFrontFace(VkFrontFace frontFace)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerFrontFace(VkFrontFace frontFace)
     {
         m_rasterizationState.frontFace = frontFace;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRasterizerDepthBias(VkBool32 enabled, float biasConstantFactor, float biasClamp, float biasSlopeFactor)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDepthBias(float biasConstantFactor, float biasClamp, float biasSlopeFactor)
     {
-        m_rasterizationState.depthBiasEnable = enabled;
+        m_rasterizationState.depthBiasEnable = VK_TRUE;
         m_rasterizationState.depthBiasConstantFactor = biasConstantFactor;
         m_rasterizationState.depthBiasClamp = biasClamp;
         m_rasterizationState.depthBiasSlopeFactor = biasSlopeFactor;
@@ -326,74 +373,41 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetDepthTestState(VkBool32 testEnabled, VkBool32 depthWriteEnable, VkCompareOp compareOp)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableDepthTest(VkBool32 depthWriteEnable, VkCompareOp compareOp)
     {
-        m_depthStencilState.depthTestEnable = testEnabled;
+        m_depthStencilState.depthTestEnable = VK_TRUE;
         m_depthStencilState.depthWriteEnable = depthWriteEnable;
         m_depthStencilState.depthCompareOp = compareOp;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetStencilTestState(VkBool32 testEnabled, const VkStencilOpState& front, const VkStencilOpState& back)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableStencilTestState(const VkStencilOpState& front, const VkStencilOpState& back)
     {
-        m_depthStencilState.stencilTestEnable = testEnabled;
+        m_depthStencilState.stencilTestEnable = VK_TRUE;
         m_depthStencilState.front = front;
         m_depthStencilState.back = back;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetDepthBoundsTestState(VkBool32 depthBoundsTestEnable, float minValue, float maxValue)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableDepthBoundsTest(float minValue, float maxValue)
     {
-        m_depthStencilState.depthBoundsTestEnable = depthBoundsTestEnable;
+        m_depthStencilState.depthBoundsTestEnable = VK_TRUE;
         m_depthStencilState.minDepthBounds = minValue;
         m_depthStencilState.maxDepthBounds = maxValue;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetRenderingViewMask(uint32_t viewMask)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRenderingViewMask(uint32_t viewMask)
     {
         m_renderingCreateInfo.viewMask = viewMask;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetDepthAttachmentFormat(VkFormat format)
-    {
-        m_renderingCreateInfo.depthAttachmentFormat = format;
-        return *this;
-    }
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetStencilAttachmentFormat(VkFormat format)
-    {
-        m_renderingCreateInfo.stencilAttachmentFormat = format;
-        return *this;
-    }
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddColorAttachmentFormat(VkFormat format)
-    {
-        CORE_ASSERT(m_colorAttachmentFormatsCount + 1 <= MAX_COLOR_ATTACHMENTS_COUNT);
-        m_colorAttachmentFormats[m_colorAttachmentFormatsCount++] = format;
-
-        return *this;
-    }
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddColorAttachmentFormat(const std::span<const VkFormat> formats)
-    {
-        for (VkFormat format : formats) {
-            AddColorAttachmentFormat(format);
-        }
-        
-        return *this;
-    }
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetColorBlendConstants(float r, float g, float b, float a)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetColorBlendConstants(float r, float g, float b, float a)
     {
         m_colorBlendState.blendConstants[0] = r;
         m_colorBlendState.blendConstants[1] = g;
@@ -403,27 +417,40 @@ namespace vkn
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::SetColorBlendLogicOp(VkBool32 logicOpEnable, VkLogicOp logicOp)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableColorBlendLogicOp(VkLogicOp logicOp)
     {
-        m_colorBlendState.logicOpEnable = logicOpEnable;
+        m_colorBlendState.logicOpEnable = VK_TRUE;
         m_colorBlendState.logicOp = logicOp;
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddColorBlendAttachment(
-        VkBool32 blendEnable, 
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthAttachmentFormat(VkFormat format)
+    {
+        m_renderingCreateInfo.depthAttachmentFormat = format;
+        return *this;
+    }
+
+
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetStencilAttachmentFormat(VkFormat format)
+    {
+        m_renderingCreateInfo.stencilAttachmentFormat = format;
+        return *this;
+    }
+
+
+    GraphicsPSOBuilder& GraphicsPSOBuilder::AddColorAttachment(
+        VkFormat format,
+        VkColorComponentFlags colorWriteMask, 
+        VkBool32 blendEnable,
         VkBlendFactor srcColorBlendFactor, 
         VkBlendFactor dstColorBlendFactor,
         VkBlendOp colorBlendOp,
         VkBlendFactor srcAlphaBlendFactor,
         VkBlendFactor dstAlphaBlendFactor,
-        VkBlendOp alphaBlendOp,
-        VkColorComponentFlags colorWriteMask
+        VkBlendOp alphaBlendOp            
     ) {
-        CORE_ASSERT(m_colorBlendAttachmentStatesCount + 1 <= MAX_COLOR_ATTACHMENTS_COUNT);
-
-        VkPipelineColorBlendAttachmentState& attachment = m_colorBlendAttachmentStates[m_colorBlendAttachmentStatesCount];
+        VkPipelineColorBlendAttachmentState& attachment = m_colorBlendAttachmentStates.emplace_back();
         attachment.blendEnable = blendEnable;
         attachment.srcColorBlendFactor = srcColorBlendFactor;
         attachment.dstColorBlendFactor = dstColorBlendFactor;
@@ -433,151 +460,142 @@ namespace vkn
         attachment.alphaBlendOp = alphaBlendOp;
         attachment.colorWriteMask = colorWriteMask;
 
-        ++m_colorBlendAttachmentStatesCount;
+        m_colorAttachmentFormats.emplace_back(format);
 
         return *this;
     }
 
 
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddColorBlendAttachment(const VkPipelineColorBlendAttachmentState& blendState)
+    PSO GraphicsPSOBuilder::Build()
     {
-        CORE_ASSERT(m_colorBlendAttachmentStatesCount + 1 <= MAX_COLOR_ATTACHMENTS_COUNT);
-        m_colorBlendAttachmentStates[m_colorBlendAttachmentStatesCount++] = blendState;
-
-        return *this;
-    }
-
-
-    GraphicsPipelineBuilder& GraphicsPipelineBuilder::AddColorBlendAttachment(const std::span<const VkPipelineColorBlendAttachmentState> blendStates)
-    {
-        for (const VkPipelineColorBlendAttachmentState& blendState : blendStates) {
-            AddColorBlendAttachment(blendState);
-        }
-
-        return *this;
-    }
-
-
-    VkPipeline GraphicsPipelineBuilder::Build()
-    {
-        CORE_ASSERT_MSG(m_colorBlendAttachmentStatesCount == m_colorAttachmentFormatsCount, "Color attachments count and color blend states count must be equal");
-        CORE_ASSERT_MSG(m_layout != VK_NULL_HANDLE, "Graphics pipeline layout is not set");
+        CORE_ASSERT_MSG(m_pLayout && m_pLayout->IsCreated(), "Graphics PSO layout is invalid");
         CORE_ASSERT_MSG(
-            m_colorAttachmentFormatsCount > 0 || 
+            !m_colorAttachmentFormats.empty() || 
             m_renderingCreateInfo.depthAttachmentFormat != VK_FORMAT_UNDEFINED || 
             m_renderingCreateInfo.stencilAttachmentFormat != VK_FORMAT_UNDEFINED,
-            "There is no format set for any of the graphics pipeline attachments"
+            "There is no format set for any of the graphics PSO attachments"
         );
 
-        for (size_t i = 0; i < m_shaderStages.size(); ++i) {
-            CORE_ASSERT_MSG(m_shaderStages[i].module != VK_NULL_HANDLE, "Shader stage (index: %zu) module is VK_NULL_HANDLE", i);
-            m_shaderStages[i].pName = m_shaderEntryNames[i].data();
-        }
+        VkGraphicsPipelineCreateInfo psoCreateInfo = {};
+        psoCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
-        VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-        pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-
-        m_renderingCreateInfo.colorAttachmentCount = m_colorAttachmentFormatsCount;
-        m_renderingCreateInfo.pColorAttachmentFormats = m_colorAttachmentFormats.data();
-        pipelineCreateInfo.pNext = &m_renderingCreateInfo;
+        m_renderingCreateInfo.colorAttachmentCount = m_colorAttachmentFormats.size();
+        m_renderingCreateInfo.pColorAttachmentFormats = m_colorAttachmentFormats.empty() ? nullptr : m_colorAttachmentFormats.data();
+        psoCreateInfo.pNext = &m_renderingCreateInfo;
         
-        pipelineCreateInfo.stageCount = m_shaderStages.size();
-        pipelineCreateInfo.pStages = m_shaderStages.data();
+        psoCreateInfo.stageCount = m_shaderStages.size();
+        psoCreateInfo.pStages = m_shaderStages.data();
 
-        pipelineCreateInfo.flags = m_flags;
+        psoCreateInfo.flags = m_flags;
 
-        pipelineCreateInfo.pVertexInputState = &m_vertexInputState;
+        psoCreateInfo.pVertexInputState = &m_vertexInputState;
         
-        pipelineCreateInfo.pInputAssemblyState = &m_inputAssemblyState;
+        psoCreateInfo.pInputAssemblyState = &m_inputAssemblyState;
 
         VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
         viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        if (m_viewportsAndScissorCount == 0) {
+        
+        if (m_viewports.empty()) {
             viewportStateCreateInfo.viewportCount = 1;
+        } else {
+            viewportStateCreateInfo.viewportCount = m_viewports.size();
+            viewportStateCreateInfo.pViewports = m_viewports.data();
+        }
+
+        if (m_scissors.empty()) {
             viewportStateCreateInfo.scissorCount = 1;
         } else {
-            viewportStateCreateInfo.viewportCount = m_viewportsAndScissorCount;
-            viewportStateCreateInfo.pViewports = m_viewports.data();
-            viewportStateCreateInfo.scissorCount = m_viewportsAndScissorCount;
+            viewportStateCreateInfo.scissorCount = m_scissors.size();
             viewportStateCreateInfo.pScissors = m_scissors.data();
         }
-        pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
-        
-        pipelineCreateInfo.pRasterizationState = &m_rasterizationState;
 
-        pipelineCreateInfo.pMultisampleState = &m_multisampleState;
-
-        pipelineCreateInfo.pDepthStencilState = &m_depthStencilState;
+        psoCreateInfo.pViewportState = &viewportStateCreateInfo;
         
-        m_colorBlendState.attachmentCount = m_colorBlendAttachmentStatesCount;
-        m_colorBlendState.pAttachments = m_colorBlendAttachmentStates.data();
-        pipelineCreateInfo.pColorBlendState = &m_colorBlendState;
+        psoCreateInfo.pRasterizationState = &m_rasterizationState;
+
+        psoCreateInfo.pMultisampleState = &m_multisampleState;
+
+        psoCreateInfo.pDepthStencilState = &m_depthStencilState;
+        
+        m_colorBlendState.attachmentCount = m_colorBlendAttachmentStates.size();
+        m_colorBlendState.pAttachments = m_colorBlendAttachmentStates.empty() ? nullptr : m_colorBlendAttachmentStates.data();
+        psoCreateInfo.pColorBlendState = &m_colorBlendState;
         
         VkPipelineDynamicStateCreateInfo dynamicState = {};
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.dynamicStateCount = m_dynamicStatesCount;
-        dynamicState.pDynamicStates = m_dynamicStateValues.data();
+        dynamicState.dynamicStateCount = m_dynamicStateValues.size();
+        dynamicState.pDynamicStates = m_dynamicStateValues.empty() ? nullptr : m_dynamicStateValues.data();
         
-        pipelineCreateInfo.pDynamicState = &dynamicState;
+        psoCreateInfo.pDynamicState = &dynamicState;
 
-        pipelineCreateInfo.layout = m_layout;
+        psoCreateInfo.layout = m_pLayout->Get();
 
-        VkPipeline vkPipeline = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateGraphicsPipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &vkPipeline));
-        VK_ASSERT(vkPipeline != VK_NULL_HANDLE);
+        VkPipeline pso = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateGraphicsPipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &psoCreateInfo, nullptr, &pso));
+        VK_ASSERT(pso != VK_NULL_HANDLE);
 
-        return vkPipeline;
+        PSO::State state = {};
+        state.set(PSO::StateBits::BIT_IS_RASTERIZATION_PSO);
+
+        return PSO(m_pLayout, pso, state);
     }
 
 
-    ComputePipelineBuilder& ComputePipelineBuilder::Reset()
+    ComputePSOBuilder& ComputePSOBuilder::Reset()
     {
         m_createInfo = {};
         m_createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         m_createInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 
-        m_shaderEntryName.fill('\0');
+        m_pLayout = nullptr;
 
         return *this;
     }
 
 
-    ComputePipelineBuilder& ComputePipelineBuilder::SetFlags(VkPipelineCreateFlags flags)
+    ComputePSOBuilder& ComputePSOBuilder::SetFlags(VkPipelineCreateFlags flags)
     {
         m_createInfo.flags = flags;
         return *this;
     }
 
 
-    ComputePipelineBuilder& ComputePipelineBuilder::SetLayout(VkPipelineLayout layout)
+    ComputePSOBuilder& ComputePSOBuilder::SetLayout(PSOLayout& layout)
     {
-        m_createInfo.layout = layout;
-        return *this;
-    }
+        VK_ASSERT(layout.IsCreated());
 
-
-    ComputePipelineBuilder& ComputePipelineBuilder::SetShader(VkShaderModule shader, const char* pEntryName)
-    {
-        CORE_ASSERT(pEntryName && strlen(pEntryName) <= MAX_SHADER_ENTRY_NAME_LENGTH);
-        strcpy_s(m_shaderEntryName.data(), MAX_SHADER_ENTRY_NAME_LENGTH, pEntryName);
-
-        m_createInfo.stage.module = shader;
-        m_createInfo.stage.pName = m_shaderEntryName.data();
-        m_createInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        m_pLayout = &layout;
+        m_createInfo.layout = m_pLayout->Get();
 
         return *this;
     }
 
 
-    VkPipeline ComputePipelineBuilder::Build()
+    ComputePSOBuilder& ComputePSOBuilder::SetShader(Shader& shader)
     {
-        CORE_ASSERT(m_createInfo.layout);
-        CORE_ASSERT(m_createInfo.stage.module);
+        VK_ASSERT(shader.IsCreated());
+        VK_ASSERT(shader.IsComputeShader());
 
-        VkPipeline pipeline = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateComputePipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &pipeline));
-        VK_ASSERT(pipeline != VK_NULL_HANDLE);
+        m_createInfo.stage.module = shader.Get();
+        m_createInfo.stage.pName = shader.GetEntryName().data();
+        m_createInfo.stage.stage = shader.GetStage();
 
-        return pipeline;
+        return *this;
+    }
+
+
+    PSO ComputePSOBuilder::Build()
+    {
+        CORE_ASSERT(m_createInfo.stage.module != VK_NULL_HANDLE);
+        CORE_ASSERT(m_pLayout && m_pLayout->IsCreated());
+
+        VkPipeline pso = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateComputePipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &pso));
+        VK_ASSERT(pso != VK_NULL_HANDLE);
+
+        PSO::State state = {};
+        state.set(PSO::StateBits::BIT_IS_COMPUTE_PSO);
+
+        return PSO(m_pLayout, pso, state);
     }
 }

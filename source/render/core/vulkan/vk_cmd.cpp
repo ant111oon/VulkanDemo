@@ -205,6 +205,7 @@ namespace vkn
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
         std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
+        std::swap(m_pPSOCache, cmdBuffer.m_pPSOCache);
         std::swap(m_state, cmdBuffer.m_state);
 
         return *this;
@@ -286,6 +287,22 @@ namespace vkn
         vkCmdEndRendering(m_cmdBuffer);
 
         m_state.set(FLAG_IS_RENDERING_STARTED, false);
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdBindPSO(PSO& pso)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        if (m_pPSOCache == &pso) {
+            return *this;
+        }
+        
+        vkCmdBindPipeline(m_cmdBuffer, pso.GetBindPoint(), pso.Get());
+
+        m_pPSOCache = &pso;
 
         return *this;
     }
@@ -749,6 +766,7 @@ namespace vkn
         m_blitCache = {};
         m_bufImageCopyCache = {};
         m_pDescrBufferBindingCache = nullptr;
+        m_pPSOCache = nullptr;
 
         m_pOwner = nullptr;
         m_ID = INVALID_ID;
@@ -766,6 +784,7 @@ namespace vkn
         m_blitCache.clear();
         m_bufImageCopyCache.clear();
         m_pDescrBufferBindingCache = nullptr;
+        m_pPSOCache = nullptr;
 
         return *this;
     }

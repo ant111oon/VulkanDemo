@@ -15,6 +15,7 @@ namespace vkn
     class SCTexture;
     class DescriptorBuffer;
     class PSOLayout;
+    class PSO;
 
 
     class BarrierList
@@ -170,6 +171,8 @@ namespace vkn
         CmdBuffer& CmdBeginRendering(const VkRenderingInfo& renderingInfo);
         CmdBuffer& CmdEndRendering();
 
+        CmdBuffer& CmdBindPSO(PSO& pso);
+
         CmdBuffer& CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports);
         CmdBuffer& CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors);
 
@@ -283,6 +286,7 @@ namespace vkn
         std::vector<VkImageBlit2> m_blitCache;
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
         DescriptorBuffer* m_pDescrBufferBindingCache;
+        PSO* m_pPSOCache;
 
         ID m_ID = INVALID_ID;
 

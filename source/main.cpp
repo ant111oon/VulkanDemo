@@ -19,6 +19,7 @@
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_texture.h"
 #include "render/core/vulkan/vk_pso.h"
+#include "render/core/vulkan/vk_shader.h"
 #include "render/core/vulkan/vk_descriptor.h"
 #include "render/core/vulkan/vk_query.h"
 
@@ -852,7 +853,7 @@ static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 static std::array<vkn::DescriptorSetLayout, (size_t)SetLayoutID::COUNT> s_descSetLayouts;
 
 static std::array<vkn::PSOLayout, (size_t)PassID::COUNT> s_PSOLayouts;
-static std::array<VkPipeline, (size_t)PassID::COUNT>     s_PSOs;
+static std::array<vkn::PSO, (size_t)PassID::COUNT>       s_PSOs;
 
 static vkn::DescriptorBuffer s_descriptorBuffer;
 
@@ -922,6 +923,10 @@ static vkn::TextureView s_colorRTView8U;
 
 static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
+
+static vkn::ComputePSOBuilder s_computePSOBuilder;
+static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
+static std::vector<uint8_t> s_shaderCodeBuffer;
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
@@ -1954,30 +1959,17 @@ static void CreateIBLResources()
 }
 
 
-static VkShaderModule CreateVkShaderModule(const fs::path& shaderSpirVPath, std::vector<uint8_t>* pExternalBuffer = nullptr)
+static bool LoadShaderSpirVCode(const fs::path& path, std::vector<uint8_t>& buffer)
 {
-    std::vector<uint8_t>* pShaderData = nullptr;
-    std::vector<uint8_t> localBuffer;
-    
-    pShaderData = pExternalBuffer ? pExternalBuffer : &localBuffer;
+    const std::string pathS = path.string();
 
-    const std::string pathS = shaderSpirVPath.string();
-
-    if (!ReadFile(*pShaderData, shaderSpirVPath)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", pathS.c_str());
+    if (!ReadFile(buffer, path)) {
+        return false;
     }
-    VK_ASSERT_MSG(pShaderData->size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
 
-    VkShaderModuleCreateInfo shaderCreateInfo = {};
-    shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(pShaderData->data());
-    shaderCreateInfo.codeSize = pShaderData->size();
+    VK_ASSERT_MSG(buffer.size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
 
-    VkShaderModule shader = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateShaderModule(s_vkDevice.Get(), &shaderCreateInfo, nullptr, &shader));
-    VK_ASSERT(shader != VK_NULL_HANDLE);
-
-    return shader;
+    return true;
 }
 
 
@@ -2369,404 +2361,331 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
 
 static void CreateMeshCullingPipeline(const fs::path& csPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
-
-    vkn::ComputePipelineBuilder builder;
-
-    s_PSOs[(size_t)PassID::MESH_CULLING] = builder
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shaderModule, "main")
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::MESH_CULLING].Get())
-        .Build();
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
     
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer).SetDebugName("MESH_CULLING_COMPUTE_SHADER");
 
-    CORE_ASSERT(s_PSOs[(size_t)PassID::MESH_CULLING] != VK_NULL_HANDLE);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::MESH_CULLING];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::MESH_CULLING])
+        .SetShader(shader)
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .Build();
+
+    pso.SetDebugName("MESH_CULLING_PSO");
 }
 
 
 static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
     
-    builder
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("ZPASS_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("ZPASS_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::ZPASS];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
-        .SetStencilTestState(VK_FALSE, {}, {})
     #ifdef ENG_REVERSED_Z
-        .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .EnableDepthTest(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
     #else
-        .SetDepthTestState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
+        .EnableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
-        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
+        .EnableDepthBoundsTest(0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::ZPASS].Get());
-
-    builder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::ZPASS])
+        .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
-    s_PSOs[(size_t)PassID::ZPASS] = builder.Build();
-
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::ZPASS] != VK_NULL_HANDLE);
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("ZPASS_PSO");
 }
     
 
 static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
     
-    builder
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("GBUFFER_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("GBUFFER_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::GBUFFER];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthTestState(VK_TRUE, VK_FALSE, VK_COMPARE_OP_EQUAL)
-        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::GBUFFER].Get());
+        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_EQUAL)
+        .EnableDepthBoundsTest(0.f, 1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::GBUFFER]);
 
     #ifdef ENG_BUILD_DEBUG
-        builder.AddDynamicState(std::array{ VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE });
+        s_graphicsPSOBuilder.AddDynamicState(std::array{ VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE });
     #else
-        builder.SetDepthTestState(VK_TRUE, VK_FALSE, VK_COMPARE_OP_EQUAL);
+        s_graphicsPSOBuilder.EnableDepthTest(VK_FALSE, VK_COMPARE_OP_EQUAL);
     #endif
 
-    VkPipelineColorBlendAttachmentState blendState = {};
-    blendState.blendEnable = VK_FALSE;
-    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
     for (const vkn::Texture& colorRT : s_gbufferRTs) {
-        builder.AddColorAttachmentFormat(colorRT.GetFormat());  
-        builder.AddColorBlendAttachment(blendState);   
+        s_graphicsPSOBuilder.AddColorAttachment(colorRT.GetFormat()); 
     }
-    builder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+    s_graphicsPSOBuilder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
-    s_PSOs[(size_t)PassID::GBUFFER] = builder.Build();
-
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::GBUFFER] != VK_NULL_HANDLE);
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("GBUFFER_PSO");
 }
 
 
 static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
+    
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("DEFERRED_LIGHTING_VERTEX_SHADER");
 
-    VkPipelineColorBlendAttachmentState blendState = {};
-    blendState.blendEnable = VK_FALSE;
-    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("DEFERRED_LIGHTING_FRAGMENT_SHADER");
 
-    s_PSOs[(size_t)PassID::DEFERRED_LIGHTING] = builder
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::DEFERRED_LIGHTING];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
-        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_colorRT16F.GetFormat())
-        .AddColorBlendAttachment(blendState)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::DEFERRED_LIGHTING].Get())
-        .Build();
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::DEFERRED_LIGHTING])
+        .AddColorAttachment(s_colorRT16F.GetFormat());
     
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::DEFERRED_LIGHTING] != VK_NULL_HANDLE);
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("DEFERRED_LIGHTING_PSO");
 }
 
 
 static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
-
-    VkPipelineColorBlendAttachmentState blendState = {};
-    blendState.blendEnable = VK_FALSE;
-    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     
-    s_PSOs[(size_t)PassID::POST_PROCESSING] = builder
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("POST_PROCESSING_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("POST_PROCESSING_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::POST_PROCESSING];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
-        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_colorRT8U.GetFormat())
-        .AddColorBlendAttachment(blendState)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::POST_PROCESSING].Get())
-        .Build();
-
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::POST_PROCESSING] != VK_NULL_HANDLE);
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::POST_PROCESSING])
+        .AddColorAttachment(s_colorRT8U.GetFormat());
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("POST_PROCESSING_PSO");
 }
 
 
 static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
-
-    VkPipelineColorBlendAttachmentState blendState = {};
-    blendState.blendEnable = VK_FALSE;
-    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     
-    s_PSOs[(size_t)PassID::BACKBUFFER] = builder
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("BACKBUFFER_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("BACKBUFFER_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::BACKBUFFER];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetStencilTestState(VK_FALSE, {}, {})
-        .SetDepthTestState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_EQUAL)
-        .SetDepthBoundsTestState(VK_FALSE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_vkSwapchain.GetTextureFormat())
-        .AddColorBlendAttachment(blendState)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BACKBUFFER].Get())
-        .Build();
-
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::BACKBUFFER] != VK_NULL_HANDLE);
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BACKBUFFER])
+        .AddColorAttachment(s_vkSwapchain.GetTextureFormat());
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("BACKBUFFER_PSO");
 }
 
 
 static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    std::array shaderModules = {
-        CreateVkShaderModule(vsPath, &shaderCodeBuffer),
-        CreateVkShaderModule(psPath, &shaderCodeBuffer),
-    };
-
-    const std::array shaderModuleStages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-
-    static_assert(shaderModules.size() == shaderModuleStages.size());
-    const size_t shadersCount = shaderModules.size();
-
-    vkn::GraphicsPipelineBuilder builder;
-
-    for (size_t i = 0; i < shadersCount; ++i) {
-        builder.AddShader(shaderModules[i], shaderModuleStages[i], "main");
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
-
-    VkPipelineColorBlendAttachmentState blendState = {};
-    blendState.blendEnable = VK_FALSE;
-    blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     
-    s_PSOs[(size_t)PassID::SKYBOX] = builder
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("SKYBOX_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("SKYBOX_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::SKYBOX];
+
+    s_graphicsPSOBuilder.Reset()
+        .AddShader(vsShader)
+        .AddShader(psShader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_NONE)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetStencilTestState(VK_FALSE, {}, {})
-    #ifdef ENG_REVERSED_Z
-        .SetDepthTestState(VK_TRUE, VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
-    #else
-        .SetDepthTestState(VK_TRUE, VK_FALSE VK_COMPARE_OP_LESS_OR_EQUAL)
-    #endif
-        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .SetRasterizerLineWidth(1.f)
-        .AddColorAttachmentFormat(s_colorRT16F.GetFormat())
-        .AddColorBlendAttachment(blendState)
-        .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat())
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::SKYBOX].Get())
-        .Build();
-
-    for (VkShaderModule& shader : shaderModules) {
-        vkDestroyShaderModule(s_vkDevice.Get(), shader, nullptr);
-        shader = VK_NULL_HANDLE;
-    }
-
-    CORE_ASSERT(s_PSOs[(size_t)PassID::SKYBOX] != VK_NULL_HANDLE);
+    #ifdef ENG_REVERSED_Z
+        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+    #else
+        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL)
+    #endif
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::SKYBOX])
+        .AddColorAttachment(s_colorRT16F.GetFormat())
+        .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("SKYBOX_PSO");
 }
 
 
 static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
-
-    vkn::ComputePipelineBuilder builder;
-
-    s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN] = builder
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shaderModule, "main")
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::IRRADIANCE_MAP_GEN].Get())
-        .Build();
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
     
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer).SetDebugName("IRRADIANCE_MAP_GEN_COMPUTE_SHADER");
 
-    CORE_ASSERT(s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN] != VK_NULL_HANDLE);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::IRRADIANCE_MAP_GEN])
+        .SetShader(shader)
+        .Build();
+
+    pso.SetDebugName("IRRADIANCE_MAP_GEN_PSO");
 }
 
 
 static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
-
-    vkn::ComputePipelineBuilder builder;
-
-    s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN] = builder
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shaderModule, "main")
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0].Get())
-        .Build();
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
     
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer).SetDebugName("PREFILT_ENV_MAP_GEN_COMPUTE_SHADER");
 
-    CORE_ASSERT(s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN] != VK_NULL_HANDLE);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0])
+        .SetShader(shader)
+        .Build();
+
+    pso.SetDebugName("PREFILT_ENV_MAP_GEN_PSO");
 }
 
 
 static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
 {
-    std::vector<uint8_t> shaderCodeBuffer;
-    VkShaderModule shaderModule = CreateVkShaderModule(csPath, &shaderCodeBuffer);
-
-    vkn::ComputePipelineBuilder builder;
-
-    s_PSOs[(size_t)PassID::BRDF_LUT_GEN] = builder
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shaderModule, "main")
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BRDF_LUT_GEN].Get())
-        .Build();
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
     
-    vkDestroyShaderModule(s_vkDevice.Get(), shaderModule, nullptr);
-    shaderModule = VK_NULL_HANDLE;
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer).SetDebugName("BRDF_LUT_GEN_COMPUTE_SHADER");
 
-    CORE_ASSERT(s_PSOs[(size_t)PassID::BRDF_LUT_GEN] != VK_NULL_HANDLE);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::BRDF_LUT_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BRDF_LUT_GEN])
+        .SetShader(shader)
+        .Build();
+
+    pso.SetDebugName("BRDF_LUT_GEN_PSO");
 }
 
 
@@ -4249,7 +4168,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     cmdBuffer.CmdPushBarrierList();
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN]);
+    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN]);
     
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
         (size_t)SetLayoutID::COMMON, 0);
@@ -4277,7 +4196,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", 165, 42, 42, 255);
     Timer timer;
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN]);
+    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN]);
 
     PREFILTERED_ENV_MAP_PUSH_CONSTS pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
@@ -4317,7 +4236,7 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", 165, 42, 42, 255);
     Timer timer;
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_PSOs[(size_t)PassID::BRDF_LUT_GEN]);
+    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BRDF_LUT_GEN]);
 
     cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, 
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -4356,7 +4275,7 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdPushBarrierList();
 
-    vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_COMPUTE, s_PSOs[(size_t)PassID::MESH_CULLING]);
+    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::MESH_CULLING]);
     
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_PIPELINE_BIND_POINT_COMPUTE, 
         (size_t)SetLayoutID::COMMON, 0);
@@ -4431,7 +4350,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::ZPASS]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::ZPASS]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::ZPASS], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -4598,7 +4517,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::GBUFFER]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::GBUFFER]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -4746,7 +4665,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::DEFERRED_LIGHTING]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DEFERRED_LIGHTING]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -4806,7 +4725,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::SKYBOX]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::SKYBOX]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::SKYBOX], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -4864,7 +4783,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::POST_PROCESSING]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::POST_PROCESSING]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::POST_PROCESSING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -4960,7 +4879,7 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        vkCmdBindPipeline(cmdBuffer.Get(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_PSOs[(size_t)PassID::BACKBUFFER]);
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BACKBUFFER]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BACKBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
             (size_t)SetLayoutID::COMMON, 0);
@@ -5342,11 +5261,6 @@ int main(int argc, char* argv[])
     }
 
     s_vkDevice.WaitIdle();
-
-    for (VkPipeline& pso : s_PSOs) {
-        vkDestroyPipeline(s_vkDevice.Get(), pso, nullptr);
-        pso = VK_NULL_HANDLE;
-    }
     
     DbgUI::Terminate();
 
