@@ -3321,7 +3321,7 @@ static void WriteDescriptorSets()
 
 static void LoadSceneMeshData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Mesh_Data", 255, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Mesh_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3476,7 +3476,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
 static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Textures_Data", 255, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Textures_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3522,7 +3522,7 @@ static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirP
 
 static void LoadSceneMaterialData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Material_Data", 255, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Material_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3603,7 +3603,7 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 
 static void LoadSceneInstData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Inst_Data", 255, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Inst_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3653,7 +3653,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
 static void UploadGPUMeshData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Mesh_Data", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Mesh_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3757,7 +3757,7 @@ static void UploadGPUMeshData()
 
 static void UploadGPUTextureData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Texture_Data", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Texture_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3856,7 +3856,7 @@ static void UploadGPUTextureData()
 
 static void UploadGPUMaterialData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Material_Data", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Material_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3891,7 +3891,7 @@ static void UploadGPUMaterialData()
 
 static void UploadGPUInstData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Inst_Data", 255, 255, 0, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Inst_Data", prfl::Color::DarkMagenta);
 
     Timer timer;
 
@@ -3943,7 +3943,7 @@ static void LoadScene(const fs::path& filepath)
 		return;
 	}
     
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", 255, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", prfl::Color::DarkMagenta);
     
     Timer timer;
 
@@ -3998,7 +3998,7 @@ static void CreateCommonConstBuffer()
 
 void UpdateGPUCommonConstBuffer()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", 255, 255, 50, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", prfl::Color::Cyan4);
 
     COMMON_CB_DATA* pCommonConstBufferData = (COMMON_CB_DATA*)s_commonConstBuffer.Map();
 
@@ -4056,7 +4056,7 @@ void UpdateScene()
 
 static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("CPU_Is_Inst_Visible", 50, 200, 50, 255);
+    ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", prfl::Color::Purple1);
 
     const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
 
@@ -4083,7 +4083,7 @@ static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
 
 void PresentImage(uint32_t imageIndex)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", 50, 50, 255, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", prfl::Color::Maroon3);
 
     const VkResult presentResult = s_vkDevice.GetQueue().Present(s_vkSwapchain, imageIndex, &s_renderFinishedSemaphores[imageIndex]);
 
@@ -4097,7 +4097,7 @@ void PresentImage(uint32_t imageIndex)
 
 static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", 165, 42, 42, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", prfl::Color::OrangeRed);
     Timer timer;
 
     cmdBuffer.BeginBarrierList().AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_GENERAL, 
@@ -4129,7 +4129,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", 165, 42, 42, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", prfl::Color::OrangeRed);
     Timer timer;
 
     cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN]);
@@ -4169,7 +4169,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", 165, 42, 42, 255);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", prfl::Color::OrangeRed);
     Timer timer;
 
     cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BRDF_LUT_GEN]);
@@ -4195,8 +4195,8 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
 void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Mesh_Culling_Pass", 50, 50, 200, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", 50, 50, 200, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Mesh_Culling_Pass", prfl::Color::Blue3);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", prfl::Color::Blue3);
 
     cmdBuffer.GetBarrierList().Begin()
         .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
@@ -4309,7 +4309,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
                     0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             }
         } else {
-            ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", 50, 255, 50, 255);
+            ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", prfl::Color::Purple1);
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
                 const COMMON_INST_INFO& instInfo = s_cpuInstData[i];
@@ -4343,17 +4343,17 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
 void DepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass", 128, 128, 128, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", 128, 128, 128, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass", prfl::Color::Grey51);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", prfl::Color::Grey51);
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Opaque", 128, 128, 128, 255);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Opaque", 128, 128, 128, 255);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Opaque", prfl::Color::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Opaque", prfl::Color::Grey51);
         RenderPass_Depth(cmdBuffer, false);
     }
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_AKill", 128, 128, 128, 255);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_AKill", 128, 128, 128, 255);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_AKill", prfl::Color::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_AKill", prfl::Color::Grey51);
         RenderPass_Depth(cmdBuffer, true);
     }
 }
@@ -4488,7 +4488,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             }
         } else {
-            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", 50, 255, 50, 255);
+            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", prfl::Color::Purple1);
 
         #ifdef ENG_BUILD_DEBUG
             if (isAKillPass) {
@@ -4534,17 +4534,17 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", 50, 200, 50, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", 50, 200, 50, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", prfl::Color::ForestGreen);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", prfl::Color::ForestGreen);
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", 50, 200, 50, 255);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", 50, 200, 50, 255);
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", prfl::Color::ForestGreen);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", prfl::Color::ForestGreen);
         RenderPass_GBuffer(cmdBuffer, false);
     }
     {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_AKill", 50, 200, 50, 255);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", 50, 200, 50, 255);
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_AKill", prfl::Color::ForestGreen);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", prfl::Color::ForestGreen);
         RenderPass_GBuffer(cmdBuffer, true);
     }
 }
@@ -4552,8 +4552,8 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Deferred_Lighting_Pass", 250, 250, 40, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", 250, 250, 40, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Deferred_Lighting_Pass", prfl::Color::Yellow);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", prfl::Color::Yellow);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -4615,8 +4615,8 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
 void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Skybox_Pass", 255, 165, 10, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", 255, 165, 10, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Skybox_Pass", prfl::Color::Aquamarine);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", prfl::Color::Aquamarine);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -4675,8 +4675,8 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
 void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Post_Processing_Pass", 100, 250, 250, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", 100, 250, 250, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Post_Processing_Pass", prfl::Color::RebeccaPurple);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", prfl::Color::RebeccaPurple);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -4733,8 +4733,8 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
 static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", 200, 50, 50, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", 200, 50, 50, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", prfl::Color::Red);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", prfl::Color::Red);
 
     DbgUI::FillData();
     DbgUI::EndFrame();
@@ -4770,8 +4770,8 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Resolve_To_Backbuffer_Pass", 100, 100, 100, 255);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Resolve_To_Backbuffer_Pass", 100, 100, 100, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Resolve_To_Backbuffer_Pass", prfl::Color::DimGrey);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Resolve_To_Backbuffer_Pass", prfl::Color::DimGrey);
 
     vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
     vkn::SCTextureView& scTextureView = s_vkSwapchain.GetTextureView(s_nextImageIdx);
@@ -4838,7 +4838,7 @@ static void RenderScene()
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", 255, 255, 50, 255);
+    ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", prfl::Color::DimGrey);
 
     UpdateGPUCommonConstBuffer();
 
@@ -4859,7 +4859,7 @@ static void RenderScene()
 
     cmdBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", 255, 165, 0, 255);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", prfl::Color::DimGrey);
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 

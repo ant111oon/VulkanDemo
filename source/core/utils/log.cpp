@@ -69,16 +69,16 @@ void LogInternal(FILE* pStream, LogLevel level, const char* file, uint32_t line,
         
         switch (level) {
             case LogLevel::TRACE:
-                ENG_PROFILE_LOG_C(profilerMsgBuffer, 255, 255, 255, 255);
+                ENG_PROFILE_LOG_C(profilerMsgBuffer, prfl::Color::White);
                 break;
             case LogLevel::INFO:
-                ENG_PROFILE_LOG_C(profilerMsgBuffer, 0, 255, 0, 255);
+                ENG_PROFILE_LOG_C(profilerMsgBuffer, prfl::Color::Green);
                 break;
             case LogLevel::WARN:
-                ENG_PROFILE_LOG_C(profilerMsgBuffer, 255, 255, 0, 255);
+                ENG_PROFILE_LOG_C(profilerMsgBuffer, prfl::Color::Yellow);
                 break;
             case LogLevel::ERROR:
-                ENG_PROFILE_LOG_C(profilerMsgBuffer, 255, 0, 0, 255);
+                ENG_PROFILE_LOG_C(profilerMsgBuffer, prfl::Color::Red);
                 break;
         }
     #endif

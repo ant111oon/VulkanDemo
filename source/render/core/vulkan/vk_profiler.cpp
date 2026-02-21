@@ -7,6 +7,10 @@
 
 namespace vkn
 {
+    static PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabel = nullptr;
+    static PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabel = nullptr;
+
+
     Profiler::~Profiler()
     {
         Destroy();
@@ -30,8 +34,15 @@ namespace vkn
         cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         cmdPoolCreateInfo.size = 1;
 
-        m_vkCmdBeginDebugUtilsLabelFunc = (PFN_vkCmdBeginDebugUtilsLabelEXT)m_pDevice->GetPhysDevice()->GetInstance()->GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
-        m_vkCmdEndDebugUtilsLabelFunc = (PFN_vkCmdEndDebugUtilsLabelEXT)m_pDevice->GetPhysDevice()->GetInstance()->GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
+        Instance* pInst = m_pDevice->GetPhysDevice()->GetInstance();
+
+        if (vkCmdBeginDebugUtilsLabel == nullptr) {
+            vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)pInst->GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
+        }
+
+        if (vkCmdEndDebugUtilsLabel == nullptr) {
+            vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)pInst->GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
+        }
 
         m_cmdPool.Create(cmdPoolCreateInfo);
         CORE_ASSERT(m_cmdPool.IsCreated());
@@ -67,38 +78,34 @@ namespace vkn
 
         m_pDevice = nullptr;
 
-        m_vkCmdBeginDebugUtilsLabelFunc = nullptr;
-        m_vkCmdEndDebugUtilsLabelFunc = nullptr;
-
         Object::Destroy();
 
         return *this;
     }
 
 
-    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName) const
+    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName) const
     {
-        BeginCmdGroup(cmd, pGroupName, 168, 168, 168, 255);
+        BeginCmdGroup(cmd, groupName, prfl::Color::Grey51);
         return *this;
     }
 
 
-    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, const char* pGroupName, uint8_t r, uint8_t g, uint8_t b, uint8_t a) const
+    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName, uint32_t color) const
     {
         CORE_ASSERT(IsCreated());
-        CORE_ASSERT(pGroupName != nullptr);
 
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU command group within not started command buffer: %s", cmd.GetDebugName());
 
         VkDebugUtilsLabelEXT dbgLabel = {};
         dbgLabel.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
-        dbgLabel.pLabelName = pGroupName;
-        dbgLabel.color[0] = static_cast<float>(r) / 255.f;
-        dbgLabel.color[1] = static_cast<float>(g) / 255.f;
-        dbgLabel.color[2] = static_cast<float>(b) / 255.f;
-        dbgLabel.color[3] = static_cast<float>(a) / 255.f;
+        dbgLabel.pLabelName = groupName.data();
+        dbgLabel.color[0] = static_cast<float>((color >> 16) & 0xFF) / 255.f;
+        dbgLabel.color[1] = static_cast<float>((color >> 8) & 0xFF)  / 255.f;
+        dbgLabel.color[2] = static_cast<float>(color & 0xFF)         / 255.f;
+        dbgLabel.color[3] = 1.f;
 
-        m_vkCmdBeginDebugUtilsLabelFunc(cmd.Get(), &dbgLabel);
+        vkCmdBeginDebugUtilsLabel(cmd.Get(), &dbgLabel);
 
         return *this;
     }
@@ -109,7 +116,7 @@ namespace vkn
         CORE_ASSERT(IsCreated());
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to end GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
     
-        m_vkCmdEndDebugUtilsLabelFunc(cmd.Get());
+        vkCmdEndDebugUtilsLabel(cmd.Get());
 
         return *this;
     }
@@ -126,20 +133,16 @@ namespace vkn
 
     TracyVkCtx Profiler::GetTracyContext() const
     {
-    #ifdef ENG_PROFILING_ENABLED
         CORE_ASSERT(IsCreated());
         return m_context;
-    #else
-        return nullptr;
-    #endif
     }
     
 
-    GpuMarker::GpuMarker(CmdBuffer& cmd, std::string_view name, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+    GpuMarker::GpuMarker(CmdBuffer& cmd, std::string_view name, uint32_t color)
         : m_cmdBuf(cmd)
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName());
-        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, name.data(), r, g, b, a);
+        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, name, color);
     }
 
 
