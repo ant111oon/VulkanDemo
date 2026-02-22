@@ -20,16 +20,16 @@ bool IsInstVisible(in COMMON_INST_INFO instInfo)
 }
 
 
-COMMON_INDIRECT_DRAW_CMD CreateCommonIndirectCmd(in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount)
+void FillCommonIndirectCmd(RWStructuredBuffer<uint> dst, in uint dstIndex, in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount)
 {
-    COMMON_INDIRECT_DRAW_CMD cmd = (COMMON_INDIRECT_DRAW_CMD)0;
-    cmd.FIRST_INDEX = firstIndex;
-    cmd.INDEX_COUNT = indexCount;
-    cmd.VERTEX_OFFSET = firstVertex;
-    cmd.FIRST_INSTANCE = firstInstance;
-    cmd.INSTANCE_COUNT = instanceCount;
+    // First uint in the buffer is counter
+    const uint index = 1 + dstIndex * COMMON_INDIRECT_DRAW_CMD_SIZE_UINT;
 
-    return cmd;
+    dst[index + 0] = indexCount;
+    dst[index + 1] = instanceCount;
+    dst[index + 2] = firstIndex;
+    dst[index + 3] = firstVertex;
+    dst[index + 4] = firstInstance;
 }
 
 
@@ -38,19 +38,19 @@ void PushCmd(in COMMON_MATERIAL material, in uint firstIndex, in uint indexCount
     uint idx = 0;
 
     if (IS_COMMON_MATERIAL_ALPHA_BLEND(material)) {
-        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
+        FillCommonIndirectCmd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV, idx, firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
     } else if (IS_COMMON_MATERIAL_ALPHA_KILL(material)) {
-        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
+        FillCommonIndirectCmd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV, idx, firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
     } else {
-        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 1, idx);
+        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[idx] = CreateCommonIndirectCmd(firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
+        FillCommonIndirectCmd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV, idx, firstIndex, indexCount, firstVertex, firstInstance, instanceCount);
         MESH_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
     }
 }
@@ -60,14 +60,6 @@ void PushCmd(in COMMON_MATERIAL material, in uint firstIndex, in uint indexCount
 [shader("compute")]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (DTid.x == 0) {
-        InterlockedExchange(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
-        InterlockedExchange(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
-        InterlockedExchange(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV[0], 0);
-    }
-
-    AllMemoryBarrier();
-
     const uint instID = DTid.x;
 
     if (instID >= PUSH_CONSTS.INST_COUNT) {

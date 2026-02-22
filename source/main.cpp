@@ -409,6 +409,10 @@ struct COMMON_INDIRECT_DRAW_CMD
 };
 
 
+static constexpr glm::uint COMMON_INDIRECT_DRAW_CMD_SIZE_UINT = 5;
+static_assert(sizeof(COMMON_INDIRECT_DRAW_CMD) == COMMON_INDIRECT_DRAW_CMD_SIZE_UINT * sizeof(glm::uint));
+
+
 struct FRUSTUM_PLANE
 {
     glm::float3 normal;
@@ -726,14 +730,11 @@ static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 
 static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
-static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT = 5;
-static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 6;
-static constexpr size_t MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 7;
-static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 8;
+static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
@@ -868,15 +869,12 @@ static vkn::Buffer s_commonTransformDataBuffer;
 static vkn::Buffer s_commonInstDataBuffer;
 
 static vkn::Buffer s_commonOpaqueMeshDrawCmdBuffer;
-static vkn::Buffer s_commonOpaqueMeshDrawCmdCountBuffer;
 static vkn::Buffer s_commonCulledOpaqueInstInfoIDsBuffer;
 
 static vkn::Buffer s_commonAKillMeshDrawCmdBuffer;
-static vkn::Buffer s_commonAKillMeshDrawCmdCountBuffer;
 static vkn::Buffer s_commonCulledAKillInstInfoIDsBuffer;
 
 static vkn::Buffer s_commonTranspMeshDrawCmdBuffer;
-static vkn::Buffer s_commonTranspMeshDrawCmdCountBuffer;
 static vkn::Buffer s_commonCulledTranspInstInfoIDsBuffer;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
@@ -1978,9 +1976,6 @@ static void CreateMeshCullingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -2849,15 +2844,12 @@ static void CreateCullingResources()
 
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
+        VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
     s_commonOpaqueMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_BUFFER");
-
-    createInfo.size = sizeof(glm::uint);
-
-    s_commonOpaqueMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_COUNT_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -2865,14 +2857,11 @@ static void CreateCullingResources()
     s_commonCulledOpaqueInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_OPAQUE_INST_INFO_IDS_BUFFER");
 
 
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
+        VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
     s_commonAKillMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_BUFFER");
-
-    createInfo.size = sizeof(glm::uint);
-
-    s_commonAKillMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_COUNT_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -2880,14 +2869,11 @@ static void CreateCullingResources()
     s_commonCulledAKillInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_AKILL_INST_INFO_IDS_BUFFER");
 
 
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
-    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
+        VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
     s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_BUFFER");
-
-    createInfo.size = sizeof(glm::uint);
-
-    s_commonTranspMeshDrawCmdCountBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_COUNT_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -3154,15 +3140,6 @@ static void WriteMeshCullingDescriptorSet()
 
     s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
         MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
-        MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdCountBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
-        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdCountBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
-        MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdCountBuffer);
 
     s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
         MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
@@ -4198,17 +4175,26 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("Mesh_Culling_Pass", prfl::Color::Blue3);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", prfl::Color::Blue3);
 
-    cmdBuffer.GetBarrierList().Begin()
-        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonAKillMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonTranspMeshDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT);
+    cmdBuffer.BeginBarrierList()
+        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    cmdBuffer.CmdPushBarrierList();
 
+    static constexpr VkDeviceSize COUNTER_OFFSET = 0; 
+    static constexpr VkDeviceSize COUNTER_SIZE = sizeof(glm::uint);
+
+    cmdBuffer.CmdFillBuffer(s_commonOpaqueMeshDrawCmdBuffer, 0, COUNTER_OFFSET, COUNTER_SIZE);
+    cmdBuffer.CmdFillBuffer(s_commonAKillMeshDrawCmdBuffer,  0, COUNTER_OFFSET, COUNTER_SIZE);
+    cmdBuffer.CmdFillBuffer(s_commonTranspMeshDrawCmdBuffer, 0, COUNTER_OFFSET, COUNTER_SIZE);
+
+    cmdBuffer.BeginBarrierList()
+        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     cmdBuffer.CmdPushBarrierList();
 
     cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::MESH_CULLING]);
@@ -4240,16 +4226,14 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     if (s_useMeshIndirectDraw) {
         vkn::Buffer& drawCmdBuffer = isAKillPass ? s_commonAKillMeshDrawCmdBuffer : s_commonOpaqueMeshDrawCmdBuffer;
-        vkn::Buffer& counterBuffer = isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer : s_commonOpaqueMeshDrawCmdCountBuffer;
 
-        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
-        barrierList.AddBufferBarrier(counterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
     }
 
     barrierList.AddBufferBarrier(
         isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer : s_commonCulledOpaqueInstInfoIDsBuffer, 
         s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT
+        s_useMeshIndirectDraw ? VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT : VK_ACCESS_2_SHADER_READ_BIT
     );
     
     cmdBuffer.CmdPushBarrierList();
@@ -4302,11 +4286,11 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::ZPASS], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
 
             if (isAKillPass) {
-                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, 0, s_commonAKillMeshDrawCmdCountBuffer, 
-                    0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             } else {
-                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 
-                    0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, sizeof(glm::uint), s_commonOpaqueMeshDrawCmdBuffer, 0, 
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", prfl::Color::Purple1);
@@ -4378,16 +4362,14 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     if (s_useMeshIndirectDraw) {
         vkn::Buffer& drawCmdBuffer = isAKillPass ? s_commonAKillMeshDrawCmdBuffer : s_commonOpaqueMeshDrawCmdBuffer;
-        vkn::Buffer& counterBuffer = isAKillPass ? s_commonAKillMeshDrawCmdCountBuffer : s_commonOpaqueMeshDrawCmdCountBuffer;
 
-        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
-        barrierList.AddBufferBarrier(counterBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_MEMORY_READ_BIT);
+        barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
     }
 
     barrierList.AddBufferBarrier(
         isAKillPass ? s_commonCulledAKillInstInfoIDsBuffer : s_commonCulledOpaqueInstInfoIDsBuffer, 
         s_useMeshIndirectDraw ? VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT : VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
-        VK_ACCESS_2_MEMORY_READ_BIT
+        s_useMeshIndirectDraw ? VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT : VK_ACCESS_2_SHADER_READ_BIT
     );
 
     cmdBuffer.CmdPushBarrierList();    
@@ -4483,9 +4465,11 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
             
             if (isAKillPass) {
-                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, 0, s_commonAKillMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             } else {
-                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, 0, s_commonOpaqueMeshDrawCmdCountBuffer, 0, MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, sizeof(glm::uint), s_commonOpaqueMeshDrawCmdBuffer, 0, 
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
             }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", prfl::Color::Purple1);

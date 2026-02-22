@@ -11,5 +11,7 @@ struct COMMON_INDIRECT_DRAW_CMD
     uint FIRST_INSTANCE;
 };
 
+static const uint COMMON_INDIRECT_DRAW_CMD_SIZE_UINT = 5;
+
 
 #endif

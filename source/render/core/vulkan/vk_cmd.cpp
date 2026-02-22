@@ -403,6 +403,19 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdFillBuffer(Buffer& buffer, uint32_t value, VkDeviceSize offset, VkDeviceSize size)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        size = size == VK_WHOLE_SIZE ? buffer.GetMemorySize() : size;
+        VK_ASSERT(offset + size <= buffer.GetMemorySize());
+
+        vkCmdFillBuffer(m_cmdBuffer, buffer.Get(), offset, size, value);
+
+        return *this;
+    }
+
+
     CmdBuffer& CmdBuffer::CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, std::span<const VkBufferCopy> regions)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
