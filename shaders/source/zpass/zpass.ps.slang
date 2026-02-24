@@ -20,7 +20,7 @@ ZPASS_PS_OUTPUT main(ZPASS_VS_OUTPUT input)
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
     if (IS_COMMON_MATERIAL_ALPHA_KILL(material)) {
-        const float alpha = SampleGBufferSurfaceAlbedo(material, (uint)COMMON_SAMPLER_IDX::LINEAR_REPEAT, input.data.uv).a;
+        const float alpha = SampleGBufferSurfaceAlbedo(material, (uint)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT, input.data.uv).a;
 
         if (alpha < material.ALPHA_REF) {
             discard;

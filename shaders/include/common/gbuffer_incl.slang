@@ -23,7 +23,7 @@ float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
     float4 albedo = ONEF4;
 
     if (mtl.ALBEDO_TEX_IDX < 0) {
-        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::ANISO_2X_NEAREST_REPEAT), uv);
+        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, uint(COMMON_DBG_TEX_IDX::CHECKERBOARD), GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT), uv);
     } else {
         albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv);
         albedo.rgb = SRGBToLinear(albedo.rgb);
@@ -91,7 +91,7 @@ GBUFFER_SURFACE SampleGBufferSurface(in COMMON_MATERIAL material, in float3x3 TB
 {
     GBUFFER_SURFACE surf = (GBUFFER_SURFACE)0;
 
-    const uint smpIdx = (uint)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT;
+    const uint smpIdx = (uint)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT;
 
     surf.albedo = SampleGBufferSurfaceAlbedo(material, smpIdx, uv);
     surf.emissive = SampleGBufferSurfaceEmissive(material, smpIdx, uv);

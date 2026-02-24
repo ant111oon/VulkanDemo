@@ -1,6 +1,7 @@
 #ifndef MATH_HALF_H
 #define MATH_HALF_H
 
+
 float HalfBitsToFloat(uint packed)
 {
     uint sign = (packed >> 15) & 0x1;
