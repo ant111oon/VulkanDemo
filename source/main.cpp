@@ -778,36 +778,19 @@ static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
 
+static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
+static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
+
 static constexpr glm::uvec2 COMMON_IRRADIANCE_MAP_SIZE = glm::uvec2(32);
-static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE = glm::uvec2(256);
+static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE = glm::uvec2(glm::uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
-static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = (glm::uint)math::CalcMipsCount(COMMON_PREFILTERED_ENV_MAP_SIZE.x);
-static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
 static constexpr float CAMERA_SPEED = 0.0025f;
-
-
-enum class SetLayoutID
-{
-    COMMON,
-    MESH_CULLING,
-    ZPASS,
-    GBUFFER,
-    DEFERRED_LIGHTING,
-    POST_PROCESSING,
-    BACKBUFFER,
-    SKYBOX,
-    IRRADIANCE_MAP_GEN,
-    BRDF_LUT_GEN,
-    PREFILT_ENV_MAP_GEN_0,
-    PREFILT_ENV_MAP_GEN_LAST = PREFILT_ENV_MAP_GEN_0 + COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1,
-    COUNT,
-};
 
 
 enum class PassID
@@ -851,7 +834,7 @@ static vkn::CmdBuffer* s_pRenderCmdBuffer;
 
 static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
 
-static std::array<vkn::DescriptorSetLayout, (size_t)SetLayoutID::COUNT> s_descSetLayouts;
+static std::array<vkn::DescriptorSetLayout, (size_t)PassID::COUNT> s_descSetLayouts;
 
 static std::array<vkn::PSOLayout, (size_t)PassID::COUNT> s_PSOLayouts;
 static std::array<vkn::PSO,       (size_t)PassID::COUNT> s_PSOs;
@@ -904,7 +887,7 @@ static vkn::TextureView s_irradianceMapTextureViewRW;
 
 static vkn::Texture     s_prefilteredEnvMapTexture;
 static vkn::TextureView s_prefilteredEnvMapTextureView;
-static std::array<vkn::TextureView, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvMapTextureViewRWs;
+static std::array<vkn::TextureView, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT * CUBEMAP_FACE_COUNT> s_prefilteredEnvMapTextureViewRWs;
 
 static vkn::Texture     s_brdfLUTTexture;
 static vkn::TextureView s_brdfLUTTextureView;
@@ -1848,9 +1831,9 @@ static void CreateIBLResources()
         viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         viewCreateInfo.subresourceRange.baseMipLevel = 0;
-        viewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        viewCreateInfo.subresourceRange.levelCount = COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT;
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
-        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        viewCreateInfo.subresourceRange.layerCount = CUBEMAP_FACE_COUNT;
         
         s_prefilteredEnvMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW");
     }
@@ -1858,18 +1841,22 @@ static void CreateIBLResources()
     {
         vkn::TextureViewCreateInfo viewCreateInfo = {};
         viewCreateInfo.pOwner = &s_prefilteredEnvMapTexture;
-        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        viewCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D;
         viewCreateInfo.format = s_skyboxTexture.GetFormat();
         viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        viewCreateInfo.subresourceRange.baseArrayLayer = 0;
-        viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-        for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-            viewCreateInfo.subresourceRange.baseMipLevel = mip;
-            viewCreateInfo.subresourceRange.levelCount = 1;
+        for (size_t layer = 0; layer < CUBEMAP_FACE_COUNT; ++layer) {
+            viewCreateInfo.subresourceRange.baseArrayLayer = layer;
+            viewCreateInfo.subresourceRange.layerCount = 1;
 
-            s_prefilteredEnvMapTextureViewRWs[mip].Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_%zu", mip);
+            for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+                viewCreateInfo.subresourceRange.baseMipLevel = mip;
+                viewCreateInfo.subresourceRange.levelCount = 1;
+    
+                s_prefilteredEnvMapTextureViewRWs[layer * COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT + mip].Create(viewCreateInfo)
+                    .SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_LAYER_%zu_MIP_%zu", layer, mip);
+            }
         }
     }
 
@@ -1941,7 +1928,7 @@ static void CreateCommonDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::COMMON].Create(createInfo).SetDebugName("COMMON_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::COMMON].Create(createInfo).SetDebugName("COMMON_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -1960,7 +1947,7 @@ static void CreateZPassDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::ZPASS].Create(createInfo).SetDebugName("ZPASS_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::ZPASS].Create(createInfo).SetDebugName("ZPASS_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -1983,7 +1970,7 @@ static void CreateMeshCullingDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::MESH_CULLING].Create(createInfo).SetDebugName("MESH_CULLING_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::MESH_CULLING].Create(createInfo).SetDebugName("MESH_CULLING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2002,7 +1989,7 @@ static void CreateGBufferDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::GBUFFER].Create(createInfo).SetDebugName("GBUFFER_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::GBUFFER].Create(createInfo).SetDebugName("GBUFFER_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2028,7 +2015,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::DEFERRED_LIGHTING].Create(createInfo).SetDebugName("DEFERRED_LIGHTING_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::DEFERRED_LIGHTING].Create(createInfo).SetDebugName("DEFERRED_LIGHTING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2046,7 +2033,7 @@ static void CreatePostProcessingDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::POST_PROCESSING].Create(createInfo).SetDebugName("POST_PROCESSING_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::POST_PROCESSING].Create(createInfo).SetDebugName("POST_PROCESSING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2064,7 +2051,7 @@ static void CreateBackbufferPassDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::BACKBUFFER].Create(createInfo).SetDebugName("BACK_BUFFER_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::BACKBUFFER].Create(createInfo).SetDebugName("BACK_BUFFER_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2082,7 +2069,7 @@ static void CreateSkyboxDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::SKYBOX].Create(createInfo).SetDebugName("SKYBOX_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::SKYBOX].Create(createInfo).SetDebugName("SKYBOX_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2101,7 +2088,7 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::IRRADIANCE_MAP_GEN].Create(createInfo).SetDebugName("IRRADIANCE_MAP_GEN_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN].Create(createInfo).SetDebugName("IRRADIANCE_MAP_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2114,16 +2101,15 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 
+            1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT * CUBEMAP_FACE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
 
-    for (uint32_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-        s_descSetLayouts[(size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0 + mip].Create(createInfo)
-            .SetDebugName("PREFILT_ENV_MAP_GEN_DESCRIPTOR_SET_LAYOUT_%u", mip);
-    }
+    s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN].Create(createInfo).SetDebugName("PREFILT_ENV_MAP_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2141,13 +2127,13 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)SetLayoutID::BRDF_LUT_GEN].Create(createInfo).SetDebugName("BRDF_INTEGRATION_LUT_GEN_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN].Create(createInfo).SetDebugName("BRDF_INTEGRATION_LUT_GEN_DESCRIPTOR_SET_LAYOUT");
 }
 
 
 static void CreateDescriptorBuffer()
 {
-    std::array<vkn::DescriptorSetLayout*, (size_t)SetLayoutID::COUNT> layouts = {};
+    std::array<vkn::DescriptorSetLayout*, (size_t)PassID::COUNT> layouts = {};
     
     for (size_t i = 0; i < layouts.size(); ++i) {
         layouts[i] = &s_descSetLayouts[i];
@@ -2178,8 +2164,8 @@ static void CreateDescriptorSets()
 static void CreateMeshCullingPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::MESH_CULLING]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::MESH_CULLING]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS) };
@@ -2192,8 +2178,8 @@ static void CreateMeshCullingPipelineLayout()
 static void CreateZPassPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::ZPASS]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::ZPASS]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS) };
@@ -2206,8 +2192,8 @@ static void CreateZPassPipelineLayout()
 static void CreateGBufferPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::GBUFFER]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::GBUFFER]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS) };
@@ -2219,8 +2205,8 @@ static void CreateGBufferPipelineLayout()
 static void CreateDeferredLightingPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::DEFERRED_LIGHTING]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::DEFERRED_LIGHTING]
     };
 
     s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING].Create(&s_vkDevice, layoutPtrs).SetDebugName("DEFERRED_LIGHTING_PIPELINE_LAYOUT");
@@ -2230,8 +2216,8 @@ static void CreateDeferredLightingPipelineLayout()
 static void CreatePostProcessingPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::POST_PROCESSING]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::POST_PROCESSING]
     };
 
     s_PSOLayouts[(size_t)PassID::POST_PROCESSING].Create(&s_vkDevice, layoutPtrs).SetDebugName("POST_PROCESSING_PIPELINE_LAYOUT");
@@ -2241,8 +2227,8 @@ static void CreatePostProcessingPipelineLayout()
 static void CreateBackbufferPassPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::BACKBUFFER]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::BACKBUFFER]
     };
 
     s_PSOLayouts[(size_t)PassID::BACKBUFFER].Create(&s_vkDevice, layoutPtrs).SetDebugName("BACKBUFFER_PIPELINE_LAYOUT");
@@ -2252,8 +2238,8 @@ static void CreateBackbufferPassPipelineLayout()
 static void CreateSkyboxPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::SKYBOX]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::SKYBOX]
     };
 
     s_PSOLayouts[(size_t)PassID::SKYBOX].Create(&s_vkDevice, layoutPtrs).SetDebugName("SKYBOX_PIPELINE_LAYOUT");
@@ -2263,8 +2249,8 @@ static void CreateSkyboxPipelineLayout()
 static void CreateIrradianceMapGenPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::IRRADIANCE_MAP_GEN]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS) };
@@ -2277,8 +2263,8 @@ static void CreateIrradianceMapGenPipelineLayout()
 static void CreatePrefilteredEnvMapGenPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS) };
@@ -2291,8 +2277,8 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
 static void CreateBRDFIntegrationLUTGenPipelineLayout()
 {
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)SetLayoutID::COMMON],
-        &s_descSetLayouts[(size_t)SetLayoutID::BRDF_LUT_GEN]
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN]
     };
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BRDF_INTEGRATION_PUSH_CONSTS) };
@@ -2314,9 +2300,9 @@ static void CreateMeshCullingPipeline(const fs::path& csPath)
     vkn::PSO& pso = s_PSOs[(size_t)PassID::MESH_CULLING];
 
     pso = s_computePSOBuilder.Reset()
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::MESH_CULLING])
-        .SetShader(shader)
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetShader(shader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::MESH_CULLING])
         .Build();
 
     pso.SetDebugName("MESH_CULLING_PSO");
@@ -2342,9 +2328,10 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     vkn::PSO& pso = s_PSOs[(size_t)PassID::ZPASS];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::ZPASS])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
@@ -2356,8 +2343,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         .EnableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
         .EnableDepthBoundsTest(0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::ZPASS])
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })        
         .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
@@ -2385,9 +2371,10 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     vkn::PSO& pso = s_PSOs[(size_t)PassID::GBUFFER];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::GBUFFER])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
@@ -2395,8 +2382,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .SetRasterizerLineWidth(1.f)
         .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_EQUAL)
         .EnableDepthBoundsTest(0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::GBUFFER]);
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR });
 
     #ifdef ENG_BUILD_DEBUG
         s_graphicsPSOBuilder.AddDynamicState(std::array{ VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE });
@@ -2434,16 +2420,16 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
     vkn::PSO& pso = s_PSOs[(size_t)PassID::DEFERRED_LIGHTING];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::DEFERRED_LIGHTING])
         .AddColorAttachment(s_colorRT16F.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
@@ -2471,16 +2457,16 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
     vkn::PSO& pso = s_PSOs[(size_t)PassID::POST_PROCESSING];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::POST_PROCESSING])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::POST_PROCESSING])
         .AddColorAttachment(s_colorRT8U.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
@@ -2508,16 +2494,16 @@ static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path&
     vkn::PSO& pso = s_PSOs[(size_t)PassID::BACKBUFFER];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::BACKBUFFER])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BACKBUFFER])
         .AddColorAttachment(s_vkSwapchain.GetTextureFormat());
     
     pso = s_graphicsPSOBuilder.Build();
@@ -2545,9 +2531,10 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
     vkn::PSO& pso = s_PSOs[(size_t)PassID::SKYBOX];
 
     s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::SKYBOX])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_NONE)
@@ -2559,7 +2546,6 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
         .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::SKYBOX])
         .AddColorAttachment(s_colorRT16F.GetFormat())
         .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
     
@@ -2582,8 +2568,8 @@ static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::IRRADIANCE_MAP_GEN])
         .SetShader(shader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN])
         .Build();
 
     pso.SetDebugName("IRRADIANCE_MAP_GEN_PSO");
@@ -2603,8 +2589,8 @@ static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0])
         .SetShader(shader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN])
         .Build();
 
     pso.SetDebugName("PREFILT_ENV_MAP_GEN_PSO");
@@ -2624,8 +2610,8 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetLayout(s_PSOLayouts[(size_t)SetLayoutID::BRDF_LUT_GEN])
         .SetShader(shader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN])
         .Build();
 
     pso.SetDebugName("BRDF_LUT_GEN_PSO");
@@ -3122,49 +3108,49 @@ static void CreateCommonSamplers()
 
 static void WriteZPassDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::ZPASS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, 
         ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
     
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::ZPASS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, 
         ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
 }
 
 
 static void WriteMeshCullingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::MESH_CULLING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
         MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
 }
 
 
 static void WriteGBufferDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::GBUFFER, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, 
         GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::GBUFFER, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, 
         GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
 }
 
 
 static void WriteDeferredLightingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
         DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
 
     std::array<vkn::TextureView*, GBUFFER_RT_COUNT> gbufferViews = {};
@@ -3173,70 +3159,70 @@ static void WriteDeferredLightingDescriptorSet()
     }
 
     for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
             DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
         DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
         DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView);
     
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
         DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::DEFERRED_LIGHTING, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
         DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView);
 }
 
 
 static void WritePostProcessingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::POST_PROCESSING,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::POST_PROCESSING,
         POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
 }
 
 
 static void WriteBackbufferPassDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::BACKBUFFER,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BACKBUFFER,
         BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U);
 }
 
 
 static void WriteSkyboxDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::SKYBOX,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::SKYBOX,
         SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
 }
 
 
 static void WriteIrradianceMapGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::IRRADIANCE_MAP_GEN,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN,
         IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::IRRADIANCE_MAP_GEN,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN,
         IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW);
 }
 
 
 static void WritePrefilteredEnvMapGenDescriptorSets()
 {
-    for (uint32_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0 + mip,
-            PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
-
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0 + mip,
-            PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureViewRWs[mip]);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN,
+        PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    
+    for (uint32_t i = 0; i < s_prefilteredEnvMapTextureViewRWs.size(); ++i) {
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN,
+            PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i]);
     }
 }
 
 
 static void WriteBRDFIntegrationLUTGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::BRDF_LUT_GEN,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BRDF_LUT_GEN,
         BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW);
 }
 
@@ -3244,36 +3230,36 @@ static void WriteBRDFIntegrationLUTGenDescriptorSet()
 static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
             COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_MESH_INFOS_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformDataBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialDataBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
             COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_INST_INFOS_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
 
 #ifdef ENG_BUILD_DEBUG
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)SetLayoutID::COMMON,
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
             COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
     }
 #endif
@@ -4084,9 +4070,9 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN]);
     
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::COMMON, 0);
+        (size_t)PassID::COMMON, 0);
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::IRRADIANCE_MAP_GEN, 1);
+        (size_t)PassID::IRRADIANCE_MAP_GEN, 1);
 
     IRRADIANCE_MAP_PUSH_CONSTS pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
@@ -4120,12 +4106,12 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdPushBarrierList();
 
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::COMMON, 0);
+        (size_t)PassID::COMMON, 0);
+
+    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
+        (size_t)PassID::PREFILT_ENV_MAP_GEN, 1);
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-            (size_t)SetLayoutID::PREFILT_ENV_MAP_GEN_0 + mip, 1);
-
         pushConsts.MIP = mip;
 
         cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
@@ -4156,9 +4142,9 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdPushBarrierList();
 
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::COMMON, 0);
+        (size_t)PassID::COMMON, 0);
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::BRDF_LUT_GEN, 1);
+        (size_t)PassID::BRDF_LUT_GEN, 1);
 
     cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1U);
 
@@ -4200,9 +4186,9 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::MESH_CULLING]);
     
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::COMMON, 0);
+        (size_t)PassID::COMMON, 0);
     cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)SetLayoutID::MESH_CULLING, 1);
+        (size_t)PassID::MESH_CULLING, 1);
 
     MESH_CULLING_PUSH_CONSTS pushConsts = {};
     pushConsts.INST_COUNT = s_cpuInstData.size();
@@ -4273,9 +4259,9 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::ZPASS]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::ZPASS], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::ZPASS], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::ZPASS, 1);
+            (size_t)PassID::ZPASS, 1);
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -4438,9 +4424,9 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::GBUFFER]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::GBUFFER, 1);
+            (size_t)PassID::GBUFFER, 1);
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -4588,9 +4574,9 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DEFERRED_LIGHTING]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::DEFERRED_LIGHTING, 1);
+            (size_t)PassID::DEFERRED_LIGHTING, 1);
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -4648,9 +4634,9 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::SKYBOX]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::SKYBOX], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::SKYBOX], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::SKYBOX, 1);
+            (size_t)PassID::SKYBOX, 1);
 
         cmdBuffer.CmdDraw(36, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -4706,9 +4692,9 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::POST_PROCESSING]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::POST_PROCESSING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::POST_PROCESSING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::POST_PROCESSING, 1);
+            (size_t)PassID::POST_PROCESSING, 1);
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -4802,9 +4788,9 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BACKBUFFER]);
         
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BACKBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::COMMON, 0);
+            (size_t)PassID::COMMON, 0);
         cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BACKBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)SetLayoutID::BACKBUFFER, 1);
+            (size_t)PassID::BACKBUFFER, 1);
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
