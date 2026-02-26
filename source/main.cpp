@@ -1,7 +1,9 @@
-#include "core/engine/wnd_system/wnd_system.h"
+#include "core/platform/window/window.h"
 
 #ifdef ENG_OS_WINDOWS
     #include "core/platform/native/win32/window/win32_window.h"
+#else
+    #error Unsupported OS type!
 #endif
 
 
@@ -29,6 +31,8 @@
 
 #include "core/profiler/cpu_profiler.h"
 #include "render/core/vulkan/vk_profiler.h"
+
+#include "render/debug/debug_ui.h"
 
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -810,7 +814,7 @@ enum class PassID
 };
 
 
-static Window* s_pWnd = nullptr;
+static std::unique_ptr<eng::Window> s_pWnd = nullptr;
 
 static vkn::Instance& s_vkInstance = vkn::GetInstance();
 static vkn::Surface& s_vkSurface = vkn::GetSurface();
@@ -909,6 +913,8 @@ static vkn::ComputePSOBuilder s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
 static std::vector<uint8_t> s_shaderCodeBuffer;
 
+static eng::DebugUI s_dbgUI;
+
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
 
@@ -949,104 +955,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace DbgUI
 {
-    static void Init()
-    {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-
-        ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; 
-
-		ImGui::GetStyle().Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
-		ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);
-		ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
-		ImGui::GetStyle().Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
-		ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
-
-    #ifdef ENG_OS_WINDOWS
-        if (!ImGui_ImplWin32_Init(s_pWnd->GetNativeHandle())) {
-            CORE_ASSERT_FAIL("Failed to initialize ImGui Win32 part");
-        }
-
-        ImGui::GetPlatformIO().Platform_CreateVkSurface = [](ImGuiViewport* viewport, ImU64 vkInstance, const void* vkAllocator, ImU64* outVkSurface)
-        {
-            VkWin32SurfaceCreateInfoKHR createInfo = {};
-            createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-            createInfo.hwnd = (HWND)viewport->PlatformHandleRaw;
-            createInfo.hinstance = ::GetModuleHandle(nullptr);
-            return (int)vkCreateWin32SurfaceKHR((VkInstance)vkInstance, &createInfo, (VkAllocationCallbacks*)vkAllocator, (VkSurfaceKHR*)outVkSurface);
-        };
-    #endif
-
-        ImGui_ImplVulkan_InitInfo imGuiInitInfo = {};
-        imGuiInitInfo.ApiVersion = s_vkInstance.GetApiVersion();
-        imGuiInitInfo.Instance = s_vkInstance.Get();
-        imGuiInitInfo.PhysicalDevice = s_vkPhysDevice.Get();
-        imGuiInitInfo.Device = s_vkDevice.Get();
-        imGuiInitInfo.QueueFamily = s_vkDevice.GetQueue().GetFamilyIndex();
-        imGuiInitInfo.Queue = s_vkDevice.GetQueue().Get();
-        imGuiInitInfo.DescriptorPoolSize = 1000;
-        imGuiInitInfo.MinImageCount = 2;
-        imGuiInitInfo.ImageCount = 2;
-        imGuiInitInfo.PipelineCache = VK_NULL_HANDLE;
-
-        imGuiInitInfo.UseDynamicRendering = true;
-        imGuiInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // 0 defaults to VK_SAMPLE_COUNT_1_BIT
-    #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-        
-        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        const VkFormat fmt = s_colorRT8U.GetFormat();
-        imGuiInitInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &fmt;
-    #else
-        #error Vulkan Dynamic Rendering Is Not Supported. Get Vulkan SDK Latests.
-    #endif
-        imGuiInitInfo.CheckVkResultFn = [](VkResult error) { VK_CHECK(error); };
-        imGuiInitInfo.MinAllocationSize = 1024 * 1024;
-
-        if (!ImGui_ImplVulkan_Init(&imGuiInitInfo)) {
-            CORE_ASSERT_FAIL("Failed to initialize ImGui Vulkan part");
-        }
-
-    #ifdef ENG_OS_WINDOWS
-        dynamic_cast<Win32Window*>(s_pWnd)->AddEventCallback([](HWND wHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
-        {
-            return ::ImGui_ImplWin32_WndProcHandler(wHwnd, uMsg, wParam, lParam);
-        });
-    #endif
-    }
-
-
-    static void Terminate()
-    {
-        ImGui_ImplVulkan_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-    }
-
-
-    static bool IsAnyWindowFocused()
-    {
-        return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
-    }
-
-
-    static void BeginFrame()
-    {
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-    }
-
-
-    static void EndFrame()
-    {
-        ImGui::EndFrame();
-    }
-
-
     static void FillData()
     {
         if (ImGui::Begin("Settings")) {
@@ -1152,14 +1060,6 @@ namespace DbgUI
             }
         #endif
         } ImGui::End();
-
-        ImGui::Render();
-    }
-
-
-    static void Render(vkn::CmdBuffer& cmdBuffer)
-    {
-        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
     }
 }
 
@@ -1896,7 +1796,7 @@ static bool LoadShaderSpirVCode(const fs::path& path, std::vector<uint8_t>& buff
 {
     const std::string pathS = path.string();
 
-    if (!ReadFile(buffer, path)) {
+    if (!eng::ReadFile(buffer, path)) {
         return false;
     }
 
@@ -4004,7 +3904,7 @@ void UpdateGPUCommonConstBuffer()
 
 void UpdateScene()
 {
-    DbgUI::BeginFrame();
+    s_dbgUI.BeginFrame(s_frameTime);
 
     const float moveDist = glm::length(s_cameraVel);
 
@@ -4707,7 +4607,6 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", prfl::Color::Red);
 
     DbgUI::FillData();
-    DbgUI::EndFrame();
 
     cmdBuffer.BeginBarrierList().AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -4730,7 +4629,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     renderingInfo.pColorAttachments = &colorAttachment;
 
     cmdBuffer.CmdBeginRendering(renderingInfo);
-        DbgUI::Render(cmdBuffer);
+        s_dbgUI.Render(cmdBuffer);
     cmdBuffer.CmdEndRendering();
 
     // ImGui uses descriptor sets so we need to rebind descriptor buffer
@@ -4804,7 +4703,7 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 static void RenderScene()
 {
     if (s_renderFinishedFence.GetStatus() == VK_NOT_READY) {
-        DbgUI::EndFrame();
+        s_dbgUI.EndFrame();
         return;
     }
 
@@ -4818,7 +4717,7 @@ static void RenderScene()
         VK_CHECK(acquireResult);
     } else {
         s_swapchainRecreateRequired = true;
-        DbgUI::EndFrame();
+        s_dbgUI.EndFrame();
         return;
     }
 
@@ -4862,14 +4761,14 @@ static void RenderScene()
 }
 
 
-static bool ResizeVkSwapchain(Window* pWnd)
+static bool ResizeVkSwapchain(eng::Window& window)
 {
     if (!s_swapchainRecreateRequired) {
         return false;
     }
 
     bool resizeResult;
-    s_vkSwapchain.Resize(pWnd->GetWidth(), pWnd->GetHeight(), resizeResult);
+    s_vkSwapchain.Resize(window.GetWidth(), window.GetHeight(), resizeResult);
     
     s_swapchainRecreateRequired = !resizeResult;
 
@@ -4877,60 +4776,60 @@ static bool ResizeVkSwapchain(Window* pWnd)
 }
 
 
-static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
+static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& event)
 {
     static bool firstEvent = true;
 
-    if (event.Is<WndKeyEvent>()) {
-        const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
+    if (event.Is<eng::WndKeyEvent>()) {
+        const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
 
         if (keyEvent.IsPressed()) {
             const float finalSpeed = CAMERA_SPEED * s_frameTime;
 
-            if (keyEvent.key == WndKey::KEY_W) { 
+            if (keyEvent.key == eng::WndKey::KEY_W) { 
                 s_cameraVel.z = -finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_S) {
+            if (keyEvent.key == eng::WndKey::KEY_S) {
                 s_cameraVel.z = finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_A) {
+            if (keyEvent.key == eng::WndKey::KEY_A) {
                 s_cameraVel.x = -finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_D) {
+            if (keyEvent.key == eng::WndKey::KEY_D) {
                 s_cameraVel.x = finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_E) {
+            if (keyEvent.key == eng::WndKey::KEY_E) {
                 s_cameraVel.y = finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_Q) {
+            if (keyEvent.key == eng::WndKey::KEY_Q) {
                 s_cameraVel.y = -finalSpeed;
             }
-            if (keyEvent.key == WndKey::KEY_F5) {
+            if (keyEvent.key == eng::WndKey::KEY_F5) {
                 firstEvent = true;
             }
         }
 
         if (keyEvent.IsReleased()) {
-            if (keyEvent.key == WndKey::KEY_W) {
+            if (keyEvent.key == eng::WndKey::KEY_W) {
                 s_cameraVel.z = 0;
             }
-            if (keyEvent.key == WndKey::KEY_S) {
+            if (keyEvent.key == eng::WndKey::KEY_S) {
                 s_cameraVel.z = 0;
             }
-            if (keyEvent.key == WndKey::KEY_A) {
+            if (keyEvent.key == eng::WndKey::KEY_A) {
                 s_cameraVel.x = 0;
             }
-            if (keyEvent.key == WndKey::KEY_D) {
+            if (keyEvent.key == eng::WndKey::KEY_D) {
                 s_cameraVel.x = 0;
             }
-            if (keyEvent.key == WndKey::KEY_E) {
+            if (keyEvent.key == eng::WndKey::KEY_E) {
                 s_cameraVel.y = 0;
             }
-            if (keyEvent.key == WndKey::KEY_Q) {
+            if (keyEvent.key == eng::WndKey::KEY_Q) {
                 s_cameraVel.y = 0;
             }
         }
-    } else if (event.Is<WndCursorEvent>()) {
+    } else if (event.Is<eng::WndCursorEvent>()) {
         CORE_ASSERT(s_pWnd->IsCursorRelativeMode());
 
         static glm::float3 pitchYawRoll = s_camera.GetPitchYawRollDegrees();
@@ -4961,8 +4860,8 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 
             camera.SetRotation(newRotation);
         }
-    } else if (event.Is<WndResizeEvent>()) {
-        const WndResizeEvent& resizeEvent = event.Get<WndResizeEvent>();
+    } else if (event.Is<eng::WndResizeEvent>()) {
+        const eng::WndResizeEvent& resizeEvent = event.Get<eng::WndResizeEvent>();
 
         if (!resizeEvent.IsMinimized() && resizeEvent.height != 0) {
             camera.SetAspectRatio((float)resizeEvent.width / (float)resizeEvent.height);
@@ -4971,12 +4870,14 @@ static void CameraProcessWndEvent(eng::Camera& camera, const WndEvent& event)
 }
 
 
-bool AppProcessWndEvent(const WndEvent& event)
+bool AppProcessWndEvent(const eng::WndEvent& event)
 {
-    if (event.Is<WndKeyEvent>()) {
-        const WndKeyEvent& keyEvent = event.Get<WndKeyEvent>();
+    s_dbgUI.ProcessEvent(event);
 
-        if (keyEvent.key == WndKey::KEY_F5 && keyEvent.IsPressed()) {
+    if (event.Is<eng::WndKeyEvent>()) {
+        const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
+
+        if (keyEvent.key == eng::WndKey::KEY_F5 && keyEvent.IsPressed()) {
             s_flyCameraMode = !s_flyCameraMode;
             s_pWnd->SetCursorRelativeMode(s_flyCameraMode);
         }
@@ -4986,7 +4887,7 @@ bool AppProcessWndEvent(const WndEvent& event)
         CameraProcessWndEvent(s_camera, event);
     }
 
-    if (event.Is<WndResizeEvent>()) {
+    if (event.Is<eng::WndResizeEvent>()) {
         s_swapchainRecreateRequired = true;
     }
 
@@ -4995,7 +4896,7 @@ bool AppProcessWndEvent(const WndEvent& event)
     }
 
     if (s_swapchainRecreateRequired) {
-        if (ResizeVkSwapchain(s_pWnd)) {
+        if (ResizeVkSwapchain(*s_pWnd)) {
             return false;
         }
 
@@ -5021,7 +4922,7 @@ void ProcessFrame()
 
     s_pWnd->PullEvents();
     
-    WndEvent event;
+    eng::WndEvent event;
     while(s_pWnd->PopEvent(event)) {
         if (!AppProcessWndEvent(event)) {
             return;
@@ -5041,17 +4942,14 @@ void ProcessFrame()
 
 int main(int argc, char* argv[])
 {
-    wndSysInit();
-    s_pWnd = wndSysGetMainWindow();
-
-    WindowInitInfo wndInitInfo = {};
+    eng::WindowInitInfo wndInitInfo = {};
     wndInitInfo.pTitle = APP_NAME;
     wndInitInfo.width = 1280;
     wndInitInfo.height = 720;
     wndInitInfo.isVisible = false;
 
-    s_pWnd->Create(wndInitInfo);
-    ENG_ASSERT(s_pWnd->IsInitialized());
+    s_pWnd = std::make_unique<eng::Win32Window>(wndInitInfo);
+    ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     CreateVkInstance();    
 
@@ -5113,7 +5011,7 @@ int main(int argc, char* argv[])
     };
     CreateSkybox(skyBoxFaceFilepaths);
 
-    DbgUI::Init();
+    s_dbgUI.Create(*s_pWnd, s_vkDevice, s_colorRT8U.GetFormat());
 
     const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
 
@@ -5158,12 +5056,6 @@ int main(int argc, char* argv[])
     }
 
     s_vkDevice.WaitIdle();
-    
-    DbgUI::Terminate();
-
-    s_pWnd->Destroy();
-
-    wndSysTerminate();
 
     return 0;
 }
