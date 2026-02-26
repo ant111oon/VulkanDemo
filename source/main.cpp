@@ -28,15 +28,11 @@
 #include "render/core/vulkan/vk_memory.h"
 
 #include "core/engine/camera/camera.h"
+#include "core/engine/profiler/cpu_profiler.h"
 
-#include "core/profiler/cpu_profiler.h"
 #include "render/core/vulkan/vk_profiler.h"
 
 #include "render/debug/debug_ui.h"
-
-#include <imgui.h>
-#include <backends/imgui_impl_vulkan.h>
-#include <backends/imgui_impl_win32.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>

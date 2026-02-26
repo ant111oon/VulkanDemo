@@ -8,8 +8,6 @@
 #include "vk_descriptor.h"
 #include "vk_pso.h"
 
-#include "core/profiler/cpu_profiler.h"
-
 
 namespace vkn
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/profiler/core.h"
+#include "core/engine/profiler/core.h"
 
 #include <array>
 #include <cstdint>

@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "log.h"
 
-#include "core/profiler/cpu_profiler.h"
+#include "core/engine/profiler/cpu_profiler.h"
 
 
 namespace eng
