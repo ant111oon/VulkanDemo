@@ -14,7 +14,7 @@
     template <typename... Args>
     inline void AssertImpl(const char* file, uint32_t line, const char* system, const char* fmt, Args&&... args) noexcept
     {
-        Log(stderr, LogLevel::ERROR, file, line, system, fmt, std::forward<Args>(args)...);
+        Log(stderr, eng::LogLevel::ERROR, file, line, system, fmt, std::forward<Args>(args)...);
         ENG_DEBUG_BREAK();
     }
 

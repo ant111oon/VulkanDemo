@@ -563,7 +563,7 @@ namespace vkn
         VK_ASSERT(buffer.IsCreated());
 
         if (vkCmdBindDescriptorBuffers == nullptr) {
-            vkCmdBindDescriptorBuffers = (PFN_vkCmdBindDescriptorBuffersEXT)GetDevice()->GetProcAddr("vkCmdBindDescriptorBuffersEXT");
+            vkCmdBindDescriptorBuffers = (PFN_vkCmdBindDescriptorBuffersEXT)GetDevice().GetProcAddr("vkCmdBindDescriptorBuffersEXT");
         }
 
         m_pDescrBufferBindingCache = &buffer;
@@ -584,7 +584,7 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
         if (!vkCmdSetDescriptorBufferOffsets) {
-            vkCmdSetDescriptorBufferOffsets = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)GetDevice()->GetProcAddr("vkCmdSetDescriptorBufferOffsetsEXT");
+            vkCmdSetDescriptorBufferOffsets = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)GetDevice().GetProcAddr("vkCmdSetDescriptorBufferOffsetsEXT");
         }
 
         VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdSetDescriptorBufferOffset");
@@ -723,7 +723,7 @@ namespace vkn
     }
 
     
-    Device* CmdBuffer::GetDevice() const
+    Device& CmdBuffer::GetDevice() const
     {
         return m_pOwner->GetDevice();
     }
@@ -746,7 +746,7 @@ namespace vkn
 
         VK_ASSERT(pOwnerPool && pOwnerPool->IsCreated());
 
-        VkDevice vkDevice = pOwnerPool->GetDevice()->Get();
+        VkDevice vkDevice = pOwnerPool->GetDevice().Get();
         VkCommandPool vkCmdPool = pOwnerPool->Get();
 
         VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
@@ -775,7 +775,7 @@ namespace vkn
             return *this;
         }
         
-        vkFreeCommandBuffers(GetDevice()->Get(), m_pOwner->Get(), 1, &m_cmdBuffer);
+        vkFreeCommandBuffers(GetDevice().Get(), m_pOwner->Get(), 1, &m_cmdBuffer);
         m_cmdBuffer = VK_NULL_HANDLE;
 
         m_barrierList = {};

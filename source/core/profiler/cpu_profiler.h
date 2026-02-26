@@ -30,7 +30,7 @@
 
 
 #define ENG_PROFILE_SCOPED_MARKER_N_FMT(NAME, FMT, ...) \
-    ENG_PROFILE_SCOPED_MARKER_NC_FMT(NAME, prfl::Color::Grey51, FMT, __VA_ARGS__)
+    ENG_PROFILE_SCOPED_MARKER_NC_FMT(NAME, eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 
@@ -44,7 +44,7 @@
 
 
 #define ENG_PROFILE_SCOPED_MARKER_FMT(FMT, ...) \
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(prfl::Color::Grey51, FMT, __VA_ARGS__)
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 

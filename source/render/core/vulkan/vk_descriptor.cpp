@@ -154,7 +154,7 @@ namespace vkn
             m_state.set(BIT_IS_DESCRIPTOR_BUFFER_SOMPATIBLE, true);
 
             vkGetDescriptorSetLayoutSize(pDevice->Get(), m_layout, &m_size);
-            m_size = GetAlignedSize(m_size, pDevice->GetPhysDevice()->GetDescBufferProperties().descriptorBufferOffsetAlignment);
+            m_size = GetAlignedSize(m_size, pDevice->GetPhysDevice().GetDescBufferProperties().descriptorBufferOffsetAlignment);
     
             for (size_t i = 0; i < bindings.size(); ++i) {
                 vkGetDescriptorSetLayoutBindingOffset(pDevice->Get(), m_layout, descriptorInfos[i].binding, &m_descriptors[i].offset);
@@ -360,14 +360,14 @@ namespace vkn
         VK_ASSERT(IsCreated());
         VK_ASSERT_MSG(buffer.HasDeviceAddress(), "Buffer %s must have device address to be compatible with descriptor buffer", buffer.GetDebugName());
 
-        Device* pDevice = GetDevice();
+        Device& device = GetDevice();
 
         const Entry& entry = m_entries[setIdx];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
 
-        const VkPhysicalDeviceDescriptorBufferPropertiesEXT& buffProps = pDevice->GetPhysDevice()->GetDescBufferProperties();
+        const VkPhysicalDeviceDescriptorBufferPropertiesEXT& buffProps = device.GetPhysDevice().GetDescBufferProperties();
         const size_t descrSize = buffer.IsUniformBuffer() ? buffProps.uniformBufferDescriptorSize : buffProps.storageBufferDescriptorSize;
 
         void* pBindingPtr = GetDescriptorBindingPtr(m_buffer, setOffset, bindingOffset, elemIdx, descrSize);
@@ -383,7 +383,7 @@ namespace vkn
         descriptorGetInfo.type = buffer.IsUniformBuffer() ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorGetInfo.data.pUniformBuffer = &descriptorAddressInfo;
 
-        vkGetDescriptor(pDevice->Get(), &descriptorGetInfo, descrSize, pBindingPtr);
+        vkGetDescriptor(device.Get(), &descriptorGetInfo, descrSize, pBindingPtr);
 
         return *this;
     }
@@ -393,27 +393,27 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
 
-        Device* pDevice = GetDevice();
+        Device& device = GetDevice();
 
         const Entry& entry = m_entries[setIdx];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
 
-        const size_t descrSize = pDevice->GetPhysDevice()->GetDescBufferProperties().sampledImageDescriptorSize;
+        const size_t descrSize = device.GetPhysDevice().GetDescBufferProperties().sampledImageDescriptorSize;
 
         void* pBindingPtr = GetDescriptorBindingPtr(m_buffer, setOffset, bindingOffset, elemIdx, descrSize);
 
         VkDescriptorImageInfo imageInfo = {};
         imageInfo.imageView = texture.Get();
         
-        const vkn::Texture* pOwner = texture.GetOwner();
-        imageInfo.imageLayout = pOwner->GetAccessState(0, 0).layout;
+        const vkn::Texture& owner = texture.GetOwner();
+        imageInfo.imageLayout = owner.GetAccessState(0, 0).layout;
 
     #ifdef ENG_BUILD_DEBUG
-        for (uint32_t layerIdx = 0; layerIdx < pOwner->GetLayerCount(); ++layerIdx) {
-            for (uint32_t mipIdx = 0; mipIdx < pOwner->GetMipCount(); ++mipIdx) {
-                VK_ASSERT_MSG(imageInfo.imageLayout == pOwner->GetAccessState(layerIdx, mipIdx).layout, "Texture %s descriptor has inconsistent layout", pOwner->GetDebugName());
+        for (uint32_t layerIdx = 0; layerIdx < owner.GetLayerCount(); ++layerIdx) {
+            for (uint32_t mipIdx = 0; mipIdx < owner.GetMipCount(); ++mipIdx) {
+                VK_ASSERT_MSG(imageInfo.imageLayout == owner.GetAccessState(layerIdx, mipIdx).layout, "Texture %s descriptor has inconsistent layout", owner.GetDebugName());
             }
         }
     #endif
@@ -423,7 +423,7 @@ namespace vkn
         descriptorGetInfo.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         descriptorGetInfo.data.pSampledImage = &imageInfo;
 
-        vkGetDescriptor(pDevice->Get(), &descriptorGetInfo, descrSize, pBindingPtr);
+        vkGetDescriptor(device.Get(), &descriptorGetInfo, descrSize, pBindingPtr);
 
         return *this;
     }
@@ -433,14 +433,14 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
 
-        Device* pDevice = GetDevice();
+        Device& device = GetDevice();
 
         const Entry& entry = m_entries[setIdx];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
 
-        const size_t descrSize = pDevice->GetPhysDevice()->GetDescBufferProperties().samplerDescriptorSize;
+        const size_t descrSize = device.GetPhysDevice().GetDescBufferProperties().samplerDescriptorSize;
 
         void* pBindingPtr = GetDescriptorBindingPtr(m_buffer, setOffset, bindingOffset, elemIdx, descrSize);
 
@@ -449,7 +449,7 @@ namespace vkn
         descriptorGetInfo.type = VK_DESCRIPTOR_TYPE_SAMPLER;
         descriptorGetInfo.data.pSampler = &sampler.Get();
 
-        vkGetDescriptor(pDevice->Get(), &descriptorGetInfo, descrSize, pBindingPtr);
+        vkGetDescriptor(device.Get(), &descriptorGetInfo, descrSize, pBindingPtr);
 
         return *this;
     }

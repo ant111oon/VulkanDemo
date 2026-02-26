@@ -65,7 +65,7 @@ namespace vkn
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
 
         VkSurfaceKHR vkSurface = info.pSurface->Get();
-        VkPhysicalDevice vkPhysDevice = info.pDevice->GetPhysDevice()->Get();
+        VkPhysicalDevice vkPhysDevice = info.pDevice->GetPhysDevice().Get();
 
         VkSurfaceFormatKHR surfaceFormat = {};
         surfaceFormat.format = info.imageFormat;
@@ -190,7 +190,7 @@ namespace vkn
     }
 
 
-    Device* SCTextureView::GetDevice() const
+    Device& SCTextureView::GetDevice() const
     {
         VK_ASSERT(IsValid());
         return m_pOwner->GetDevice();
@@ -223,7 +223,7 @@ namespace vkn
         imageViewCreateInfo.subresourceRange = subresourceRange;
 
         m_view = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateImageView(pOwner->GetDevice()->Get(), &imageViewCreateInfo, nullptr, &m_view));
+        VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &m_view));
 
         VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan swapchain texture view");
 
@@ -246,7 +246,7 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyImageView(GetDevice()->Get(), m_view, nullptr);
+        vkDestroyImageView(GetDevice().Get(), m_view, nullptr);
         m_view = VK_NULL_HANDLE;
 
         m_pOwner = nullptr;

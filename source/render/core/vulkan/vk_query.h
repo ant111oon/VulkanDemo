@@ -59,16 +59,16 @@ namespace vkn
         template <typename... Args>
         QueryPool& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
         const char* GetDebugName() const;
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkQueryPool& Get() const

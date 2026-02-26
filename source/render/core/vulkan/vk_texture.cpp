@@ -8,7 +8,7 @@ namespace vkn
 {
     TextureView& TextureView::SetDebugName(const char* pName)
     {
-        Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
+        Object::SetDebugName(GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
         return *this;
     }
 
@@ -19,7 +19,7 @@ namespace vkn
     }
 
 
-    Device* TextureView::GetDevice() const
+    Device& TextureView::GetDevice() const
     {
         VK_ASSERT(IsValid());
         return m_pOwner->GetDevice();
@@ -86,7 +86,7 @@ namespace vkn
         imageViewCreateInfo.subresourceRange = info.subresourceRange;
 
         m_view = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateImageView(pOwner->GetDevice()->Get(), &imageViewCreateInfo, nullptr, &m_view));
+        VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &m_view));
 
         VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan texture view");
 
@@ -122,7 +122,7 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyImageView(GetDevice()->Get(), m_view, nullptr);
+        vkDestroyImageView(GetDevice().Get(), m_view, nullptr);
         m_view = VK_NULL_HANDLE;
 
         m_pOwner = nullptr;

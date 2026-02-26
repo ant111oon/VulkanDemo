@@ -26,7 +26,7 @@ namespace vkn
         Profiler& Destroy();
 
         const Profiler& BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName) const;
-        const Profiler& BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName, uint32_t color = prfl::Color::Grey50) const;
+        const Profiler& BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName, uint32_t color = eng::ProfileColor::Grey50) const;
 
         const Profiler& EndCmdGroup(CmdBuffer& cmd) const;
 
@@ -73,7 +73,7 @@ namespace vkn
 
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER_N(CMD_BUFFER, NAME, LABEL) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, prfl::Color::Grey51)
+    ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, eng::ProfileColor::Grey51)
 
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, COLOR, FMT, ...)                                                            \
@@ -83,7 +83,7 @@ namespace vkn
 
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER_N_FMT(CMD_BUFFER, NAME, FMT, ...) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, prfl::Color::Grey51, FMT, __VA_ARGS__)
+    ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 
@@ -97,11 +97,11 @@ namespace vkn
 
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER(CMD_BUFFER, LABEL) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, prfl::Color::Grey51)
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, eng::ProfileColor::Grey51)
 
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER_FMT(CMD_BUFFER, FMT, ...) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(CMD_BUFFER, prfl::Color::Grey51, FMT, __VA_ARGS__)
+    ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(CMD_BUFFER, eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 

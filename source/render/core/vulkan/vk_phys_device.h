@@ -97,16 +97,16 @@ namespace vkn
             return m_features2;
         }
 
-        const Instance* GetInstance() const
+        const Instance& GetInstance() const
         {
             VK_ASSERT(IsCreated());
-            return m_pInstance;
+            return *m_pInstance;
         }
 
-        Instance* GetInstance()
+        Instance& GetInstance()
         {
             VK_ASSERT(IsCreated());
-            return m_pInstance;
+            return *m_pInstance;
         }
 
     private:

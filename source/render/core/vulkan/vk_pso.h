@@ -45,14 +45,14 @@ namespace vkn
         template <typename... Args>
         PSOLayout& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkPipelineLayout& Get() const
@@ -87,7 +87,7 @@ namespace vkn
         template <typename... Args>
         PSO& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_pso, VK_OBJECT_TYPE_PIPELINE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_pso, VK_OBJECT_TYPE_PIPELINE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -96,7 +96,7 @@ namespace vkn
             return Object::GetDebugName("PSO");
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
             return m_pLayout->GetDevice();

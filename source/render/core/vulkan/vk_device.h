@@ -50,10 +50,10 @@ namespace vkn
             return Object::GetDebugName("Queue");
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pOwner;
+            return *m_pOwner;
         }
 
         const VkQueue& Get() const
@@ -80,7 +80,7 @@ namespace vkn
         template <typename... Args>
         Queue& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_queue, VK_OBJECT_TYPE_QUEUE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_queue, VK_OBJECT_TYPE_QUEUE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -134,10 +134,10 @@ namespace vkn
             return m_device;
         }
 
-        PhysicalDevice* GetPhysDevice() const
+        PhysicalDevice& GetPhysDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pPhysDevice;
+            return *m_pPhysDevice;
         }
 
         const Queue& GetQueue() const

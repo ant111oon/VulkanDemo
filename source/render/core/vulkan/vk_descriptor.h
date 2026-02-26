@@ -88,14 +88,14 @@ namespace vkn
         template <typename... Args>
         DescriptorSetLayout& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkDescriptorSetLayout& Get() const
@@ -191,7 +191,7 @@ namespace vkn
             return *this;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
             return m_buffer.GetDevice();

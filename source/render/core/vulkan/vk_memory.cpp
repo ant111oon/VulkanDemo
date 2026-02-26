@@ -24,11 +24,11 @@ namespace vkn
 
         VmaAllocatorCreateInfo createInfo = {};
         createInfo.flags = info.flags;
-        createInfo.physicalDevice = info.pDevice->GetPhysDevice()->Get();
+        createInfo.physicalDevice = info.pDevice->GetPhysDevice().Get();
         createInfo.device = info.pDevice->Get();
         createInfo.preferredLargeHeapBlockSize = info.preferredLargeHeapBlockSize;
-        createInfo.instance = info.pDevice->GetPhysDevice()->GetInstance()->Get();
-        createInfo.vulkanApiVersion = info.pDevice->GetPhysDevice()->GetInstance()->GetApiVersion();
+        createInfo.instance = info.pDevice->GetPhysDevice().GetInstance().Get();
+        createInfo.vulkanApiVersion = info.pDevice->GetPhysDevice().GetInstance().GetApiVersion();
 
         m_allocator = VK_NULL_HANDLE;
         VK_CHECK(vmaCreateAllocator(&createInfo, &m_allocator));

@@ -46,10 +46,10 @@ namespace vkn
             return m_allocator;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
     private:

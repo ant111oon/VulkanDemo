@@ -212,12 +212,12 @@ namespace vkn
         BarrierList& BeginBarrierList();
         CmdBuffer& CmdPushBarrierList(); // Post list of barriers to command buffer
 
-        Device* GetDevice() const;
+        Device& GetDevice() const;
 
         template <typename... Args>
         CmdBuffer& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_cmdBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -226,10 +226,10 @@ namespace vkn
             return Object::GetDebugName("CommandBuffer");
         }
 
-        CmdPool* GetOwnerPool() const
+        CmdPool& GetOwnerPool() const
         {
             VK_ASSERT(IsCreated());
-            return m_pOwner;
+            return *m_pOwner;
         }
 
         const VkCommandBuffer& Get() const
@@ -249,7 +249,6 @@ namespace vkn
             VK_ASSERT(IsValid());
             return m_state.test(FLAG_IS_RENDERING_STARTED);
         }
-
 
         bool IsValid() const;
 
@@ -331,7 +330,7 @@ namespace vkn
         template <typename... Args>
         CmdPool& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_COMMAND_POOL, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -340,10 +339,10 @@ namespace vkn
             return Object::GetDebugName("CommandPool");
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkCommandPool& Get() const

@@ -26,10 +26,10 @@ namespace vkn
             return Object::GetDebugName("SCTexture");
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkImage& Get() const
@@ -86,7 +86,7 @@ namespace vkn
         template <typename... Args>
         SCTexture& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -119,13 +119,13 @@ namespace vkn
 
         const char* GetDebugName() const { return Object::GetDebugName("SCTextureView"); }
 
-        const SCTexture* GetOwner() const
+        const SCTexture& GetOwner() const
         {
             VK_ASSERT(IsCreated());
-            return m_pOwner;
+            return *m_pOwner;
         }
 
-        Device* GetDevice() const;
+        Device& GetDevice() const;
 
         const VkImageView& Get() const
         {
@@ -166,7 +166,7 @@ namespace vkn
         template <typename... Args>
         SCTextureView& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -224,16 +224,16 @@ namespace vkn
             return m_swapchain;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
-        Surface* GetSurface() const
+        Surface& GetSurface() const
         {
             VK_ASSERT(IsCreated());
-            return m_pSurface;
+            return *m_pSurface;
         }
 
         SCTexture& GetTexture(size_t idx)

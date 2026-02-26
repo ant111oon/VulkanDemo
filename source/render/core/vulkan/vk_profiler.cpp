@@ -34,14 +34,14 @@ namespace vkn
         cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         cmdPoolCreateInfo.size = 1;
 
-        Instance* pInst = m_pDevice->GetPhysDevice()->GetInstance();
+        Instance& inst = m_pDevice->GetPhysDevice().GetInstance();
 
         if (vkCmdBeginDebugUtilsLabel == nullptr) {
-            vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)pInst->GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
+            vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)inst.GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
         }
 
         if (vkCmdEndDebugUtilsLabel == nullptr) {
-            vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)pInst->GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
+            vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)inst.GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
         }
 
         m_cmdPool.Create(cmdPoolCreateInfo);
@@ -51,7 +51,7 @@ namespace vkn
         m_pCmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         m_pCmdBuffer->SetDebugName("PROFILER_CMD_BUFFER");
 
-        m_context = TracyVkContext(m_pDevice->GetPhysDevice()->Get(), m_pDevice->Get(), m_pDevice->GetQueue().Get(), m_pCmdBuffer->Get());
+        m_context = TracyVkContext(m_pDevice->GetPhysDevice().Get(), m_pDevice->Get(), m_pDevice->GetQueue().Get(), m_pCmdBuffer->Get());
 
         CORE_ASSERT_MSG(m_context != nullptr, "Failed to create Vulkan profiler");
 
@@ -86,7 +86,7 @@ namespace vkn
 
     const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName) const
     {
-        BeginCmdGroup(cmd, groupName, prfl::Color::Grey51);
+        BeginCmdGroup(cmd, groupName, eng::ProfileColor::Grey51);
         return *this;
     }
 

@@ -35,16 +35,16 @@ namespace vkn
         template <typename... Args>
         Semaphore& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
         const char* GetDebugName() const;
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkSemaphore& Get() const

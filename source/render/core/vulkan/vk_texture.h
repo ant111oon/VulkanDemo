@@ -45,17 +45,17 @@ namespace vkn
         template <typename... Args>
         TextureView& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
-        const Texture* GetOwner() const
+        const Texture& GetOwner() const
         {
             VK_ASSERT(IsCreated());
-            return m_pOwner;
+            return *m_pOwner;
         }
 
-        Device* GetDevice() const;
+        Device& GetDevice() const;
 
         const VkImageView& Get() const
         {
@@ -135,14 +135,14 @@ namespace vkn
         template <typename... Args>
         Texture& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkImage& Get() const
@@ -281,16 +281,16 @@ namespace vkn
         template <typename... Args>
         Sampler& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_sampler, VK_OBJECT_TYPE_SAMPLER, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_sampler, VK_OBJECT_TYPE_SAMPLER, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
         const char* GetDebugName() const;
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkSampler& Get() const

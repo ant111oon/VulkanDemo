@@ -75,7 +75,7 @@ namespace vkn
         }
 
     #ifdef ENG_BUILD_DEBUG
-        const VkDeviceSize maxPushConstantsSize = pDevice->GetPhysDevice()->GetProperties().properties.limits.maxPushConstantsSize;
+        const VkDeviceSize maxPushConstantsSize = pDevice->GetPhysDevice().GetProperties().properties.limits.maxPushConstantsSize;
 
         for (const VkPushConstantRange& range : pushConstantRanges) {
             VK_ASSERT_MSG(range.offset + range.size <= maxPushConstantsSize, 
@@ -184,7 +184,7 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyPipeline(m_pLayout->GetDevice()->Get(), m_pso, nullptr);
+        vkDestroyPipeline(m_pLayout->GetDevice().Get(), m_pso, nullptr);
         m_pso = VK_NULL_HANDLE;
 
         m_pLayout = nullptr;

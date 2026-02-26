@@ -236,13 +236,13 @@ namespace eng
         };
     #endif
 
-        vkn::PhysicalDevice* pPhysDevice = device.GetPhysDevice();
-        vkn::Instance* pInst = pPhysDevice->GetInstance();
+        vkn::PhysicalDevice& physDevice = device.GetPhysDevice();
+        vkn::Instance& inst = physDevice.GetInstance();
 
         ImGui_ImplVulkan_InitInfo imGuiInitInfo = {};
-        imGuiInitInfo.ApiVersion = pInst->GetApiVersion();
-        imGuiInitInfo.Instance = pInst->Get();
-        imGuiInitInfo.PhysicalDevice = pPhysDevice->Get();
+        imGuiInitInfo.ApiVersion = inst.GetApiVersion();
+        imGuiInitInfo.Instance = inst.Get();
+        imGuiInitInfo.PhysicalDevice = physDevice.Get();
         imGuiInitInfo.Device = device.Get();
         imGuiInitInfo.QueueFamily = device.GetQueue().GetFamilyIndex();
         imGuiInitInfo.Queue = device.GetQueue().Get();

@@ -27,7 +27,7 @@ namespace vkn
         template <typename... Args>
         Shader& SetDebugName(const char* pFmt, Args&&... args)
         {
-            Object::SetDebugName(*GetDevice(), (uint64_t)m_module, VK_OBJECT_TYPE_SHADER_MODULE, pFmt, std::forward<Args>(args)...);
+            Object::SetDebugName(GetDevice(), (uint64_t)m_module, VK_OBJECT_TYPE_SHADER_MODULE, pFmt, std::forward<Args>(args)...);
             return *this;
         }
 
@@ -36,10 +36,10 @@ namespace vkn
             return Object::GetDebugName("Shader");
         }
 
-        Device* GetDevice() const
+        Device& GetDevice() const
         {
             VK_ASSERT(IsCreated());
-            return m_pDevice;
+            return *m_pDevice;
         }
 
         const VkShaderModule& Get() const

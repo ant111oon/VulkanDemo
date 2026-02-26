@@ -14,8 +14,8 @@
 #include "tracy/../common/TracyColor.hpp"
 
 
-namespace prfl
+namespace eng
 {
-    using Color = tracy::Color;
+    using ProfileColor = tracy::Color;
 }
 #endif
