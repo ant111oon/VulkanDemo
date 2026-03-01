@@ -72,14 +72,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
 #ifdef ENV_DEBUG
-    if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {
-        PushCmd(material, meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID);
-        return;
-    }
+    if (COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED)
 #endif
-
-    if (!IsInstVisible(instInfo)) {
-        return;
+    {
+        if (!IsInstVisible(instInfo)) {
+            return;
+        }
     }
 
     PushCmd(material, meshInfo.FIRST_INDEX, meshInfo.INDEX_COUNT, meshInfo.FIRST_VERTEX, 0, 1, instID);

@@ -36,6 +36,15 @@ if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
 endif()
 
 
+if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+    if (CMAKE_CONFIGURATION_TYPES)
+        set(ENG_ENABLE_IMGUI ON)
+    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(ENG_ENABLE_IMGUI ON)
+    endif()
+endif()
+
+
 find_package(Vulkan REQUIRED)
 
 include(FetchContent)
@@ -46,27 +55,6 @@ FetchContent_Declare(
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(glm)
-
-
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.92.4-docking
-    GIT_PROGRESS   TRUE
-)
-FetchContent_MakeAvailable(imgui)
-
-
-if (ENG_ENABLE_TRACY)
-    FetchContent_Declare(
-        tracy
-        GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-        GIT_TAG        v0.13.1
-        GIT_SHALLOW    TRUE
-        GIT_PROGRESS   TRUE
-    )
-    FetchContent_MakeAvailable(tracy)
-endif()
 
 
 FetchContent_Declare(
@@ -87,19 +75,41 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(stb)
 
 
-add_library(imgui STATIC
-    ${imgui_SOURCE_DIR}/imgui.h
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
-)
+if (ENG_ENABLE_TRACY)
+    FetchContent_Declare(
+        tracy
+        GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+        GIT_TAG        v0.13.1
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+    )
+    FetchContent_MakeAvailable(tracy)
+endif()
 
-target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+
+if (ENG_ENABLE_IMGUI)
+    FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        v1.92.4-docking
+        GIT_PROGRESS   TRUE
+    )
+    FetchContent_MakeAvailable(imgui)
+
+    add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.h
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
+    )
+
+    target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
+    target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+endif()
 
 
 FetchContent_Declare(
@@ -139,11 +149,10 @@ target_precompile_headers(${ENGINE_PROJ_NAME}
 target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE Vulkan::Vulkan
     PRIVATE vma
-    PRIVATE glm 
-    PRIVATE imgui
+    PRIVATE glm
     PRIVATE fastgltf
     
-    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient>
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui>
 
     PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
 )

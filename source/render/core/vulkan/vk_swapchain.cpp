@@ -328,8 +328,6 @@ namespace vkn
             return *this;
         }
 
-        VK_CHECK(vkDeviceWaitIdle(info.pDevice->Get()));
-
         VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
         VK_CHECK(vkCreateSwapchainKHR(info.pDevice->Get(), &swapchainCreateInfo, nullptr, &newSwapchain));
 

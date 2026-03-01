@@ -2,6 +2,11 @@
 #include "debug_ui.h"
 
 
+#ifdef ENG_DEBUG_UI_ENABLED
+
+#include "core/utils/hash.h"
+
+
 namespace eng
 {
     static ImGuiMouseButton_ WndMouseButtonTypeToImGui(WndMouseButtonType type)
@@ -280,9 +285,16 @@ namespace eng
             return *this;
         }
 
+        while (!m_hashToTextureID.empty()) {
+            RemoveTexture(m_hashToTextureID.begin()->second);
+        }
+
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext(m_pContext);
+
+        m_hashToTextureID = {};
+        m_textureIDToHash = {};
 
         m_pContext = nullptr;
         m_pIO = nullptr;
@@ -370,4 +382,62 @@ namespace eng
 
         return *this;
     }
+
+
+    ImTextureID DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout)
+    {
+        ImTextureID ID;
+        AddTexture(view, sampler, layout, ID);
+
+        return ID;
+    }
+
+
+    DebugUI& DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout, ImTextureID& outID)
+    {
+        CORE_ASSERT(IsCreated());
+
+        eng::HashBuilder builder;
+        builder.AddValue((uintptr_t)view.Get());
+        builder.AddValue((uintptr_t)sampler.Get());
+        builder.AddValue(layout);
+
+        const uint64_t hash = builder.Value();
+
+        const auto it = m_hashToTextureID.find(hash);
+
+        if (it == m_hashToTextureID.cend()) {
+            outID = (ImTextureID)ImGui_ImplVulkan_AddTexture(sampler.Get(), view.Get(), layout);
+            
+            m_hashToTextureID[hash] = outID;
+            m_textureIDToHash[outID] = hash;
+        } else {
+            outID = it->second;
+        }
+
+        return *this;
+    }
+
+
+    DebugUI& DebugUI::RemoveTexture(ImTextureID ID)
+    {
+        CORE_ASSERT(IsCreated());
+
+        const auto hashIt = m_textureIDToHash.find(ID);
+
+        if (hashIt == m_textureIDToHash.cend()) {
+            return *this;
+        }
+
+        ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)ID);
+            
+        const uint64_t hash = m_textureIDToHash[ID];
+        
+        m_textureIDToHash.erase(ID);
+        m_hashToTextureID.erase(hash);
+
+        return *this;
+    }
 }
+
+#endif

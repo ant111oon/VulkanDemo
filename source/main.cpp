@@ -788,6 +788,14 @@ static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
+#if defined(ENG_BUILD_DEBUG)
+    constexpr const char* APP_BUILD_TYPE_STR = "DEBUG";
+#elif defined(ENG_BUILD_PROFILE)
+    constexpr const char* APP_BUILD_TYPE_STR = "PROFILE";
+#else
+    constexpr const char* APP_BUILD_TYPE_STR = "RELEASE";
+#endif  
+
 static constexpr bool VSYNC_ENABLED = false;
 
 static constexpr float CAMERA_SPEED = 0.0025f;
@@ -909,7 +917,9 @@ static vkn::ComputePSOBuilder s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
 static std::vector<uint8_t> s_shaderCodeBuffer;
 
-static eng::DebugUI s_dbgUI;
+#ifdef ENG_DEBUG_UI_ENABLED
+    static eng::DebugUI s_dbgUI;
+#endif
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
@@ -918,9 +928,11 @@ static uint32_t s_dbgOutputRTIdx = 0;
 static uint32_t s_nextImageIdx = 0;
 
 static size_t s_frameNumber = 0;
-static float s_frameTime = 0.f;
+static float s_frameTime = M3D_EPS;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
+
+static bool s_skipRender = false;
 
 #ifdef ENG_BUILD_DEBUG
     static bool s_useMeshIndirectDraw = true;
@@ -946,24 +958,14 @@ static bool s_flyCameraMode = false;
 #endif
 
 
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-
+#ifdef ENG_DEBUG_UI_ENABLED
 namespace DbgUI
 {
     static void FillData()
     {
         if (ImGui::Begin("Settings")) {
-        #if defined(ENG_BUILD_DEBUG)
-            constexpr const char* BUILD_TYPE_STR = "DEBUG";
-        #elif defined(ENG_BUILD_PROFILE)
-            constexpr const char* BUILD_TYPE_STR = "PROFILE";
-        #else
-            constexpr const char* BUILD_TYPE_STR = "RELEASE";
-        #endif            
-
             ImGui::SeparatorText("Common Info");
-            ImGui::Text("Build Type: %s", BUILD_TYPE_STR);
+            ImGui::Text("Build Type: %s", APP_BUILD_TYPE_STR);
             ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
 
             ImGui::NewLine();
@@ -991,7 +993,6 @@ namespace DbgUI
             ImGui::SameLine(); 
             ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
 
-        #ifdef ENG_BUILD_DEBUG
             static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
             static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
 
@@ -1054,28 +1055,10 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
-        #endif
         } ImGui::End();
     }
 }
-
-
-static bool IsAKillMaterial(const COMMON_MATERIAL& material)
-{
-    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
-}
-
-
-static bool IsTransparentMaterial(const COMMON_MATERIAL& material)
-{
-    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_BLEND) != 0;
-}
-
-
-static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
-{
-    return !IsAKillMaterial(material) && !IsTransparentMaterial(material);
-}
+#endif
 
 
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
@@ -1130,6 +1113,24 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     return VK_FALSE;
 }
 #endif
+
+
+static bool IsAKillMaterial(const COMMON_MATERIAL& material)
+{
+    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
+}
+
+
+static bool IsTransparentMaterial(const COMMON_MATERIAL& material)
+{
+    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_BLEND) != 0;
+}
+
+
+static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
+{
+    return !IsAKillMaterial(material) && !IsTransparentMaterial(material);
+}
 
 
 static constexpr VkIndexType GetVkIndexType()
@@ -2526,7 +2527,7 @@ static void CreatePipelines()
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
     CreateBRDFIntegrationLUTGenPipelineLayout();
-    CreateMeshCullingPipeline("shaders/bin/mesh_culling.cs.spv");
+    CreateMeshCullingPipeline("shaders/bin/scene.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
     CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.vs.spv", "shaders/bin/deferred_lighting.ps.spv");
@@ -3498,6 +3499,13 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
 
                     s_cpuInstData.emplace_back(instInfo);
+
+                    if (meshIdx == 0) {
+                        for (size_t i = 0; i < 5; ++i) {
+                            s_cpuInstData.emplace_back(instInfo);
+                        }
+                    }
+
                     ++meshIdx;
                 }
             }
@@ -3507,6 +3515,14 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     }
 
     CORE_LOG_INFO("FastGLTF: Instance data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+
+    timer.Reset().Start();
+
+    std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), [](const COMMON_INST_INFO& a, const COMMON_INST_INFO& b){
+        return a.MESH_IDX < b.MESH_IDX;
+    });
+
+    CORE_LOG_INFO("Instance data sorting finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -3898,9 +3914,34 @@ void UpdateGPUCommonConstBuffer()
 }
 
 
+static void ResizeVkSwapchain(eng::Window& window)
+{
+    bool resizeSucceded;
+    s_vkSwapchain.Resize(window.GetWidth(), window.GetHeight(), resizeSucceded);
+    
+    s_swapchainRecreateRequired = !resizeSucceded;
+}
+
+
 void UpdateScene()
 {
-    s_dbgUI.BeginFrame(s_frameTime);
+    if (s_swapchainRecreateRequired) {
+        s_vkDevice.WaitIdle();
+
+        ResizeVkSwapchain(*s_pWnd);
+
+        if (s_swapchainRecreateRequired) {
+            s_skipRender = true;
+        } else {
+            ResizeDynamicRenderTargets();
+
+            WriteDeferredLightingDescriptorSet();
+            WritePostProcessingDescriptorSet();
+            WriteBackbufferPassDescriptorSet();
+
+            s_skipRender = s_skipRender || false;
+        }    
+    }
 
     const float moveDist = glm::length(s_cameraVel);
 
@@ -3949,7 +3990,7 @@ void PresentImage(uint32_t imageIndex)
     if (presentResult != VK_SUBOPTIMAL_KHR && presentResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(presentResult);
     } else {
-        s_swapchainRecreateRequired = true;
+        s_swapchainRecreateRequired = !s_pWnd->IsMinimized() && s_pWnd->GetWidth() != 0 &&  s_pWnd->GetHeight() != 0;
     }
 }
 
@@ -4597,10 +4638,13 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+#ifdef ENG_DEBUG_UI_ENABLED
 static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", eng::ProfileColor::Red);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", eng::ProfileColor::Red);
+
+    s_dbgUI.BeginFrame(s_frameTime);
 
     DbgUI::FillData();
 
@@ -4631,6 +4675,7 @@ static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
     // ImGui uses descriptor sets so we need to rebind descriptor buffer
     cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 }
+#endif
 
 
 void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
@@ -4699,7 +4744,6 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 static void RenderScene()
 {
     if (s_renderFinishedFence.GetStatus() == VK_NOT_READY) {
-        s_dbgUI.EndFrame();
         return;
     }
 
@@ -4712,8 +4756,7 @@ static void RenderScene()
     if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
         VK_CHECK(acquireResult);
     } else {
-        s_swapchainRecreateRequired = true;
-        s_dbgUI.EndFrame();
+        s_swapchainRecreateRequired = !s_pWnd->IsMinimized() && s_pWnd->GetWidth() != 0 &&  s_pWnd->GetHeight() != 0;
         return;
     }
 
@@ -4738,8 +4781,10 @@ static void RenderScene()
 
         PostProcessingPass(cmdBuffer);
 
+    #ifdef ENG_DEBUG_UI_ENABLED
         DebugUIRenderPass(cmdBuffer);
-        
+    #endif
+
         ResolveToBackbufferPass(cmdBuffer);
 
         ENG_PROFILE_GPU_COLLECT_STATS(cmdBuffer);
@@ -4754,21 +4799,6 @@ static void RenderScene()
     s_vkDevice.GetQueue().Submit(cmdBuffer, &s_renderFinishedFence, &waitData, &signalData);
 
     PresentImage(s_nextImageIdx);
-}
-
-
-static bool ResizeVkSwapchain(eng::Window& window)
-{
-    if (!s_swapchainRecreateRequired) {
-        return false;
-    }
-
-    bool resizeResult;
-    s_vkSwapchain.Resize(window.GetWidth(), window.GetHeight(), resizeResult);
-    
-    s_swapchainRecreateRequired = !resizeResult;
-
-    return s_swapchainRecreateRequired;
 }
 
 
@@ -4866,9 +4896,11 @@ static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& even
 }
 
 
-bool AppProcessWndEvent(const eng::WndEvent& event)
+void AppProcessWndEvent(const eng::WndEvent& event)
 {
+#ifdef ENG_DEBUG_UI_ENABLED
     s_dbgUI.ProcessEvent(event);
+#endif
 
     if (event.Is<eng::WndKeyEvent>()) {
         const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
@@ -4884,28 +4916,12 @@ bool AppProcessWndEvent(const eng::WndEvent& event)
     }
 
     if (event.Is<eng::WndResizeEvent>()) {
-        s_swapchainRecreateRequired = true;
-    }
+        const eng::WndResizeEvent& e = event.Get<eng::WndResizeEvent>();
 
-    if (s_pWnd->IsMinimized() || s_pWnd->GetWidth() == 0 || s_pWnd->GetHeight() == 0) {
-        return false;
-    }
-
-    if (s_swapchainRecreateRequired) {
-        if (ResizeVkSwapchain(*s_pWnd)) {
-            return false;
+        if (!e.IsMinimized() && e.width != 0 && e.height != 0) {
+            s_swapchainRecreateRequired = true;
         }
-
-        s_vkDevice.WaitIdle();
-
-        ResizeDynamicRenderTargets();
-
-        WriteDeferredLightingDescriptorSet();
-        WritePostProcessingDescriptorSet();
-        WriteBackbufferPassDescriptorSet();
     }
-
-    return true;
 }
 
 
@@ -4916,17 +4932,22 @@ void ProcessFrame()
     static eng::Timer timer;
     timer.End().GetDuration<float, std::milli>(s_frameTime).Reset();
 
+    s_pWnd->SetTitle("%s | Build Type: %s | CPU: %.3f ms (%.1f FPS)", APP_NAME, APP_BUILD_TYPE_STR, s_frameTime, 1000.f / s_frameTime);
+
+    s_skipRender = false;
+
     s_pWnd->PullEvents();
-    
+
     eng::WndEvent event;
     while(s_pWnd->PopEvent(event)) {
-        if (!AppProcessWndEvent(event)) {
-            return;
-        }
+        AppProcessWndEvent(event);
     }
 
-    if (!s_pWnd->IsMinimized() && s_pWnd->GetWidth() > 0 && s_pWnd->GetHeight() > 0) {
-        UpdateScene();
+    UpdateScene();
+
+    s_skipRender = s_skipRender || s_pWnd->IsMinimized() || s_pWnd->GetWidth() == 0 || s_pWnd->GetHeight() == 0;
+
+    if (!s_skipRender) {
         RenderScene();
     }
 
@@ -5007,7 +5028,9 @@ int main(int argc, char* argv[])
     };
     CreateSkybox(skyBoxFaceFilepaths);
 
+#ifdef ENG_DEBUG_UI_ENABLED
     s_dbgUI.Create(*s_pWnd, s_vkDevice, s_colorRT8U.GetFormat());
+#endif
 
     const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
 

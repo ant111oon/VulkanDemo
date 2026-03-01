@@ -10,6 +10,18 @@ static const float M3D_HALF_PI = 0.5f * M3D_PI;
 static const float M3D_FLT_MAX = 3.40282347e+37F;
 static const float M3D_FLT_MIN = 1.17549435e-37F;
 
+static const int M3D_INT8_MIN = -128;
+static const int M3D_INT8_MAX = 127;
+static const int M3D_INT16_MIN = -32768;
+static const int M3D_INT16_MAX = 32767;
+static const int M3D_INT32_MIN = -2147483648;
+static const int M3D_INT32_MAX = 2147483647;
+
+static const uint M3D_UINT8_MAX = 0xffu;
+static const uint M3D_UINT16_MAX = 0xffffu;
+static const uint M3D_UINT32_MAX = 0xffffffffu;
+
+
 #define FLOAT2(x) float2(x, x)
 #define FLOAT3(x) float3(x, x, x)
 #define FLOAT4(x) float4(x, x, x, x)
