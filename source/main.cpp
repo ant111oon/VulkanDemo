@@ -3938,8 +3938,6 @@ void UpdateScene()
             WriteDeferredLightingDescriptorSet();
             WritePostProcessingDescriptorSet();
             WriteBackbufferPassDescriptorSet();
-
-            s_skipRender = s_skipRender || false;
         }    
     }
 

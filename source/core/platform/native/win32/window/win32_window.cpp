@@ -511,7 +511,11 @@ namespace eng
     void Win32Window::UpdateTitleInternal()
     {
         WIN32_ASSERT(IsCreated());
-        SetWindowTextA(m_HWND, GetTitle().data());
+
+        if (!IsMinimized()) {
+            // On some reason if window is minimized and we change window title every frame than system freezes
+            SetWindowTextA(m_HWND, GetTitle().data());
+        }
     }
 }
 
