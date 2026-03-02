@@ -384,25 +384,26 @@ namespace eng
     }
 
 
-    ImTextureID DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout)
+    ImTextureID DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler)
     {
         ImTextureID ID;
-        AddTexture(view, sampler, layout, ID);
+        AddTexture(view, sampler, ID);
 
         return ID;
     }
 
 
-    DebugUI& DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout, ImTextureID& outID)
+    DebugUI& DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, ImTextureID& outID)
     {
         CORE_ASSERT(IsCreated());
-
+ 
+        static constexpr VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        
         eng::HashBuilder builder;
         builder.AddValue((uintptr_t)view.Get());
         builder.AddValue((uintptr_t)sampler.Get());
-        builder.AddValue(layout);
 
-        const uint64_t hash = builder.Value();
+        const TextureHash hash = builder.Value();
 
         const auto it = m_hashToTextureID.find(hash);
 

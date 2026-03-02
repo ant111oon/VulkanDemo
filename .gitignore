@@ -6,3 +6,4 @@ assets/*
 !assets/**/Sponza/
 !assets/**/LightSponza/
 !assets/**/TestPBR/
+!assets/**/GPUOcclusionTest/

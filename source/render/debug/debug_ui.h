@@ -49,8 +49,8 @@ namespace eng
     
         DebugUI& Render(vkn::CmdBuffer& cmdBuffer);
     
-        ImTextureID AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout);
-        DebugUI& AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, VkImageLayout layout, ImTextureID& outID);
+        ImTextureID AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler);
+        DebugUI& AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, ImTextureID& outID);
 
         DebugUI& RemoveTexture(ImTextureID ID);
 
@@ -80,8 +80,18 @@ namespace eng
         ImGuiContext* m_pContext = nullptr;
         ImGuiIO* m_pIO = nullptr;
 
-        std::unordered_map<TextureHash, ImTextureID> m_hashToTextureID;
-        std::unordered_map<ImTextureID,TextureHash> m_textureIDToHash;
+        struct Hasher0
+        {
+            static constexpr uint64_t operator()(TextureHash texHash) { return texHash; }
+        };
+
+        struct Hasher1
+        {
+            static constexpr uint64_t operator()(ImTextureID ID) { return ID; }
+        };
+
+        std::unordered_map<TextureHash, ImTextureID, Hasher0> m_hashToTextureID;
+        std::unordered_map<ImTextureID, TextureHash, Hasher1> m_textureIDToHash;
 
         std::bitset<BIT_COUNT> m_state = {};
     };

@@ -1055,6 +1055,16 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
+
+            // if (ImGui::Begin("Viewport")) {
+            //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
+                
+            //     ImVec2 size = ImGui::GetWindowSize();
+            //     size.x = std::min((float)s_colorRT16F.GetSizeX(), size.x);
+            //     size.x = std::min((float)s_colorRT16F.GetSizeY(), size.y);
+
+            //     ImGui::Image(ID, size);
+            // } ImGui::End();
         } ImGui::End();
     }
 }
@@ -2563,7 +2573,7 @@ static void CreateCommonDbgTextures()
         createInfo.pAllocInfo = &allocInfo;
     }
 
-    texCreateInfos[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD].extent = { 16u, 16u, 1u };
+    texCreateInfos[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD].extent = { 64u, 64u, 1u };
 
     static constexpr std::array<const char*, (size_t)COMMON_DBG_TEX_IDX::COUNT> texNames = {
         "COMMON_DBG_TEX_RED",
@@ -2707,7 +2717,21 @@ static void UploadGPUDbgTextures()
 
     for (uint32_t y = 0; y < checkerboardTex.GetSizeY(); ++y) {
         for (uint32_t x = 0; x < checkerboardTex.GetSizeX(); ++x) {
-            pCheckerboardImageData[y * checkerboardTex.GetSizeX() + x] = ((x % 2) ^ (y % 2)) ? whiteColorU32 : blackColorU32;
+            const uint32_t idx = y * checkerboardTex.GetSizeX() + x;
+
+            if (x < checkerboardTex.GetSizeX() / 2) {
+                if (y < checkerboardTex.GetSizeY() / 2) {
+                    pCheckerboardImageData[idx] = whiteColorU32;
+                } else {
+                    pCheckerboardImageData[idx] = blackColorU32;
+                }
+            } else {
+                if (y < checkerboardTex.GetSizeY() / 2) {
+                    pCheckerboardImageData[idx] = blackColorU32;
+                } else {
+                    pCheckerboardImageData[idx] = whiteColorU32;
+                }
+            }
         }
     }
     checkerboardImageStagingBuffer.Unmap();
@@ -3467,14 +3491,23 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
     eng::Timer timer;
 
-    s_cpuInstData.reserve(asset.meshes.size());
+    size_t meshInstCount = 0;
+
+    for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
+        gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&meshInstCount, &asset](auto&& node, auto&& trs)
+        {    
+            if (node.meshIndex.has_value()) {
+                const uint32_t meshIdx = node.meshIndex.value();
+                meshInstCount += asset.meshes[meshIdx].primitives.size();
+            }
+        });
+    }
+
+    s_cpuInstData.reserve(meshInstCount);
     s_cpuInstData.clear();
 
     s_cpuTransformData.reserve(asset.nodes.size());
     s_cpuTransformData.clear();
-
-    uint32_t meshIdx = 0;
-    uint32_t trsIdx = 0;
 
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
         gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
@@ -3487,7 +3520,10 @@ static void LoadSceneInstData(const gltf::Asset& asset)
             s_cpuTransformData.emplace_back(transform);
     
             if (node.meshIndex.has_value()) {
-                const gltf::Mesh& mesh = asset.meshes[node.meshIndex.value()];
+                const uint32_t meshIdx = node.meshIndex.value();
+                const uint32_t trsIdx = s_cpuTransformData.size() - 1;
+
+                const gltf::Mesh& mesh = asset.meshes[meshIdx];
     
                 for (const gltf::Primitive& primitive : mesh.primitives) {
                     COMMON_INST_INFO instInfo = {};
@@ -3495,22 +3531,12 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     instInfo.MESH_IDX = meshIdx;
                     instInfo.TRANSFORM_IDX = trsIdx;
     
-                    CORE_ASSERT(primitive.materialIndex.has_value());
+                    CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
 
                     s_cpuInstData.emplace_back(instInfo);
-
-                    if (meshIdx == 0) {
-                        for (size_t i = 0; i < 5; ++i) {
-                            s_cpuInstData.emplace_back(instInfo);
-                        }
-                    }
-
-                    ++meshIdx;
                 }
             }
-    
-            ++trsIdx;
         });
     }
 
@@ -5045,7 +5071,8 @@ int main(int argc, char* argv[])
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     UploadGPUResources();
     CreateIBLResources();
