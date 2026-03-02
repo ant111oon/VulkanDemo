@@ -394,7 +394,7 @@ struct COMMON_INST_INFO
     glm::uint TRANSFORM_IDX;
     glm::uint MATERIAL_IDX;
     glm::uint MESH_IDX;
-    glm::uint PAD0;
+    glm::uint PAD;
 };
 
 
@@ -3509,6 +3509,10 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     s_cpuTransformData.reserve(asset.nodes.size());
     s_cpuTransformData.clear();
 
+    std::unordered_map<uint32_t, uint32_t> meshIdxToFirstRawIdx = {};
+
+    uint32_t currMeshIdx = 0;
+
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
         gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
         {
@@ -3520,16 +3524,30 @@ static void LoadSceneInstData(const gltf::Asset& asset)
             s_cpuTransformData.emplace_back(transform);
     
             if (node.meshIndex.has_value()) {
-                const uint32_t meshIdx = node.meshIndex.value();
                 const uint32_t trsIdx = s_cpuTransformData.size() - 1;
-
+                
+                const uint32_t meshIdx = node.meshIndex.value();
                 const gltf::Mesh& mesh = asset.meshes[meshIdx];
-    
-                for (const gltf::Primitive& primitive : mesh.primitives) {
+
+                uint32_t idxOffset;
+
+                auto meshEntryIt = meshIdxToFirstRawIdx.find(meshIdx);
+                if (meshEntryIt != meshIdxToFirstRawIdx.cend()) {
+                    idxOffset = meshEntryIt->second;
+                } else {
+                    idxOffset = currMeshIdx;
+
+                    meshIdxToFirstRawIdx[meshIdx] = currMeshIdx;
+                    currMeshIdx += mesh.primitives.size();
+                }
+
+                for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
+                    const gltf::Primitive& primitive = mesh.primitives[i];
+
                     COMMON_INST_INFO instInfo = {};
                     
-                    instInfo.MESH_IDX = meshIdx;
                     instInfo.TRANSFORM_IDX = trsIdx;
+                    instInfo.MESH_IDX = idxOffset + i;
     
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
@@ -3544,9 +3562,11 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
     timer.Reset().Start();
 
-    std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), [](const COMMON_INST_INFO& a, const COMMON_INST_INFO& b){
-        return a.MESH_IDX < b.MESH_IDX;
-    });
+    std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), 
+        [](const COMMON_INST_INFO& a, const COMMON_INST_INFO& b) {
+            return a.MESH_IDX < b.MESH_IDX;
+        }
+    );
 
     CORE_LOG_INFO("Instance data sorting finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }

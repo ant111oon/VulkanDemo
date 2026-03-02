@@ -72,7 +72,7 @@ struct COMMON_INST_INFO
     uint TRANSFORM_IDX;
     uint MATERIAL_IDX;
     uint MESH_IDX;
-    uint PAD0;
+    uint PAD;
 };
 
 
