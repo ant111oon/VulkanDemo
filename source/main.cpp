@@ -3503,15 +3503,16 @@ static void LoadSceneInstData(const gltf::Asset& asset)
         });
     }
 
+    std::vector<uint32_t> meshBaseIdxOffsets(asset.meshes.size());
+    for (size_t i = 1; i < meshBaseIdxOffsets.size(); ++i) {
+        meshBaseIdxOffsets[i] = meshBaseIdxOffsets[i - 1] + asset.meshes[i - 1].primitives.size();
+    }
+
     s_cpuInstData.reserve(meshInstCount);
     s_cpuInstData.clear();
 
     s_cpuTransformData.reserve(asset.nodes.size());
     s_cpuTransformData.clear();
-
-    std::unordered_map<uint32_t, uint32_t> meshIdxToFirstRawIdx = {};
-
-    uint32_t currMeshIdx = 0;
 
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
         gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
@@ -3529,17 +3530,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 const uint32_t meshIdx = node.meshIndex.value();
                 const gltf::Mesh& mesh = asset.meshes[meshIdx];
 
-                uint32_t idxOffset;
-
-                auto meshEntryIt = meshIdxToFirstRawIdx.find(meshIdx);
-                if (meshEntryIt != meshIdxToFirstRawIdx.cend()) {
-                    idxOffset = meshEntryIt->second;
-                } else {
-                    idxOffset = currMeshIdx;
-
-                    meshIdxToFirstRawIdx[meshIdx] = currMeshIdx;
-                    currMeshIdx += mesh.primitives.size();
-                }
+                const uint32_t baseIdx = meshBaseIdxOffsets[meshIdx];
 
                 for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
                     const gltf::Primitive& primitive = mesh.primitives[i];
@@ -3547,7 +3538,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     COMMON_INST_INFO instInfo = {};
                     
                     instInfo.TRANSFORM_IDX = trsIdx;
-                    instInfo.MESH_IDX = idxOffset + i;
+                    instInfo.MESH_IDX = baseIdx + i;
     
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     instInfo.MATERIAL_IDX = primitive.materialIndex.value();
