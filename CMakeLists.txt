@@ -27,22 +27,25 @@ else()
 endif()
 
 
-if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
-    if (CMAKE_CONFIGURATION_TYPES)
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+
+# Single-config: ON unless Release
+if(NOT IS_MULTI_CONFIG)
+    if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
         set(ENG_ENABLE_TRACY ON)
-    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(ENG_ENABLE_TRACY ON)
+        set(ENG_ENABLE_IMGUI ON)
+    else()
+        set(ENG_ENABLE_TRACY OFF)
+        set(ENG_ENABLE_IMGUI OFF)
     endif()
+else()
+    set(ENG_ENABLE_TRACY ON)
+    set(ENG_ENABLE_IMGUI ON)
 endif()
 
-
-if (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
-    if (CMAKE_CONFIGURATION_TYPES)
-        set(ENG_ENABLE_IMGUI ON)
-    elseif (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(ENG_ENABLE_IMGUI ON)
-    endif()
-endif()
+# Optional: put it in cache so it's visible in CMake GUI / ccmake
+set(ENG_ENABLE_TRACY ${ENG_ENABLE_TRACY} CACHE BOOL "Enable Tracy (non-Release only)" FORCE)
+set(ENG_ENABLE_IMGUI ${ENG_ENABLE_IMGUI} CACHE BOOL "Enable Debug Draw" FORCE)
 
 
 find_package(Vulkan REQUIRED)
