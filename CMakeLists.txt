@@ -33,19 +33,19 @@ get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(NOT IS_MULTI_CONFIG)
     if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
         set(ENG_ENABLE_TRACY ON)
-        set(ENG_ENABLE_IMGUI ON)
+        set(ENG_ENABLE_DBG_DRAW ON)
     else()
         set(ENG_ENABLE_TRACY OFF)
-        set(ENG_ENABLE_IMGUI OFF)
+        set(ENG_ENABLE_DBG_DRAW OFF)
     endif()
 else()
     set(ENG_ENABLE_TRACY ON)
-    set(ENG_ENABLE_IMGUI ON)
+    set(ENG_ENABLE_DBG_DRAW ON)
 endif()
 
 # Optional: put it in cache so it's visible in CMake GUI / ccmake
 set(ENG_ENABLE_TRACY ${ENG_ENABLE_TRACY} CACHE BOOL "Enable Tracy (non-Release only)" FORCE)
-set(ENG_ENABLE_IMGUI ${ENG_ENABLE_IMGUI} CACHE BOOL "Enable Debug Draw" FORCE)
+set(ENG_ENABLE_DBG_DRAW ${ENG_ENABLE_DBG_DRAW} CACHE BOOL "Enable Debug Draw" FORCE)
 
 
 find_package(Vulkan REQUIRED)
@@ -90,7 +90,7 @@ if (ENG_ENABLE_TRACY)
 endif()
 
 
-if (ENG_ENABLE_IMGUI)
+if (ENG_ENABLE_DBG_DRAW)
     FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -112,6 +112,24 @@ if (ENG_ENABLE_IMGUI)
 
     target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
     target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+
+
+    FetchContent_Declare(
+        im3d
+        GIT_REPOSITORY https://github.com/john-chapman/im3d.git
+        GIT_TAG        master
+        GIT_PROGRESS   TRUE
+    )
+    FetchContent_MakeAvailable(im3d)
+
+    add_library(im3d STATIC
+        ${im3d_SOURCE_DIR}/im3d_config.h
+        ${im3d_SOURCE_DIR}/im3d_math.h
+        ${im3d_SOURCE_DIR}/im3d.h
+        ${im3d_SOURCE_DIR}/im3d.cpp
+    )
+    
+    target_include_directories(im3d PUBLIC ${im3d_SOURCE_DIR})
 endif()
 
 
@@ -155,7 +173,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE glm
     PRIVATE fastgltf
     
-    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui>
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui im3d>
 
     PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
 )

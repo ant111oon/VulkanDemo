@@ -32,7 +32,7 @@
 
 #include "render/core/vulkan/vk_profiler.h"
 
-#include "render/debug/debug_ui.h"
+#include "render/debug/dbg_ui.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -917,9 +917,7 @@ static vkn::ComputePSOBuilder s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
 static std::vector<uint8_t> s_shaderCodeBuffer;
 
-#ifdef ENG_DEBUG_UI_ENABLED
-    static eng::DebugUI s_dbgUI;
-#endif
+static eng::DbgUI s_dbgUI;
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = M3D_ZEROF3;
@@ -4933,9 +4931,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& even
 
 void AppProcessWndEvent(const eng::WndEvent& event)
 {
-#ifdef ENG_DEBUG_UI_ENABLED
     s_dbgUI.ProcessEvent(event);
-#endif
 
     if (event.Is<eng::WndKeyEvent>()) {
         const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
@@ -5063,9 +5059,7 @@ int main(int argc, char* argv[])
     };
     CreateSkybox(skyBoxFaceFilepaths);
 
-#ifdef ENG_DEBUG_UI_ENABLED
     s_dbgUI.Create(*s_pWnd, s_vkDevice, s_colorRT8U.GetFormat());
-#endif
 
     const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
 

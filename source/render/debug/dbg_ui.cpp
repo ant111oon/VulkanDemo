@@ -1,14 +1,14 @@
 #include "pch.h"
-#include "debug_ui.h"
-
+#include "dbg_ui.h"
 
 #ifdef ENG_DEBUG_UI_ENABLED
-
-#include "core/utils/hash.h"
+    #include "core/utils/hash.h"
+#endif
 
 
 namespace eng
 {
+#ifdef ENG_DEBUG_UI_ENABLED
     static ImGuiMouseButton_ WndMouseButtonTypeToImGui(WndMouseButtonType type)
     {
         switch (type) {
@@ -193,18 +193,19 @@ namespace eng
             pIO->AddKeyEvent(ImGuiMod_Super, down);
         }   
     }
+#endif
 
-
-    DebugUI::~DebugUI()
+    DbgUI::~DbgUI()
     {
         Destroy();
     }
 
 
-    DebugUI& DebugUI::Create(Window& window, vkn::Device& device, VkFormat rtFormat)
+    DbgUI& DbgUI::Create(Window& window, vkn::Device& device, VkFormat rtFormat)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         if (IsCreated()) {
-            CORE_LOG_WARN("DebugUI is already created");
+            CORE_LOG_WARN("DbgUI is already created");
             return *this;
         }
 
@@ -274,13 +275,15 @@ namespace eng
         }
 
         m_state.set(BIT_IS_CREATED, true);
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::Destroy()
+    DbgUI& DbgUI::Destroy()
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         if (!IsCreated()) {
             return *this;
         }
@@ -301,13 +304,15 @@ namespace eng
         m_pWindow = nullptr;
 
         m_state.set(BIT_IS_CREATED, false);
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::ProcessEvent(const WndEvent& event)
+    DbgUI& DbgUI::ProcessEvent(const WndEvent& event)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
 
         if (event.Is<WndCursorEvent>()) {
@@ -343,13 +348,15 @@ namespace eng
 
             m_pIO->DisplaySize = ImVec2(static_cast<float>(e.width), static_cast<float>(e.height));
         }
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::BeginFrame(float dt)
+    DbgUI& DbgUI::BeginFrame(float dt)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
 
         m_pIO->DisplaySize = ImVec2(static_cast<float>(m_pWindow->GetWidth()), static_cast<float>(m_pWindow->GetHeight()));
@@ -358,43 +365,53 @@ namespace eng
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::EndFrame()
+    DbgUI& DbgUI::EndFrame()
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
 
         ImGui::EndFrame();
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::Render(vkn::CmdBuffer& cmdBuffer)
+    DbgUI& DbgUI::Render(vkn::CmdBuffer& cmdBuffer)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer.Get());
+    #endif
 
         return *this;
     }
 
 
-    ImTextureID DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler)
+    DbgUI::TexID DbgUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler)
     {
-        ImTextureID ID;
+    #ifdef ENG_DEBUG_UI_ENABLED
+        TexID ID;
         AddTexture(view, sampler, ID);
 
         return ID;
+    #else
+        return (TexID)-1;
+    #endif
     }
 
 
-    DebugUI& DebugUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, ImTextureID& outID)
+    DbgUI& DbgUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, TexID& outID)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
  
         static constexpr VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -408,20 +425,22 @@ namespace eng
         const auto it = m_hashToTextureID.find(hash);
 
         if (it == m_hashToTextureID.cend()) {
-            outID = (ImTextureID)ImGui_ImplVulkan_AddTexture(sampler.Get(), view.Get(), layout);
+            outID = (TexID)ImGui_ImplVulkan_AddTexture(sampler.Get(), view.Get(), layout);
             
             m_hashToTextureID[hash] = outID;
             m_textureIDToHash[outID] = hash;
         } else {
             outID = it->second;
         }
+    #endif
 
         return *this;
     }
 
 
-    DebugUI& DebugUI::RemoveTexture(ImTextureID ID)
+    DbgUI& DbgUI::RemoveTexture(TexID ID)
     {
+    #ifdef ENG_DEBUG_UI_ENABLED
         CORE_ASSERT(IsCreated());
 
         const auto hashIt = m_textureIDToHash.find(ID);
@@ -436,9 +455,29 @@ namespace eng
         
         m_textureIDToHash.erase(ID);
         m_hashToTextureID.erase(hash);
+    #endif
 
         return *this;
     }
-}
 
-#endif
+
+    bool DbgUI::IsAnyWindowFocused() const
+    {
+    #ifdef ENG_DEBUG_UI_ENABLED
+        CORE_ASSERT(IsCreated());
+        return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
+    #else
+        return false;
+    #endif
+    }
+
+
+    bool DbgUI::IsCreated() const
+    {
+    #ifdef ENG_DEBUG_UI_ENABLED
+        return m_state.test(BIT_IS_CREATED);
+    #else
+        return false;
+    #endif
+    }
+}
