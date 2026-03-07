@@ -448,10 +448,10 @@ struct COMMON_CB_DATA
     float Z_NEAR;
     float Z_FAR;
 
-    glm::uint  COMMON_FLAGS;
-    glm::uint  COMMON_DBG_FLAGS;
-    glm::uint  COMMON_DBG_VIS_FLAGS;
-    glm::uint  PAD0;
+    glm::uint COMMON_FLAGS;
+    glm::uint COMMON_DBG_FLAGS;
+    glm::uint COMMON_DBG_VIS_FLAGS;
+    glm::uint PAD0;
 
     glm::float3 CAM_WPOS;
     glm::uint PAD1;
@@ -804,16 +804,16 @@ static constexpr float CAMERA_SPEED = 0.0025f;
 enum class PassID
 {
     COMMON,
+    IRRADIANCE_MAP_GEN,
+    BRDF_LUT_GEN,
+    PREFILT_ENV_MAP_GEN,
     MESH_CULLING,
     ZPASS,
     GBUFFER,
     DEFERRED_LIGHTING,
+    SKYBOX,
     POST_PROCESSING,
     BACKBUFFER,
-    SKYBOX,
-    IRRADIANCE_MAP_GEN,
-    BRDF_LUT_GEN,
-    PREFILT_ENV_MAP_GEN,
     COUNT,
 };
 
@@ -4672,7 +4672,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
 
 #ifdef ENG_DEBUG_UI_ENABLED
-static void DebugUIRenderPass(vkn::CmdBuffer& cmdBuffer)
+static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", eng::ProfileColor::Red);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", eng::ProfileColor::Red);
@@ -4815,7 +4815,7 @@ static void RenderScene()
         PostProcessingPass(cmdBuffer);
 
     #ifdef ENG_DEBUG_UI_ENABLED
-        DebugUIRenderPass(cmdBuffer);
+        DbgUIPass(cmdBuffer);
     #endif
 
         ResolveToBackbufferPass(cmdBuffer);

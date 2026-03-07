@@ -112,24 +112,6 @@ if (ENG_ENABLE_DBG_DRAW)
 
     target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
     target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
-
-
-    FetchContent_Declare(
-        im3d
-        GIT_REPOSITORY https://github.com/john-chapman/im3d.git
-        GIT_TAG        master
-        GIT_PROGRESS   TRUE
-    )
-    FetchContent_MakeAvailable(im3d)
-
-    add_library(im3d STATIC
-        ${im3d_SOURCE_DIR}/im3d_config.h
-        ${im3d_SOURCE_DIR}/im3d_math.h
-        ${im3d_SOURCE_DIR}/im3d.h
-        ${im3d_SOURCE_DIR}/im3d.cpp
-    )
-    
-    target_include_directories(im3d PUBLIC ${im3d_SOURCE_DIR})
 endif()
 
 
