@@ -317,7 +317,7 @@ private:
 };
 
 
-static constexpr uint32_t VERTEX_DATA_SIZE_UI = 6;
+static constexpr uint32_t COMMON_VERTEX_DATA_SIZE_UI = 6;
 
 struct Vertex
 {
@@ -342,7 +342,7 @@ struct Vertex
     glm::float3 GetLNorm() const { return glm::float3(glm::unpackHalf2x16(data[1]).y, glm::unpackHalf2x16(data[2])); }
     glm::float2 GetUV() const { return glm::unpackHalf2x16(data[3]); }
 
-    glm::uint data[VERTEX_DATA_SIZE_UI] = {};
+    glm::uint data[COMMON_VERTEX_DATA_SIZE_UI] = {};
 };
 
 
@@ -599,12 +599,6 @@ struct PREFILTERED_ENV_MAP_PUSH_CONSTS
     glm::uvec2 ENV_MAP_FACE_SIZE;
     glm::uint  MIP;
     glm::uint  PADDING;
-};
-
-
-struct BRDF_INTEGRATION_PUSH_CONSTS
-{
-    glm::uvec4 PADDING;
 };
 
 
@@ -2186,10 +2180,7 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
         &s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN]
     };
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BRDF_INTEGRATION_PUSH_CONSTS) };
-
-    s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1))
-        .SetDebugName("GRDF_LUT_GEN_PIPELINE_LAYOUT");
+    s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN].Create(&s_vkDevice, layoutPtrs).SetDebugName("GRDF_LUT_GEN_PIPELINE_LAYOUT");
 }
 
 

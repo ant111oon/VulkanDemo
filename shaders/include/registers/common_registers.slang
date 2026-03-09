@@ -241,7 +241,7 @@ static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 
 [vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
 
-static const uint VERTEX_DATA_SIZE_UI = 6;
+static const uint COMMON_VERTEX_DATA_SIZE_UI = 6;
 [vk::binding(7, 0)] StructuredBuffer<uint> COMMON_VERTEX_DATA;
 
 [vk::binding(8, 0)] Texture2D COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
