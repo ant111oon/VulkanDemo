@@ -7,7 +7,6 @@
 
 struct GBUFFER_PUSH_CONSTS
 {
-    uint2 PAD0;
     uint IS_AKILL_PASS;
     uint INST_INFO_IDX;
 };

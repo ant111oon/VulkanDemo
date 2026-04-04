@@ -7,6 +7,11 @@
 #endif
 
 
+#ifndef ENG_BUILD_RELEASE
+    #define ENG_DEBUG_DRAW_ENABLED
+#endif
+
+
 #include "core/platform/file/file.h"
 #include "core/utils/timer.h"
 
@@ -398,7 +403,7 @@ struct COMMON_INST_INFO
 };
 
 
-struct COMMON_INDIRECT_DRAW_CMD
+struct COMMON_CMD_DRAW_INDEXED_INDIRECT
 {
     // NOTE: Don't change order of this variables!!!
     glm::uint INDEX_COUNT;
@@ -409,8 +414,10 @@ struct COMMON_INDIRECT_DRAW_CMD
 };
 
 
-static constexpr glm::uint COMMON_INDIRECT_DRAW_CMD_SIZE_UINT = 5;
-static_assert(sizeof(COMMON_INDIRECT_DRAW_CMD) == COMMON_INDIRECT_DRAW_CMD_SIZE_UINT * sizeof(glm::uint));
+struct DBG_LINE_DATA
+{
+    glm::uint COLOR;
+};
 
 
 struct FRUSTUM_PLANE
@@ -566,14 +573,12 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 
 struct MESH_CULLING_PUSH_CONSTS
 {
-    glm::float3 PAD0;
     glm::uint INST_COUNT;
 };
 
 
 struct ZPASS_PUSH_CONSTS
 {
-    glm::uvec2 PAD0;
     glm::uint IS_AKILL_PASS;
     glm::uint INST_INFO_IDX;
 };
@@ -581,7 +586,6 @@ struct ZPASS_PUSH_CONSTS
 
 struct GBUFFER_PUSH_CONSTS
 {
-    glm::uvec2 PAD0;
     glm::uint IS_AKILL_PASS;
     glm::uint INST_INFO_IDX;
 };
@@ -590,7 +594,6 @@ struct GBUFFER_PUSH_CONSTS
 struct IRRADIANCE_MAP_PUSH_CONSTS
 {
     glm::uvec2 ENV_MAP_FACE_SIZE;
-    glm::uvec2 PADDING;
 };
 
 
@@ -598,7 +601,19 @@ struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 {
     glm::uvec2 ENV_MAP_FACE_SIZE;
     glm::uint  MIP;
-    glm::uint  PADDING;
+};
+
+
+enum class DBG_DRAW_PASS_ID : glm::uint
+{
+    LINES,
+    COUNT
+};
+
+
+struct DBG_DRAW_PUSH_CONSTS
+{
+    DBG_DRAW_PASS_ID PASS_ID;
 };
 
 
@@ -760,10 +775,17 @@ static constexpr size_t PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 
+static constexpr size_t DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT = 1;
+
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
+static constexpr uint32_t MAX_DBG_LINE_COUNT = 1024;
+
+static constexpr uint32_t DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
+static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
 
 static constexpr size_t GBUFFER_RT_COUNT = 4;
 static constexpr size_t CUBEMAP_FACE_COUNT = 6;
@@ -808,6 +830,9 @@ enum class PassID
     SKYBOX,
     POST_PROCESSING,
     BACKBUFFER,
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    DBG_DRAW_LINE,
+#endif
     COUNT,
 };
 
@@ -875,6 +900,13 @@ static std::vector<COMMON_MESH_INFO> s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
 static std::vector<glm::float4x4>    s_cpuTransformData;
 static std::vector<COMMON_INST_INFO> s_cpuInstData;
+
+
+static std::vector<DBG_LINE_DATA> s_dbgLineDataCPU;
+static vkn::Buffer s_dbgLineDataGPU;
+
+static std::vector<glm::uint> s_dbgLineVertexDataCPU;
+static vkn::Buffer s_dbgLineVertexDataGPU;
 
 
 static std::array<vkn::Texture, (size_t)COMMON_DBG_TEX_IDX::COUNT>     s_commonDbgTextures;
@@ -950,6 +982,32 @@ static bool s_skipRender = false;
 #endif
 
 
+static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float4& color)
+{
+    if (s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity()) {
+        CORE_LOG_WARN("Debug lines buffer is full");
+        return;
+    }
+
+    DBG_LINE_DATA data = {};
+    data.COLOR = glm::packUnorm4x8(color);
+
+    s_dbgLineDataCPU.emplace_back(data);
+
+    glm::uint wPos0XY = glm::packHalf2x16(glm::float2(wPos0.x, wPos0.y));
+    glm::uint wPos0Z = glm::packHalf2x16(glm::float2(wPos0.z, 0.f));
+
+    s_dbgLineVertexDataCPU.emplace_back(wPos0XY);
+    s_dbgLineVertexDataCPU.emplace_back(wPos0Z);
+
+    glm::uint wPos1XY = glm::packHalf2x16(glm::float2(wPos1.x, wPos1.y));
+    glm::uint wPos1Z = glm::packHalf2x16(glm::float2(wPos1.z, 0.f));
+
+    s_dbgLineVertexDataCPU.emplace_back(wPos1XY);
+    s_dbgLineVertexDataCPU.emplace_back(wPos1Z);
+}
+
+
 #ifdef ENG_DEBUG_UI_ENABLED
 namespace DbgUI
 {
@@ -990,32 +1048,47 @@ namespace DbgUI
 
             ImGui::NewLine();
             ImGui::SeparatorText("Mesh Culling");
+        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
-            ImGui::SameLine(); ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+            ImGui::SameLine();
+        #endif
+            ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
             ImGui::NewLine();
             ImGui::SeparatorText("Depth Pass");
+        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
-            ImGui::SameLine(); ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+            ImGui::SameLine(); 
+        #endif
+            ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
             
             ImGui::NewLine();
             ImGui::SeparatorText("GBuffer Pass");
+        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
-            ImGui::SameLine(); ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
+            ImGui::SameLine(); 
+        #endif
+            ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
             
+        #ifdef ENG_BUILD_DEBUG
             if (!s_useMeshIndirectDraw) {
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Opaque Mesh Count: %zu)", s_dbgDrawnOpaqueMeshCount);
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn AKill Mesh Count: %zu)", s_dbgDrawnAkillMeshCount);
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Transparent Mesh Count: %zu)", s_dbgDrawnTranspMeshCount);
             }
+        #endif
 
             ImGui::NewLine();
             ImGui::SeparatorText("Deferred Lighting Pass");
+        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
-            ImGui::SameLine(); ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
+            ImGui::SameLine(); 
+        #endif
+            ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
             
             ImGui::NewLine();
             ImGui::SeparatorText("Tonemapping");
+        #ifdef ENG_BUILD_DEBUG
             if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
                 for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
                     const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
@@ -1030,7 +1103,11 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
+        #else
+            ImGui::Text(DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
+        #endif
 
+        #ifdef ENG_BUILD_DEBUG
             ImGui::NewLine();
             ImGui::SeparatorText("Debug Output");
             if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
@@ -1047,6 +1124,7 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
+        #endif
 
             // if (ImGui::Begin("Viewport")) {
             //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
@@ -1319,6 +1397,7 @@ static void CreateVkPhysAndLogicalDevices()
     features2.pNext = &features11;
     features2.features.samplerAnisotropy = VK_TRUE;
     features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
+    features2.features.wideLines = VK_TRUE;
 
     vkn::DeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
@@ -1791,6 +1870,44 @@ static void CreateIBLResources()
 }
 
 
+static void CreateDbgDrawResources()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    {
+        s_dbgLineDataCPU.reserve(MAX_DBG_LINE_COUNT);
+    
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    
+        vkn::BufferCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.size = MAX_DBG_LINE_COUNT * sizeof(DBG_LINE_DATA);
+        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+        createInfo.pAllocInfo = &allocInfo;
+    
+        s_dbgLineDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_LINE_DATA_BUFFER");
+    }
+
+    {
+        s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE);
+
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    
+        vkn::BufferCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.size = DBG_LINE_VERTEX_BUFFER_SIZE;
+        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+        createInfo.pAllocInfo = &allocInfo;
+    
+        s_dbgLineVertexDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_LINE_VERT_BUFFER");
+    }
+#endif
+}
+
+
 static bool LoadShaderSpirVCode(const fs::path& path, std::vector<uint8_t>& buffer)
 {
     const std::string pathS = path.string();
@@ -2030,11 +2147,33 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 }
 
 
+static void CreateDbgDrawLineDescriptorSetLayout()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINE].Create(createInfo).SetDebugName("DBG_DRAW_DESCRIPTOR_SET_LAYOUT");
+#endif
+}
+
+
 static void CreateDescriptorBuffer()
 {
     std::array<vkn::DescriptorSetLayout*, (size_t)PassID::COUNT> layouts = {};
     
     for (size_t i = 0; i < layouts.size(); ++i) {
+        CORE_ASSERT_MSG(s_descSetLayouts[i].IsCreated(), "Descriptor Set Layout %u is not created", (uint32_t)i);
         layouts[i] = &s_descSetLayouts[i];
     }
 
@@ -2055,6 +2194,7 @@ static void CreateDescriptorSets()
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
+    CreateDbgDrawLineDescriptorSetLayout();
 
     CreateDescriptorBuffer();
 }
@@ -2181,6 +2321,19 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
     };
 
     s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN].Create(&s_vkDevice, layoutPtrs).SetDebugName("GRDF_LUT_GEN_PIPELINE_LAYOUT");
+}
+
+
+static void CreateDbgDrawLinePipelineLayout()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    const vkn::DescriptorSetLayout* layoutPtrs[] = {
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINE]
+    };
+
+    s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_LINE_PIPELINE_LAYOUT");
+#endif
 }
 
 
@@ -2514,6 +2667,51 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
 }
 
 
+static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& psPath)
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
+    }
+    
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("DBG_DRAW_LINE_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("DBG_DRAW_LINE_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_LINE];
+
+    s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .AddShader(vsShader)
+        .AddShader(psShader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE])
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_LINE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_NONE)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetRasterizerLineWidth(2.f)
+    #ifdef ENG_REVERSED_Z
+        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+    #else
+        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL)
+    #endif
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .AddColorAttachment(s_colorRT8U.GetFormat(), 
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE);
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("DBG_DRAW_LINES_PSO");
+#endif
+}
+
+
 static void CreatePipelines()
 {
     CreateMeshCullingPipelineLayout();
@@ -2526,6 +2724,7 @@ static void CreatePipelines()
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
     CreateBRDFIntegrationLUTGenPipelineLayout();
+    CreateDbgDrawLinePipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/scene.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
@@ -2536,6 +2735,7 @@ static void CreatePipelines()
     CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
     CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
     CreateBRDFIntegrationLUTGenPipeline("shaders/bin/brdf_integration_gen.cs.spv");
+    CreateDbgDrawLinePipeline("shaders/bin/dbg_draw_lines.vs.spv", "shaders/bin/dbg_draw_lines.ps.spv");
 }
 
 
@@ -2740,7 +2940,7 @@ static void CreateCullingResources()
 
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
@@ -2753,7 +2953,7 @@ static void CreateCullingResources()
     s_commonCulledOpaqueInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_OPAQUE_INST_INFO_IDS_BUFFER");
 
 
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
@@ -2765,7 +2965,7 @@ static void CreateCullingResources()
     s_commonCulledAKillInstInfoIDsBuffer.Create(createInfo).SetDebugName("COMMON_CULLED_AKILL_INST_INFO_IDS_BUFFER");
 
 
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_INDIRECT_DRAW_CMD);
+    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
@@ -3176,6 +3376,18 @@ static void WriteCommonDescriptorSet()
 }
 
 
+static void WriteDbgDrawLineDescriptorSet()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINE,
+        DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
+
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINE,
+        DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
+#endif
+}
+
+
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
@@ -3189,6 +3401,7 @@ static void WriteDescriptorSets()
     WriteIrradianceMapGenDescriptorSet();
     WritePrefilteredEnvMapGenDescriptorSets();
     WriteBRDFIntegrationLUTGenDescriptorSet();
+    WriteDbgDrawLineDescriptorSet();
 }
 
 
@@ -3975,6 +4188,11 @@ void UpdateScene()
     }
 
     s_camera.Update();
+
+    RenderDebugLine(glm::float3(-2.5f, -2.5f, 0.f), glm::float3(2.5f, -2.5f, 0.f),  glm::float4(1.f, 0.f, 0.f, 1.f));
+    RenderDebugLine(glm::float3(2.5f, -2.5f, 0.f),  glm::float3(2.5f, 2.5f, 0.f),   glm::float4(0.f, 1.f, 0.f, 1.f));
+    RenderDebugLine(glm::float3(2.5f, 2.5f, 0.f),   glm::float3(-2.5f, 2.5f, 0.f),  glm::float4(0.f, 0.f, 1.f, 1.f));
+    RenderDebugLine(glm::float3(-2.5f, 2.5f, 0.f),  glm::float3(-2.5f, -2.5f, 0.f), glm::float4(1.f, 1.f, 0.f, 1.f));
 }
 
 
@@ -4234,10 +4452,10 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
             if (isAKillPass) {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
-                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
             } else {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, sizeof(glm::uint), s_commonOpaqueMeshDrawCmdBuffer, 0, 
-                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
             }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
@@ -4413,10 +4631,10 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             
             if (isAKillPass) {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
-                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
             } else {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonOpaqueMeshDrawCmdBuffer, sizeof(glm::uint), s_commonOpaqueMeshDrawCmdBuffer, 0, 
-                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_INDIRECT_DRAW_CMD));
+                    MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
             }
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
@@ -4662,6 +4880,77 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+#ifdef ENG_DEBUG_DRAW_ENABLED
+static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
+{
+    const uint32_t lineInstCount = s_dbgLineDataCPU.size();
+
+    if (lineInstCount == 0) {
+        return;
+    }
+
+    ENG_PROFILE_SCOPED_MARKER_C("Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
+
+    {
+        void* pLineData = s_dbgLineDataGPU.Map();
+        memcpy(pLineData, s_dbgLineDataCPU.data(), lineInstCount * sizeof(DBG_LINE_DATA));
+        s_dbgLineDataGPU.Unmap();
+
+        void* pLineVertData = s_dbgLineVertexDataGPU.Map();
+        memcpy(pLineVertData, s_dbgLineVertexDataCPU.data(), s_dbgLineVertexDataCPU.size() * sizeof(glm::uint));
+        s_dbgLineVertexDataGPU.Unmap();
+
+        s_dbgLineDataCPU.clear();
+        s_dbgLineVertexDataCPU.clear();
+    }
+
+    cmdBuffer.BeginBarrierList()
+        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    cmdBuffer.CmdPushBarrierList();
+
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.layerCount = 1;
+
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = s_colorRTView8U.Get();
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+
+    cmdBuffer.CmdBeginRendering(renderingInfo);
+        VkViewport viewport = {};
+        viewport.width = renderingInfo.renderArea.extent.width;
+        viewport.height = renderingInfo.renderArea.extent.height;
+        viewport.minDepth = 0.f;
+        viewport.maxDepth = 1.f;
+        cmdBuffer.CmdSetViewport(0, 1, &viewport); 
+
+        VkRect2D scissor = {};
+        scissor.extent = renderingInfo.renderArea.extent;
+        cmdBuffer.CmdSetScissor(0, 1, &scissor);
+
+        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_LINE]);
+        
+        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            (size_t)PassID::COMMON, 0);
+        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            (size_t)PassID::DBG_DRAW_LINE, 1);
+
+        cmdBuffer.CmdDraw(2, lineInstCount, 0, 0);     
+    cmdBuffer.CmdEndRendering();
+}
+#endif
+
+
 #ifdef ENG_DEBUG_UI_ENABLED
 static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 {
@@ -4804,6 +5093,10 @@ static void RenderScene()
         SkyboxPass(cmdBuffer);
 
         PostProcessingPass(cmdBuffer);
+
+    #ifdef ENG_DEBUG_DRAW_ENABLED
+        DbgDrawPass(cmdBuffer);
+    #endif
 
     #ifdef ENG_DEBUG_UI_ENABLED
         DbgUIPass(cmdBuffer);
@@ -5037,6 +5330,7 @@ int main(int argc, char* argv[])
     CreateCommonConstBuffer();
     CreateCullingResources();
     CreateCommonDbgTextures();
+    CreateDbgDrawResources();
     CreateDescriptorSets();
     CreatePipelines();
 

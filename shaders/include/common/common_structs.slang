@@ -1,7 +1,7 @@
 #ifndef COMMON_STRUCTS_H
 #define COMMON_STRUCTS_H
 
-struct COMMON_INDIRECT_DRAW_CMD
+struct COMMON_CMD_DRAW_INDEXED_INDIRECT
 {
     // NOTE: Don't change order of this variables!!!
     uint INDEX_COUNT;
@@ -11,7 +11,7 @@ struct COMMON_INDIRECT_DRAW_CMD
     uint FIRST_INSTANCE;
 };
 
-static const uint COMMON_INDIRECT_DRAW_CMD_SIZE_UINT = 5;
+static const uint COMMON_CMD_DRAW_INDEXED_INDIRECT_SIZE_UINT = sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT) / sizeof(uint);
 
 
 #endif

@@ -4,8 +4,6 @@
 #include "registers/common_registers.slang"
 #include "registers/skybox_registers.slang"
 
-#include "common/math/half.slang"
-
 
 namespace utils
 {

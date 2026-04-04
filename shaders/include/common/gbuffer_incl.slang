@@ -23,7 +23,7 @@ float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
     float4 albedo = ONEF4;
 
     if (mtl.ALBEDO_TEX_IDX < 0) {
-        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, COMMON_DBG_TEX_IDX::CHECKERBOARD, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_REPEAT), uv);
+        albedo = SAMPLE_ARR_TEX(COMMON_DBG_TEXTURES, COMMON_DBG_TEX_IDX::WHITE, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_REPEAT), uv);
     } else {
         albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.ALBEDO_TEX_IDX, GET_COMMON_SAMPLER(smpIdx), uv);
         albedo.rgb = SRGBToLinear(albedo.rgb);

@@ -7,7 +7,6 @@
 
 struct MESH_CULLING_PUSH_CONSTS
 {
-    float3 PAD0;
     uint INST_COUNT;
 };
 

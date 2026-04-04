@@ -9,7 +9,6 @@ struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 {
     uint2 ENV_MAP_FACE_SIZE;
     uint  MIP;
-    uint  PADDING;
 };
 
 [[vk::push_constant]] PREFILTERED_ENV_MAP_PUSH_CONSTS PUSH_CONSTS;

@@ -4,8 +4,6 @@
 #include "registers/common_registers.slang"
 #include "registers/zpass_registers.slang"
 
-#include "common/math/half.slang"
-
 
 struct ZPASS_INPUT_DATA
 {
@@ -20,11 +18,11 @@ ZPASS_INPUT_DATA PrepareZPassVSInputData(uint vertID)
 
     const uint offset = vertID * COMMON_VERTEX_DATA_SIZE_UI;
 
-    inputData.position.xy = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 0]);
-    inputData.position.z = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 1]).x;
+    inputData.position.xy = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 0]);
+    inputData.position.z = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 1]).x;
 
     // Move this code under define for example COMMON_AKILL or to separate shader
-    inputData.uv = UnpackHalf2x16(COMMON_VERTEX_DATA[offset + 3]);
+    inputData.uv = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 3]);
 
     return inputData;
 }

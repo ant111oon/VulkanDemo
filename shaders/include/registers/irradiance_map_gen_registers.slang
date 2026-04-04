@@ -7,7 +7,6 @@
 struct IRRADIANCE_MAP_PUSH_CONSTS
 {
     uint2 ENV_MAP_FACE_SIZE;
-    uint2 PADDING;
 };
 
 [[vk::push_constant]] IRRADIANCE_MAP_PUSH_CONSTS PUSH_CONSTS;
