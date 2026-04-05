@@ -327,16 +327,16 @@ namespace vkn
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDepthClamp()
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerDepthClampState(VkBool32 depthClampEnable)
     {
-        m_rasterizationState.depthClampEnable = VK_TRUE;
+        m_rasterizationState.depthClampEnable = depthClampEnable;
         return *this;
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDiscard()
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerDiscardState(VkBool32 rasterizerDiscardEnable)
     {
-        m_rasterizationState.rasterizerDiscardEnable = VK_TRUE;
+        m_rasterizationState.rasterizerDiscardEnable = rasterizerDiscardEnable;
         return *this;
     }
 
@@ -362,9 +362,9 @@ namespace vkn
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableRasterizerDepthBias(float biasConstantFactor, float biasClamp, float biasSlopeFactor)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetRasterizerDepthBiasState(VkBool32 depthBiasEnable, float biasConstantFactor, float biasClamp, float biasSlopeFactor)
     {
-        m_rasterizationState.depthBiasEnable = VK_TRUE;
+        m_rasterizationState.depthBiasEnable = depthBiasEnable;
         m_rasterizationState.depthBiasConstantFactor = biasConstantFactor;
         m_rasterizationState.depthBiasClamp = biasClamp;
         m_rasterizationState.depthBiasSlopeFactor = biasSlopeFactor;
@@ -373,29 +373,39 @@ namespace vkn
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableDepthTest(VkBool32 depthWriteEnable, VkCompareOp compareOp)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthTestState(VkBool32 enabled, VkCompareOp compareOp)
     {
-        m_depthStencilState.depthTestEnable = VK_TRUE;
-        m_depthStencilState.depthWriteEnable = depthWriteEnable;
+        m_depthStencilState.depthTestEnable = enabled;
         m_depthStencilState.depthCompareOp = compareOp;
+        
         return *this;
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableStencilTestState(const VkStencilOpState& front, const VkStencilOpState& back)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthWriteState(VkBool32 enabled)
     {
-        m_depthStencilState.stencilTestEnable = VK_TRUE;
+        m_depthStencilState.depthWriteEnable = enabled;
+
+        return *this;
+    }
+
+
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetStencilTestState(VkBool32 enabled, const VkStencilOpState& front, const VkStencilOpState& back)
+    {
+        m_depthStencilState.stencilTestEnable = enabled;
         m_depthStencilState.front = front;
         m_depthStencilState.back = back;
+
         return *this;
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableDepthBoundsTest(float minValue, float maxValue)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthBoundsTestState(VkBool32 enabled, float minValue, float maxValue)
     {
-        m_depthStencilState.depthBoundsTestEnable = VK_TRUE;
+        m_depthStencilState.depthBoundsTestEnable = enabled;
         m_depthStencilState.minDepthBounds = minValue;
         m_depthStencilState.maxDepthBounds = maxValue;
+
         return *this;
     }
 
@@ -403,6 +413,7 @@ namespace vkn
     GraphicsPSOBuilder& GraphicsPSOBuilder::SetRenderingViewMask(uint32_t viewMask)
     {
         m_renderingCreateInfo.viewMask = viewMask;
+
         return *this;
     }
 
@@ -413,21 +424,24 @@ namespace vkn
         m_colorBlendState.blendConstants[1] = g;
         m_colorBlendState.blendConstants[2] = b;
         m_colorBlendState.blendConstants[3] = a;
+
         return *this;
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::EnableColorBlendLogicOp(VkLogicOp logicOp)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetColorBlendLogicOpState(VkBool32 enabled, VkLogicOp logicOp)
     {
-        m_colorBlendState.logicOpEnable = VK_TRUE;
+        m_colorBlendState.logicOpEnable = enabled;
         m_colorBlendState.logicOp = logicOp;
+
         return *this;
     }
 
 
-    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthAttachmentFormat(VkFormat format)
+    GraphicsPSOBuilder& GraphicsPSOBuilder::SetDepthAttachment(VkFormat format)
     {
         m_renderingCreateInfo.depthAttachmentFormat = format;
+
         return *this;
     }
 
@@ -435,6 +449,7 @@ namespace vkn
     GraphicsPSOBuilder& GraphicsPSOBuilder::SetStencilAttachmentFormat(VkFormat format)
     {
         m_renderingCreateInfo.stencilAttachmentFormat = format;
+
         return *this;
     }
 

@@ -10,23 +10,18 @@ struct DBG_LINE_DATA
 };
 
 
-enum DBG_DRAW_PASS_ID
+struct DBG_TRIANGLE_DATA
 {
-    LINES,
-    COUNT
+    uint COLOR;
 };
-
-struct DBG_DRAW_PUSH_CONSTS
-{
-    DBG_DRAW_PASS_ID PASS_ID;
-};
-
-[[vk::push_constant]] DBG_DRAW_PUSH_CONSTS PUSH_CONSTS;
 
 
 static const uint DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 [vk::binding(0, 1)] StructuredBuffer<uint> DBG_DRAW_LINES_VERTEX_BUFFER;
-
 [vk::binding(1, 1)] StructuredBuffer<DBG_LINE_DATA> DBG_DRAW_LINES_DATA;
+
+static const uint DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
+[vk::binding(2, 1)] StructuredBuffer<uint> DBG_DRAW_TRIANGLES_VERTEX_BUFFER;
+[vk::binding(3, 1)] StructuredBuffer<DBG_TRIANGLE_DATA> DBG_DRAW_TRIANGLES_DATA;
 
 #endif

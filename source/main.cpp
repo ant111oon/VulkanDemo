@@ -420,6 +420,12 @@ struct DBG_LINE_DATA
 };
 
 
+struct DBG_TRIANGLE_DATA
+{
+    glm::uint COLOR;
+};
+
+
 struct FRUSTUM_PLANE
 {
     glm::float3 normal;
@@ -604,19 +610,6 @@ struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 };
 
 
-enum class DBG_DRAW_PASS_ID : glm::uint
-{
-    LINES,
-    COUNT
-};
-
-
-struct DBG_DRAW_PUSH_CONSTS
-{
-    DBG_DRAW_PASS_ID PASS_ID;
-};
-
-
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
     "GBUFFER ALBEDO",
@@ -777,15 +770,20 @@ static constexpr size_t BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 3;
 
 
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 1024;
+static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 1024;
 
 static constexpr uint32_t DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
 static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = MAX_DBG_TRIANGLE_COUNT * DBG_TRIANGLE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
 
 static constexpr size_t GBUFFER_RT_COUNT = 4;
 static constexpr size_t CUBEMAP_FACE_COUNT = 6;
@@ -831,7 +829,8 @@ enum class PassID
     POST_PROCESSING,
     BACKBUFFER,
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    DBG_DRAW_LINE,
+    DBG_DRAW_LINES,
+    DBG_DRAW_TRIANGLES,
 #endif
     COUNT,
 };
@@ -903,10 +902,15 @@ static std::vector<COMMON_INST_INFO> s_cpuInstData;
 
 
 static std::vector<DBG_LINE_DATA> s_dbgLineDataCPU;
-static vkn::Buffer s_dbgLineDataGPU;
+static std::vector<DBG_TRIANGLE_DATA> s_dbgTriangleDataCPU;
 
 static std::vector<glm::uint> s_dbgLineVertexDataCPU;
+static std::vector<glm::uint> s_dbgTriangleVertexDataCPU;
+
+static vkn::Buffer s_dbgLineDataGPU;
+static vkn::Buffer s_dbgTriangleDataGPU;
 static vkn::Buffer s_dbgLineVertexDataGPU;
+static vkn::Buffer s_dbgTriangleVertexDataGPU;
 
 
 static std::array<vkn::Texture, (size_t)COMMON_DBG_TEX_IDX::COUNT>     s_commonDbgTextures;
@@ -1005,6 +1009,46 @@ static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, 
 
     s_dbgLineVertexDataCPU.emplace_back(wPos1XY);
     s_dbgLineVertexDataCPU.emplace_back(wPos1Z);
+}
+
+
+static void RenderDebugTriangleWire(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float4& color)
+{
+    RenderDebugLine(wPos0, wPos1, color);
+    RenderDebugLine(wPos1, wPos2, color);
+    RenderDebugLine(wPos2, wPos0, color);
+}
+
+
+static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float4& color)
+{
+    if (s_dbgTriangleDataCPU.size() == s_dbgTriangleDataCPU.capacity()) {
+        CORE_LOG_WARN("Debug triangles buffer is full");
+        return;
+    }
+
+    DBG_TRIANGLE_DATA data = {};
+    data.COLOR = glm::packUnorm4x8(color);
+
+    s_dbgTriangleDataCPU.emplace_back(data);
+
+    glm::uint wPos0XY = glm::packHalf2x16(glm::float2(wPos0.x, wPos0.y));
+    glm::uint wPos0Z = glm::packHalf2x16(glm::float2(wPos0.z, 0.f));
+
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos0XY);
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos0Z);
+
+    glm::uint wPos1XY = glm::packHalf2x16(glm::float2(wPos1.x, wPos1.y));
+    glm::uint wPos1Z = glm::packHalf2x16(glm::float2(wPos1.z, 0.f));
+
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos1XY);
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos1Z);
+
+    glm::uint wPos2XY = glm::packHalf2x16(glm::float2(wPos2.x, wPos2.y));
+    glm::uint wPos2Z = glm::packHalf2x16(glm::float2(wPos2.z, 0.f));
+
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos2XY);
+    s_dbgTriangleVertexDataCPU.emplace_back(wPos2Z);
 }
 
 
@@ -1904,6 +1948,38 @@ static void CreateDbgDrawResources()
     
         s_dbgLineVertexDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_LINE_VERT_BUFFER");
     }
+
+    {
+        s_dbgTriangleDataCPU.reserve(MAX_DBG_TRIANGLE_COUNT);
+    
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    
+        vkn::BufferCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.size = MAX_DBG_TRIANGLE_COUNT * sizeof(DBG_TRIANGLE_DATA);
+        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+        createInfo.pAllocInfo = &allocInfo;
+    
+        s_dbgTriangleDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_TRIANGLE_DATA_BUFFER");
+    }
+
+    {
+        s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE);
+
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    
+        vkn::BufferCreateInfo createInfo = {};
+        createInfo.pDevice = &s_vkDevice;
+        createInfo.size = DBG_TRIANGLE_VERTEX_BUFFER_SIZE;
+        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+        createInfo.pAllocInfo = &allocInfo;
+    
+        s_dbgTriangleVertexDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_TRIANGLE_VERT_BUFFER");
+    }
 #endif
 }
 
@@ -2163,7 +2239,28 @@ static void CreateDbgDrawLineDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINE].Create(createInfo).SetDebugName("DBG_DRAW_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINES].Create(createInfo).SetDebugName("DBG_DRAW_LINES_DESCRIPTOR_SET_LAYOUT");
+#endif
+}
+
+
+static void CreateDbgDrawTriangleDescriptorSetLayout()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_descSetLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES].Create(createInfo).SetDebugName("DBG_DRAW_TRIANGLES_DESCRIPTOR_SET_LAYOUT");
 #endif
 }
 
@@ -2195,6 +2292,7 @@ static void CreateDescriptorSets()
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
     CreateDbgDrawLineDescriptorSetLayout();
+    CreateDbgDrawTriangleDescriptorSetLayout();
 
     CreateDescriptorBuffer();
 }
@@ -2329,10 +2427,23 @@ static void CreateDbgDrawLinePipelineLayout()
 #ifdef ENG_DEBUG_DRAW_ENABLED
     const vkn::DescriptorSetLayout* layoutPtrs[] = {
         &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINE]
+        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINES]
     };
 
-    s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_LINE_PIPELINE_LAYOUT");
+    s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_LINE_PIPELINE_LAYOUT");
+#endif
+}
+
+
+static void CreateDbgDrawTrianglePipelineLayout()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    const vkn::DescriptorSetLayout* layoutPtrs[] = {
+        &s_descSetLayouts[(size_t)PassID::COMMON],
+        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES]
+    };
+
+    s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_TRIANGLES_PIPELINE_LAYOUT");
 #endif
 }
 
@@ -2387,13 +2498,14 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
     #ifdef ENG_REVERSED_Z
-        .EnableDepthTest(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
     #else
-        .EnableDepthTest(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
-        .EnableDepthBoundsTest(0.f, 1.f)
+        .SetDepthWriteState(VK_TRUE)
+        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })        
-        .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_commonDepthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -2429,20 +2541,19 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
-        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_EQUAL)
-        .EnableDepthBoundsTest(0.f, 1.f)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_EQUAL)
+        .SetDepthWriteState(VK_FALSE)
+        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR });
 
     #ifdef ENG_BUILD_DEBUG
         s_graphicsPSOBuilder.AddDynamicState(std::array{ VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE });
-    #else
-        s_graphicsPSOBuilder.EnableDepthTest(VK_FALSE, VK_COMPARE_OP_EQUAL);
     #endif
 
     for (const vkn::Texture& colorRT : s_gbufferRTs) {
         s_graphicsPSOBuilder.AddColorAttachment(colorRT.GetFormat()); 
     }
-    s_graphicsPSOBuilder.SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+    s_graphicsPSOBuilder.SetDepthAttachment(s_commonDepthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -2590,13 +2701,14 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
     #ifdef ENG_REVERSED_Z
-        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
     #else
-        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
+        .SetDepthWriteState(VK_FALSE)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .AddColorAttachment(s_colorRT16F.GetFormat())
-        .SetDepthAttachmentFormat(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_commonDepthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -2684,30 +2796,81 @@ static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& ps
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("DBG_DRAW_LINE_FRAGMENT_SHADER");
 
-    vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_LINE];
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_LINES];
 
     s_graphicsPSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .AddShader(vsShader)
         .AddShader(psShader)
-        .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE])
+        .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_LINE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
         .SetRasterizerCullMode(VK_CULL_MODE_NONE)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(2.f)
     #ifdef ENG_REVERSED_Z
-        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
     #else
-        .EnableDepthTest(VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL)
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
     #endif
+        .SetDepthWriteState(VK_TRUE)
+        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .AddColorAttachment(s_colorRT8U.GetFormat(), 
-            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE);
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE)
+        .SetDepthAttachment(s_commonDepthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
     pso.SetDebugName("DBG_DRAW_LINES_PSO");
+#endif
+}
+
+
+static void CreateDbgDrawTrianglePipeline(const fs::path& vsPath, const fs::path& psPath)
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
+    }
+    
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer).SetDebugName("DBG_DRAW_TRIANGLE_VERTEX_SHADER");
+
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer).SetDebugName("DBG_DRAW_TRIANGLE_FRAGMENT_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_TRIANGLES];
+
+    s_graphicsPSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .AddShader(vsShader)
+        .AddShader(psShader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES])
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_NONE)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetRasterizerLineWidth(1.f)
+    #ifdef ENG_REVERSED_Z
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
+    #else
+        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
+    #endif
+        .SetDepthWriteState(VK_TRUE)
+        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .AddColorAttachment(s_colorRT8U.GetFormat(), 
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE)
+        .SetDepthAttachment(s_commonDepthRT.GetFormat());
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    pso.SetDebugName("DBG_DRAW_TRIANGLES_PSO");
 #endif
 }
 
@@ -2725,6 +2888,7 @@ static void CreatePipelines()
     CreatePrefilteredEnvMapGenPipelineLayout();
     CreateBRDFIntegrationLUTGenPipelineLayout();
     CreateDbgDrawLinePipelineLayout();
+    CreateDbgDrawTrianglePipelineLayout();
     CreateMeshCullingPipeline("shaders/bin/scene.cs.spv");
     CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
     CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
@@ -2736,6 +2900,7 @@ static void CreatePipelines()
     CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
     CreateBRDFIntegrationLUTGenPipeline("shaders/bin/brdf_integration_gen.cs.spv");
     CreateDbgDrawLinePipeline("shaders/bin/dbg_draw_lines.vs.spv", "shaders/bin/dbg_draw_lines.ps.spv");
+    CreateDbgDrawTrianglePipeline("shaders/bin/dbg_draw_triangles.vs.spv", "shaders/bin/dbg_draw_triangles.ps.spv");
 }
 
 
@@ -3379,11 +3544,23 @@ static void WriteCommonDescriptorSet()
 static void WriteDbgDrawLineDescriptorSet()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINE,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES,
         DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINE,
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES,
         DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
+#endif
+}
+
+
+static void WriteDbgDrawTriangleDescriptorSet()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES,
+        DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
+
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES,
+        DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
 #endif
 }
 
@@ -3402,6 +3579,7 @@ static void WriteDescriptorSets()
     WritePrefilteredEnvMapGenDescriptorSets();
     WriteBRDFIntegrationLUTGenDescriptorSet();
     WriteDbgDrawLineDescriptorSet();
+    WriteDbgDrawTriangleDescriptorSet();
 }
 
 
@@ -4193,6 +4371,9 @@ void UpdateScene()
     RenderDebugLine(glm::float3(2.5f, -2.5f, 0.f),  glm::float3(2.5f, 2.5f, 0.f),   glm::float4(0.f, 1.f, 0.f, 1.f));
     RenderDebugLine(glm::float3(2.5f, 2.5f, 0.f),   glm::float3(-2.5f, 2.5f, 0.f),  glm::float4(0.f, 0.f, 1.f, 1.f));
     RenderDebugLine(glm::float3(-2.5f, 2.5f, 0.f),  glm::float3(-2.5f, -2.5f, 0.f), glm::float4(1.f, 1.f, 0.f, 1.f));
+
+    RenderDebugTriangleWire(glm::float3(-2.4f, -2.4f, 0.f), glm::float3(-0.1f, -2.4f, 0.f), glm::float3(-1.25f, -0.1f, 0.f), glm::float4(1.f, 0.f, 1.f, 1.f));
+    RenderDebugTriangleFilled(glm::float3(0.1f, 0.1f, 0.f), glm::float3(2.4f, 0.1f, 0.f), glm::float3(1.25f, 2.4f, 0.f), glm::float4(0.5f, 0.5f, 0.5f, 0.5f));
 }
 
 
@@ -4884,15 +5065,16 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 {
     const uint32_t lineInstCount = s_dbgLineDataCPU.size();
+    const uint32_t triInstCount = s_dbgTriangleDataCPU.size();
 
-    if (lineInstCount == 0) {
+    if (lineInstCount == 0 && triInstCount == 0) {
         return;
     }
 
     ENG_PROFILE_SCOPED_MARKER_C("Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
 
-    {
+    if (lineInstCount > 0) {
         void* pLineData = s_dbgLineDataGPU.Map();
         memcpy(pLineData, s_dbgLineDataCPU.data(), lineInstCount * sizeof(DBG_LINE_DATA));
         s_dbgLineDataGPU.Unmap();
@@ -4905,9 +5087,40 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         s_dbgLineVertexDataCPU.clear();
     }
 
-    cmdBuffer.BeginBarrierList()
-        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    if (triInstCount > 0) {
+        void* pTriData = s_dbgTriangleDataGPU.Map();
+        memcpy(pTriData, s_dbgTriangleDataCPU.data(), triInstCount * sizeof(DBG_TRIANGLE_DATA));
+        s_dbgTriangleDataGPU.Unmap();
+
+        void* pTriVertData = s_dbgTriangleVertexDataGPU.Map();
+        memcpy(pTriVertData, s_dbgTriangleVertexDataCPU.data(), s_dbgTriangleVertexDataCPU.size() * sizeof(glm::uint));
+        s_dbgTriangleVertexDataGPU.Unmap();
+
+        s_dbgTriangleDataCPU.clear();
+        s_dbgTriangleVertexDataCPU.clear();
+    }
+
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    barriers.AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barriers.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);  
+
+    if (lineInstCount > 0) {
+        barriers.AddBufferBarrier(s_dbgLineDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT);
+        barriers.AddBufferBarrier(s_dbgLineVertexDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT);
+    }
+    
+    if (triInstCount > 0) {
+        barriers.AddBufferBarrier(s_dbgTriangleDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT);
+        barriers.AddBufferBarrier(s_dbgTriangleVertexDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT);
+    }
+        
     cmdBuffer.CmdPushBarrierList();
 
     VkRenderingInfo renderingInfo = {};
@@ -4926,6 +5139,15 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &colorAttachment;
 
+    VkRenderingAttachmentInfo depthAttachment = {};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.imageView = s_commonDepthRTView.Get();
+    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    renderingInfo.pDepthAttachment = &depthAttachment;
+
     cmdBuffer.CmdBeginRendering(renderingInfo);
         VkViewport viewport = {};
         viewport.width = renderingInfo.renderArea.extent.width;
@@ -4938,14 +5160,31 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_LINE]);
-        
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINE], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::DBG_DRAW_LINE, 1);
+        if (lineInstCount > 0) {
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Lines", eng::ProfileColor::Red2);
+    
+            cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_LINES]);
+            
+            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                (size_t)PassID::COMMON, 0);
+            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                (size_t)PassID::DBG_DRAW_LINES, 1);
+    
+            cmdBuffer.CmdDraw(2, lineInstCount, 0, 0);     
+        }
 
-        cmdBuffer.CmdDraw(2, lineInstCount, 0, 0);     
+        if (triInstCount > 0) {
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Triangles", eng::ProfileColor::Red2);
+
+            cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_TRIANGLES]);
+            
+            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                (size_t)PassID::COMMON, 0);
+            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                (size_t)PassID::DBG_DRAW_TRIANGLES, 1);
+    
+            cmdBuffer.CmdDraw(3, triInstCount, 0, 0);     
+        }
     cmdBuffer.CmdEndRendering();
 }
 #endif

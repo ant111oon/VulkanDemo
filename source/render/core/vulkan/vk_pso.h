@@ -168,9 +168,9 @@ namespace vkn
 
         GraphicsPSOBuilder& SetRasterizerLineWidth(float lineWidth);
 
-        GraphicsPSOBuilder& EnableRasterizerDepthClamp();
+        GraphicsPSOBuilder& SetRasterizerDepthClampState(VkBool32 enabled);
 
-        GraphicsPSOBuilder& EnableRasterizerDiscard();
+        GraphicsPSOBuilder& SetRasterizerDiscardState(VkBool32 rasterizerDiscardEnable);
 
         GraphicsPSOBuilder& SetRasterizerPolygonMode(VkPolygonMode polygonMode);
 
@@ -178,21 +178,23 @@ namespace vkn
 
         GraphicsPSOBuilder& SetRasterizerFrontFace(VkFrontFace frontFace);
 
-        GraphicsPSOBuilder& EnableRasterizerDepthBias(float biasConstantFactor, float biasClamp, float biasSlopeFactor);
+        GraphicsPSOBuilder& SetRasterizerDepthBiasState(VkBool32 enabled, float biasConstantFactor, float biasClamp, float biasSlopeFactor);
 
-        GraphicsPSOBuilder& EnableDepthTest(VkBool32 depthWriteEnable, VkCompareOp compareOp);
+        GraphicsPSOBuilder& SetDepthTestState(VkBool32 enabled, VkCompareOp compareOp);
 
-        GraphicsPSOBuilder& EnableStencilTestState(const VkStencilOpState& front, const VkStencilOpState& back);
+        GraphicsPSOBuilder& SetDepthWriteState(VkBool32 enabled);
 
-        GraphicsPSOBuilder& EnableDepthBoundsTest(float minValue, float maxValue);
+        GraphicsPSOBuilder& SetStencilTestState(VkBool32 enabled, const VkStencilOpState& front, const VkStencilOpState& back);
+
+        GraphicsPSOBuilder& SetDepthBoundsTestState(VkBool32 enabled, float minValue, float maxValue);
 
         GraphicsPSOBuilder& SetRenderingViewMask(uint32_t viewMask);
 
         GraphicsPSOBuilder& SetColorBlendConstants(float r, float g, float b, float a);
 
-        GraphicsPSOBuilder& EnableColorBlendLogicOp(VkLogicOp logicOp);
+        GraphicsPSOBuilder& SetColorBlendLogicOpState(VkBool32 enabled, VkLogicOp logicOp);
 
-        GraphicsPSOBuilder& SetDepthAttachmentFormat(VkFormat format);
+        GraphicsPSOBuilder& SetDepthAttachment(VkFormat format);
 
         GraphicsPSOBuilder& SetStencilAttachmentFormat(VkFormat format);
 

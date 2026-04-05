@@ -2,21 +2,21 @@
 #define DBG_DRAW_VS_OUT_H
 
 
-struct DBG_DRAW_LINE_VS_OUTPUT_INTERP
+struct DBG_DRAW_VS_OUTPUT_INTERP
 {
-    [[vk::location(0)]] float3 color;
+    [[vk::location(0)]] float4 color;
 };
 
 
-struct DBG_DRAW_LINE_VS_OUTPUT_NO_INTERP
+struct DBG_DRAW_VS_OUTPUT_NO_INTERP
 {
 };
 
 
-struct DBG_DRAW_LINE_VS_OUTPUT
+struct DBG_DRAW_VS_OUTPUT
 {
-    DBG_DRAW_LINE_VS_OUTPUT_INTERP data;
-    nointerpolation DBG_DRAW_LINE_VS_OUTPUT_NO_INTERP flatData;
+    DBG_DRAW_VS_OUTPUT_INTERP data;
+    nointerpolation DBG_DRAW_VS_OUTPUT_NO_INTERP flatData;
 
     float4 hpos : SV_Position; 
 };

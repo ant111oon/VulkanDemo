@@ -1,4 +1,4 @@
-#define DBG_DRAW_LINES_PASS
+#define DBG_DRAW_TRIANGLES_PASS
 
 #include "registers/dbg_draw_registers.slang"
 
