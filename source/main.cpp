@@ -2805,7 +2805,7 @@ static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& ps
         .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_LINE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
-        .SetRasterizerCullMode(VK_CULL_MODE_NONE)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(2.f)
     #ifdef ENG_REVERSED_Z
@@ -2853,7 +2853,7 @@ static void CreateDbgDrawTrianglePipeline(const fs::path& vsPath, const fs::path
         .SetLayout(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
-        .SetRasterizerCullMode(VK_CULL_MODE_NONE)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
     #ifdef ENG_REVERSED_Z
