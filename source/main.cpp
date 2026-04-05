@@ -1052,6 +1052,22 @@ static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float
 }
 
 
+static void RenderDebugQuadWire(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float3& wPos3, const glm::float4& color)
+{
+    RenderDebugLine(wPos0, wPos1, color);
+    RenderDebugLine(wPos1, wPos2, color);
+    RenderDebugLine(wPos2, wPos3, color);
+    RenderDebugLine(wPos3, wPos0, color);
+}
+
+
+static void RenderDebugQuadFilled(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float3& wPos3, const glm::float4& color)
+{
+    RenderDebugTriangleFilled(wPos0, wPos1, wPos2, color);
+    RenderDebugTriangleFilled(wPos0, wPos2, wPos3, color);
+}
+
+
 #ifdef ENG_DEBUG_UI_ENABLED
 namespace DbgUI
 {
@@ -4372,8 +4388,20 @@ void UpdateScene()
     RenderDebugLine(glm::float3(2.5f, 2.5f, 0.f),   glm::float3(-2.5f, 2.5f, 0.f),  glm::float4(0.f, 0.f, 1.f, 1.f));
     RenderDebugLine(glm::float3(-2.5f, 2.5f, 0.f),  glm::float3(-2.5f, -2.5f, 0.f), glm::float4(1.f, 1.f, 0.f, 1.f));
 
-    RenderDebugTriangleWire(glm::float3(-2.4f, -2.4f, 0.f), glm::float3(-0.1f, -2.4f, 0.f), glm::float3(-1.25f, -0.1f, 0.f), glm::float4(1.f, 0.f, 1.f, 1.f));
-    RenderDebugTriangleFilled(glm::float3(0.1f, 0.1f, 0.f), glm::float3(2.4f, 0.1f, 0.f), glm::float3(1.25f, 2.4f, 0.f), glm::float4(0.5f, 0.5f, 0.5f, 0.5f));
+    RenderDebugTriangleWire(
+        glm::float3(-2.4f, -2.4f, 0.f),
+        glm::float3(-0.1f, -2.4f, 0.f),
+        glm::float3(-1.25f, -0.1f, 0.f),
+        glm::float4(1.0f, 0.3f, 0.f, 1.f)
+    );
+    
+    RenderDebugQuadFilled(
+        glm::float3(0.1f, 0.1f, 0.f),
+        glm::float3(2.4f, 0.1f, 0.f),
+        glm::float3(2.4f, 2.4f, 0.f),
+        glm::float3(0.1f, 2.4f, 0.f),
+        glm::float4(0.0f, 0.75f, 0.75f, 0.5f)
+    );
 }
 
 
