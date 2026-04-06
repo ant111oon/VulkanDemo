@@ -986,6 +986,16 @@ static bool s_skipRender = false;
 #endif
 
 
+static void ClearDebugDrawData()
+{
+    s_dbgLineDataCPU.clear();
+    s_dbgLineVertexDataCPU.clear();
+
+    s_dbgTriangleDataCPU.clear();
+    s_dbgTriangleVertexDataCPU.clear();
+}
+
+
 static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float4& color)
 {
     if (s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity()) {
@@ -1065,6 +1075,68 @@ static void RenderDebugQuadFilled(const glm::float3& wPos0, const glm::float3& w
 {
     RenderDebugTriangleFilled(wPos0, wPos1, wPos2, color);
     RenderDebugTriangleFilled(wPos0, wPos2, wPos3, color);
+}
+
+
+
+template <typename Func>
+static void RenderDebugOBBInternal(const Func& func, const glm::float3& centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3& size, const glm::float4& color)
+{
+    CORE_ASSERT(math::IsZero(glm::dot(axisX, axisY)));
+    CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisY)));
+    CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisX)));
+
+    const glm::float3 halfSize = size * 0.5f;
+    const glm::float3 origin = centerWPos - halfSize.x * axisX - halfSize.y * axisY + halfSize.z * axisZ;
+
+    const glm::float3 bln = origin;
+    const glm::float3 brn = bln + axisX * size.x;
+    const glm::float3 urn = brn + axisY * size.y;
+    const glm::float3 uln = bln + axisY * size.y;
+
+    const glm::float3 blf = bln - axisZ * size.z;
+    const glm::float3 brf = brn - axisZ * size.z;
+    const glm::float3 urf = urn - axisZ * size.z;
+    const glm::float3 ulf = uln - axisZ * size.z;
+
+    func(bln, brn, urn, uln, color);
+    func(brn, brf, urf, urn, color);
+    func(brf, blf, ulf, urf, color);
+    func(blf, bln, uln, ulf, color);
+    func(uln, urn, urf, ulf, color);
+    func(blf, brf, brn, bln, color);
+}
+
+
+
+template <typename Func>
+static void RenderDebugAABBInternal(const Func& func, const glm::float3& centerWPos, const glm::float3& size, const glm::float4& color)
+{
+    RenderDebugOBBInternal(func, centerWPos, M3D_AXIS_X, M3D_AXIS_Y, M3D_AXIS_Z, size, color);
+}
+
+
+static void RenderDebugAABBWired(const glm::float3& centerWPos, const glm::float3& size, const glm::float4& color)
+{
+    RenderDebugAABBInternal(RenderDebugQuadWire, centerWPos, size, color);
+}
+
+
+static void RenderDebugAABBFilled(const glm::float3 centerWPos, const glm::float3 size, const glm::float4& color)
+{
+    RenderDebugAABBInternal(RenderDebugQuadFilled, centerWPos, size, color);
+}
+
+
+static void RenderDebugOBBWired(const glm::float3& centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3& size, const glm::float4& color)
+{
+    RenderDebugOBBInternal(RenderDebugQuadWire, centerWPos, axisX, axisY, axisZ, size, color);
+}
+
+
+static void RenderDebugOBBFilled(const glm::float3 centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3 size, const glm::float4& color)
+{
+    RenderDebugOBBInternal(RenderDebugQuadFilled, centerWPos, axisX, axisY, axisZ, size, color);
 }
 
 
@@ -4358,6 +4430,8 @@ static void ResizeVkSwapchain(eng::Window& window)
 
 void UpdateScene()
 {
+    ClearDebugDrawData();
+
     if (s_swapchainRecreateRequired) {
         s_vkDevice.WaitIdle();
 
@@ -4402,6 +4476,12 @@ void UpdateScene()
         glm::float3(0.1f, 2.4f, 0.f),
         glm::float4(0.0f, 0.75f, 0.75f, 0.5f)
     );
+
+    RenderDebugAABBWired(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f), glm::float4(M3D_ZEROF3, 1.f));
+    RenderDebugAABBFilled(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
+
+    RenderDebugOBBWired(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(M3D_ZEROF3, 1.f));
+    RenderDebugOBBFilled(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 }
 
 
@@ -5110,9 +5190,6 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         void* pLineVertData = s_dbgLineVertexDataGPU.Map();
         memcpy(pLineVertData, s_dbgLineVertexDataCPU.data(), s_dbgLineVertexDataCPU.size() * sizeof(glm::uint));
         s_dbgLineVertexDataGPU.Unmap();
-
-        s_dbgLineDataCPU.clear();
-        s_dbgLineVertexDataCPU.clear();
     }
 
     if (triInstCount > 0) {
@@ -5123,9 +5200,6 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         void* pTriVertData = s_dbgTriangleVertexDataGPU.Map();
         memcpy(pTriVertData, s_dbgTriangleVertexDataCPU.data(), s_dbgTriangleVertexDataCPU.size() * sizeof(glm::uint));
         s_dbgTriangleVertexDataGPU.Unmap();
-
-        s_dbgTriangleDataCPU.clear();
-        s_dbgTriangleVertexDataCPU.clear();
     }
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
