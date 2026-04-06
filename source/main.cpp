@@ -389,8 +389,10 @@ struct COMMON_MESH_INFO
     glm::uint FIRST_INDEX;
     glm::uint INDEX_COUNT;
 
-    glm::float3 SPHERE_BOUNDS_CENTER_LCS;
-    float SPHERE_BOUNDS_RADIUS_LCS;
+    glm::float3 BOUNDS_MIN_LCS;
+    glm::uint   PADD0;
+    glm::float3 BOUNDS_MAX_LCS;
+    glm::uint   PADD1;
 };
 
 
@@ -984,6 +986,57 @@ static bool s_skipRender = false;
 
     static_assert(s_tonemappingPreset < _countof(TONEMAPPING_MASKS));
 #endif
+
+
+static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& wMatr)
+{
+    const glm::float3 aabbMin = aabbLCS.min;
+    const glm::float3 aabbMax = aabbLCS.max;
+
+    glm::float3 corners[8] = {
+        glm::float3(aabbMin.x, aabbMin.y, aabbMin.z),
+        glm::float3(aabbMax.x, aabbMin.y, aabbMin.z),
+        glm::float3(aabbMin.x, aabbMax.y, aabbMin.z),
+        glm::float3(aabbMax.x, aabbMax.y, aabbMin.z),
+        glm::float3(aabbMin.x, aabbMin.y, aabbMax.z),
+        glm::float3(aabbMax.x, aabbMin.y, aabbMax.z),
+        glm::float3(aabbMin.x, aabbMax.y, aabbMax.z),
+        glm::float3(aabbMax.x, aabbMax.y, aabbMax.z)
+    };
+
+    glm::float3 newMin = glm::float3(100000000.f);
+    glm::float3 newMax = glm::float3(-100000000.f);
+
+    for (int i = 0; i < 8; i++) {
+        const glm::float3 p = glm::float3(wMatr * glm::float4(corners[i], 1.f));
+
+        newMin.x = glm::min(newMin.x, p.x);
+        newMin.y = glm::min(newMin.y, p.y);
+        newMin.z = glm::min(newMin.z, p.z);
+
+        newMax.x = glm::max(newMax.x, p.x);
+        newMax.y = glm::max(newMax.y, p.y);
+        newMax.z = glm::max(newMax.z, p.z);
+    }
+
+    return math::AABB(newMin, newMax);
+}
+
+
+static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
+{
+    ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
+
+    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
+
+    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
+
+    const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
+
+    const math::Frustum& frustum = s_camera.GetFrustum();
+
+    return frustum.IsIntersect(aabb); 
+}
 
 
 static void ClearDebugDrawData()
@@ -3789,10 +3842,8 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
             }
 
-            const glm::float3 sphereBoundPosition = (minVert + maxVert) * 0.5f;
-
-            cpuMesh.SPHERE_BOUNDS_CENTER_LCS = sphereBoundPosition;
-            cpuMesh.SPHERE_BOUNDS_RADIUS_LCS = glm::max(glm::distance(minVert, sphereBoundPosition), glm::distance(maxVert, sphereBoundPosition));
+            cpuMesh.BOUNDS_MIN_LCS = minVert;
+            cpuMesh.BOUNDS_MAX_LCS = maxVert;
 
             CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
             const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
@@ -4482,33 +4533,6 @@ void UpdateScene()
 
     RenderDebugOBBWired(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(M3D_ZEROF3, 1.f));
     RenderDebugOBBFilled(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
-}
-
-
-static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
-{
-    ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
-
-    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
-
-    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
-
-    const glm::float3 position = wMatr * glm::float4(mesh.SPHERE_BOUNDS_CENTER_LCS, 1.f);
-
-    const float scale = glm::max(glm::max(glm::length(glm::float3(wMatr[0])), glm::length(glm::float3(wMatr[1]))), glm::length(glm::float3(wMatr[2])));
-    const float radius = scale * mesh.SPHERE_BOUNDS_RADIUS_LCS;
-
-    const math::Frustum& frustum = s_camera.GetFrustum();
-
-    for (size_t i = 0; i < COMMON_FRUSTUM_PLANES_COUNT; ++i) {
-        const math::Plane& plane = frustum.planes[i];
-
-        if (glm::dot(plane.normal, position) + plane.distance < -radius) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 

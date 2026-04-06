@@ -4,19 +4,54 @@
 #include "common/resource_defines.slang"
 
 
+// TODO: Optimize this
+AABB GetWorldAABB(in AABB aabbLCS, in float4x4 wMatr)
+{
+    const float3 aabbMin = aabbLCS.min;
+    const float3 aabbMax = aabbLCS.max;
+
+    float3 corners[8] = {
+        float3(aabbMin.x, aabbMin.y, aabbMin.z),
+        float3(aabbMax.x, aabbMin.y, aabbMin.z),
+        float3(aabbMin.x, aabbMax.y, aabbMin.z),
+        float3(aabbMax.x, aabbMax.y, aabbMin.z),
+        float3(aabbMin.x, aabbMin.y, aabbMax.z),
+        float3(aabbMax.x, aabbMin.y, aabbMax.z),
+        float3(aabbMin.x, aabbMax.y, aabbMax.z),
+        float3(aabbMax.x, aabbMax.y, aabbMax.z)
+    };
+
+    float3 newMin = FLOAT3(100000000.f);
+    float3 newMax = FLOAT3(-100000000.f);
+
+    for (int i = 0; i < 8; i++) {
+        const float3 p = mul(wMatr, float4(corners[i], 1.f)).xyz;
+
+        newMin = min(newMin, p);
+        newMax = max(newMax, p);
+    }
+
+    AABB result;
+    result.min = newMin;
+    result.max = newMax;
+
+    return result;
+}
+
+
 bool IsInstVisible(in COMMON_INST_INFO instInfo)
 {
     const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
 
     const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
 
-    SPHERE sphere = (SPHERE)0;
-    sphere.position = mul(wMatr, float4(meshInfo.SPHERE_BOUNDS_CENTER_LCS, 1.f)).xyz;
+    AABB aabb = (AABB)0;
+    aabb.min = meshInfo.BOUNDS_MIN_LCS;
+    aabb.max = meshInfo.BOUNDS_MAX_LCS;
 
-    const float scale = max(max(length(wMatr[0].xyz), length(wMatr[1].xyz)), length(wMatr[2].xyz));
-    sphere.radius = scale * meshInfo.SPHERE_BOUNDS_RADIUS_LCS;
+    aabb = GetWorldAABB(aabb, wMatr);
 
-    return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(sphere); 
+    return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(aabb); 
 }
 
 

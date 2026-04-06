@@ -62,8 +62,10 @@ struct COMMON_MESH_INFO
     uint FIRST_INDEX;
     uint INDEX_COUNT;
 
-    float3 SPHERE_BOUNDS_CENTER_LCS;
-    float SPHERE_BOUNDS_RADIUS_LCS;
+    float3 BOUNDS_MIN_LCS;
+    uint   PADD0;
+    float3 BOUNDS_MAX_LCS;
+    uint   PADD1;
 };
 
 

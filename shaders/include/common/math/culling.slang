@@ -1,6 +1,8 @@
 #ifndef MATH_CULLING_H
 #define MATH_CULLING_H
 
+#include "common/math/constants.slang"
+
 
 struct SPHERE
 {
@@ -43,13 +45,13 @@ struct FRUSTUM
         for (uint i = 0; i < 6; ++i) {
             FRUSTUM_PLANE plane = planes[i];
 
-            const float d =
-                max(aabb.min.x * plane.normal.x, aabb.max.x * plane.normal.x) +
-                max(aabb.min.y * plane.normal.y, aabb.max.y * plane.normal.y) +
-                max(aabb.min.z * plane.normal.z, aabb.max.z * plane.normal.z) -
-                plane.distance;
+            const float3 p = float3(
+                (plane.normal.x >= 0.f) ? aabb.max.x : aabb.min.x,
+                (plane.normal.y >= 0.f) ? aabb.max.y : aabb.min.y,
+                (plane.normal.z >= 0.f) ? aabb.max.z : aabb.min.z
+            );
 
-            if (d < 0.f) {
+            if (dot(plane.normal, p) + plane.distance < 0.f) {
                 return false;
             }
         }

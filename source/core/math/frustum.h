@@ -1,8 +1,6 @@
 #pragma once
 
-#include "math.h"
-
-#include <array>
+#include "aabb.h"
 
 
 namespace math
@@ -19,6 +17,8 @@ namespace math
     
     struct Frustum
     {
+        bool IsIntersect(const AABB& aabb) const;
+
         enum PlaneIdx : size_t
         {
             PLANE_IDX_LEFT,
