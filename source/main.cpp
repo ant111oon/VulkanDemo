@@ -1217,6 +1217,72 @@ static void RenderDebugOBBFilled(const glm::float4x4& trs, const glm::float4& co
 }
 
 
+template <typename Func>
+static void RenderDebugFrustumInternal(const Func& func, const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+{    
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    #ifdef ENG_GFX_API_VULKAN
+        static constexpr float BOTTOM_NDC_Y = 1.f;
+        static constexpr float TOP_NDC_Y = -1.f;
+    #else
+        static constexpr float BOTTOM_NDC_Y = -1.f;
+        static constexpr float TOP_NDC_Y = 1.f;
+    #endif
+
+    #ifdef ENG_REVERSED_Z
+        static constexpr float NEAR_NDC_Z = 1.f;
+        static constexpr float FAR_NDC_Z = 0.f;
+    #else
+        static constexpr float NEAR_NDC_Z = 0.f;
+        static constexpr float FAR_NDC_Z = 1.f;
+    #endif
+
+    glm::float4 bln = frustumInvViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
+    bln /= bln.w;
+    
+    glm::float4 brn = frustumInvViewProj * glm::float4(1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
+    brn /= brn.w;
+
+    glm::float4 urn = frustumInvViewProj * glm::float4(1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
+    urn /= urn.w;
+
+    glm::float4 uln = frustumInvViewProj * glm::float4(-1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
+    uln /= uln.w;
+
+    glm::float4 blf = frustumInvViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
+    blf /= blf.w;
+
+    glm::float4 brf = frustumInvViewProj * glm::float4(1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
+    brf /= brf.w;
+
+    glm::float4 urf = frustumInvViewProj * glm::float4(1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
+    urf /= urf.w;
+
+    glm::float4 ulf = frustumInvViewProj * glm::float4(-1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
+    ulf /= ulf.w;
+
+    func(bln, brn, urn, uln, color);
+    func(brn, brf, urf, urn, color);
+    func(brf, blf, ulf, urf, color);
+    func(blf, bln, uln, ulf, color);
+    func(uln, urn, urf, ulf, color);
+    func(blf, brf, brn, bln, color);
+#endif
+}
+
+
+static void RenderDebugFrustumWired(const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+{
+    RenderDebugFrustumInternal(RenderDebugQuadWire, frustumInvViewProj, color);
+}
+
+
+static void RenderDebugFrustumFilled(const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+{
+    RenderDebugFrustumInternal(RenderDebugQuadFilled, frustumInvViewProj, color);
+}
+
+
 #ifdef ENG_DEBUG_UI_ENABLED
 namespace DbgUI
 {
@@ -4635,6 +4701,13 @@ void UpdateScene()
     );
     RenderDebugOBBWired(TRS, glm::float4(M3D_ZEROF3, 1.f));
     RenderDebugOBBFilled(TRS, glm::float4(1.f, 0.6f, 0.3f, 0.25f));
+
+    static const glm::float4x4 dbgFrustumInvMatr = glm::inverse(
+        glm::perspective(glm::radians(45.f), 16.f / 9.f, 0.1f, 50.f) * 
+        glm::lookAt(glm::float3(0.f, 0.f, 6.f), M3D_ZEROF3, M3D_AXIS_Y)
+    );
+
+    RenderDebugFrustumWired(dbgFrustumInvMatr, glm::float4(1.f));
 }
 
 
