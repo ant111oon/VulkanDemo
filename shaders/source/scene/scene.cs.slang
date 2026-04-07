@@ -8,11 +8,7 @@ bool IsInstVisible(in COMMON_INST_DATA instData)
 {
     const COMMON_INST_VOLUME volume = COMMON_AABB_BUFFER[instData.VOLUME_IDX];
 
-    AABB aabb = (AABB)0;
-    aabb.min = volume.MIN.xyz;
-    aabb.max = volume.MAX.xyz;
-
-    return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(aabb); 
+    return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(AABB(volume.MIN.xyz, volume.MAX.xyz)); 
 }
 
 

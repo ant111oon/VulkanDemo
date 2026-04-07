@@ -17,8 +17,6 @@ namespace math
     
     struct Frustum
     {
-        bool IsIntersect(const AABB& aabb) const;
-
         enum PlaneIdx : size_t
         {
             PLANE_IDX_LEFT,
@@ -29,6 +27,14 @@ namespace math
             PLANE_IDX_FAR,
             PLANE_COUNT
         };
+
+        Frustum() = default;
+        Frustum(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+
+        void Recalculate(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+        bool IsIntersect(const AABB& aabb) const;
+
+        const Plane& GetPlane(PlaneIdx index) const;
 
         std::array<Plane, PLANE_COUNT> planes;
     };

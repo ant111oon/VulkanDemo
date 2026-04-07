@@ -276,39 +276,6 @@ namespace eng
 
     void Camera::RecalcFrustum() noexcept
     {
-        using namespace math;
-
-        const glm::float3 forwardDir = GetForwardDir();
-        const glm::float3 backwardDir = -forwardDir;
-        const glm::float3 farVec = forwardDir * m_zFar;
-        const float halfH = m_zFar * glm::tan(m_fovY * 0.5f);
-        const float halfW = halfH * m_aspectRatio;
-
-        const glm::float3 xDir = GetXDir();
-        const glm::float3 yDir = GetYDir();
-
-        Plane& leftPlane = m_frustum.planes[Frustum::PLANE_IDX_LEFT];
-        leftPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec - xDir * halfW), yDir));
-        leftPlane.distance = -glm::dot(leftPlane.normal, m_position);
-        
-        Plane& topPlane = m_frustum.planes[Frustum::PLANE_IDX_TOP];
-        topPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec + yDir * halfH), xDir));
-        topPlane.distance = -glm::dot(topPlane.normal, m_position);
-
-        Plane& rightPlane = m_frustum.planes[Frustum::PLANE_IDX_RIGHT];
-        rightPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec + xDir * halfW), -yDir));
-        rightPlane.distance = -glm::dot(rightPlane.normal, m_position);
-
-        Plane& bottomPlane = m_frustum.planes[Frustum::PLANE_IDX_BOTTOM];
-        bottomPlane.normal = glm::normalize(glm::cross(glm::normalize(farVec - yDir * halfH), -xDir));
-        bottomPlane.distance = -glm::dot(bottomPlane.normal, m_position);
-
-        Plane& nearPlane = m_frustum.planes[Frustum::PLANE_IDX_NEAR];
-        nearPlane.normal = forwardDir;
-        nearPlane.distance = -glm::dot(nearPlane.normal, m_position + forwardDir * m_zNear);
-
-        Plane& farPlane = m_frustum.planes[Frustum::PLANE_IDX_FAR];
-        farPlane.normal = backwardDir;
-        farPlane.distance = -glm::dot(farPlane.normal, m_position + forwardDir * m_zFar);
+        m_frustum.Recalculate(m_position, GetXDir(), GetYDir(), m_fovY, m_aspectRatio, m_zNear, m_zFar);
     }
 }

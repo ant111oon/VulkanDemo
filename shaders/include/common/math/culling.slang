@@ -13,12 +13,22 @@ struct SPHERE
 
 struct AABB
 {
+    float3 GetCenter()
+    {
+        return (min + max) * 0.5f;
+    }
+
+    float3 GetSize()
+    {
+        return max - min;
+    }
+
     float3 min;
     float3 max;
 };
 
 
-struct FRUSTUM_PLANE
+struct PLANE
 {
     float3 normal;
     float distance;
@@ -30,7 +40,7 @@ struct FRUSTUM
     bool IsIntersect(in SPHERE sphere)
     {
         for (uint i = 0; i < 6; ++i) {
-            FRUSTUM_PLANE plane = planes[i];
+            PLANE plane = planes[i];
 
             if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
                 return false;
@@ -43,7 +53,7 @@ struct FRUSTUM
     bool IsIntersect(in AABB aabb)
     {
         for (uint i = 0; i < 6; ++i) {
-            FRUSTUM_PLANE plane = planes[i];
+            PLANE plane = planes[i];
 
             const float3 p = float3(
                 (plane.normal.x >= 0.f) ? aabb.max.x : aabb.min.x,
@@ -59,7 +69,7 @@ struct FRUSTUM
         return true;
     }
 
-    FRUSTUM_PLANE planes[6];
+    PLANE planes[6];
 };
 
 

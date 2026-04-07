@@ -435,7 +435,7 @@ struct DBG_TRIANGLE_DATA
 };
 
 
-struct FRUSTUM_PLANE
+struct PLANE
 {
     glm::float3 normal;
     float distance;
@@ -446,7 +446,7 @@ static constexpr glm::uint COMMON_FRUSTUM_PLANES_COUNT = 6;
 
 struct FRUSTUM
 {
-    FRUSTUM_PLANE planes[COMMON_FRUSTUM_PLANES_COUNT];
+    PLANE planes[COMMON_FRUSTUM_PLANES_COUNT];
 };
 
 
@@ -1047,16 +1047,19 @@ static bool IsInstVisible(const COMMON_INST_DATA& instInfo)
 
 static void ClearDebugDrawData()
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     s_dbgLineDataCPU.clear();
     s_dbgLineVertexDataCPU.clear();
 
     s_dbgTriangleDataCPU.clear();
     s_dbgTriangleVertexDataCPU.clear();
+#endif
 }
 
 
 static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float4& color)
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     if (s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity()) {
         CORE_LOG_WARN("Debug lines buffer is full");
         return;
@@ -1078,6 +1081,7 @@ static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, 
 
     s_dbgLineVertexDataCPU.emplace_back(wPos1XY);
     s_dbgLineVertexDataCPU.emplace_back(wPos1Z);
+#endif
 }
 
 
@@ -1091,6 +1095,7 @@ static void RenderDebugTriangleWire(const glm::float3& wPos0, const glm::float3&
 
 static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float4& color)
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     if (s_dbgTriangleDataCPU.size() == s_dbgTriangleDataCPU.capacity()) {
         CORE_LOG_WARN("Debug triangles buffer is full");
         return;
@@ -1118,6 +1123,7 @@ static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float
 
     s_dbgTriangleVertexDataCPU.emplace_back(wPos2XY);
     s_dbgTriangleVertexDataCPU.emplace_back(wPos2Z);
+#endif
 }
 
 
@@ -1137,10 +1143,10 @@ static void RenderDebugQuadFilled(const glm::float3& wPos0, const glm::float3& w
 }
 
 
-
 template <typename Func>
 static void RenderDebugOBBInternal(const Func& func, const glm::float3& centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3& size, const glm::float4& color)
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     CORE_ASSERT(math::IsZero(glm::dot(axisX, axisY)));
     CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisY)));
     CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisX)));
@@ -1164,8 +1170,8 @@ static void RenderDebugOBBInternal(const Func& func, const glm::float3& centerWP
     func(blf, bln, uln, ulf, color);
     func(uln, urn, urf, ulf, color);
     func(blf, brf, brn, bln, color);
+#endif
 }
-
 
 
 template <typename Func>
