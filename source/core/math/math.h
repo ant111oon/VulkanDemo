@@ -12,6 +12,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include <bit>
 
@@ -50,7 +51,11 @@ constexpr inline glm::float3 M3D_AXIS_Z = glm::float3(0.f, 0.f, 1.f);
 constexpr inline glm::float3x3 M3D_MAT3X3_IDENTITY = glm::identity<glm::float3x3>();
 constexpr inline glm::float3x4 M3D_MAT3X4_IDENTITY = glm::identity<glm::float3x4>();
 constexpr inline glm::float4x4 M3D_MAT4X4_IDENTITY = glm::identity<glm::float4x4>();
-constexpr inline glm::quat M3D_QUAT_IDENTITY       = glm::identity<glm::quat>();
+constexpr inline glm::quat     M3D_QUAT_IDENTITY   = glm::identity<glm::quat>();
+
+
+#define MATH_IS_FLAG_SET(VALUE, MASK) ((uint64_t(VALUE) & uint64_t(MASK)) != 0)
+#define MATH_IS_BIT_SET(VALUE, BIT)   MATH_IS_FLAG_SET(VALUE, uint64_t(1) << uint64_t(BIT))
 
 
 namespace math
@@ -97,8 +102,4 @@ namespace math
     {
         return std::bit_width(size);
     }
-
-
-    #define MATH_IS_FLAG_SET(VALUE, MASK) ((uint64_t(VALUE) & uint64_t(MASK)) != 0)
-    #define MATH_IS_BIT_SET(VALUE, BIT)   MATH_IS_FLAG_SET(VALUE, uint64_t(1) << uint64_t(BIT))
 }

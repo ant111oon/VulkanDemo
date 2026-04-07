@@ -9,7 +9,7 @@ BACKBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID)
 {
     BACKBUFFER_VS_OUTPUT result = (BACKBUFFER_VS_OUTPUT)0;
 
-    result.hpos = float4(GetQuadMeshVert(vertID), 1.f);
+    result.hpos = float4(GetScreenQuadVertNDC(vertID), 1.f);
 
     return result;
 }

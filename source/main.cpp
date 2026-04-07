@@ -15,6 +15,8 @@
 #include "core/platform/file/file.h"
 #include "core/utils/timer.h"
 
+#include "core/math/transform.h"
+
 #include "render/core/vulkan/vk_instance.h"
 #include "render/core/vulkan/vk_surface.h"
 #include "render/core/vulkan/vk_phys_device.h"
@@ -1144,9 +1146,19 @@ static void RenderDebugQuadFilled(const glm::float3& wPos0, const glm::float3& w
 
 
 template <typename Func>
-static void RenderDebugOBBInternal(const Func& func, const glm::float3& centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3& size, const glm::float4& color)
-{
+static void RenderDebugOBBInternal(const Func& func, const glm::float4x4& trs, const glm::float4& color)
+{    
 #ifdef ENG_DEBUG_DRAW_ENABLED
+    glm::float3 centerWPos;
+    glm::quat rotation;
+    glm::float3 size;
+
+    math::GetTRSComponents(trs, centerWPos, rotation, size);
+
+    const glm::float3 axisX = glm::normalize(rotation * M3D_AXIS_X);
+    const glm::float3 axisY = glm::normalize(rotation * M3D_AXIS_Y);
+    const glm::float3 axisZ = glm::normalize(rotation * M3D_AXIS_Z);
+
     CORE_ASSERT(math::IsZero(glm::dot(axisX, axisY)));
     CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisY)));
     CORE_ASSERT(math::IsZero(glm::dot(axisZ, axisX)));
@@ -1175,33 +1187,33 @@ static void RenderDebugOBBInternal(const Func& func, const glm::float3& centerWP
 
 
 template <typename Func>
-static void RenderDebugAABBInternal(const Func& func, const glm::float3& centerWPos, const glm::float3& size, const glm::float4& color)
+static void RenderDebugAABBInternal(const Func& func, const glm::float4x4& ts, const glm::float4& color)
 {
-    RenderDebugOBBInternal(func, centerWPos, M3D_AXIS_X, M3D_AXIS_Y, M3D_AXIS_Z, size, color);
+    RenderDebugOBBInternal(func, math::MakeTRS(math::GetTranslation(ts), M3D_QUAT_IDENTITY, math::GetScale(ts)), color);
 }
 
 
-static void RenderDebugAABBWired(const glm::float3& centerWPos, const glm::float3& size, const glm::float4& color)
+static void RenderDebugAABBWired(const glm::float4x4& ts, const glm::float4& color)
 {
-    RenderDebugAABBInternal(RenderDebugQuadWire, centerWPos, size, color);
+    RenderDebugAABBInternal(RenderDebugQuadWire, ts, color);
 }
 
 
-static void RenderDebugAABBFilled(const glm::float3 centerWPos, const glm::float3 size, const glm::float4& color)
+static void RenderDebugAABBFilled(const glm::float4x4& ts, const glm::float4& color)
 {
-    RenderDebugAABBInternal(RenderDebugQuadFilled, centerWPos, size, color);
+    RenderDebugAABBInternal(RenderDebugQuadFilled, ts, color);
 }
 
 
-static void RenderDebugOBBWired(const glm::float3& centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3& size, const glm::float4& color)
+static void RenderDebugOBBWired(const glm::float4x4& trs, const glm::float4& color)
 {
-    RenderDebugOBBInternal(RenderDebugQuadWire, centerWPos, axisX, axisY, axisZ, size, color);
+    RenderDebugOBBInternal(RenderDebugQuadWire, trs, color);
 }
 
 
-static void RenderDebugOBBFilled(const glm::float3 centerWPos, const glm::float3& axisX, const glm::float3& axisY, const glm::float3& axisZ, const glm::float3 size, const glm::float4& color)
+static void RenderDebugOBBFilled(const glm::float4x4& trs, const glm::float4& color)
 {
-    RenderDebugOBBInternal(RenderDebugQuadFilled, centerWPos, axisX, axisY, axisZ, size, color);
+    RenderDebugOBBInternal(RenderDebugQuadFilled, trs, color);
 }
 
 
@@ -4588,7 +4600,7 @@ void UpdateScene()
                 const glm::float3 center = glm::float3(volume.MIN + volume.MAX) * 0.5f;
                 const glm::float3 size = glm::float3(volume.MAX - volume.MIN);
 
-                RenderDebugAABBWired(center, size, COLOR);
+                RenderDebugAABBWired(math::MakeTS(center, size), COLOR);
             }
         }
     }    
@@ -4613,11 +4625,16 @@ void UpdateScene()
         glm::float4(0.0f, 0.75f, 0.75f, 0.5f)
     );
 
-    RenderDebugAABBWired(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f), glm::float4(M3D_ZEROF3, 1.f));
-    RenderDebugAABBFilled(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
+    RenderDebugAABBWired(math::MakeTS(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(M3D_ZEROF3, 1.f));
+    RenderDebugAABBFilled(math::MakeTS(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 
-    RenderDebugOBBWired(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(M3D_ZEROF3, 1.f));
-    RenderDebugOBBFilled(-M3D_AXIS_Z * 4.f, M3D_AXIS_X, glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y), glm::float3(2.f), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
+    const glm::float4x4 TRS = math::MakeTRS(
+        M3D_AXIS_Y * 5.f, 
+        glm::quatLookAt(glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y)),
+        glm::float3(2.f)
+    );
+    RenderDebugOBBWired(TRS, glm::float4(M3D_ZEROF3, 1.f));
+    RenderDebugOBBFilled(TRS, glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 }
 
 
@@ -5829,7 +5846,7 @@ int main(int argc, char* argv[])
 
     s_cpuTexturesData.clear();
 
-    s_camera.SetPosition(glm::float3(0.f, 0.f, 4.f));
+    s_camera.SetPosition(glm::float3(0.f, 0.f, 6.f));
     s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
     s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 10'000.f);
 
