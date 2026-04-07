@@ -787,12 +787,16 @@ static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 4096;
-static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 4096;
+static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 2048;
+
+static constexpr uint32_t DBG_LINE_VERTEX_COUNT = 2;
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_COUNT = 3;
 
 static constexpr uint32_t DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 static constexpr uint32_t DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
-static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
-static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = MAX_DBG_TRIANGLE_COUNT * DBG_TRIANGLE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
+
+static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = MAX_DBG_TRIANGLE_COUNT * DBG_TRIANGLE_VERTEX_COUNT * DBG_TRIANGLE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
 
 static constexpr size_t GBUFFER_RT_COUNT = 4;
 static constexpr size_t CUBEMAP_FACE_COUNT = 6;
@@ -4571,11 +4575,14 @@ void UpdateScene()
     if (s_drawInstAABBs) {
         const math::Frustum& frustum = s_camera.GetFrustum();
 
-        constexpr glm::float4 COLOR = glm::float4(1.f, 0.6f, 0.3f, 0.25f);
+        static constexpr glm::float4 COLOR = glm::float4(1.f, 1.f, 0.f, 1.f);
 
         for (const COMMON_INST_VOLUME& volume : s_cpuAABBData) {
             if (frustum.IsIntersect(math::AABB(volume.MIN, volume.MAX))) {
-                RenderDebugAABBWired(glm::float3(volume.MIN + volume.MAX) * 0.5f, glm::float3(volume.MAX - volume.MIN), COLOR);
+                const glm::float3 center = glm::float3(volume.MIN + volume.MAX) * 0.5f;
+                const glm::float3 size = glm::float3(volume.MAX - volume.MIN);
+
+                RenderDebugAABBWired(center, size, COLOR);
             }
         }
     }    
@@ -5284,7 +5291,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         s_dbgLineDataGPU.Unmap();
 
         void* pLineVertData = s_dbgLineVertexDataGPU.Map();
-        memcpy(pLineVertData, s_dbgLineVertexDataCPU.data(), s_dbgLineVertexDataCPU.size() * sizeof(glm::uint));
+        memcpy(pLineVertData, s_dbgLineVertexDataCPU.data(), s_dbgLineVertexDataCPU.size() * sizeof(s_dbgLineVertexDataCPU[0]));
         s_dbgLineVertexDataGPU.Unmap();
     }
 
@@ -5294,7 +5301,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         s_dbgTriangleDataGPU.Unmap();
 
         void* pTriVertData = s_dbgTriangleVertexDataGPU.Map();
-        memcpy(pTriVertData, s_dbgTriangleVertexDataCPU.data(), s_dbgTriangleVertexDataCPU.size() * sizeof(glm::uint));
+        memcpy(pTriVertData, s_dbgTriangleVertexDataCPU.data(), s_dbgTriangleVertexDataCPU.size() * sizeof(s_dbgTriangleVertexDataCPU[0]));
         s_dbgTriangleVertexDataGPU.Unmap();
     }
 
@@ -5368,7 +5375,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
             cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 (size_t)PassID::DBG_DRAW_LINES, 1);
     
-            cmdBuffer.CmdDraw(2, lineInstCount, 0, 0);     
+            cmdBuffer.CmdDraw(DBG_LINE_VERTEX_COUNT, lineInstCount, 0, 0);     
         }
 
         if (triInstCount > 0) {
@@ -5381,7 +5388,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
             cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 (size_t)PassID::DBG_DRAW_TRIANGLES, 1);
     
-            cmdBuffer.CmdDraw(3, triInstCount, 0, 0);     
+            cmdBuffer.CmdDraw(DBG_TRIANGLE_VERTEX_COUNT, triInstCount, 0, 0);     
         }
     cmdBuffer.CmdEndRendering();
 }
