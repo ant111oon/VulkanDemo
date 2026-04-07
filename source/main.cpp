@@ -382,7 +382,7 @@ struct COMMON_MATERIAL
 };
 
 
-struct COMMON_MESH_INFO
+struct COMMON_MESH_DATA
 {
     glm::uint FIRST_VERTEX;
     glm::uint VERTEX_COUNT;
@@ -396,12 +396,19 @@ struct COMMON_MESH_INFO
 };
 
 
-struct COMMON_INST_INFO
+struct COMMON_INST_VOLUME
+{
+    glm::float4 MIN;
+    glm::float4 MAX;
+};
+
+
+struct COMMON_INST_DATA
 {
     glm::uint TRANSFORM_IDX;
     glm::uint MATERIAL_IDX;
     glm::uint MESH_IDX;
-    glm::uint PAD;
+    glm::uint VOLUME_IDX;
 };
 
 
@@ -436,7 +443,6 @@ struct FRUSTUM_PLANE
 
 
 static constexpr glm::uint COMMON_FRUSTUM_PLANES_COUNT = 6;
-
 
 struct FRUSTUM
 {
@@ -725,13 +731,14 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_MESH_INFOS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT = 2;
 static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_INST_INFOS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT = 6;
 static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_AABB_BUFFER_DESCRIPTOR_SLOT = 9;
 
 static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
@@ -779,8 +786,8 @@ static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 3;
 static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
-static constexpr uint32_t MAX_DBG_LINE_COUNT = 1024;
-static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 1024;
+static constexpr uint32_t MAX_DBG_LINE_COUNT = 4096;
+static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 4096;
 
 static constexpr uint32_t DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 static constexpr uint32_t DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
@@ -877,6 +884,7 @@ static vkn::Buffer s_commonConstBuffer;
 static vkn::Buffer s_commonMeshDataBuffer;
 static vkn::Buffer s_commonMaterialDataBuffer;
 static vkn::Buffer s_commonTransformDataBuffer;
+static vkn::Buffer s_commonAABBDataBuffer;
 static vkn::Buffer s_commonInstDataBuffer;
 
 static vkn::Buffer s_commonOpaqueMeshDrawCmdBuffer;
@@ -897,10 +905,11 @@ static std::vector<IndexType> s_cpuIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
 
-static std::vector<COMMON_MESH_INFO> s_cpuMeshData;
-static std::vector<COMMON_MATERIAL>  s_cpuMaterialData;
-static std::vector<glm::float4x4>    s_cpuTransformData;
-static std::vector<COMMON_INST_INFO> s_cpuInstData;
+static std::vector<COMMON_MESH_DATA>   s_cpuMeshData;
+static std::vector<COMMON_MATERIAL>    s_cpuMaterialData;
+static std::vector<glm::float4x4>      s_cpuTransformData;
+static std::vector<COMMON_INST_DATA>   s_cpuInstData;
+static std::vector<COMMON_INST_VOLUME> s_cpuAABBData;
 
 
 static std::vector<DBG_LINE_DATA> s_dbgLineDataCPU;
@@ -969,6 +978,7 @@ static bool s_skipRender = false;
     static bool s_useMeshCulling = true;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = true;
+    static bool s_drawInstAABBs = false;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -981,6 +991,7 @@ static bool s_skipRender = false;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = true;
+    static constexpr bool s_drawInstAABBs = false;
 
     static constexpr uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
 
@@ -1004,38 +1015,29 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
         glm::float3(aabbMax.x, aabbMax.y, aabbMax.z)
     };
 
-    glm::float3 newMin = glm::float3(100000000.f);
-    glm::float3 newMax = glm::float3(-100000000.f);
+    glm::float3 newMin = glm::float3(std::numeric_limits<float>::max());
+    glm::float3 newMax = glm::float3(std::numeric_limits<float>::lowest());
 
     for (int i = 0; i < 8; i++) {
         const glm::float3 p = glm::float3(wMatr * glm::float4(corners[i], 1.f));
 
-        newMin.x = glm::min(newMin.x, p.x);
-        newMin.y = glm::min(newMin.y, p.y);
-        newMin.z = glm::min(newMin.z, p.z);
-
-        newMax.x = glm::max(newMax.x, p.x);
-        newMax.y = glm::max(newMax.y, p.y);
-        newMax.z = glm::max(newMax.z, p.z);
+        newMin = glm::min(newMin, p);
+        newMax = glm::max(newMax, p);
     }
 
     return math::AABB(newMin, newMax);
 }
 
 
-static bool IsInstVisible(const COMMON_INST_INFO& instInfo)
+static bool IsInstVisible(const COMMON_INST_DATA& instInfo)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
-    const COMMON_MESH_INFO& mesh = s_cpuMeshData[instInfo.MESH_IDX];
-
-    const glm::float4x4& wMatr = s_cpuTransformData[instInfo.TRANSFORM_IDX];
-
-    const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
+    const COMMON_INST_VOLUME& volume = s_cpuAABBData[instInfo.VOLUME_IDX];
 
     const math::Frustum& frustum = s_camera.GetFrustum();
 
-    return frustum.IsIntersect(aabb); 
+    return frustum.IsIntersect(math::AABB(volume.MIN, volume.MAX)); 
 }
 
 
@@ -1219,9 +1221,12 @@ namespace DbgUI
                 }
             }
 
-            ImGui::Text("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
-            ImGui::Text("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
-
+            ImGui::NewLine();
+            ImGui::TextDisabled("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
+            ImGui::TextDisabled("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
+            ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
+            ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
+            
             ImGui::NewLine();
             ImGui::SeparatorText("Camera Info");
             ImGui::Text("Fly Camera Mode (F5):");
@@ -1295,6 +1300,11 @@ namespace DbgUI
         #ifdef ENG_BUILD_DEBUG
             ImGui::NewLine();
             ImGui::SeparatorText("Debug Output");
+
+            ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
+            ImGui::SameLine();
+            ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
+
             if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
                 for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
                     const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
@@ -2150,13 +2160,14 @@ static void CreateCommonDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_MESH_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkn::DescriptorInfo::Create(COMMON_INST_INFOS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3654,7 +3665,7 @@ static void WriteCommonDescriptorSet()
         COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_MESH_INFOS_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
+        COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformDataBuffer);
@@ -3668,7 +3679,7 @@ static void WriteCommonDescriptorSet()
     }
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_INST_INFOS_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
+        COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
         COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
@@ -3679,6 +3690,9 @@ static void WriteCommonDescriptorSet()
             COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
     }
 #endif
+
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
+        COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
 }
 
 
@@ -3795,7 +3809,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
             }
 
-            COMMON_MESH_INFO cpuMesh = {};
+            COMMON_MESH_DATA cpuMesh = {};
 
             cpuMesh.FIRST_VERTEX = s_cpuVertexBuffer.size();
             cpuMesh.VERTEX_COUNT = pPosAccessor->count;
@@ -4033,6 +4047,24 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     s_cpuTransformData.reserve(asset.nodes.size());
     s_cpuTransformData.clear();
 
+    s_cpuAABBData.reserve(meshInstCount);
+    s_cpuAABBData.clear();
+
+    auto PushAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> uint32_t
+    {
+        const COMMON_MESH_DATA& mesh = s_cpuMeshData[meshIdx];
+
+        const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
+        
+        COMMON_INST_VOLUME volume = {};
+        volume.MIN = glm::float4(aabb.min, 0.f);
+        volume.MAX = glm::float4(aabb.max, 0.f);
+
+        s_cpuAABBData.emplace_back(volume);
+
+        return s_cpuAABBData.size() - 1;
+    };
+
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
         gltf::iterateSceneNodes(asset, sceneId, gltf::math::fmat4x4(1.f), [&](auto&& node, auto&& trs)
         {
@@ -4054,15 +4086,17 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
                     const gltf::Primitive& primitive = mesh.primitives[i];
 
-                    COMMON_INST_INFO instInfo = {};
+                    COMMON_INST_DATA instData = {};
                     
-                    instInfo.TRANSFORM_IDX = trsIdx;
-                    instInfo.MESH_IDX = baseIdx + i;
+                    instData.TRANSFORM_IDX = trsIdx;
+                    instData.MESH_IDX = baseIdx + i;
     
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
-                    instInfo.MATERIAL_IDX = primitive.materialIndex.value();
+                    instData.MATERIAL_IDX = primitive.materialIndex.value();
 
-                    s_cpuInstData.emplace_back(instInfo);
+                    instData.VOLUME_IDX = PushAABB(instData.MESH_IDX, transform);
+
+                    s_cpuInstData.emplace_back(instData);
                 }
             }
         });
@@ -4073,7 +4107,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     timer.Reset().Start();
 
     std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), 
-        [](const COMMON_INST_INFO& a, const COMMON_INST_INFO& b) {
+        [](const COMMON_INST_DATA& a, const COMMON_INST_DATA& b) {
             return a.MESH_IDX < b.MESH_IDX;
         }
     );
@@ -4137,7 +4171,7 @@ static void UploadGPUMeshData()
 
     vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
 
-    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH_INFO);
+    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH_DATA);
     CORE_ASSERT(meshDataBufferSize <= stagingMeshInfosBuffer.GetMemorySize());
 
     void* pMeshBufferData = stagingMeshInfosBuffer.Map();
@@ -4326,14 +4360,16 @@ static void UploadGPUInstData()
 
     eng::Timer timer;
 
-    vkn::Buffer& stagingBuffer = s_commonStagingBuffers[0];
+    vkn::Buffer& instStagingBuffer = s_commonStagingBuffers[0];
 
-    const size_t bufferSize = s_cpuInstData.size() * sizeof(COMMON_INST_INFO);
-    CORE_ASSERT(bufferSize <= stagingBuffer.GetMemorySize());
+    const size_t instBufferSize = s_cpuInstData.size() * sizeof(COMMON_INST_DATA);
+    CORE_ASSERT(instBufferSize <= instStagingBuffer.GetMemorySize());
 
-    void* pData = stagingBuffer.Map();
-    memcpy(pData, s_cpuInstData.data(), bufferSize);
-    stagingBuffer.Unmap();
+    {
+        void* pData = instStagingBuffer.Map();
+        memcpy(pData, s_cpuInstData.data(), instBufferSize);
+        instStagingBuffer.Unmap();
+    }
 
     vkn::AllocationInfo instInfosBufAllocInfo = {};
     instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4341,14 +4377,38 @@ static void UploadGPUInstData()
 
     vkn::BufferCreateInfo instInfosBufCreateInfo = {};
     instInfosBufCreateInfo.pDevice = &s_vkDevice;
-    instInfosBufCreateInfo.size = bufferSize;
+    instInfosBufCreateInfo.size = instBufferSize;
     instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
     s_commonInstDataBuffer.Create(instInfosBufCreateInfo).SetDebugName("COMMON_INSTANCE_DATA");
 
+    vkn::Buffer& aabbStagingBuffer = s_commonStagingBuffers[1];
+
+    const size_t aabbBufferSize = s_cpuAABBData.size() * sizeof(COMMON_INST_VOLUME);
+    CORE_ASSERT(aabbBufferSize <= aabbStagingBuffer.GetMemorySize());
+
+    {
+        void* pData = aabbStagingBuffer.Map();
+        memcpy(pData, s_cpuAABBData.data(), aabbBufferSize);
+        aabbStagingBuffer.Unmap();
+    }
+
+    vkn::AllocationInfo aabbBufAllocInfo = {};
+    aabbBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    aabbBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo aabbBufCreateInfo = {};
+    aabbBufCreateInfo.pDevice = &s_vkDevice;
+    aabbBufCreateInfo.size = aabbBufferSize;
+    aabbBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    aabbBufCreateInfo.pAllocInfo = &aabbBufAllocInfo;
+
+    s_commonAABBDataBuffer.Create(aabbBufCreateInfo).SetDebugName("COMMON_AABB_DATA");
+
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingBuffer, s_commonInstDataBuffer, bufferSize);
+        cmdBuffer.CmdCopyBuffer(instStagingBuffer, s_commonInstDataBuffer, instBufferSize);
+        cmdBuffer.CmdCopyBuffer(aabbStagingBuffer, s_commonAABBDataBuffer, aabbBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Instance data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -4507,6 +4567,18 @@ void UpdateScene()
     }
 
     s_camera.Update();
+
+    if (s_drawInstAABBs) {
+        const math::Frustum& frustum = s_camera.GetFrustum();
+
+        constexpr glm::float4 COLOR = glm::float4(1.f, 0.6f, 0.3f, 0.25f);
+
+        for (const COMMON_INST_VOLUME& volume : s_cpuAABBData) {
+            if (frustum.IsIntersect(math::AABB(volume.MIN, volume.MAX))) {
+                RenderDebugAABBWired(glm::float3(volume.MIN + volume.MAX) * 0.5f, glm::float3(volume.MAX - volume.MIN), COLOR);
+            }
+        }
+    }    
 
     RenderDebugLine(glm::float3(-2.5f, -2.5f, 0.f), glm::float3(2.5f, -2.5f, 0.f),  glm::float4(1.f, 0.f, 0.f, 1.f));
     RenderDebugLine(glm::float3(2.5f, -2.5f, 0.f),  glm::float3(2.5f, 2.5f, 0.f),   glm::float4(0.f, 1.f, 0.f, 1.f));
@@ -4774,7 +4846,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
-                const COMMON_INST_INFO& instInfo = s_cpuInstData[i];
+                const COMMON_INST_DATA& instInfo = s_cpuInstData[i];
                 const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
 
                 if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
@@ -4791,7 +4863,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
                 cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::ZPASS], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
 
-                const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
+                const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }
@@ -4961,7 +5033,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         #endif
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
-                const COMMON_INST_INFO& instInfo = s_cpuInstData[i];
+                const COMMON_INST_DATA& instInfo = s_cpuInstData[i];
                 const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
 
                 if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
@@ -4986,7 +5058,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
                 cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
                 
-                const COMMON_MESH_INFO& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
+                const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }

@@ -55,7 +55,7 @@ struct COMMON_MATERIAL
 #define IS_COMMON_MATERIAL_ALPHA_BLEND(MTL)  IS_FLAG_SET(MTL.FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)
 
 
-struct COMMON_MESH_INFO
+struct COMMON_MESH_DATA
 {
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
@@ -69,12 +69,19 @@ struct COMMON_MESH_INFO
 };
 
 
-struct COMMON_INST_INFO
+struct COMMON_INST_VOLUME
+{
+    float4 MIN;
+    float4 MAX;
+};
+
+
+struct COMMON_INST_DATA
 {
     uint TRANSFORM_IDX;
     uint MATERIAL_IDX;
     uint MESH_IDX;
-    uint PAD;
+    uint VOLUME_IDX;
 };
 
 
@@ -236,16 +243,18 @@ static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 
 [vk::binding(1, 0)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
-[vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_INFO> COMMON_MESH_INFOS;
+[vk::binding(2, 0)] StructuredBuffer<COMMON_MESH_DATA> COMMON_MESH_DATA_BUFFER;
 [vk::binding(3, 0)] StructuredBuffer<float4x4>         COMMON_TRANSFORMS;
 [vk::binding(4, 0)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
 [vk::binding(5, 0)] Texture2D                          COMMON_MTL_TEXTURES[];
 
-[vk::binding(6, 0)] StructuredBuffer<COMMON_INST_INFO> COMMON_INST_INFOS;
+[vk::binding(6, 0)] StructuredBuffer<COMMON_INST_DATA> COMMON_INST_DATA_BUFFER;
 
 static const uint COMMON_VERTEX_DATA_SIZE_UI = 6;
 [vk::binding(7, 0)] StructuredBuffer<uint> COMMON_VERTEX_DATA;
 
 [vk::binding(8, 0)] Texture2D COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
+
+[vk::binding(9, 0)] StructuredBuffer<COMMON_INST_VOLUME> COMMON_AABB_BUFFER;
 
 #endif

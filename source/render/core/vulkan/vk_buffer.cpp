@@ -85,6 +85,7 @@ namespace vkn
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
         VK_ASSERT(GetAllocator().IsCreated());
         VK_ASSERT(info.pAllocInfo);
+        VK_ASSERT(info.size > 0);
 
         VkDevice vkDevice = info.pDevice->Get();
 

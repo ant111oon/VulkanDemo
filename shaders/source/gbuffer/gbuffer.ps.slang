@@ -25,14 +25,14 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     input.data.lnorm = normalize(input.data.lnorm);
     input.data.tangent.xyz = normalize(input.data.tangent.xyz);
 
-    const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[input.flatData.instID];
+    const COMMON_INST_DATA instData = COMMON_INST_DATA_BUFFER[input.flatData.instID];
 
-    const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
+    const COMMON_MATERIAL material = COMMON_MATERIALS[instData.MATERIAL_IDX];
 
     const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
     GBUFFER_SURFACE surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
-    const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
+    const float4x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
     const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)).xyz);
 
     result.rt0 = surf.albedo;

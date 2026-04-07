@@ -4,52 +4,13 @@
 #include "common/resource_defines.slang"
 
 
-// TODO: Optimize this
-AABB GetWorldAABB(in AABB aabbLCS, in float4x4 wMatr)
+bool IsInstVisible(in COMMON_INST_DATA instData)
 {
-    const float3 aabbMin = aabbLCS.min;
-    const float3 aabbMax = aabbLCS.max;
-
-    float3 corners[8] = {
-        float3(aabbMin.x, aabbMin.y, aabbMin.z),
-        float3(aabbMax.x, aabbMin.y, aabbMin.z),
-        float3(aabbMin.x, aabbMax.y, aabbMin.z),
-        float3(aabbMax.x, aabbMax.y, aabbMin.z),
-        float3(aabbMin.x, aabbMin.y, aabbMax.z),
-        float3(aabbMax.x, aabbMin.y, aabbMax.z),
-        float3(aabbMin.x, aabbMax.y, aabbMax.z),
-        float3(aabbMax.x, aabbMax.y, aabbMax.z)
-    };
-
-    float3 newMin = FLOAT3(100000000.f);
-    float3 newMax = FLOAT3(-100000000.f);
-
-    for (int i = 0; i < 8; i++) {
-        const float3 p = mul(wMatr, float4(corners[i], 1.f)).xyz;
-
-        newMin = min(newMin, p);
-        newMax = max(newMax, p);
-    }
-
-    AABB result;
-    result.min = newMin;
-    result.max = newMax;
-
-    return result;
-}
-
-
-bool IsInstVisible(in COMMON_INST_INFO instInfo)
-{
-    const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
-
-    const float4x4 wMatr = COMMON_TRANSFORMS[instInfo.TRANSFORM_IDX];
+    const COMMON_INST_VOLUME volume = COMMON_AABB_BUFFER[instData.VOLUME_IDX];
 
     AABB aabb = (AABB)0;
-    aabb.min = meshInfo.BOUNDS_MIN_LCS;
-    aabb.max = meshInfo.BOUNDS_MAX_LCS;
-
-    aabb = GetWorldAABB(aabb, wMatr);
+    aabb.min = volume.MIN.xyz;
+    aabb.max = volume.MAX.xyz;
 
     return COMMON_CB.CAMERA_FRUSTUM.IsIntersect(aabb); 
 }
@@ -101,8 +62,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const COMMON_INST_INFO instInfo = COMMON_INST_INFOS[instID];
-    const COMMON_MESH_INFO meshInfo = COMMON_MESH_INFOS[instInfo.MESH_IDX];
+    const COMMON_INST_DATA instInfo = COMMON_INST_DATA_BUFFER[instID];
+    const COMMON_MESH_DATA meshInfo = COMMON_MESH_DATA_BUFFER[instInfo.MESH_IDX];
 
     const COMMON_MATERIAL material = COMMON_MATERIALS[instInfo.MATERIAL_IDX];
 
