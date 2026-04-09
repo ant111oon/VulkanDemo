@@ -1,10 +1,10 @@
+#include "registers/common_registers.slang"
+#include "registers/brdf_integration_gen_registers.slang"
+
 #include "common/common_cs.slang"
 
 #include "common/math/distribution.slang"
-#include "common/resource_defines.slang"
-
-#include "common/lighting/brdf.slang"
-#include "registers/brdf_integration_gen_registers.slang"
+#include "common/brdf.slang"
 
 
 static const uint SAMPLES_NUM = 1024;

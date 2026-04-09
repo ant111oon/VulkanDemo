@@ -353,6 +353,11 @@ struct Vertex
 };
 
 
+static constexpr uint32_t DESC_SET_IDX_BINDLESS = 0;
+static constexpr uint32_t DESC_SET_IDX_PER_FRAME = 1;
+static constexpr uint32_t DESC_SET_IDX_PER_DRAW = 2;
+
+
 enum class COMMON_MATERIAL_FLAGS : glm::uint
 {
     DOUBLE_SIDED = 0x1,

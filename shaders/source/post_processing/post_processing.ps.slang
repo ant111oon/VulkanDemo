@@ -1,11 +1,10 @@
-#include "pass/post_processing/vsout.slang"
-
-#include "registers/post_processing_registers.slang"
 #include "registers/common_registers.slang"
+#include "registers/post_processing_registers.slang"
 
 #include "common/tonemapping.slang"
-#include "common/resource_defines.slang"
 #include "common/math/utils.slang"
+
+#include "pass/post_processing/vsout.slang"
 
 
 float3 Tonemap(in float3 color)

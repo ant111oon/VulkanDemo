@@ -2,8 +2,8 @@
 #define GBUFFER_INCL_H
 
 #include "registers/common_registers.slang"
+#include "registers/gbuffer_registers.slang"
 
-#include "common/resource_defines.slang"
 #include "common/math/utils.slang"
 
 

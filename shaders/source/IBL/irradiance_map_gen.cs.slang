@@ -1,9 +1,9 @@
+#include "registers/common_registers.slang"
 #include "registers/irradiance_map_gen_registers.slang"
 
-#include "common/math/distribution.slang"
-#include "common/resource_defines.slang"
-
 #include "common/common_cs.slang"
+
+#include "common/math/distribution.slang"
 
 
 static const uint IRRADIANCE_MAP_GEN_SAMPLES_NUM = 2048;

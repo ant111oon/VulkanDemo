@@ -1,9 +1,7 @@
-#include "registers/gbuffer_registers.slang"
+#include "common/gbuffer_incl.slang"
 
 #include "common/math/utils.slang"
 #include "common/dbg_vis.slang"
-#include "common/resource_defines.slang"
-#include "common/gbuffer_incl.slang"
 
 #include "pass/gbuffer/vsout.slang"
 

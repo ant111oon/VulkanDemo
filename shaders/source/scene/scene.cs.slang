@@ -1,7 +1,7 @@
 #include "registers/common_registers.slang"
 #include "registers/mesh_culling_registers.slang"
 
-#include "common/resource_defines.slang"
+#include "common/common_structs.slang"
 
 
 bool IsInstVisible(in COMMON_INST_DATA instData)

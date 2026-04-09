@@ -1,7 +1,7 @@
-#include "pass/skybox/vsout.slang"
+#include "registers/common_registers.slang"
 #include "registers/skybox_registers.slang"
 
-#include "common/resource_defines.slang"
+#include "pass/skybox/vsout.slang"
 
 
 struct SKYBOX_PS_OUTPUT

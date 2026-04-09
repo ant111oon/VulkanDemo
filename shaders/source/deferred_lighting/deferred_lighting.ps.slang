@@ -1,12 +1,12 @@
-#include "pass/deferred_lighting/vsout.slang"
-
-#include "registers/deferred_lighting_registers.slang"
 #include "registers/common_registers.slang"
+#include "registers/deferred_lighting_registers.slang"
 
-#include "common/resource_defines.slang"
+#include "common/system/sys_constants.slang"
 #include "common/math/utils.slang"
 
-#include "common/lighting/brdf.slang"
+#include "common/brdf.slang"
+
+#include "pass/deferred_lighting/vsout.slang"
 
 
 struct GBUFFER

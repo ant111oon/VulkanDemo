@@ -1,8 +1,7 @@
 #ifndef MESH_CULLING_REGISTERS_H
 #define MESH_CULLING_REGISTERS_H
 
-#include "common_registers.slang"
-#include "common/common_structs.slang"
+#include "common/system/sys_constants.slang"
 
 
 struct MESH_CULLING_PUSH_CONSTS

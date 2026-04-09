@@ -3,7 +3,7 @@
 #include "registers/common_registers.slang"
 #include "registers/backbuffer_registers.slang"
 
-#include "common/resource_defines.slang"
+#include "common/system/sys_constants.slang"
 
 
 struct BACKBUFFER_PS_OUTPUT

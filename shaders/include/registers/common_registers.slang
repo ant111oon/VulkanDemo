@@ -5,6 +5,8 @@
 #include "common/math/utils.slang"
 #include "common/math/culling.slang"
 
+#include "common/system/sys_constants.slang"
+
 
 enum COMMON_DBG_TEX_IDX
 {

@@ -1,7 +1,7 @@
 #ifndef IRRADIANCE_MAP_GEN_H
 #define IRRADIANCE_MAP_GEN_H
 
-#include "common_registers.slang"
+#include "common/system/sys_constants.slang"
 
 
 struct IRRADIANCE_MAP_PUSH_CONSTS
