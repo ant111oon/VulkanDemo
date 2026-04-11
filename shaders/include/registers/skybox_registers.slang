@@ -4,6 +4,6 @@
 #include "common/system/sys_constants.slang"
 
 
-[vk::binding(0, 1)] TextureCube SKYBOX_TEXTURE;
+[vk::binding(0, DESC_SET_PER_DRAW)] TextureCube SKYBOX_TEXTURE;
 
 #endif

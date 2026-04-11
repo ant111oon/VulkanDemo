@@ -1,9 +1,9 @@
 #ifndef SYS_CONSTANTS_H
 #define SYS_CONSTANTS_H
 
-static const uint DESC_SET_IDX_BINDLESS = 0;
-static const uint DESC_SET_IDX_PER_FRAME = 1;
-static const uint DESC_SET_IDX_PER_DRAW = 2;
+static const uint DESC_SET_PER_FRAME = 0;
+static const uint DESC_SET_PER_DRAW = 1;
+static const uint DESC_SET_TOTAL_COUNT = 2;
 
 
 #define SAMPLE_TEX(TEXTURE, SAMPLER, TEXCOORDS) TEXTURE.Sample(SAMPLER, TEXCOORDS)

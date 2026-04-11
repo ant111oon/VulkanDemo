@@ -98,8 +98,13 @@ namespace vkn
 
         Device& GetDevice() const
         {
+            return GetLayout().GetDevice();
+        }
+
+        PSOLayout& GetLayout() const
+        {
             VK_ASSERT(IsCreated());
-            return m_pLayout->GetDevice();
+            return *m_pLayout;
         }
 
         const VkPipeline& Get() const

@@ -13,7 +13,7 @@ struct ZPASS_PUSH_CONSTS
 
 [[vk::push_constant]] ZPASS_PUSH_CONSTS PUSH_CONSTS;
 
-[vk::binding(0, 1)] StructuredBuffer<uint> ZPASS_OPAQUE_INST_INFO_IDS;
-[vk::binding(1, 1)] StructuredBuffer<uint> ZPASS_AKILL_INST_INFO_IDS;
+[vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> ZPASS_OPAQUE_INST_INFO_IDS;
+[vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<uint> ZPASS_AKILL_INST_INFO_IDS;
 
 #endif

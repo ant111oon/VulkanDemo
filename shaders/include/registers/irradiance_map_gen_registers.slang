@@ -12,8 +12,8 @@ struct IRRADIANCE_MAP_PUSH_CONSTS
 [[vk::push_constant]] IRRADIANCE_MAP_PUSH_CONSTS PUSH_CONSTS;
 
 
-[vk::binding(0, 1)] TextureCube IRRADIANCE_MAP_GEN_ENV_MAP;
-[vk::binding(1, 1)] RWTexture2DArray IRRADIANCE_MAP_GEN_OUTPUT_UAV;
+[vk::binding(0, DESC_SET_PER_DRAW)] TextureCube IRRADIANCE_MAP_GEN_ENV_MAP;
+[vk::binding(1, DESC_SET_PER_DRAW)] RWTexture2DArray IRRADIANCE_MAP_GEN_OUTPUT_UAV;
 
 
 #endif

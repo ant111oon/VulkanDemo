@@ -146,6 +146,13 @@ namespace vkn
     };
 
 
+    struct DescriptorSetBindingInfo
+    {
+        uint32_t bufferSetIdx; // index of set inside bound descriptor buffer
+        uint32_t shaderSetIdx; // index of set in shader
+    };
+
+
     class CmdBuffer : public Object
     {
         friend class CmdPool;
@@ -191,22 +198,27 @@ namespace vkn
 
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, std::span<const BufferToTextureCopyInfo> regions);
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, const BufferToTextureCopyInfo& region);
-        
-        CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
         CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 
+        CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
+        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorSetBindingInfo& bindigInfo);
+        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorSetBindingInfo> bindigInfos);
+
+        CmdBuffer& CmdPushConstants(PSO& pso, VkShaderStageFlags stagesMask, const void* pData, VkDeviceSize size, VkDeviceSize offset = 0);
+        
+        template <typename T>
+        CmdBuffer& CmdPushConstants(PSO& pso, VkShaderStageFlags stagesMask, const T& data, VkDeviceSize offset = 0)
+        {
+            static_assert(std::is_trivially_copyable_v<T>, "T must be a trivially copyable type");
+            return CmdPushConstants(pso, stagesMask, &data, sizeof(T), offset);
+        }
+
+        CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
         CmdBuffer& CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
         CmdBuffer& CmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
-        CmdBuffer& CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride);
-        
-        CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
-        
-        // setIdx    - index of set inside descriptor buffer
-        // dstSetIdx - index of set inside in shader
-        CmdBuffer& CmdSetDescriptorBufferOffset(PSOLayout& layout, VkPipelineBindPoint bindPoint, uint32_t setIdx, uint32_t dstSetIdx);
-
-        CmdBuffer& CmdPushConstants(PSOLayout& layout, VkShaderStageFlags stagesMask, VkDeviceSize offset, VkDeviceSize size, const void* pData);
+        CmdBuffer& CmdDrawIndexedIndirect(Buffer& argBuffer, VkDeviceSize argBufferOffset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t argStride);
 
         BarrierList& GetBarrierList();
         BarrierList& BeginBarrierList();

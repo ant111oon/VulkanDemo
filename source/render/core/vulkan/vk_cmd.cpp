@@ -545,11 +545,11 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdDrawIndexedIndirect(Buffer& buffer, VkDeviceSize offset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+    CmdBuffer& CmdBuffer::CmdDrawIndexedIndirect(Buffer& argBuffer, VkDeviceSize argBufferOffset, Buffer& countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t argStride)
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
-        vkCmdDrawIndexedIndirectCount(m_cmdBuffer, buffer.Get(), offset, countBuffer.Get(), countBufferOffset, maxDrawCount, stride);
+        vkCmdDrawIndexedIndirectCount(m_cmdBuffer, argBuffer.Get(), argBufferOffset, countBuffer.Get(), countBufferOffset, maxDrawCount, argStride);
 
         return *this;
     }
@@ -577,7 +577,7 @@ namespace vkn
     }
 
     
-    CmdBuffer& CmdBuffer::CmdSetDescriptorBufferOffset(PSOLayout& layout, VkPipelineBindPoint bindPoint, uint32_t setIdx, uint32_t dstSetIdx)
+    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorSetBindingInfo& bindigInfo)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
@@ -585,23 +585,32 @@ namespace vkn
             vkCmdSetDescriptorBufferOffsets = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)GetDevice().GetProcAddr("vkCmdSetDescriptorBufferOffsetsEXT");
         }
 
-        VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdSetDescriptorBufferOffset");
-        VK_ASSERT(setIdx < m_pDescrBufferBindingCache->GetSetCount());
+        VK_ASSERT(pso.IsCreated());
+        VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdBindDescriptorBufferSet");
+        VK_ASSERT(bindigInfo.bufferSetIdx < m_pDescrBufferBindingCache->GetSetCount());
 
-        const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(setIdx);
+        const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(bindigInfo.bufferSetIdx);
 
         constexpr uint32_t bufferIdx = 0;
-        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, bindPoint, layout.Get(), dstSetIdx, 1, &bufferIdx, &offset);
+        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, pso.GetBindPoint(), pso.GetLayout().Get(), bindigInfo.shaderSetIdx, 1, &bufferIdx, &offset);
 
         return *this;
     }
 
 
-    CmdBuffer& CmdBuffer::CmdPushConstants(PSOLayout& layout, VkShaderStageFlags stagesMask, VkDeviceSize offset, VkDeviceSize size, const void* pData)
+    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorSetBindingInfo> bindigInfos)
+    {
+        for (const DescriptorSetBindingInfo& info : bindigInfos) {
+            CmdBindDescriptorBufferSets(pso, info);
+        }
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdPushConstants(PSO& pso, VkShaderStageFlags stagesMask, const void* pData, VkDeviceSize size, VkDeviceSize offset)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdPushConstants(m_cmdBuffer, layout.Get(), stagesMask, offset, size, pData);
+        vkCmdPushConstants(m_cmdBuffer, pso.GetLayout().Get(), stagesMask, offset, size, pData);
 
         return *this;
     }

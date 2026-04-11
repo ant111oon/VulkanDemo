@@ -4,6 +4,6 @@
 #include "common/system/sys_constants.slang"
 
 
-[vk::binding(0, 1)] RWTexture2D BRDF_INTEGRATION_GEN_OUTPUT_UAV;
+[vk::binding(0, DESC_SET_PER_DRAW)] RWTexture2D BRDF_INTEGRATION_GEN_OUTPUT_UAV;
 
 #endif

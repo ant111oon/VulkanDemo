@@ -22,10 +22,10 @@ static const uint DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 static const uint DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
 
 
-[vk::binding(0, 1)] StructuredBuffer<uint> DBG_DRAW_LINES_VERTEX_BUFFER;
-[vk::binding(1, 1)] StructuredBuffer<DBG_LINE_DATA> DBG_DRAW_LINES_DATA;
+[vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> DBG_DRAW_LINES_VERTEX_BUFFER;
+[vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<DBG_LINE_DATA> DBG_DRAW_LINES_DATA;
 
-[vk::binding(2, 1)] StructuredBuffer<uint> DBG_DRAW_TRIANGLES_VERTEX_BUFFER;
-[vk::binding(3, 1)] StructuredBuffer<DBG_TRIANGLE_DATA> DBG_DRAW_TRIANGLES_DATA;
+[vk::binding(2, DESC_SET_PER_DRAW)] StructuredBuffer<uint> DBG_DRAW_TRIANGLES_VERTEX_BUFFER;
+[vk::binding(3, DESC_SET_PER_DRAW)] StructuredBuffer<DBG_TRIANGLE_DATA> DBG_DRAW_TRIANGLES_DATA;
 
 #endif

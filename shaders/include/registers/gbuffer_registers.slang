@@ -14,7 +14,7 @@ struct GBUFFER_PUSH_CONSTS
 [[vk::push_constant]] GBUFFER_PUSH_CONSTS PUSH_CONSTS;
 
 
-[vk::binding(0, 1)] StructuredBuffer<uint> GBUFFER_OPAQUE_INST_INFO_IDS;
-[vk::binding(1, 1)] StructuredBuffer<uint> GBUFFER_AKILL_INST_INFO_IDS;
+[vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GBUFFER_OPAQUE_INST_INFO_IDS;
+[vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GBUFFER_AKILL_INST_INFO_IDS;
 
 #endif

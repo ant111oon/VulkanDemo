@@ -353,9 +353,9 @@ struct Vertex
 };
 
 
-static constexpr uint32_t DESC_SET_IDX_BINDLESS = 0;
-static constexpr uint32_t DESC_SET_IDX_PER_FRAME = 1;
-static constexpr uint32_t DESC_SET_IDX_PER_DRAW = 2;
+static constexpr uint32_t DESC_SET_PER_FRAME = 0;
+static constexpr uint32_t DESC_SET_PER_DRAW = 1;
+static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
 
 
 enum class COMMON_MATERIAL_FLAGS : glm::uint
@@ -2545,10 +2545,9 @@ static void CreateDescriptorSets()
 
 static void CreateMeshCullingPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::MESH_CULLING]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::MESH_CULLING];
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS) };
 
@@ -2559,10 +2558,9 @@ static void CreateMeshCullingPipelineLayout()
 
 static void CreateZPassPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::ZPASS]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::ZPASS];
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS) };
 
@@ -2573,10 +2571,9 @@ static void CreateZPassPipelineLayout()
 
 static void CreateGBufferPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::GBUFFER]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GBUFFER];
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS) };
 
@@ -2586,10 +2583,9 @@ static void CreateGBufferPipelineLayout()
 
 static void CreateDeferredLightingPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::DEFERRED_LIGHTING]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::DEFERRED_LIGHTING];
 
     s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING].Create(&s_vkDevice, layoutPtrs).SetDebugName("DEFERRED_LIGHTING_PIPELINE_LAYOUT");
 }
@@ -2597,10 +2593,9 @@ static void CreateDeferredLightingPipelineLayout()
 
 static void CreatePostProcessingPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::POST_PROCESSING]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::POST_PROCESSING];
 
     s_PSOLayouts[(size_t)PassID::POST_PROCESSING].Create(&s_vkDevice, layoutPtrs).SetDebugName("POST_PROCESSING_PIPELINE_LAYOUT");
 }
@@ -2608,10 +2603,9 @@ static void CreatePostProcessingPipelineLayout()
 
 static void CreateBackbufferPassPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::BACKBUFFER]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::BACKBUFFER];
 
     s_PSOLayouts[(size_t)PassID::BACKBUFFER].Create(&s_vkDevice, layoutPtrs).SetDebugName("BACKBUFFER_PIPELINE_LAYOUT");
 }
@@ -2619,10 +2613,9 @@ static void CreateBackbufferPassPipelineLayout()
 
 static void CreateSkyboxPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::SKYBOX]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::SKYBOX];
 
     s_PSOLayouts[(size_t)PassID::SKYBOX].Create(&s_vkDevice, layoutPtrs).SetDebugName("SKYBOX_PIPELINE_LAYOUT");
 }
@@ -2630,10 +2623,9 @@ static void CreateSkyboxPipelineLayout()
 
 static void CreateIrradianceMapGenPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN];
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS) };
 
@@ -2644,10 +2636,9 @@ static void CreateIrradianceMapGenPipelineLayout()
 
 static void CreatePrefilteredEnvMapGenPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN];
 
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS) };
 
@@ -2658,10 +2649,9 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
 
 static void CreateBRDFIntegrationLUTGenPipelineLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN];
 
     s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN].Create(&s_vkDevice, layoutPtrs).SetDebugName("GRDF_LUT_GEN_PIPELINE_LAYOUT");
 }
@@ -2670,10 +2660,9 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
 static void CreateDbgDrawLinePipelineLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINES]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINES];
 
     s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_LINE_PIPELINE_LAYOUT");
 #endif
@@ -2683,10 +2672,9 @@ static void CreateDbgDrawLinePipelineLayout()
 static void CreateDbgDrawTrianglePipelineLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    const vkn::DescriptorSetLayout* layoutPtrs[] = {
-        &s_descSetLayouts[(size_t)PassID::COMMON],
-        &s_descSetLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES]
-    };
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES];
 
     s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES].Create(&s_vkDevice, layoutPtrs).SetDebugName("DBG_DRAW_TRIANGLES_PIPELINE_LAYOUT");
 #endif
@@ -4739,18 +4727,18 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     cmdBuffer.CmdPushBarrierList();
 
-    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN]);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN];
+
+    cmdBuffer.CmdBindPSO(pso);
     
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::COMMON, 0);
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::IRRADIANCE_MAP_GEN, 1);
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::IRRADIANCE_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     IRRADIANCE_MAP_PUSH_CONSTS pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
     pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
-    cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
     cmdBuffer.CmdDispatch(ceil(COMMON_IRRADIANCE_MAP_SIZE.x / 32.f), ceil(COMMON_IRRADIANCE_MAP_SIZE.y / 32.f), 6);
 
@@ -4767,7 +4755,9 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", eng::ProfileColor::OrangeRed);
     eng::Timer timer;
 
-    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN]);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::PREFILT_ENV_MAP_GEN];
+
+    cmdBuffer.CmdBindPSO(pso);
 
     PREFILTERED_ENV_MAP_PUSH_CONSTS pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
@@ -4777,16 +4767,13 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     cmdBuffer.CmdPushBarrierList();
 
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::COMMON, 0);
-
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::PREFILT_ENV_MAP_GEN, 1);
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::PREFILT_ENV_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
         pushConsts.MIP = mip;
 
-        cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
         const uint32_t sizeX = COMMON_PREFILTERED_ENV_MAP_SIZE.x >> mip;
         const uint32_t sizeY = COMMON_PREFILTERED_ENV_MAP_SIZE.y >> mip;
@@ -4807,18 +4794,18 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", eng::ProfileColor::OrangeRed);
     eng::Timer timer;
 
-    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BRDF_LUT_GEN]);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::BRDF_LUT_GEN];
+
+    cmdBuffer.CmdBindPSO(pso);
 
     cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, 
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     cmdBuffer.CmdPushBarrierList();
 
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::COMMON, 0);
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BRDF_LUT_GEN], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::BRDF_LUT_GEN, 1);
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::BRDF_LUT_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1U);
+    cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1u);
 
     cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -4855,17 +4842,17 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
         .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     cmdBuffer.CmdPushBarrierList();
 
-    cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::MESH_CULLING]);
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::MESH_CULLING];
+
+    cmdBuffer.CmdBindPSO(pso);
     
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::COMMON, 0);
-    cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_PIPELINE_BIND_POINT_COMPUTE, 
-        (size_t)PassID::MESH_CULLING, 1);
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::MESH_CULLING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     MESH_CULLING_PUSH_CONSTS pushConsts = {};
     pushConsts.INST_COUNT = s_cpuInstData.size();
 
-    cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::MESH_CULLING], VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConsts), &pushConsts);
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / 64.f), 1, 1);
 }
@@ -4928,12 +4915,12 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::ZPASS]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::ZPASS];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::ZPASS], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::ZPASS], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::ZPASS, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::ZPASS, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -4941,7 +4928,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         pushConsts.IS_AKILL_PASS = isAKillPass;
 
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::ZPASS], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
+            cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
             if (isAKillPass) {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
@@ -4969,7 +4956,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
                 pushConsts.INST_INFO_IDX = i;
 
-                cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::ZPASS], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
+                cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
                 const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
@@ -5093,12 +5080,12 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::GBUFFER]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::GBUFFER];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::GBUFFER, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::GBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
@@ -5120,7 +5107,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         pushConsts.IS_AKILL_PASS = isAKillPass;
 
         if (s_useMeshIndirectDraw) {
-            cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
+            cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
             
             if (isAKillPass) {
                 cmdBuffer.CmdDrawIndexedIndirect(s_commonAKillMeshDrawCmdBuffer, sizeof(glm::uint), s_commonAKillMeshDrawCmdBuffer, 0, 
@@ -5164,7 +5151,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
                 pushConsts.INST_INFO_IDX = i;
 
-                cmdBuffer.CmdPushConstants(s_PSOLayouts[(size_t)PassID::GBUFFER], VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConsts), &pushConsts);
+                cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
                 
                 const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
                 cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
@@ -5243,12 +5230,12 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DEFERRED_LIGHTING]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::DEFERRED_LIGHTING];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DEFERRED_LIGHTING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::DEFERRED_LIGHTING, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DEFERRED_LIGHTING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -5303,12 +5290,12 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::SKYBOX]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::SKYBOX];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::SKYBOX], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::SKYBOX], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::SKYBOX, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::SKYBOX, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(36, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -5361,12 +5348,12 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::POST_PROCESSING]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::POST_PROCESSING];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::POST_PROCESSING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::POST_PROCESSING], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::POST_PROCESSING, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::POST_PROCESSING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -5469,12 +5456,12 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         if (lineInstCount > 0) {
             ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Lines", eng::ProfileColor::Red2);
     
-            cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_LINES]);
+            vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_LINES];
+
+            cmdBuffer.CmdBindPSO(pso);
             
-            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                (size_t)PassID::COMMON, 0);
-            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_LINES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                (size_t)PassID::DBG_DRAW_LINES, 1);
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DBG_DRAW_LINES, .shaderSetIdx = DESC_SET_PER_DRAW });
     
             cmdBuffer.CmdDraw(DBG_LINE_VERTEX_COUNT, lineInstCount, 0, 0);     
         }
@@ -5482,12 +5469,12 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         if (triInstCount > 0) {
             ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Triangles", eng::ProfileColor::Red2);
 
-            cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::DBG_DRAW_TRIANGLES]);
+            vkn::PSO& pso = s_PSOs[(size_t)PassID::DBG_DRAW_TRIANGLES];
+
+            cmdBuffer.CmdBindPSO(pso);
             
-            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                (size_t)PassID::COMMON, 0);
-            cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                (size_t)PassID::DBG_DRAW_TRIANGLES, 1);
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DBG_DRAW_TRIANGLES, .shaderSetIdx = DESC_SET_PER_DRAW });
     
             cmdBuffer.CmdDraw(DBG_TRIANGLE_VERTEX_COUNT, triInstCount, 0, 0);     
         }
@@ -5583,12 +5570,12 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
         scissor.extent = renderingInfo.renderArea.extent;
         cmdBuffer.CmdSetScissor(0, 1, &scissor);
 
-        cmdBuffer.CmdBindPSO(s_PSOs[(size_t)PassID::BACKBUFFER]);
+        vkn::PSO& pso = s_PSOs[(size_t)PassID::BACKBUFFER];
+
+        cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BACKBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::COMMON, 0);
-        cmdBuffer.CmdSetDescriptorBufferOffset(s_PSOLayouts[(size_t)PassID::BACKBUFFER], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            (size_t)PassID::BACKBUFFER, 1);
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::BACKBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
