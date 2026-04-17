@@ -19,7 +19,7 @@ namespace eng
     }
 
 
-    #ifdef ENG_OS_WINDOWS
+#ifdef ENG_OS_WINDOWS
     enum OutputColor : WORD
     {
         OUTPUT_COLOR_DEFAULT = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
@@ -90,5 +90,5 @@ namespace eng
     }
 }
 #else
-    #error Invalid platform
+    #error Unsupported OS type!
 #endif

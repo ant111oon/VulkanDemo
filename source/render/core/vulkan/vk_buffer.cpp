@@ -146,6 +146,23 @@ namespace vkn
 
         return *this;
     }
+        
+
+    Buffer& Buffer::CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags)
+    {
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT |
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+        const VkBufferUsageFlags2 usage = 
+            VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT | 
+            VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT |
+            VK_BUFFER_USAGE_2_TRANSFER_DST_BIT |
+            extraUsageFlags;
+
+        return Create(pDevice, size, usage, allocInfo);
+    }
 
     
     Buffer& Buffer::Destroy()

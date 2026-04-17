@@ -50,7 +50,7 @@ namespace math
     }
 
 
-    constexpr inline glm::float4x4 MakeTRS(const glm::float3& translation, const glm::quat& rotation, const glm::float3& scale) noexcept
+    inline glm::float4x4 MakeTRS(const glm::float3& translation, const glm::quat& rotation, const glm::float3& scale) noexcept
     {
         const glm::float4x4 T = glm::translate(M3D_MAT4X4_IDENTITY, translation);
         const glm::float4x4 R = glm::mat4_cast(rotation);
@@ -60,7 +60,7 @@ namespace math
     }
 
 
-    constexpr inline glm::float4x4 MakeTR(const glm::float3& translation, const glm::quat& rotation) noexcept
+    inline glm::float4x4 MakeTR(const glm::float3& translation, const glm::quat& rotation) noexcept
     {
         const glm::float4x4 T = glm::translate(M3D_MAT4X4_IDENTITY, translation);
         const glm::float4x4 R = glm::mat4_cast(rotation);
@@ -69,7 +69,7 @@ namespace math
     }
 
 
-    constexpr inline glm::float4x4 MakeTS(const glm::float3& translation, const glm::float3& scale) noexcept
+    inline glm::float4x4 MakeTS(const glm::float3& translation, const glm::float3& scale) noexcept
     {
         const glm::float4x4 T = glm::translate(M3D_MAT4X4_IDENTITY, translation);
         const glm::float4x4 S = glm::scale(M3D_MAT4X4_IDENTITY, scale);

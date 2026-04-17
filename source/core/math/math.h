@@ -73,13 +73,13 @@ namespace math
 
 
     template <typename T>
-    constexpr inline bool IsNormalized(const T& value) noexcept
+    inline bool IsNormalized(const T& value) noexcept
     {
         return glm::abs(glm::length(value) - 1.f) < M3D_EPS;
     }
 
 
-    constexpr inline bool IsNormalized(const glm::quat& quat) noexcept
+    inline bool IsNormalized(const glm::quat& quat) noexcept
     {
         return std::abs(glm::length(quat) - 1.f) < M3D_EPS;
     }

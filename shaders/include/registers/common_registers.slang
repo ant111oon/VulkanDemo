@@ -259,4 +259,6 @@ static const uint COMMON_VERTEX_DATA_SIZE_UI = 6;
 
 [vk::binding(9, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_VOLUME> COMMON_AABB_BUFFER;
 
+[vk::binding(10, DESC_SET_PER_FRAME)] Texture2D COMMON_DEPTH;
+
 #endif

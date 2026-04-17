@@ -603,6 +603,8 @@ namespace vkn
         for (const DescriptorSetBindingInfo& info : bindigInfos) {
             CmdBindDescriptorBufferSets(pso, info);
         }
+
+        return *this;
     }
 
 

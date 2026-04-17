@@ -3,7 +3,7 @@
 
 int2 DispatchThreadIDToPixCoord(in uint2 dtid, in uint2 size)
 {
-    return int2(min(dtid.x, size.x), max(size.y - 1, dtid.y) - dtid.y);
+    return int2(int(dtid.x), int(size.y) - 1 - dtid.y);
 }
 
 #endif

@@ -9,10 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(ENGINE_PROJ_NAME ${PROJECT_NAME})
 
 
-if (NOT WIN32)
-    message(FATAL_ERROR "Currently, only Windows is supported")
-endif()
-
+message(STATUS "${ENGINE_PROJ_NAME}: C++ compiler: ${CMAKE_CXX_COMPILER}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
     message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Use Debug/RelWithDebInfo (Profile)/Release")
@@ -155,7 +152,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE glm
     PRIVATE fastgltf
     
-    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui im3d>
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui>
 
     PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
 )
@@ -177,9 +174,13 @@ target_compile_definitions(${ENGINE_PROJ_NAME}
     PRIVATE $<$<CONFIG:Debug>:-DENG_BUILD_DEBUG>
     PRIVATE $<$<CONFIG:RelWithDebInfo>:-DENG_BUILD_PROFILE>
     PRIVATE $<$<CONFIG:Release>:-DENG_BUILD_RELEASE>
-
-    PRIVATE $<$<PLATFORM_ID:Windows>:-DENG_OS_WINDOWS>
 )
+
+if (WIN32)
+    target_compile_definitions(${ENGINE_PROJ_NAME} PRIVATE -DENG_OS_WINDOWS)
+else()
+    message(FATAL_ERROR "Currently, only Windows is supported")
+endif()
 
 if (SHADER_USE_REVERSED_Z)
     target_compile_definitions(${ENGINE_PROJ_NAME}

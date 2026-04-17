@@ -746,6 +746,7 @@ static constexpr size_t COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT = 6;
 static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 static constexpr size_t COMMON_AABB_BUFFER_DESCRIPTOR_SLOT = 9;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
 
 static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
@@ -2230,13 +2231,13 @@ static void CreateDbgDrawResources()
 
 static bool LoadShaderSpirVCode(const fs::path& path, std::vector<uint8_t>& buffer)
 {
-    const std::string pathS = path.string();
+    const fs::path fullPath = fs::absolute(path);
 
-    if (!eng::ReadFile(buffer, path)) {
+    if (!eng::ReadFile(buffer, fullPath)) {
         return false;
     }
 
-    VK_ASSERT_MSG(buffer.size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", pathS.c_str(), sizeof(uint32_t));
+    VK_ASSERT_MSG(buffer.size() % sizeof(uint32_t) == 0, "Size of SPIR-V byte code of %s must be multiple of %zu", fullPath.string().c_str(), sizeof(uint32_t));
 
     return true;
 }
@@ -2261,6 +2262,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3607,7 +3609,6 @@ static void CreateCommonSamplers()
     samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
 
-
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
         s_commonSamplers[i].Create(samplerCreateInfo[i]).SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
@@ -3616,50 +3617,32 @@ static void CreateCommonSamplers()
 
 static void WriteZPassDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, 
-        ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
-    
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, 
-        ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::ZPASS, ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
 }
 
 
 static void WriteMeshCullingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, 
-        MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::MESH_CULLING, MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
 }
 
 
 static void WriteGBufferDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, 
-        GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, 
-        GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
 }
 
 
 static void WriteDeferredLightingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-        DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
 
     std::array<vkn::TextureView*, GBUFFER_RT_COUNT> gbufferViews = {};
     for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
@@ -3667,124 +3650,91 @@ static void WriteDeferredLightingDescriptorSet()
     }
 
     for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-            DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i]);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-        DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-        DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView);
-    
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-        DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, 
-        DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView);
 }
 
 
 static void WritePostProcessingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::POST_PROCESSING,
-        POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::POST_PROCESSING, POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
 }
 
 
 static void WriteBackbufferPassDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BACKBUFFER,
-        BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BACKBUFFER, BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U);
 }
 
 
 static void WriteSkyboxDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::SKYBOX,
-        SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::SKYBOX, SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
 }
 
 
 static void WriteIrradianceMapGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN,
-        IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN,
-        IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW);
 }
 
 
 static void WritePrefilteredEnvMapGenDescriptorSets()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN,
-        PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
     
     for (uint32_t i = 0; i < s_prefilteredEnvMapTextureViewRWs.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN,
-            PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i]);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i]);
     }
 }
 
 
 static void WriteBRDFIntegrationLUTGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BRDF_LUT_GEN,
-        BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BRDF_LUT_GEN, BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW);
 }
 
 
 static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-            COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformDataBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialDataBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-            COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
 
 #ifdef ENG_BUILD_DEBUG
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-            COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
     }
 #endif
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,
-        COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
 }
 
 
 static void WriteDbgDrawLineDescriptorSet()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES,
-        DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES,
-        DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES, DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES, DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
 #endif
 }
 
@@ -3792,11 +3742,8 @@ static void WriteDbgDrawLineDescriptorSet()
 static void WriteDbgDrawTriangleDescriptorSet()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES,
-        DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES,
-        DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
 #endif
 }
 
@@ -4554,17 +4501,8 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    vkn::AllocationInfo allocInfo = {};
-    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    
-    vkn::BufferCreateInfo createInfo = {};
-    createInfo.pDevice = &s_vkDevice;
-    createInfo.size = sizeof(COMMON_CB_DATA);
-    createInfo.usage = VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    createInfo.pAllocInfo = &allocInfo;
-
-    s_commonConstBuffer.Create(createInfo).SetDebugName("COMMON_CB");
+    s_commonConstBuffer
+        .CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT).SetDebugName("COMMON_CB");
 }
 
 

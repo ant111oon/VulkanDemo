@@ -26,16 +26,19 @@ namespace vkn
         ENG_DECL_CLASS_NO_COPIABLE(Buffer);
 
         Buffer() = default;
-        Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
         Buffer(const BufferCreateInfo& info);
+        Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
 
         ~Buffer();
 
         Buffer(Buffer&& buffer) noexcept;
         Buffer& operator=(Buffer&& buffer) noexcept;
 
-        Buffer& Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
         Buffer& Create(const BufferCreateInfo& info);
+        Buffer& Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
+        
+        Buffer& CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags = 0);
+
         Buffer& Destroy();
 
         void* Map(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);

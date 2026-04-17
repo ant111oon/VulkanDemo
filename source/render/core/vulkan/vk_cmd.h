@@ -115,6 +115,8 @@ namespace vkn
             std::swap(m_textureBarriers, list.m_textureBarriers);
             std::swap(m_scTextureBarriers, list.m_scTextureBarriers);
             std::swap(m_state, list.m_state);
+
+            return *this;
         }
 
     private:
