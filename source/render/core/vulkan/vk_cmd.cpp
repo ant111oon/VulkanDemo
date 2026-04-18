@@ -61,9 +61,20 @@ namespace vkn
     BarrierList& BarrierList::Begin()
     {
         VK_ASSERT_MSG(!IsStarted(), "Attempt to begin already started barrier list");
+        VK_ASSERT_MSG(IsValidOwner(), "Invalid Command Buffer Owner");
         
         m_state.set(FLAG_IS_STARTED, true);
         
+        return *this;
+    }
+
+
+    BarrierList& BarrierList::Push()
+    {
+        VK_ASSERT_MSG(IsValidOwner(), "Invalid Command Buffer Owner");
+
+        m_pCmdBufferOwner->CmdPushBarrierList();
+
         return *this;
     }
 
@@ -165,6 +176,23 @@ namespace vkn
         return *this;
     }
 
+
+    BarrierList& BarrierList::Swap(BarrierList& list) noexcept
+    {
+        std::swap(m_pCmdBufferOwner, list.m_pCmdBufferOwner);
+        std::swap(m_bufferBarriers, list.m_bufferBarriers);
+        std::swap(m_textureBarriers, list.m_textureBarriers);
+        std::swap(m_scTextureBarriers, list.m_scTextureBarriers);
+        std::swap(m_state, list.m_state);
+
+        return *this;
+    }
+
+    bool BarrierList::IsValidOwner() const
+    {
+        return m_pCmdBufferOwner && m_pCmdBufferOwner->IsCreated();
+    }
+
     
     bool CmdBuffer::IsValid() const
     {
@@ -175,6 +203,12 @@ namespace vkn
     CmdBuffer::CmdBuffer(CmdBuffer&& cmdBuffer) noexcept
     {
         *this = std::move(cmdBuffer);
+    }
+
+
+    CmdBuffer::CmdBuffer()
+    {
+        m_barrierList.m_pCmdBufferOwner = this;
     }
 
 

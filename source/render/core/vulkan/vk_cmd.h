@@ -66,6 +66,7 @@ namespace vkn
         BarrierList() = default;
 
         BarrierList& Begin();
+        BarrierList& Push();
 
         BarrierList& AddBufferBarrier(
             Buffer& buffer,
@@ -109,17 +110,13 @@ namespace vkn
         const TextureBarrierData& GetTextureBarrierByIdx(size_t i) const;
         const SCTextureBarrierData& GetSCTextureBarrierByIdx(size_t i) const;
 
-        BarrierList& Swap(BarrierList& list) noexcept
-        {
-            std::swap(m_bufferBarriers, list.m_bufferBarriers);
-            std::swap(m_textureBarriers, list.m_textureBarriers);
-            std::swap(m_scTextureBarriers, list.m_scTextureBarriers);
-            std::swap(m_state, list.m_state);
+        BarrierList& Swap(BarrierList& list) noexcept;
 
-            return *this;
-        }
+        bool IsValidOwner() const;
 
     private:
+        CmdBuffer* m_pCmdBufferOwner = nullptr;
+
         std::vector<BufferBarrierData> m_bufferBarriers;
         std::vector<TextureBarrierData> m_textureBarriers;
         std::vector<SCTextureBarrierData> m_scTextureBarriers;
@@ -162,7 +159,7 @@ namespace vkn
     public:
         ENG_DECL_CLASS_NO_COPIABLE(CmdBuffer);
 
-        CmdBuffer() = default;
+        CmdBuffer();
         ~CmdBuffer();
     
         CmdBuffer(CmdBuffer&& cmdBuffer) noexcept;

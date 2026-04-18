@@ -25,7 +25,7 @@ namespace eng
         m_matView     = M3D_MAT4X4_IDENTITY;
         
         m_rotation = M3D_QUAT_IDENTITY;
-        m_position = M3D_ZEROF3;
+        m_position = ZEROF3;
         
         m_fovY = 0.f;
         m_aspectRatio = 0.f;

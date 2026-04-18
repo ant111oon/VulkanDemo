@@ -122,7 +122,7 @@ namespace eng
         glm::float4x4 m_matView     = M3D_MAT4X4_IDENTITY;
 
         glm::quat m_rotation = M3D_QUAT_IDENTITY;
-        glm::float3 m_position = M3D_ZEROF3;
+        glm::float3 m_position = ZEROF3;
 
         // perspective
         float m_fovY = 0.f;

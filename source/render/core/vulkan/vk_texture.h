@@ -24,6 +24,15 @@ namespace vkn
     class TextureView : public Object
     {
     public:
+        struct SubresourceRange
+        {
+            uint8_t baseMipLevel = 0;
+            uint8_t levelCount = 0;
+            uint8_t baseArrayLayer = 0;
+            uint8_t layerCount = 0;
+        };
+
+    public:
         ENG_DECL_CLASS_NO_COPIABLE(TextureView);
 
         TextureView() = default;
@@ -75,6 +84,12 @@ namespace vkn
             return m_format;
         }
 
+        const SubresourceRange& GetSubresourceRange() const
+        {
+            VK_ASSERT(IsValid());
+            return m_subresRange;
+        }
+
         bool IsValid() const;
 
     private:
@@ -82,8 +97,9 @@ namespace vkn
 
         VkImageView m_view = VK_NULL_HANDLE;
 
-        VkImageViewType         m_type = {};
-        VkFormat                m_format = {};
+        VkImageViewType m_type = {};
+        VkFormat m_format = {};
+        SubresourceRange m_subresRange = {};
     };
 
 

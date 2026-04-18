@@ -1,5 +1,8 @@
 #pragma once
 
+#include "render/core/core.h"
+
+
 #if !defined(ENG_GFX_API_VULKAN)
     #error Invalid Gpraphics API defines
 #endif

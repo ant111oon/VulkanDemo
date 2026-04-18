@@ -35,12 +35,18 @@ constexpr inline float M3D_2_PI    = 2.0f * M3D_PI;
 constexpr inline float M3D_HALF_PI = 0.5f * M3D_PI;
 
 
-constexpr inline glm::float2 M3D_ZEROF2 = glm::float2(0.f);
-constexpr inline glm::float3 M3D_ZEROF3 = glm::float3(0.f);
-constexpr inline glm::float4 M3D_ZEROF4 = glm::float4(0.f);
-constexpr inline glm::float2 M3D_ONEF2  = glm::float2(1.f);
-constexpr inline glm::float3 M3D_ONEF3  = glm::float3(1.f);
-constexpr inline glm::float4 M3D_ONEF4  = glm::float4(1.f);
+constexpr inline glm::float2 ZEROF2 = glm::float2(0.f);
+constexpr inline glm::uvec2  ZEROU2 = glm::uvec2(0);
+constexpr inline glm::float3 ZEROF3 = glm::float3(0.f);
+constexpr inline glm::uvec3  ZEROU3 = glm::uvec3(0);
+constexpr inline glm::float4 ZEROF4 = glm::float4(0.f);
+constexpr inline glm::uvec4  ZEROU4 = glm::uvec4(0);
+constexpr inline glm::float2 ONEF2  = glm::float2(1.f);
+constexpr inline glm::uvec2  ONEU2  = glm::uvec2(1);
+constexpr inline glm::float3 ONEF3  = glm::float3(1.f);
+constexpr inline glm::uvec3  ONEU3  = glm::uvec3(1);
+constexpr inline glm::float4 ONEF4  = glm::float4(1.f);
+constexpr inline glm::uvec4  ONEU4  = glm::uvec4(1);
 
 
 constexpr inline glm::float3 M3D_AXIS_X = glm::float3(1.f, 0.f, 0.f);

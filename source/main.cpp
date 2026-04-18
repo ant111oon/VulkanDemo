@@ -49,9 +49,24 @@
 #include <fastgltf/glm_element_traits.hpp>
 
 
-namespace gltf  = fastgltf;
-namespace fs    = std::filesystem;
+namespace gltf = fastgltf;
+namespace fs   = std::filesystem;
+
 using IndexType = uint32_t;
+using float2 = glm::float2;
+using float3 = glm::float3;
+using float4 = glm::float4;
+using uint   = glm::uint;
+using uint2  = glm::uvec2;
+using uint3  = glm::uvec3;
+using uint4  = glm::uvec4;
+using int2   = glm::ivec2;
+using int3   = glm::ivec3;
+using int4   = glm::ivec4;
+using float4x4 = glm::float4x4;
+using float3x4 = glm::float3x4;
+using float4x3 = glm::float4x3;
+using float3x3 = glm::float3x3;
 
 
 class TextureLoadData
@@ -368,9 +383,9 @@ enum class COMMON_MATERIAL_FLAGS : glm::uint
 
 struct COMMON_MATERIAL
 {
-    glm::float4 ALBEDO_MULT;
+    float4 ALBEDO_MULT;
 
-    glm::float3 EMISSIVE_MULT;
+    float3 EMISSIVE_MULT;
     float ALPHA_REF;
 
     float NORMAL_SCALE;
@@ -378,78 +393,78 @@ struct COMMON_MATERIAL
     float ROUGHNESS_SCALE;
     float AO_COEF;
 
-    int32_t ALBEDO_TEX_IDX = -1;
-    int32_t NORMAL_TEX_IDX = -1;
-    int32_t MR_TEX_IDX = -1;
-    int32_t AO_TEX_IDX = -1;
+    int ALBEDO_TEX_IDX = -1;
+    int NORMAL_TEX_IDX = -1;
+    int MR_TEX_IDX = -1;
+    int AO_TEX_IDX = -1;
 
-    glm::uvec2 PAD0;
-    int32_t EMISSIVE_TEX_IDX = -1;
-    glm::uint FLAGS;
+    uint2 PAD0;
+    int EMISSIVE_TEX_IDX = -1;
+    uint FLAGS;
 };
 
 
 struct COMMON_MESH_DATA
 {
-    glm::uint FIRST_VERTEX;
-    glm::uint VERTEX_COUNT;
-    glm::uint FIRST_INDEX;
-    glm::uint INDEX_COUNT;
+    uint FIRST_VERTEX;
+    uint VERTEX_COUNT;
+    uint FIRST_INDEX;
+    uint INDEX_COUNT;
 
-    glm::float3 BOUNDS_MIN_LCS;
-    glm::uint   PADD0;
-    glm::float3 BOUNDS_MAX_LCS;
-    glm::uint   PADD1;
+    float3 BOUNDS_MIN_LCS;
+    uint   PADD0;
+    float3 BOUNDS_MAX_LCS;
+    uint   PADD1;
 };
 
 
 struct COMMON_INST_VOLUME
 {
-    glm::float4 MIN;
-    glm::float4 MAX;
+    float4 MIN;
+    float4 MAX;
 };
 
 
 struct COMMON_INST_DATA
 {
-    glm::uint TRANSFORM_IDX;
-    glm::uint MATERIAL_IDX;
-    glm::uint MESH_IDX;
-    glm::uint VOLUME_IDX;
+    uint TRANSFORM_IDX;
+    uint MATERIAL_IDX;
+    uint MESH_IDX;
+    uint VOLUME_IDX;
 };
 
 
 struct COMMON_CMD_DRAW_INDEXED_INDIRECT
 {
     // NOTE: Don't change order of this variables!!!
-    glm::uint INDEX_COUNT;
-    glm::uint INSTANCE_COUNT;
-    glm::uint FIRST_INDEX;
-    int32_t   VERTEX_OFFSET;
-    glm::uint FIRST_INSTANCE;
+    uint INDEX_COUNT;
+    uint INSTANCE_COUNT;
+    uint FIRST_INDEX;
+    int  VERTEX_OFFSET;
+    uint FIRST_INSTANCE;
 };
 
 
 struct DBG_LINE_DATA
 {
-    glm::uint COLOR;
+    uint COLOR;
 };
 
 
 struct DBG_TRIANGLE_DATA
 {
-    glm::uint COLOR;
+    uint COLOR;
 };
 
 
 struct PLANE
 {
-    glm::float3 normal;
+    float3 normal;
     float distance;
 };
 
 
-static constexpr glm::uint COMMON_FRUSTUM_PLANES_COUNT = 6;
+static constexpr uint COMMON_FRUSTUM_PLANES_COUNT = 6;
 
 struct FRUSTUM
 {
@@ -462,27 +477,27 @@ static_assert(sizeof(FRUSTUM) == sizeof(math::Frustum));
 
 struct COMMON_CB_DATA
 {
-    glm::float4x4 VIEW_MATRIX;
-    glm::float4x4 PROJ_MATRIX;
-    glm::float4x4 VIEW_PROJ_MATRIX;
+    float4x4 VIEW_MATRIX;
+    float4x4 PROJ_MATRIX;
+    float4x4 VIEW_PROJ_MATRIX;
 
-    glm::float4x4 INV_VIEW_MATRIX;
-    glm::float4x4 INV_PROJ_MATRIX;
-    glm::float4x4 INV_VIEW_PROJ_MATRIX;
+    float4x4 INV_VIEW_MATRIX;
+    float4x4 INV_PROJ_MATRIX;
+    float4x4 INV_VIEW_PROJ_MATRIX;
 
     FRUSTUM CAMERA_FRUSTUM;
 
-    glm::uvec2 SCREEN_SIZE;
+    uint2 SCREEN_SIZE;
     float Z_NEAR;
     float Z_FAR;
 
-    glm::uint COMMON_FLAGS;
-    glm::uint COMMON_DBG_FLAGS;
-    glm::uint COMMON_DBG_VIS_FLAGS;
-    glm::uint PAD0;
+    uint COMMON_FLAGS;
+    uint COMMON_DBG_FLAGS;
+    uint COMMON_DBG_VIS_FLAGS;
+    uint PAD0;
 
-    glm::float3 CAM_WPOS;
-    glm::uint PAD1;
+    float3 CAM_WPOS;
+    uint PAD1;
 };
 
 
@@ -594,34 +609,41 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 
 struct MESH_CULLING_PUSH_CONSTS
 {
-    glm::uint INST_COUNT;
+    uint INST_COUNT;
 };
 
 
 struct ZPASS_PUSH_CONSTS
 {
-    glm::uint IS_AKILL_PASS;
-    glm::uint INST_INFO_IDX;
+    uint IS_AKILL_PASS;
+    uint INST_INFO_IDX;
 };
 
 
 struct GBUFFER_PUSH_CONSTS
 {
-    glm::uint IS_AKILL_PASS;
-    glm::uint INST_INFO_IDX;
+    uint IS_AKILL_PASS;
+    uint INST_INFO_IDX;
 };
 
 
 struct IRRADIANCE_MAP_PUSH_CONSTS
 {
-    glm::uvec2 ENV_MAP_FACE_SIZE;
+    uint2 ENV_MAP_FACE_SIZE;
 };
 
 
 struct PREFILTERED_ENV_MAP_PUSH_CONSTS
 {
-    glm::uvec2 ENV_MAP_FACE_SIZE;
-    glm::uint  MIP;
+    uint2 ENV_MAP_FACE_SIZE;
+    uint  MIP;
+};
+
+
+struct HZB_GEN_PUSH_CONSTS
+{
+    uint2 DST_MIP_RESOLUTION;
+    uint  DST_MIP_IDX;
 };
 
 
@@ -790,8 +812,11 @@ static constexpr size_t DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT = 1;
 static constexpr size_t DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 2;
 static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 3;
 
+static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
 
-static constexpr uint32_t COMMON_BINDLESS_TEXTURES_COUNT = 128;
+
+static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 4096;
@@ -812,13 +837,15 @@ static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
 static constexpr size_t STAGING_BUFFER_COUNT = 2;
 
-
 static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static constexpr glm::uvec2 COMMON_IRRADIANCE_MAP_SIZE = glm::uvec2(32);
 static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE = glm::uvec2(glm::uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
+
+static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 8;
+static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -839,9 +866,6 @@ static constexpr float CAMERA_SPEED = 0.0025f;
 enum class PassID
 {
     COMMON,
-    IRRADIANCE_MAP_GEN,
-    BRDF_LUT_GEN,
-    PREFILT_ENV_MAP_GEN,
     MESH_CULLING,
     ZPASS,
     GBUFFER,
@@ -853,6 +877,10 @@ enum class PassID
     DBG_DRAW_LINES,
     DBG_DRAW_TRIANGLES,
 #endif
+    IRRADIANCE_MAP_GEN,
+    BRDF_LUT_GEN,
+    PREFILT_ENV_MAP_GEN,
+    HZB_GEN,
     COUNT,
 };
 
@@ -924,7 +952,7 @@ static std::vector<COMMON_INST_DATA>   s_cpuInstData;
 static std::vector<COMMON_INST_VOLUME> s_cpuAABBData;
 
 
-static std::vector<DBG_LINE_DATA> s_dbgLineDataCPU;
+static std::vector<DBG_LINE_DATA>     s_dbgLineDataCPU;
 static std::vector<DBG_TRIANGLE_DATA> s_dbgTriangleDataCPU;
 
 static std::vector<glm::uint> s_dbgLineVertexDataCPU;
@@ -957,14 +985,17 @@ static vkn::TextureView s_brdfLUTTextureViewRW;
 static std::array<vkn::Texture, GBUFFER_RT_COUNT>     s_gbufferRTs;
 static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
 
-static vkn::Texture     s_commonDepthRT;
-static vkn::TextureView s_commonDepthRTView;
+static vkn::Texture     s_depthRT;
+static vkn::TextureView s_depthRTView;
 
 static vkn::Texture     s_colorRT8U;
 static vkn::TextureView s_colorRTView8U;
 
 static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
+
+static vkn::Texture                  s_HZB;
+static std::vector<vkn::TextureView> s_HZBMipViews;
 
 static vkn::ComputePSOBuilder s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
@@ -973,7 +1004,7 @@ static std::vector<uint8_t> s_shaderCodeBuffer;
 static eng::DbgUI s_dbgUI;
 
 static eng::Camera s_camera;
-static glm::float3 s_cameraVel = M3D_ZEROF3;
+static glm::float3 s_cameraVel = ZEROF3;
 
 static uint32_t s_dbgOutputRTIdx = 0;
 static uint32_t s_nextImageIdx = 0;
@@ -1718,7 +1749,7 @@ static void CreateCommonStagingBuffers()
 }
 
 
-static void CreateDynamicRenderTargets()
+static void CreateGBufferRTs()
 {
     vkn::AllocationInfo rtAllocInfo = {};
     rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -1784,7 +1815,35 @@ static void CreateDynamicRenderTargets()
 
     gbuffRT3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
     gbuffRT3View.Create(gbuffRT3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
+}
 
+
+static void CreateColorRTs()
+{
+    vkn::AllocationInfo rtAllocInfo = {};
+    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.mipLevels = 1;
+    rtCreateInfo.arrayLayers = 1;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &rtAllocInfo;
+
+    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -1799,20 +1858,102 @@ static void CreateDynamicRenderTargets()
     s_colorRT16F.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT_16F");
     s_colorRTView16F.Create(s_colorRT16F, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT_VIEW_16F");
 
+
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.BeginBarrierList()
-            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
-        cmdBuffer.CmdPushBarrierList();
+            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
     });
+}
 
+
+static void CreateDepthRT()
+{
+    vkn::AllocationInfo rtAllocInfo = {};
+    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.extent = VkExtent3D{s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.mipLevels = 1;
+    rtCreateInfo.arrayLayers = 1;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &rtAllocInfo;
+
+    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    s_depthRT.Create(rtCreateInfo).SetDebugName("COMMON_DEPTH_RT");
+    s_depthRTView.Create(s_depthRT, mapping, subresourceRange).SetDebugName("COMMON_DEPTH_RT_VIEW");
+}
 
-    s_commonDepthRT.Create(rtCreateInfo).SetDebugName("COMMON_DEPTH_RT");
-    s_commonDepthRTView.Create(s_commonDepthRT, mapping, subresourceRange).SetDebugName("COMMON_DEPTH_RT_VIEW");
+
+static void CreateHZB()
+{
+    const VkExtent3D extent = {s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
+
+    const uint32_t mipsCount = glm::floor(glm::log2((float)glm::max(extent.width, extent.height))) + 1;
+    CORE_ASSERT(mipsCount <= HZB_MAX_MIP_COUNT);
+
+    vkn::AllocationInfo rtAllocInfo = {};
+    rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    rtAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.extent = extent;
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.arrayLayers = 1;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &rtAllocInfo;
+
+    rtCreateInfo.format = VK_FORMAT_R16_SFLOAT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    rtCreateInfo.mipLevels = mipsCount;
+
+    s_HZB.Create(rtCreateInfo).SetDebugName("HZB");
+    
+    s_HZBMipViews.resize(mipsCount);
+    
+    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.levelCount = 1;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    for (uint32_t mip = 0; mip < mipsCount; ++mip) {
+        subresourceRange.baseMipLevel = mip;
+
+        s_HZBMipViews[mip].Create(s_HZB, mapping, subresourceRange).SetDebugName("HZB_MIP_%u", mip);
+    }
+}
+
+
+static void CreateDynamicRenderTargets()
+{
+    CreateGBufferRTs();
+    CreateColorRTs();
+    CreateDepthRT();
+    CreateHZB();
 }
 
 
@@ -1823,14 +1964,19 @@ static void DestroyDynamicRenderTargets()
         s_gbufferRTs[i].Destroy();
     }
 
-    s_commonDepthRTView.Destroy();
-    s_commonDepthRT.Destroy();
+    s_depthRTView.Destroy();
+    s_depthRT.Destroy();
 
     s_colorRTView16F.Destroy();
     s_colorRT16F.Destroy();
 
     s_colorRTView8U.Destroy();
     s_colorRT8U.Destroy();
+
+    for (vkn::TextureView& mip : s_HZBMipViews) {
+        mip.Destroy();
+    }
+    s_HZB.Destroy();
 }
 
 
@@ -1853,8 +1999,8 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
             .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
                 VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 1, layerIdx, 1)
             .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
-                VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1);
-        cmdBuffer.CmdPushBarrierList();
+                VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1)
+        .Push();
 
         vkn::BlitInfo blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1881,9 +2027,11 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
     }
 
     // Add this barrier to get all mips in same VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL layout
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-        VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, loadData.GetMipsCount() - 1, 1, layerIdx, 1);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, loadData.GetMipsCount() - 1, 1, layerIdx, 1)
+        .Push();
 }
 
 
@@ -1962,9 +2110,11 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
         }
 
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-            cmdBuffer.BeginBarrierList().AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-                VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
-            cmdBuffer.CmdPushBarrierList();
+            cmdBuffer
+                .BeginBarrierList()
+                    .AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+                .Push();
 
             for (size_t j = 0; j < s_commonStagingBuffers.size(); ++j) {
                 const uint32_t faceIdx = i + j;
@@ -1992,9 +2142,12 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
             GenerateTextureMipmaps(cmdBuffer, s_skyboxTexture, faceLoadDatas[layerIdx], layerIdx);
         }
 
-        cmdBuffer.BeginBarrierList().AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-        cmdBuffer.CmdPushBarrierList();
+        cmdBuffer
+            .BeginBarrierList()
+                .AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .Push();
     });
 
     CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -2257,7 +2410,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_BINDLESS_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MATERIAL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
@@ -2512,6 +2665,25 @@ static void CreateDbgDrawTriangleDescriptorSetLayout()
 }
 
 
+static void CreateHZBGenDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(HZB_SRC_MIPS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_descSetLayouts[(size_t)PassID::HZB_GEN].Create(createInfo).SetDebugName("HZB_GEN_DESCRIPTOR_SET_LAYOUT");
+}
+
+
 static void CreateDescriptorBuffer()
 {
     std::array<vkn::DescriptorSetLayout*, (size_t)PassID::COUNT> layouts = {};
@@ -2540,6 +2712,7 @@ static void CreateDescriptorSets()
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
     CreateDbgDrawLineDescriptorSetLayout();
     CreateDbgDrawTriangleDescriptorSetLayout();
+    CreateHZBGenDescriptorSetLayout();
 
     CreateDescriptorBuffer();
 }
@@ -2683,6 +2856,18 @@ static void CreateDbgDrawTrianglePipelineLayout()
 }
 
 
+static void CreateHZBGenPipelineLayout()
+{
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::HZB_GEN];
+
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PUSH_CONSTS) };
+
+    s_PSOLayouts[(size_t)PassID::HZB_GEN].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1)).SetDebugName("HZB_GEN_PIPELINE_LAYOUT");
+}
+
+
 static void CreateMeshCullingPipeline(const fs::path& csPath)
 {
     if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
@@ -2740,7 +2925,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         .SetDepthWriteState(VK_TRUE)
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })        
-        .SetDepthAttachment(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -2788,7 +2973,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     for (const vkn::Texture& colorRT : s_gbufferRTs) {
         s_graphicsPSOBuilder.AddColorAttachment(colorRT.GetFormat()); 
     }
-    s_graphicsPSOBuilder.SetDepthAttachment(s_commonDepthRT.GetFormat());
+    s_graphicsPSOBuilder.SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -2943,7 +3128,7 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
         .SetDepthWriteState(VK_FALSE)
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .AddColorAttachment(s_colorRT16F.GetFormat())
-        .SetDepthAttachment(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -3053,7 +3238,7 @@ static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& ps
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .AddColorAttachment(s_colorRT8U.GetFormat(), 
             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE)
-        .SetDepthAttachment(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
@@ -3101,12 +3286,33 @@ static void CreateDbgDrawTrianglePipeline(const fs::path& vsPath, const fs::path
         .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
         .AddColorAttachment(s_colorRT8U.GetFormat(), 
             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_TRUE)
-        .SetDepthAttachment(s_commonDepthRT.GetFormat());
+        .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
     pso.SetDebugName("DBG_DRAW_TRIANGLES_PSO");
 #endif
+}
+
+
+static void CreateHZBGenPipeline(const fs::path& csPath)
+{
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
+    
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer).SetDebugName("HZB_GEN_COMPUTE_SHADER");
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::HZB_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetShader(shader)
+        .SetLayout(s_PSOLayouts[(size_t)PassID::HZB_GEN])
+        .Build();
+
+    pso.SetDebugName("HZB_GEN_PSO");
 }
 
 
@@ -3124,18 +3330,20 @@ static void CreatePipelines()
     CreateBRDFIntegrationLUTGenPipelineLayout();
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
-    CreateMeshCullingPipeline("shaders/bin/scene.cs.spv");
-    CreateZPassPipeline("shaders/bin/zpass.vs.spv", "shaders/bin/zpass.ps.spv");
-    CreateGBufferRenderPipeline("shaders/bin/gbuffer.vs.spv", "shaders/bin/gbuffer.ps.spv");
-    CreateDeferredLightingPipeline("shaders/bin/deferred_lighting.vs.spv", "shaders/bin/deferred_lighting.ps.spv");
-    CreatePostProcessingPipeline("shaders/bin/post_processing.vs.spv", "shaders/bin/post_processing.ps.spv");
-    CreateBackbufferPassPipeline("shaders/bin/backbuffer.vs.spv", "shaders/bin/backbuffer.ps.spv");
-    CreateSkyboxPipeline("shaders/bin/skybox.vs.spv", "shaders/bin/skybox.ps.spv");
-    CreateIrradianceMapGenPipeline("shaders/bin/irradiance_map_gen.cs.spv");
-    CreatePrefilteredEnvMapGenPipeline("shaders/bin/prefiltered_env_map_gen.cs.spv");
-    CreateBRDFIntegrationLUTGenPipeline("shaders/bin/brdf_integration_gen.cs.spv");
-    CreateDbgDrawLinePipeline("shaders/bin/dbg_draw_lines.vs.spv", "shaders/bin/dbg_draw_lines.ps.spv");
-    CreateDbgDrawTrianglePipeline("shaders/bin/dbg_draw_triangles.vs.spv", "shaders/bin/dbg_draw_triangles.ps.spv");
+    CreateHZBGenPipelineLayout();
+    CreateMeshCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("scene.cs.spv"));
+    CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
+    CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
+    CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
+    CreatePostProcessingPipeline(RND_SHADER_SPIRV_FULL_PATH("post_processing.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("post_processing.ps.spv"));
+    CreateBackbufferPassPipeline(RND_SHADER_SPIRV_FULL_PATH("backbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("backbuffer.ps.spv"));
+    CreateSkyboxPipeline(RND_SHADER_SPIRV_FULL_PATH("skybox.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("skybox.ps.spv"));
+    CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("irradiance_map_gen.cs.spv"));
+    CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("prefiltered_env_map_gen.cs.spv"));
+    CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("brdf_integration_gen.cs.spv"));
+    CreateDbgDrawLinePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.ps.spv"));
+    CreateDbgDrawTrianglePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.ps.spv"));
+    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
 }
 
 
@@ -3201,10 +3409,11 @@ static void UploadGPUDbgTextures()
     {
         vkn::Texture& texture = s_commonDbgTextures[texIdx];
 
-        cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-        
-        cmdBuffer.CmdPushBarrierList();
+        cmdBuffer
+            .BeginBarrierList()
+                .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .Push();
 
         vkn::BufferToTextureCopyInfo copyInfo = {};
         copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -3215,10 +3424,11 @@ static void UploadGPUDbgTextures()
 
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffers[stagingBufIdx], texture, copyInfo);
     
-        cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-        
-        cmdBuffer.CmdPushBarrierList();
+        cmdBuffer
+            .BeginBarrierList()
+                .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .Push();
     };
 
     vkn::Buffer& redImageStagingBuffer = s_commonStagingBuffers[0];
@@ -3653,7 +3863,7 @@ static void WriteDeferredLightingDescriptorSet()
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView);
@@ -3701,6 +3911,20 @@ static void WriteBRDFIntegrationLUTGenDescriptorSet()
 }
 
 
+static void WriteHZBGenDescriptorSets()
+{
+    for (uint32_t i = 0; i < s_HZB.GetMipCount(); ++i) {
+        vkn::TextureView& mip = s_HZBMipViews[i];
+
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip);
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip);
+    }
+
+    // First source mip must contain original depth buffer
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView);
+}
+
+
 static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
@@ -3726,7 +3950,7 @@ static void WriteCommonDescriptorSet()
 #endif
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_commonDepthRTView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
 }
 
 
@@ -3763,6 +3987,7 @@ static void WriteDescriptorSets()
     WriteBRDFIntegrationLUTGenDescriptorSet();
     WriteDbgDrawLineDescriptorSet();
     WriteDbgDrawTriangleDescriptorSet();
+    WriteHZBGenDescriptorSets();
 }
 
 
@@ -4321,9 +4546,11 @@ static void UploadGPUTextureData()
 
                 vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
 
-                cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-                    VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
-                cmdBuffer.CmdPushBarrierList();
+                cmdBuffer
+                    .BeginBarrierList()
+                        .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                            VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+                    .Push();
 
                 vkn::BufferToTextureCopyInfo copyInfo = {};
                 copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -4338,9 +4565,11 @@ static void UploadGPUTextureData()
 
                 GenerateTextureMipmaps(cmdBuffer, texture, texData);
 
-                cmdBuffer.BeginBarrierList().AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-                cmdBuffer.CmdPushBarrierList();
+                cmdBuffer
+                    .BeginBarrierList()
+                        .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                            VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+                    .Push();
             }
         });
     }
@@ -4510,40 +4739,38 @@ void UpdateGPUCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", eng::ProfileColor::Cyan4);
 
-    COMMON_CB_DATA* pCommonConstBufferData = (COMMON_CB_DATA*)s_commonConstBuffer.Map();
+    COMMON_CB_DATA& constBuff = *reinterpret_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map());
 
     const glm::float4x4& viewMatrix = s_camera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_camera.GetProjMatrix();
     const glm::float4x4& viewProjMatrix = s_camera.GetViewProjMatrix();
 
-    pCommonConstBufferData->VIEW_MATRIX = viewMatrix;
-    pCommonConstBufferData->PROJ_MATRIX = projMatrix;
-    pCommonConstBufferData->VIEW_PROJ_MATRIX = viewProjMatrix;
+    constBuff.VIEW_MATRIX = viewMatrix;
+    constBuff.PROJ_MATRIX = projMatrix;
+    constBuff.VIEW_PROJ_MATRIX = viewProjMatrix;
 
-    pCommonConstBufferData->INV_VIEW_MATRIX = glm::inverse(viewMatrix);
-    pCommonConstBufferData->INV_PROJ_MATRIX = glm::inverse(projMatrix);
-    pCommonConstBufferData->INV_VIEW_PROJ_MATRIX = glm::inverse(viewProjMatrix);
+    constBuff.INV_VIEW_MATRIX = glm::inverse(viewMatrix);
+    constBuff.INV_PROJ_MATRIX = glm::inverse(projMatrix);
+    constBuff.INV_VIEW_PROJ_MATRIX = glm::inverse(viewProjMatrix);
 
-    memcpy(&pCommonConstBufferData->CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
+    memcpy(&constBuff.CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
     
-    pCommonConstBufferData->SCREEN_SIZE.x = s_pWnd->GetWidth();
-    pCommonConstBufferData->SCREEN_SIZE.y = s_pWnd->GetHeight();
+    constBuff.SCREEN_SIZE.x = s_pWnd->GetWidth();
+    constBuff.SCREEN_SIZE.y = s_pWnd->GetHeight();
 
-    pCommonConstBufferData->Z_NEAR = s_camera.GetZNear();
-    pCommonConstBufferData->Z_FAR = s_camera.GetZFar();
+    constBuff.Z_NEAR = s_camera.GetZNear();
+    constBuff.Z_FAR = s_camera.GetZFar();
 
-    uint32_t dbgVisFlags = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     uint32_t dbgFlags = 0;
-
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
     dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
     dbgFlags |= s_useMeshCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
     dbgFlags |= s_useIndirectLighting ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
 
-    pCommonConstBufferData->COMMON_DBG_FLAGS = dbgFlags;
-    pCommonConstBufferData->COMMON_DBG_VIS_FLAGS = dbgVisFlags;
+    constBuff.COMMON_DBG_FLAGS = dbgFlags;
+    constBuff.COMMON_DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
 
-    pCommonConstBufferData->CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
+    constBuff.CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
 
     s_commonConstBuffer.Unmap();
 }
@@ -4575,6 +4802,7 @@ void UpdateScene()
             WriteDeferredLightingDescriptorSet();
             WritePostProcessingDescriptorSet();
             WriteBackbufferPassDescriptorSet();
+            WriteHZBGenDescriptorSets();
         }    
     }
 
@@ -4622,20 +4850,20 @@ void UpdateScene()
         glm::float4(0.0f, 0.75f, 0.75f, 0.5f)
     );
 
-    RenderDebugAABBWired(math::MakeTS(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(M3D_ZEROF3, 1.f));
-    RenderDebugAABBFilled(math::MakeTS(M3D_ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
+    RenderDebugAABBWired(math::MakeTS(ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(ZEROF3, 1.f));
+    RenderDebugAABBFilled(math::MakeTS(ZEROF3, glm::float3(5.f, 5.f, 2.f)), glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 
     const glm::float4x4 TRS = math::MakeTRS(
         M3D_AXIS_Y * 5.f, 
         glm::quatLookAt(glm::normalize(M3D_AXIS_Y - M3D_AXIS_Z), glm::normalize(M3D_AXIS_Z + M3D_AXIS_Y)),
         glm::float3(2.f)
     );
-    RenderDebugOBBWired(TRS, glm::float4(M3D_ZEROF3, 1.f));
+    RenderDebugOBBWired(TRS, glm::float4(ZEROF3, 1.f));
     RenderDebugOBBFilled(TRS, glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 
     static const glm::float4x4 dbgFrustumInvMatr = glm::inverse(
         glm::perspective(glm::radians(45.f), 16.f / 9.f, 0.1f, 50.f) * 
-        glm::lookAt(glm::float3(0.f, 0.f, 6.f), M3D_ZEROF3, M3D_AXIS_Y)
+        glm::lookAt(glm::float3(0.f, 0.f, 6.f), ZEROF3, M3D_AXIS_Y)
     );
 
     RenderDebugFrustumWired(dbgFrustumInvMatr, glm::float4(1.f));
@@ -4661,9 +4889,11 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", eng::ProfileColor::OrangeRed);
     eng::Timer timer;
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_GENERAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     vkn::PSO& pso = s_PSOs[(size_t)PassID::IRRADIANCE_MAP_GEN];
 
@@ -4680,9 +4910,11 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdDispatch(ceil(COMMON_IRRADIANCE_MAP_SIZE.x / 32.f), ceil(COMMON_IRRADIANCE_MAP_SIZE.y / 32.f), 6);
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4701,9 +4933,11 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
     pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_GENERAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .Push();
 
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::PREFILT_ENV_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
@@ -4719,9 +4953,11 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6U);
     }
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
@@ -4736,20 +4972,83 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::BRDF_LUT_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1u);
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     CORE_LOG_INFO("BRDF LUT generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
+{
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation", eng::ProfileColor::Grey80);
+    eng::Timer timer;
+
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::HZB_GEN];
+    
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::HZB_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+        .Push();
+
+    glm::uvec2 dstMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
+
+    HZB_GEN_PUSH_CONSTS pushConsts = {};
+    pushConsts.DST_MIP_RESOLUTION = dstMipSize;
+    pushConsts.DST_MIP_IDX = 0;
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+
+    cmdBuffer.CmdDispatch(
+        (uint32_t)glm::ceil(s_HZB.GetSizeX() / (float)HZB_BUILD_CS_GROUP_SIZE), 
+        (uint32_t)glm::ceil(s_HZB.GetSizeY() / (float)HZB_BUILD_CS_GROUP_SIZE),
+        1u
+    );
+
+    for (uint32_t mip = 1; mip < s_HZB.GetMipCount(); ++mip) {
+        dstMipSize = glm::max(dstMipSize >> 1u, ONEU2);
+
+        cmdBuffer
+            .BeginBarrierList()
+                .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 1)
+                .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                    VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1)
+            .Push();
+
+        pushConsts.DST_MIP_RESOLUTION = dstMipSize;
+        pushConsts.DST_MIP_IDX = mip;
+
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+
+        cmdBuffer.CmdDispatch(
+            (uint32_t)glm::ceil(dstMipSize.x / (float)HZB_BUILD_CS_GROUP_SIZE), 
+            (uint32_t)glm::ceil(dstMipSize.y / (float)HZB_BUILD_CS_GROUP_SIZE),
+            1u
+        );
+    }
 }
 
 
@@ -4758,11 +5057,12 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("Mesh_Culling_Pass", eng::ProfileColor::Blue3);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Mesh_Culling_Pass", eng::ProfileColor::Blue3);
 
-    cmdBuffer.BeginBarrierList()
-        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+        .Push();
 
     static constexpr VkDeviceSize COUNTER_OFFSET = 0; 
     static constexpr VkDeviceSize COUNTER_SIZE = sizeof(glm::uint);
@@ -4771,14 +5071,15 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdFillBuffer(s_commonAKillMeshDrawCmdBuffer,  0, COUNTER_OFFSET, COUNTER_SIZE);
     cmdBuffer.CmdFillBuffer(s_commonTranspMeshDrawCmdBuffer, 0, COUNTER_OFFSET, COUNTER_SIZE);
 
-    cmdBuffer.BeginBarrierList()
-        .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-        .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-        .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-        .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_commonCulledOpaqueInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_commonCulledAKillInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_commonCulledTranspInstInfoIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+        .Push();
 
     vkn::PSO& pso = s_PSOs[(size_t)PassID::MESH_CULLING];
 
@@ -4804,7 +5105,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
-    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     if (s_useMeshIndirectDraw) {
@@ -4819,7 +5120,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         s_useMeshIndirectDraw ? VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT : VK_ACCESS_2_SHADER_READ_BIT
     );
     
-    cmdBuffer.CmdPushBarrierList();
+    barrierList.Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -4829,7 +5130,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView   = s_commonDepthRTView.Get();
+    depthAttachment.imageView   = s_depthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     depthAttachment.loadOp      = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
@@ -4902,9 +5203,11 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         }
     cmdBuffer.CmdEndRendering();
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+        .Push();
 }
 
 
@@ -4936,10 +5239,10 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
     }
 
     if (s_useDepthPass) {
-        barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
+        barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
     } else {
-        barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
+        barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
     }
 
@@ -4955,7 +5258,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         s_useMeshIndirectDraw ? VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT : VK_ACCESS_2_SHADER_READ_BIT
     );
 
-    cmdBuffer.CmdPushBarrierList();    
+    barrierList.Push();    
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -4965,7 +5268,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_commonDepthRTView.Get();
+    depthAttachment.imageView = s_depthRTView.Get();
     depthAttachment.imageLayout = s_useDepthPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
@@ -5131,10 +5434,10 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
     barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+    barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    cmdBuffer.CmdPushBarrierList();
+    barrierList.Push();
     
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5185,14 +5488,13 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("Skybox_Pass", eng::ProfileColor::Aquamarine);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", eng::ProfileColor::Aquamarine);
 
-    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
-
-    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barrierList.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-    
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+        .Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5211,7 +5513,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_commonDepthRTView.Get();
+    depthAttachment.imageView = s_depthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     renderingInfo.pDepthAttachment = &depthAttachment;
@@ -5245,14 +5547,13 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("Post_Processing_Pass", eng::ProfileColor::RebeccaPurple);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", eng::ProfileColor::RebeccaPurple);
 
-    vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
-
-    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barrierList.AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5335,7 +5636,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     barriers.AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barriers.AddTextureBarrier(s_commonDepthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+    barriers.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);  
 
     if (lineInstCount > 0) {
@@ -5352,7 +5653,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
             VK_ACCESS_2_SHADER_READ_BIT);
     }
         
-    cmdBuffer.CmdPushBarrierList();
+    barriers.Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5372,7 +5673,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     VkRenderingAttachmentInfo depthAttachment = {};
     depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_commonDepthRTView.Get();
+    depthAttachment.imageView = s_depthRTView.Get();
     depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -5431,9 +5732,11 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 
     DbgUI::FillData();
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5469,12 +5772,13 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
     vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
     vkn::SCTextureView& scTextureView = s_vkSwapchain.GetTextureView(s_nextImageIdx);
 
-    cmdBuffer.BeginBarrierList()
-        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-        .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -5518,9 +5822,11 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
 
-    cmdBuffer.BeginBarrierList().AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 
-        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT);
-    cmdBuffer.CmdPushBarrierList();
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
+                VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT)
+        .Push();
 }
 
 
@@ -5557,6 +5863,7 @@ static void RenderScene()
         MeshCullingPass(cmdBuffer);
 
         DepthPass(cmdBuffer);
+        HZBGeneratePass(cmdBuffer);
         GBufferRenderPass(cmdBuffer);
         DeferredLightingPass(cmdBuffer);
 

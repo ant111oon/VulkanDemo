@@ -407,13 +407,19 @@ namespace vkn
         VkDescriptorImageInfo imageInfo = {};
         imageInfo.imageView = texture.Get();
         
+        const TextureView::SubresourceRange& range = texture.GetSubresourceRange();
+
         const vkn::Texture& owner = texture.GetOwner();
-        imageInfo.imageLayout = owner.GetAccessState(0, 0).layout;
+        imageInfo.imageLayout = owner.GetAccessState(range.baseArrayLayer, range.baseMipLevel).layout;
 
     #ifdef ENG_BUILD_DEBUG
-        for (uint32_t layerIdx = 0; layerIdx < owner.GetLayerCount(); ++layerIdx) {
-            for (uint32_t mipIdx = 0; mipIdx < owner.GetMipCount(); ++mipIdx) {
-                VK_ASSERT_MSG(imageInfo.imageLayout == owner.GetAccessState(layerIdx, mipIdx).layout, "Texture %s descriptor has inconsistent layout", owner.GetDebugName());
+        const uint32_t lastLayerIdx = range.baseArrayLayer + range.layerCount - 1;
+        const uint32_t lastMipIdx = range.baseMipLevel + range.levelCount - 1;
+
+        for (uint32_t layerIdx = range.baseArrayLayer; layerIdx <= lastLayerIdx; ++layerIdx) {
+            for (uint32_t mipIdx = range.baseMipLevel; mipIdx <= lastMipIdx; ++mipIdx) {
+                VK_ASSERT_MSG(imageInfo.imageLayout == owner.GetAccessState(layerIdx, mipIdx).layout, 
+                    "Texture View %s descriptor subresource range has inconsistent layout", owner.GetDebugName());
             }
         }
     #endif

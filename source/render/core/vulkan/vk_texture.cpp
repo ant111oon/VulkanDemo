@@ -59,6 +59,7 @@ namespace vkn
         std::swap(m_view, view.m_view);
         std::swap(m_type, view.m_type);
         std::swap(m_format, view.m_format);
+        std::swap(m_subresRange, view.m_subresRange);
 
         Object::operator=(std::move(view));
 
@@ -77,13 +78,28 @@ namespace vkn
 
         VK_ASSERT(pOwner && pOwner->IsCreated());
 
+        VkImageSubresourceRange subresourceRange = info.subresourceRange;
+
+        if (subresourceRange.levelCount == VK_REMAINING_MIP_LEVELS) {
+            subresourceRange.levelCount = pOwner->GetMipCount();    
+        }
+
+        if (subresourceRange.layerCount == VK_REMAINING_ARRAY_LAYERS) {
+            subresourceRange.layerCount = pOwner->GetLayerCount();    
+        }
+
+        VK_ASSERT(subresourceRange.baseMipLevel < std::numeric_limits<decltype(m_subresRange.baseMipLevel)>::max());
+        VK_ASSERT(subresourceRange.levelCount < std::numeric_limits<decltype(m_subresRange.levelCount)>::max());
+        VK_ASSERT(subresourceRange.baseArrayLayer < std::numeric_limits<decltype(m_subresRange.baseArrayLayer)>::max());
+        VK_ASSERT(subresourceRange.layerCount < std::numeric_limits<decltype(m_subresRange.layerCount)>::max());
+
         VkImageViewCreateInfo imageViewCreateInfo = {};
         imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         imageViewCreateInfo.image = pOwner->Get();
         imageViewCreateInfo.viewType = info.type;
         imageViewCreateInfo.format = info.format;
         imageViewCreateInfo.components = info.components;
-        imageViewCreateInfo.subresourceRange = info.subresourceRange;
+        imageViewCreateInfo.subresourceRange = subresourceRange;
 
         m_view = VK_NULL_HANDLE;
         VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &m_view));
@@ -96,6 +112,10 @@ namespace vkn
 
         m_type = info.type;
         m_format = info.format;
+        m_subresRange.baseMipLevel = subresourceRange.baseMipLevel;
+        m_subresRange.levelCount = subresourceRange.levelCount;
+        m_subresRange.baseArrayLayer = subresourceRange.baseArrayLayer;
+        m_subresRange.layerCount = subresourceRange.layerCount;
 
         return *this;
     }
@@ -128,6 +148,7 @@ namespace vkn
         m_pOwner = nullptr;
         m_type = {};
         m_format = {};
+        m_subresRange = {};
 
         Object::Destroy();
 
