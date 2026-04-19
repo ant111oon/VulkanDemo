@@ -2,10 +2,10 @@
 #define HZB_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
+#include "common/common_hzb.slang"
 
 
 static const uint HZB_BUILD_CS_GROUP_SIZE = 8;
-static const uint HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
 
 
 struct HZB_GEN_PUSH_CONSTS

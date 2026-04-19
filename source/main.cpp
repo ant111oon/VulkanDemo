@@ -418,10 +418,12 @@ struct COMMON_MESH_DATA
 };
 
 
-struct COMMON_INST_VOLUME
+struct COMMON_INST_AABB
 {
-    float4 MIN;
-    float4 MAX;
+    float3 MIN;
+    float PADD0;
+    float3 MAX;
+    float PADD1;
 };
 
 
@@ -494,22 +496,25 @@ struct COMMON_CB_DATA
     uint COMMON_FLAGS;
     uint COMMON_DBG_FLAGS;
     uint COMMON_DBG_VIS_FLAGS;
-    uint PAD0;
+    uint HZB_MIPS_COUNT;
 
     float3 CAM_WPOS;
-    uint PAD1;
+    float VIS_CONTRIBUTION_FALLOFF;
 };
 
 
 enum class COMMON_DBG_FLAG_MASKS
 {
-    USE_MESH_INDIRECT_DRAW_MASK = 0x1,
-    USE_MESH_GPU_CULLING_MASK = 0x2,
-    USE_REINHARD_TONE_MAPPING_MASK = 0x4,
-    USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK = 0x8,
-    USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x10,
-    USE_ACES_TONE_MAPPING_MASK = 0x20,
-    USE_INDIRECT_LIGHTING_MASK = 0x40,
+    USE_REINHARD_TONE_MAPPING_MASK = 0x1,
+    USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK = 0x2,
+    USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x4,
+    USE_ACES_TONE_MAPPING_MASK = 0x8,
+    USE_INDIRECT_LIGHTING_MASK = 0x10,
+    USE_MESH_INDIRECT_DRAW_MASK = 0x20,
+    USE_MESH_GPU_CULLING_MASK = 0x40,
+    USE_MESH_GPU_FRUSTUM_CULLING_MASK = 0x80,
+    USE_MESH_GPU_CONTRIBUTION_CULLING_MASK = 0x100,
+    USE_MESH_GPU_HZB_CULLING_MASK = 0x200,
 };
 
 
@@ -769,6 +774,7 @@ static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
 static constexpr size_t COMMON_AABB_BUFFER_DESCRIPTOR_SLOT = 9;
 static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 11;
 
 static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
@@ -949,7 +955,7 @@ static std::vector<COMMON_MESH_DATA>   s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>    s_cpuMaterialData;
 static std::vector<glm::float4x4>      s_cpuTransformData;
 static std::vector<COMMON_INST_DATA>   s_cpuInstData;
-static std::vector<COMMON_INST_VOLUME> s_cpuAABBData;
+static std::vector<COMMON_INST_AABB>   s_cpuAABBData;
 
 
 static std::vector<DBG_LINE_DATA>     s_dbgLineDataCPU;
@@ -995,6 +1001,7 @@ static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
 
 static vkn::Texture                  s_HZB;
+static vkn::TextureView              s_HZBView;
 static std::vector<vkn::TextureView> s_HZBMipViews;
 
 static vkn::ComputePSOBuilder s_computePSOBuilder;
@@ -1016,9 +1023,14 @@ static bool s_flyCameraMode = false;
 
 static bool s_skipRender = false;
 
+static float s_commonVisContributionFalloff = 2.f;
+
 #ifdef ENG_BUILD_DEBUG
     static bool s_useMeshIndirectDraw = true;
     static bool s_useMeshCulling = true;
+    static bool s_useMeshFrustumCulling = true;
+    static bool s_useMeshContributionCulling = true;
+    static bool s_useMeshHZBCulling = false;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = true;
     static bool s_drawInstAABBs = false;
@@ -1032,6 +1044,9 @@ static bool s_skipRender = false;
 #else
     static constexpr bool s_useMeshIndirectDraw = true;
     static constexpr bool s_useMeshCulling = true;
+    static constexpr bool s_useMeshFrustumCulling = true;
+    static constexpr bool s_useMeshContributionCulling = true;
+    static constexpr bool s_useMeshHZBCulling = false;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = true;
     static constexpr bool s_drawInstAABBs = false;
@@ -1076,11 +1091,11 @@ static bool IsInstVisible(const COMMON_INST_DATA& instInfo)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
-    const COMMON_INST_VOLUME& volume = s_cpuAABBData[instInfo.VOLUME_IDX];
+    const COMMON_INST_AABB& aabb = s_cpuAABBData[instInfo.VOLUME_IDX];
 
     const math::Frustum& frustum = s_camera.GetFrustum();
 
-    return frustum.IsIntersect(math::AABB(volume.MIN, volume.MAX)); 
+    return frustum.IsIntersect(math::AABB(aabb.MIN, aabb.MAX)); 
 }
 
 
@@ -1362,12 +1377,51 @@ namespace DbgUI
             static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
 
             ImGui::NewLine();
-            ImGui::SeparatorText("Mesh Culling");
+            ImGui::SeparatorText("Culling");
+            
         #ifdef ENG_BUILD_DEBUG
-            ImGui::Checkbox("##MeshCullingEnabled", &s_useMeshCulling);
+            ImGui::Checkbox("Mesh Culling", &s_useMeshCulling);
+
+            if (s_useMeshCulling) {
+                ImGui::Checkbox("Mesh Frustum Culling", &s_useMeshFrustumCulling);
+                ImGui::Checkbox("Mesh HZB Culling", &s_useMeshHZBCulling);
+                ImGui::Checkbox("Mesh Contribution Culling", &s_useMeshContributionCulling);
+
+                if (s_useMeshContributionCulling) {
+                    ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
+
+                    if (ImGui::IsItemHovered()) {
+                        if (ImGui::BeginTooltip()) {
+                            ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
+                        } ImGui::EndTooltip();
+                    }
+                }
+            }
+        #else
+            ImGui::Text("Mesh Culling:");
             ImGui::SameLine();
+            ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshCulling ? "Enabled" : "Disabled");
+            
+            ImGui::Text("Mesh Frustum Culling:");
+            ImGui::SameLine();
+            ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshFrustumCulling ? "Enabled" : "Disabled");
+            
+            ImGui::Text("Mesh HZB Culling:");
+            ImGui::SameLine();
+            ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshHZBCulling ? "Enabled" : "Disabled");
+
+            ImGui::Text("Mesh Contribution Culling:");
+            ImGui::SameLine();
+            ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshContributionCulling ? "Enabled" : "Disabled");
+
+            ImGui::Text("Vis Contribution Falloff: %.1f", s_commonVisContributionFalloff);
+
+            if (ImGui::IsItemHovered()) {
+                if (ImGui::BeginTooltip()) {
+                    ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
+                } ImGui::EndTooltip();
+            }
         #endif
-            ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
             ImGui::NewLine();
             ImGui::SeparatorText("Depth Pass");
@@ -1929,17 +1983,22 @@ static void CreateHZB()
     rtCreateInfo.mipLevels = mipsCount;
 
     s_HZB.Create(rtCreateInfo).SetDebugName("HZB");
-    
-    s_HZBMipViews.resize(mipsCount);
-    
+
     VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
     VkImageSubresourceRange subresourceRange = {};
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subresourceRange.levelCount = 1;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
+    s_HZBView.Create(s_HZB, mapping, subresourceRange).SetDebugName("HZB_VIEW");
+    
+    s_HZBMipViews.resize(mipsCount);
+
+    subresourceRange.levelCount = 1;
+    
     for (uint32_t mip = 0; mip < mipsCount; ++mip) {
         subresourceRange.baseMipLevel = mip;
 
@@ -1976,6 +2035,7 @@ static void DestroyDynamicRenderTargets()
     for (vkn::TextureView& mip : s_HZBMipViews) {
         mip.Destroy();
     }
+    s_HZBView.Destroy();
     s_HZB.Destroy();
 }
 
@@ -2416,6 +2476,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3331,7 +3392,7 @@ static void CreatePipelines()
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
     CreateHZBGenPipelineLayout();
-    CreateMeshCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("scene.cs.spv"));
+    CreateMeshCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("mesh_culling.cs.spv"));
     CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
     CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
     CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
@@ -3951,6 +4012,7 @@ static void WriteCommonDescriptorSet()
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView);
 }
 
 
@@ -4309,7 +4371,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
         const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
         
-        COMMON_INST_VOLUME volume = {};
+        COMMON_INST_AABB volume = {};
         volume.MIN = glm::float4(aabb.min, 0.f);
         volume.MAX = glm::float4(aabb.max, 0.f);
 
@@ -4642,7 +4704,7 @@ static void UploadGPUInstData()
 
     vkn::Buffer& aabbStagingBuffer = s_commonStagingBuffers[1];
 
-    const size_t aabbBufferSize = s_cpuAABBData.size() * sizeof(COMMON_INST_VOLUME);
+    const size_t aabbBufferSize = s_cpuAABBData.size() * sizeof(COMMON_INST_AABB);
     CORE_ASSERT(aabbBufferSize <= aabbStagingBuffer.GetMemorySize());
 
     {
@@ -4763,14 +4825,20 @@ void UpdateGPUCommonConstBuffer()
 
     uint32_t dbgFlags = 0;
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
-    dbgFlags |= s_useMeshIndirectDraw ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
-    dbgFlags |= s_useMeshCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
-    dbgFlags |= s_useIndirectLighting ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
+    dbgFlags |= s_useMeshIndirectDraw        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
+    dbgFlags |= s_useIndirectLighting        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
+    dbgFlags |= s_useMeshCulling             ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_FRUSTUM_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
 
     constBuff.COMMON_DBG_FLAGS = dbgFlags;
     constBuff.COMMON_DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
+    
+    constBuff.HZB_MIPS_COUNT = s_HZB.GetMipCount();
 
     constBuff.CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
+    constBuff.VIS_CONTRIBUTION_FALLOFF = s_commonVisContributionFalloff;
 
     s_commonConstBuffer.Unmap();
 }
@@ -4798,11 +4866,7 @@ void UpdateScene()
             s_skipRender = true;
         } else {
             ResizeDynamicRenderTargets();
-
-            WriteDeferredLightingDescriptorSet();
-            WritePostProcessingDescriptorSet();
-            WriteBackbufferPassDescriptorSet();
-            WriteHZBGenDescriptorSets();
+            WriteDescriptorSets();
         }    
     }
 
@@ -4820,10 +4884,10 @@ void UpdateScene()
 
         static constexpr glm::float4 COLOR = glm::float4(1.f, 1.f, 0.f, 1.f);
 
-        for (const COMMON_INST_VOLUME& volume : s_cpuAABBData) {
-            if (frustum.IsIntersect(math::AABB(volume.MIN, volume.MAX))) {
-                const glm::float3 center = glm::float3(volume.MIN + volume.MAX) * 0.5f;
-                const glm::float3 size = glm::float3(volume.MAX - volume.MIN);
+        for (const COMMON_INST_AABB& aabb : s_cpuAABBData) {
+            if (frustum.IsIntersect(math::AABB(aabb.MIN, aabb.MAX))) {
+                const glm::float3 center = glm::float3(aabb.MIN + aabb.MAX) * 0.5f;
+                const glm::float3 size = glm::float3(aabb.MAX - aabb.MIN);
 
                 RenderDebugAABBWired(math::MakeTS(center, size), COLOR);
             }
@@ -4995,7 +5059,7 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
 static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation", eng::ProfileColor::Grey80);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation_Pass", eng::ProfileColor::Grey80);
     eng::Timer timer;
 
     vkn::PSO& pso = s_PSOs[(size_t)PassID::HZB_GEN];
@@ -5856,7 +5920,7 @@ static void RenderScene()
 
     cmdBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", eng::ProfileColor::DimGrey);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", eng::ProfileColor::Grey10);
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 

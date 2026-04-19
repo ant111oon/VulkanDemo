@@ -135,15 +135,23 @@ float2 PixelCoordToUV(in uint2 coord, in uint2 size)
 
 float2 UVToNDC(in float2 uv)
 {
+#ifdef ENV_API_VULKAN
     // Vulkan has Y NDC towards -Y
     return 2.f * float2(uv.x, 1.f - uv.y) - 1.f;
+#else
+    return 2.f * uv - 1.f;
+#endif
 }
 
 
 float2 NDCToUV(in float2 ndc)
 {
+#ifdef ENV_API_VULKAN
     // Vulkan has Y NDC towards -Y
     return 0.5f * float2(ndc.x, -ndc.y) + 0.5f;
+#else
+    return 0.5f * ndc + 0.5f;
+#endif
 }
 
 
