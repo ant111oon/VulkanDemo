@@ -42,11 +42,11 @@ bool HZB_Visibility(in float2 minUV, in float2 maxUV, in float closestZ)
     const float2 sizeInPixels = (maxUV - minUV) * (float2)HZB_CULLING_HZB_MIP_0_SIZE;
 
     if (any(sizeInPixels <= ZEROF2)) {
-        return false;
+        return true;
     }
 
-    float mip = ceil(log2(max(sizeInPixels.x, sizeInPixels.y)));
-    mip = clamp(mip, 0, HZB_CULLING_HZB_MIPS_COUNT - 1);
+    const float maxSizeInPixels = max(sizeInPixels.x, sizeInPixels.y);
+    float mip = clamp(ceil(log2(maxSizeInPixels)), 0.f, HZB_CULLING_HZB_MIPS_COUNT - 1);
 
     const float4 sbox = float4(minUV, maxUV);
 

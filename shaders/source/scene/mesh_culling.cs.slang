@@ -14,19 +14,6 @@
 #include "common/math/hzb_culling.slang"
 
 
-#ifdef ENV_DEBUG
-    #define IS_CULLING_ENABLED              COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED
-    #define IS_FRUSTUM_CULLING_ENABLED      COMMON_DBG_IS_MESH_GPU_FRUSTUM_CULLING_ENABLED
-    #define IS_CONTRIBUTION_CULLING_ENABLED COMMON_DBG_IS_MESH_GPU_CONTRIBUTION_CULLING_ENABLED
-    #define IS_HZB_CULLING_ENABLED          COMMON_DBG_IS_MESH_GPU_HZB_CULLING_ENABLED
-#else
-    #define IS_CULLING_ENABLED              true
-    #define IS_FRUSTUM_CULLING_ENABLED      true
-    #define IS_CONTRIBUTION_CULLING_ENABLED true
-    #define IS_HZB_CULLING_ENABLED          true
-#endif
-
-
 AABB GetInstAABB(in COMMON_INST_DATA inst)
 {
     const COMMON_INST_AABB volume = COMMON_AABB_BUFFER[inst.VOLUME_IDX];
@@ -46,13 +33,18 @@ bool Contribution_Visibility(in float2 minUV, in float2 maxUV)
 
 bool Pass_Visibility(in COMMON_INST_DATA instData)
 {
-    if (!IS_CULLING_ENABLED) {
+#ifdef ENV_DEBUG
+    if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {
         return true;
     }
+#endif
 
     AABB aabb = GetInstAABB(instData);
 
-    if (IS_FRUSTUM_CULLING_ENABLED) {
+#ifdef ENV_DEBUG
+    if (COMMON_DBG_IS_MESH_GPU_FRUSTUM_CULLING_ENABLED)
+#endif
+    {
         if (!Frustum_Visibility(COMMON_CAMERA_FRUSTUM, aabb)) {
             return false;
         }
@@ -64,13 +56,19 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
 
     aabb.GetMinMaxUVZ(COMMON_CB.VIEW_PROJ_MATRIX, minUV, maxUV, closestZ);
 
-    if (IS_CONTRIBUTION_CULLING_ENABLED) {
+#ifdef ENV_DEBUG
+    if (COMMON_DBG_IS_MESH_GPU_CONTRIBUTION_CULLING_ENABLED)
+#endif
+    {
         if (!Contribution_Visibility(minUV, maxUV)) {
             return false;
         }
     }
 
-    if (IS_HZB_CULLING_ENABLED) {
+#ifdef ENV_DEBUG
+    if (COMMON_DBG_IS_MESH_GPU_HZB_CULLING_ENABLED)
+#endif
+    {
         if (!HZB_Visibility(minUV, maxUV, closestZ)) {
             return false;
         }

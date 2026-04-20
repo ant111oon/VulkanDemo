@@ -34,8 +34,8 @@ struct AABB
         verts[3] = minn + float3(0.f, 0.f, size.z);
         verts[4] = minn + float3(size.xy, 0.f);
         verts[5] = minn + float3(0.f, size.yz);
-        verts[5] = minn + float3(size.x, 0.f, size.z);
-        verts[5] = minn + size;
+        verts[6] = minn + float3(size.x, 0.f, size.z);
+        verts[7] = minn + size;
     }
 
     void GetMinMaxUVZ(in float4x4 viewProjMatr, out float2 minUV, out float2 maxUV, out float closestZ)
