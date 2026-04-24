@@ -1,9 +1,6 @@
 #ifndef MATH_DISTRIBUTION_H
 #define MATH_DISTRIBUTION_H
 
-#include "utils.slang"
-
-
 float RadicalInverse_VdC(in uint bits)
 {
     bits = (bits << 16u) | (bits >> 16u);

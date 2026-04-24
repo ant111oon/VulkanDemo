@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 #include "registers/gbuffer_registers.slang"
 
-#include "common/math/utils.slang"
+#include "common/math/color_space.slang"
 
 
 struct GBUFFER_SURFACE

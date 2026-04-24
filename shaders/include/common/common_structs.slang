@@ -5,25 +5,12 @@
 #include "common/math/constants.slang"
 
 
-static const uint COMMON_CMD_DRAW_INDEXED_INDIRECT_SIZE_UINT = sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT) / sizeof(uint);
-
 static const uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static const float COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static const uint2 COMMON_IRRADIANCE_MAP_SIZE = UINT2(32);
 static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
-
-
-struct COMMON_CMD_DRAW_INDEXED_INDIRECT
-{
-    // NOTE: Don't change order of this variables!!!
-    uint INDEX_COUNT;
-    uint INSTANCE_COUNT;
-    uint FIRST_INDEX;
-    int VERTEX_OFFSET;
-    uint FIRST_INSTANCE;
-};
 
 
 enum COMMON_DBG_TEX_IDX
@@ -225,6 +212,17 @@ enum COMMON_SAMPLER_IDX
     ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE,
 
     COUNT
+};
+
+
+struct COMMON_CMD_DRAW_INDEXED_INDIRECT
+{
+    // NOTE: Don't change order of this variables!!!
+    uint INDEX_COUNT;
+    uint INSTANCE_COUNT;
+    uint FIRST_INDEX;
+    int VERTEX_OFFSET;
+    uint FIRST_INSTANCE;
 };
 
 

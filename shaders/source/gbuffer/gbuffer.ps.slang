@@ -1,6 +1,5 @@
 #include "common/gbuffer_incl.slang"
 
-#include "common/math/utils.slang"
 #include "common/dbg_vis.slang"
 
 #include "pass/gbuffer/vsout.slang"

@@ -2,7 +2,7 @@
 #define MATH_GEOM_PRIMITIVES_H
 
 #include "common/math/constants.slang"
-#include "common/math/utils.slang"
+#include "common/math/common.slang"
 
 
 struct SPHERE

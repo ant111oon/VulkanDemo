@@ -3,7 +3,6 @@
 
 #include "common/common_structs.slang"
 
-#include "common/math/utils.slang"
 #include "common/math/frustum_culling.slang"
 
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
@@ -80,8 +79,10 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
 
 void FillCommonIndirectCmd(RWStructuredBuffer<uint> dst, in uint dstIndex, in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount)
 {
+    static const uint CMD_SIZE_UINT = sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT) / sizeof(uint);
+
     // First uint in the buffer is counter
-    const uint index = 1 + dstIndex * COMMON_CMD_DRAW_INDEXED_INDIRECT_SIZE_UINT;
+    const uint index = 1 + dstIndex * CMD_SIZE_UINT;
 
     dst[index + 0] = indexCount;
     dst[index + 1] = instanceCount;

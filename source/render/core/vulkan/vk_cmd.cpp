@@ -708,7 +708,7 @@ namespace vkn
             for (uint32_t layer = 0; layer < data.layerCount; ++layer) {
                 for (uint32_t mip = 0; mip < data.mipCount; ++mip) {
                     VK_ASSERT_MSG(currState == pTexture->GetAccessState(data.baseLayer + layer, data.baseMip + mip),
-                        "Texture %s has different access state fro required layers and mips", pTexture->GetDebugName());
+                        "Texture %s has different access state for required layers and mips", pTexture->GetDebugName());
                 }
             }
         #endif

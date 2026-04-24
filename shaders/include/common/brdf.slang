@@ -1,7 +1,7 @@
 #ifndef BRDF_FX
 #define BRDF_FX
 
-#include "common/math/utils.slang"
+#include "common/math/constants.slang"
 
 
 static const float3 COMMON_DIELECTRIC_F0 = FLOAT3(0.04f);

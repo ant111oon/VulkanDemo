@@ -2,7 +2,6 @@
 #include "registers/deferred_lighting_registers.slang"
 
 #include "common/system/sys_constants.slang"
-#include "common/math/utils.slang"
 
 #include "common/brdf.slang"
 

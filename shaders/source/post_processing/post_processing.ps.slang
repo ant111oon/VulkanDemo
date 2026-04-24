@@ -2,7 +2,6 @@
 #include "registers/post_processing_registers.slang"
 
 #include "common/tonemapping.slang"
-#include "common/math/utils.slang"
 
 #include "pass/post_processing/vsout.slang"
 

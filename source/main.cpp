@@ -1978,7 +1978,7 @@ static void CreateHZB()
     rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     rtCreateInfo.pAllocInfo = &rtAllocInfo;
 
-    rtCreateInfo.format = VK_FORMAT_R16_SFLOAT;
+    rtCreateInfo.format = VK_FORMAT_R32_SFLOAT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     rtCreateInfo.mipLevels = mipsCount;
 
@@ -3392,7 +3392,7 @@ static void CreatePipelines()
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
     CreateHZBGenPipelineLayout();
-    CreateMeshCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("mesh_culling.cs.spv"));
+    CreateMeshCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling.cs.spv"));
     CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
     CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
     CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
@@ -4370,7 +4370,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
         const COMMON_MESH_DATA& mesh = s_cpuMeshData[meshIdx];
 
         const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
-        
+
         COMMON_INST_AABB volume = {};
         volume.MIN = glm::float4(aabb.min, 0.f);
         volume.MAX = glm::float4(aabb.max, 0.f);
@@ -4387,7 +4387,11 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     
             glm::float4x4 transform(1.f);
             memcpy(&transform, &trs, sizeof(transform));
-    
+
+            // if (!math::IsZero(math::GetTranslation(transform).x) || !math::IsZero(math::GetTranslation(transform).y)) {
+            //     return;
+            // }
+
             s_cpuTransformData.emplace_back(transform);
     
             if (node.meshIndex.has_value()) {
@@ -5113,6 +5117,13 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
             1u
         );
     }
+
+    // To get all mips in same layout
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, s_HZB.GetMipCount() - 1, 1)
+        .Push();
 }
 
 
@@ -5126,6 +5137,8 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
             .AddBufferBarrier(s_commonOpaqueMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
             .AddBufferBarrier(s_commonAKillMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
             .AddBufferBarrier(s_commonTranspMeshDrawCmdBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     static constexpr VkDeviceSize COUNTER_OFFSET = 0; 

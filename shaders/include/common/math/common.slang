@@ -1,12 +1,11 @@
-#ifndef MATH_UTILS_H
-#define MATH_UTILS_H
+#ifndef MATH_COMMON_H
+#define MATH_COMMON_H
 
 #include "constants.slang"
 
 
 #define IS_FLAG_SET(VALUE, MASK) (((uint)(VALUE) & (uint)(MASK)) != 0u)
 #define IS_BIT_SET(VALUE, BIT)   IS_FLAG_SET((uint)(VALUE), 1u << (uint)(BIT))
-
 
 #define M3D_IS_ZERO(x)     IsZero(x)
 #define M3D_IS_EQUAL(l, r) M3D_IS_ZERO((l) - (r))
@@ -36,34 +35,39 @@ bool IsZero(in float4 vec)
 }
 
 
-float SRGBToLinear(in float color)
+float Min2(in float2 val)
 {
-    // https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
-    return color * (color * (color * 0.305306011 + 0.682171111) + 0.012522878);
+    return min(val.x, val.y);
 }
 
 
-float3 SRGBToLinear(in float3 color)
+float Min3(in float3 val)
 {
-    return float3(SRGBToLinear(color.r), SRGBToLinear(color.g), SRGBToLinear(color.b)); 
+    return min(min(val.x, val.y), val.z);
 }
 
 
-float LinearToSRGB(in float color)
+float Min4(in float4 val)
 {
-    return color < 0.0031308f ? 12.92f * color : 1.055f * pow(color, 1.f / 2.4f) - 0.055f;
+    return min(min(val.x, val.y), min(val.z, val.w));
 }
 
 
-float3 LinearToSRGB(in float3 color)
+float Max2(in float2 val)
 {
-    return float3(LinearToSRGB(color.r), LinearToSRGB(color.g), LinearToSRGB(color.b));
+    return max(val.x, val.y);
 }
 
 
-float3 LinearToSRGBFast(in float3 color)
+float Max3(in float3 val)
 {
-    return pow(saturate(color), 1.f / 2.2f);
+    return max(max(val.x, val.y), val.z);
+}
+
+
+float Max4(in float4 val)
+{
+    return max(max(val.x, val.y), max(val.z, val.w));
 }
 
 
@@ -172,17 +176,6 @@ float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in f
 {
     const float3 viewPos = ViewPosFromDepth(uv, depth, invProjMatr);
     return mul(invViewMatr, float4(viewPos, 1.f)).xyz;
-}
-
-
-float4 UnpackRGBA8(uint color)
-{
-    const float r = float((color >> 24) & 0xFF) / 255.f;
-    const float g = float((color >> 16) & 0xFF) / 255.f;
-    const float b = float((color >>  8) & 0xFF) / 255.f;
-    const float a = float((color >>  0) & 0xFF) / 255.f;
-
-    return float4(r,g,b,a);
 }
 
 #endif

@@ -4,7 +4,7 @@
 #include "common/system/sys_constants.slang"
 
 #include "common/math/constants.slang"
-#include "common/math/utils.slang"
+#include "common/math/common.slang"
 
 #include "common/common_structs.slang"
 
