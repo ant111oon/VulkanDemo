@@ -81,10 +81,9 @@ namespace math
     }
 
 
-    const Plane& Frustum::GetPlane(PlaneIdx index) const
+    const Plane& Frustum::GetPlane(size_t index) const
     {
         MATH_ASSERT(index < PLANE_COUNT);
-
         return planes[index];
     }
 }

@@ -23,6 +23,10 @@ namespace eng
         m_matViewProj = M3D_MAT4X4_IDENTITY;
         m_matProj     = M3D_MAT4X4_IDENTITY;
         m_matView     = M3D_MAT4X4_IDENTITY;
+
+        m_invMatViewProj = M3D_MAT4X4_IDENTITY;
+        m_invMatProj     = M3D_MAT4X4_IDENTITY;
+        m_invMatView     = M3D_MAT4X4_IDENTITY;
         
         m_rotation = M3D_QUAT_IDENTITY;
         m_position = ZEROF3;
@@ -252,7 +256,9 @@ namespace eng
         #endif
         } else if (IsOrthoProj()) {
             m_matProj = glm::ortho(m_left, m_right, m_bottom, m_top, zNear, zFar);
-        }   
+        }
+
+        m_invMatProj = glm::inverse(m_matProj);
     }
 
 
@@ -265,12 +271,14 @@ namespace eng
         const glm::float4x4 translation = glm::translate(M3D_MAT4X4_IDENTITY, -m_position);
 
         m_matView = rotation * translation;
+        m_invMatView = glm::inverse(m_matView);
     }
 
 
     void Camera::RecalcViewProjMatrix() noexcept
     {
         m_matViewProj = m_matProj * m_matView;
+        m_invMatViewProj = glm::inverse(m_matViewProj);
     }
 
 

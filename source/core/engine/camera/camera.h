@@ -65,6 +65,10 @@ namespace eng
         const glm::float4x4& GetProjMatrix() const noexcept { return m_matProj; }
         const glm::float4x4& GetViewProjMatrix() const noexcept { return m_matViewProj; }
 
+        const glm::float4x4& GetInvViewMatrix() const noexcept { return m_invMatView; }
+        const glm::float4x4& GetInvProjMatrix() const noexcept { return m_invMatProj; }
+        const glm::float4x4& GetInvViewProjMatrix() const noexcept { return m_invMatViewProj; }
+
         const math::Frustum& GetFrustum() const noexcept { return m_frustum; }
 
         bool IsPerspProj() const noexcept { return !IsOrthoProj(); }
@@ -120,6 +124,10 @@ namespace eng
         glm::float4x4 m_matViewProj = M3D_MAT4X4_IDENTITY;
         glm::float4x4 m_matProj     = M3D_MAT4X4_IDENTITY;
         glm::float4x4 m_matView     = M3D_MAT4X4_IDENTITY;
+
+        glm::float4x4 m_invMatViewProj = M3D_MAT4X4_IDENTITY;
+        glm::float4x4 m_invMatProj     = M3D_MAT4X4_IDENTITY;
+        glm::float4x4 m_invMatView     = M3D_MAT4X4_IDENTITY;
 
         glm::quat m_rotation = M3D_QUAT_IDENTITY;
         glm::float3 m_position = ZEROF3;

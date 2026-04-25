@@ -3,30 +3,30 @@
 
 #include "common/common_structs.slang"
 
+#define FRUSTUM_CULLING_VIEW_PROJ_MATR COMMON_CB.CULLING_VIEW_PROJ_MATRIX
 #include "common/math/frustum_culling.slang"
 
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE)
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_CB.SCREEN_SIZE
-#define HZB_CULLING_VIEW_PROJ_MATR  COMMON_CB.VIEW_PROJ_MATRIX
+#define HZB_CULLING_VIEW_PROJ_MATR  FRUSTUM_CULLING_VIEW_PROJ_MATR
 #define HZB_CULLING_HZB_MIPS_COUNT  COMMON_CB.HZB_MIPS_COUNT
 #include "common/math/hzb_culling.slang"
 
 
 AABB GetInstAABB(in COMMON_INST_DATA inst)
 {
-    const COMMON_INST_AABB volume = COMMON_AABB_BUFFER[inst.VOLUME_IDX];
-    return AABB(volume.MIN, volume.MAX);
+    return COMMON_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 }
 
 
-// Returns false if object pixel contribution is less than certain value
-bool Contribution_Visibility(in float2 minUV, in float2 maxUV)
+// Returns false if object pixel contribution is less or equal than certain value
+bool Contribution_Visibility(in SBOX sbox)
 {
-    const float2 size = (maxUV - minUV) * COMMON_SCREEN_SIZE_F;
+    const float2 size = sbox.GetDeltaUV() * COMMON_SCREEN_SIZE_F;
     const float falloff = COMMON_VIS_CONTRIBUTION_FALLOFF;
 
-    return size.x >= falloff && size.y >= falloff; 
+    return all(size > FLOAT2(falloff)); 
 }
 
 
@@ -44,26 +44,22 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
     if (COMMON_DBG_IS_MESH_GPU_FRUSTUM_CULLING_ENABLED)
 #endif
     {
-        if (!Frustum_Visibility(COMMON_CAMERA_FRUSTUM, aabb)) {
+        if (!Frustum_Visibility(COMMON_CULLING_CAMERA_FRUSTUM, aabb)) {
             return false;
         }
     }
 
-    float2 minUV;
-    float2 maxUV;
-    float closestZ;
+    SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
 
-    aabb.GetMinMaxUVZ(COMMON_CB.VIEW_PROJ_MATRIX, minUV, maxUV, closestZ);
-
-    minUV = saturate(minUV);
-    maxUV = saturate(maxUV);
-    closestZ = saturate(closestZ);
+    sbox.minUV = saturate(sbox.minUV);
+    sbox.maxUV = saturate(sbox.maxUV);
+    sbox.closestZ = saturate(sbox.closestZ);
 
 #ifndef ENV_RELEASE
     if (COMMON_DBG_IS_MESH_GPU_CONTRIBUTION_CULLING_ENABLED)
 #endif
     {
-        if (!Contribution_Visibility(minUV, maxUV)) {
+        if (!Contribution_Visibility(sbox)) {
             return false;
         }
     }
@@ -72,7 +68,7 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
     if (COMMON_DBG_IS_MESH_GPU_HZB_CULLING_ENABLED)
 #endif
     {
-        if (!HZB_Visibility(minUV, maxUV, closestZ)) {
+        if (!HZB_Visibility(sbox)) {
             return false;
         }
     }

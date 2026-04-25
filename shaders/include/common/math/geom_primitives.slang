@@ -5,6 +5,21 @@
 #include "common/math/common.slang"
 
 
+struct SBOX
+{
+    float2 GetDeltaUV() { return maxUV - minUV; }
+
+    float2 GetCornerBL() { return minUV; }
+    float2 GetCornerBR() { return float2(maxUV.x, minUV.y); }
+    float2 GetCornerUL() { return float2(minUV.x, maxUV.y); }
+    float2 GetCornerUR() { return maxUV; }
+
+    float2 minUV;
+    float2 maxUV;
+    float closestZ;
+};
+
+
 struct SPHERE
 {
     float3 position;
@@ -38,34 +53,43 @@ struct AABB
         verts[7] = minn + size;
     }
 
-    void GetMinMaxUVZ(in float4x4 viewProjMatr, out float2 minUV, out float2 maxUV, out float closestZ)
+    SBOX GetSBOX(in float4x4 viewProjMatr)
     {
         float3 verts[8];
         GetVertices(verts);
 
-        minUV = ONEF2;
-        maxUV = ZEROF2;
+        SBOX sbox = (SBOX)0;
+
+        sbox.minUV = ONEF2;
+        sbox.maxUV = ZEROF2;
 
     #ifdef ENV_REVERSED_Z
-        closestZ = 0.f;
+        sbox.closestZ = 0.f;
     #else
-        closestZ = 1.f;
+        sbox.closestZ = 1.f;
     #endif
 
         for (uint i = 0; i < 8; ++i) {
             const float3 NDC = WPosToNDC(verts[i], viewProjMatr);
             const float2 UV = NDCToUV(NDC.xy);
 
-            minUV = min(UV, minUV);
-            maxUV = max(UV, maxUV);
+            sbox.minUV = min(UV, sbox.minUV);
+            sbox.maxUV = max(UV, sbox.maxUV);
 
         #ifdef ENV_REVERSED_Z
-            closestZ = max(closestZ, NDC.z);
+            sbox.closestZ = max(sbox.closestZ, NDC.z);
         #else
-            closestZ = min(closestZ, NDC.z);
+            sbox.closestZ = min(sbox.closestZ, NDC.z);
         #endif
         }
-    }    
+
+        return sbox;
+    }
+
+    bool IsInside(in float3 pt)
+    {
+        return all(pt >= minn) && all(pt <= maxx);
+    }
 
     float3 minn;
     float3 maxx;

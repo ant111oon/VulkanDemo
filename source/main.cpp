@@ -420,10 +420,30 @@ struct COMMON_MESH_DATA
 
 struct COMMON_INST_AABB
 {
-    float3 MIN;
-    float PADD0;
-    float3 MAX;
-    float PADD1;
+    COMMON_INST_AABB() = default;
+    
+    COMMON_INST_AABB(const float3& min, const float3& max)
+    {
+        Pack(min, max);
+    }
+
+    void Pack(const float3& min, const float3& max)
+    {
+        MIN_MAX_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
+        MIN_MAX_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
+        MIN_MAX_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
+    }
+
+    math::AABB GetAABB() const
+    {
+        const float3 minn = float3(glm::unpackHalf2x16(MIN_MAX_PACKED.x), glm::unpackHalf2x16(MIN_MAX_PACKED.y).x);
+        const float3 maxx = float3(glm::unpackHalf2x16(MIN_MAX_PACKED.y).y, glm::unpackHalf2x16(MIN_MAX_PACKED.z));
+
+        return math::AABB(minn, maxx);
+    }
+
+    uint3 MIN_MAX_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint PADDING;
 };
 
 
@@ -466,11 +486,9 @@ struct PLANE
 };
 
 
-static constexpr uint COMMON_FRUSTUM_PLANES_COUNT = 6;
-
 struct FRUSTUM
 {
-    PLANE planes[COMMON_FRUSTUM_PLANES_COUNT];
+    PLANE planes[6];
 };
 
 
@@ -479,6 +497,8 @@ static_assert(sizeof(FRUSTUM) == sizeof(math::Frustum));
 
 struct COMMON_CB_DATA
 {
+    FRUSTUM CAMERA_FRUSTUM;
+
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
     float4x4 VIEW_PROJ_MATRIX;
@@ -487,15 +507,16 @@ struct COMMON_CB_DATA
     float4x4 INV_PROJ_MATRIX;
     float4x4 INV_VIEW_PROJ_MATRIX;
 
-    FRUSTUM CAMERA_FRUSTUM;
+    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
 
     uint2 SCREEN_SIZE;
     float Z_NEAR;
     float Z_FAR;
 
-    uint COMMON_FLAGS;
-    uint COMMON_DBG_FLAGS;
-    uint COMMON_DBG_VIS_FLAGS;
+    uint FLAGS;
+    uint DBG_FLAGS;
+    uint DBG_VIS_FLAGS;
     uint HZB_MIPS_COUNT;
 
     float3 CAM_WPOS;
@@ -825,7 +846,7 @@ static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
-static constexpr uint32_t MAX_DBG_LINE_COUNT = 4096;
+static constexpr uint32_t MAX_DBG_LINE_COUNT = 16384;
 static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 2048;
 
 static constexpr uint32_t DBG_LINE_VERTEX_COUNT = 2;
@@ -866,7 +887,7 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 0.0025f;
+static constexpr float CAMERA_SPEED = 0.0075f;
 
 
 enum class PassID
@@ -1013,6 +1034,10 @@ static eng::DbgUI s_dbgUI;
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = ZEROF3;
 
+static glm::float4x4 s_fixedCamCullViewProjMatr;
+static glm::float4x4 s_fixedCamCullInvViewProjMatr;
+static math::Frustum s_fixedCamCullFrustum;
+
 static uint32_t s_dbgOutputRTIdx = 0;
 static uint32_t s_nextImageIdx = 0;
 
@@ -1020,6 +1045,7 @@ static size_t s_frameNumber = 0;
 static float s_frameTime = M3D_EPS;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
+static bool s_cullingTestMode = false;
 
 static bool s_skipRender = false;
 
@@ -1091,11 +1117,11 @@ static bool IsInstVisible(const COMMON_INST_DATA& instInfo)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
-    const COMMON_INST_AABB& aabb = s_cpuAABBData[instInfo.VOLUME_IDX];
+    const math::AABB aabb = s_cpuAABBData[instInfo.VOLUME_IDX].GetAABB();
 
     const math::Frustum& frustum = s_camera.GetFrustum();
 
-    return frustum.IsIntersect(math::AABB(aabb.MIN, aabb.MAX)); 
+    return frustum.IsIntersect(aabb); 
 }
 
 
@@ -1367,14 +1393,23 @@ namespace DbgUI
             ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
             ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
             
+            static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
+            static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
+
             ImGui::NewLine();
             ImGui::SeparatorText("Camera Info");
             ImGui::Text("Fly Camera Mode (F5):");
             ImGui::SameLine(); 
-            ImGui::TextColored(ImVec4(!s_flyCameraMode, s_flyCameraMode, 0.f, 1.f), s_flyCameraMode ? "ON" : "OFF");
+            ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
 
-            static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
-            static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
+            ImGui::Text("Fixed Culling Camera (F6):");
+            if (ImGui::IsItemHovered()) {
+                if (ImGui::BeginTooltip()) {
+                    ImGui::Text("Perform culling from fixed pos frustum view");
+                } ImGui::EndTooltip();
+            }
+            ImGui::SameLine(); 
+            ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
 
             ImGui::NewLine();
             ImGui::SeparatorText("Culling");
@@ -3373,7 +3408,7 @@ static void CreatePipelines()
 
 static void CreateCommonDbgTextures()
 {
-#ifdef ENG_BUILD_DEBUG
+#ifndef ENG_BUILD_RELEASE
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -3394,7 +3429,7 @@ static void CreateCommonDbgTextures()
         createInfo.pAllocInfo = &allocInfo;
     }
 
-    texCreateInfos[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD].extent = { 64u, 64u, 1u };
+    texCreateInfos[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD].extent = { 128u, 128u, 1u };
 
     static constexpr std::array<const char*, (size_t)COMMON_DBG_TEX_IDX::COUNT> texNames = {
         "COMMON_DBG_TEX_RED",
@@ -3428,7 +3463,7 @@ static void CreateCommonDbgTextures()
 
 static void UploadGPUDbgTextures()
 {
-#ifdef ENG_BUILD_DEBUG
+#ifndef ENG_BUILD_RELEASE
     auto UploadDbgTexture = [](vkn::CmdBuffer& cmdBuffer, size_t texIdx, size_t stagingBufIdx) -> void
     {
         vkn::Texture& texture = s_commonDbgTextures[texIdx];
@@ -3967,7 +4002,7 @@ static void WriteCommonDescriptorSet()
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
 
-#ifdef ENG_BUILD_DEBUG
+#ifndef ENG_BUILD_RELEASE
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
     }
@@ -4334,11 +4369,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
         const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
 
-        COMMON_INST_AABB volume = {};
-        volume.MIN = glm::float4(aabb.min, 0.f);
-        volume.MAX = glm::float4(aabb.max, 0.f);
-
-        s_cpuAABBData.emplace_back(volume);
+        s_cpuAABBData.emplace_back(aabb.min, aabb.max);
 
         return s_cpuAABBData.size() - 1;
     };
@@ -4782,7 +4813,30 @@ void UpdateGPUCommonConstBuffer()
     constBuff.INV_PROJ_MATRIX = glm::inverse(projMatrix);
     constBuff.INV_VIEW_PROJ_MATRIX = glm::inverse(viewProjMatrix);
 
-    memcpy(&constBuff.CAMERA_FRUSTUM, &s_camera.GetFrustum(), sizeof(FRUSTUM));
+    const math::Frustum& camFrustum = s_camera.GetFrustum();
+
+    for (size_t i = 0; i <  math::Frustum::PLANE_COUNT; ++i) {
+        const math::Plane& srcPlane = camFrustum.GetPlane(i);
+        PLANE& dstPlane = constBuff.CAMERA_FRUSTUM.planes[i];
+
+        dstPlane.normal = srcPlane.normal;
+        dstPlane.distance = srcPlane.distance;
+    }
+
+    if (s_cullingTestMode) {
+        for (size_t i = 0; i <  math::Frustum::PLANE_COUNT; ++i) {
+            const math::Plane& srcPlane = s_fixedCamCullFrustum.GetPlane(i);
+            PLANE& dstPlane = constBuff.CULLING_CAMERA_FRUSTUM.planes[i];
+
+            dstPlane.normal = srcPlane.normal;
+            dstPlane.distance = srcPlane.distance;
+        }
+
+        constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCamCullViewProjMatr;
+    } else {
+        constBuff.CULLING_CAMERA_FRUSTUM = constBuff.CAMERA_FRUSTUM;
+        constBuff.CULLING_VIEW_PROJ_MATRIX = constBuff.VIEW_PROJ_MATRIX;
+    }
     
     constBuff.SCREEN_SIZE.x = s_pWnd->GetWidth();
     constBuff.SCREEN_SIZE.y = s_pWnd->GetHeight();
@@ -4799,8 +4853,8 @@ void UpdateGPUCommonConstBuffer()
     dbgFlags |= s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
     dbgFlags |= s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
 
-    constBuff.COMMON_DBG_FLAGS = dbgFlags;
-    constBuff.COMMON_DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
+    constBuff.DBG_FLAGS = dbgFlags;
+    constBuff.DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     
     constBuff.HZB_MIPS_COUNT = s_HZB.GetMipCount();
 
@@ -4851,12 +4905,11 @@ void UpdateScene()
 
         static constexpr glm::float4 COLOR = glm::float4(1.f, 1.f, 0.f, 1.f);
 
-        for (const COMMON_INST_AABB& aabb : s_cpuAABBData) {
-            if (frustum.IsIntersect(math::AABB(aabb.MIN, aabb.MAX))) {
-                const glm::float3 center = glm::float3(aabb.MIN + aabb.MAX) * 0.5f;
-                const glm::float3 size = glm::float3(aabb.MAX - aabb.MIN);
+        for (const COMMON_INST_AABB& volume : s_cpuAABBData) {
+            const math::AABB aabb = volume.GetAABB(); 
 
-                RenderDebugAABBWired(math::MakeTS(center, size), COLOR);
+            if (frustum.IsIntersect(aabb)) {
+                RenderDebugAABBWired(math::MakeTS(aabb.GetCenter(), aabb.GetSize()), COLOR);
             }
         }
     }    
@@ -4892,12 +4945,10 @@ void UpdateScene()
     RenderDebugOBBWired(TRS, glm::float4(ZEROF3, 1.f));
     RenderDebugOBBFilled(TRS, glm::float4(1.f, 0.6f, 0.3f, 0.25f));
 
-    static const glm::float4x4 dbgFrustumInvMatr = glm::inverse(
-        glm::perspective(glm::radians(45.f), 16.f / 9.f, 0.1f, 50.f) * 
-        glm::lookAt(glm::float3(0.f, 0.f, 6.f), ZEROF3, M3D_AXIS_Y)
-    );
-
-    RenderDebugFrustumWired(dbgFrustumInvMatr, glm::float4(1.f));
+    if (s_cullingTestMode) {
+        RenderDebugFrustumFilled(s_fixedCamCullInvViewProjMatr, glm::float4(0.5f, 0.5f, 0.5f, 0.35f));
+        RenderDebugFrustumWired(s_fixedCamCullInvViewProjMatr, glm::float4(1.f));
+    }
 }
 
 
@@ -5026,6 +5077,10 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
 static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 {
+    if (s_cullingTestMode) {
+        return;
+    }
+
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation_Pass", eng::ProfileColor::Grey80);
     eng::Timer timer;
 
@@ -6040,6 +6095,14 @@ void AppProcessWndEvent(const eng::WndEvent& event)
         if (keyEvent.key == eng::WndKey::KEY_F5 && keyEvent.IsPressed()) {
             s_flyCameraMode = !s_flyCameraMode;
             s_pWnd->SetCursorRelativeMode(s_flyCameraMode);
+        } else if (keyEvent.key == eng::WndKey::KEY_F6 && keyEvent.IsPressed()) {
+            s_cullingTestMode = !s_cullingTestMode;
+
+            if (s_cullingTestMode) {
+                s_fixedCamCullViewProjMatr = s_camera.GetViewProjMatrix();
+                s_fixedCamCullInvViewProjMatr = s_camera.GetInvViewProjMatrix();
+                s_fixedCamCullFrustum = s_camera.GetFrustum();
+            }
         }
     }
 

@@ -78,10 +78,16 @@ struct COMMON_MESH_DATA
 
 struct COMMON_INST_AABB
 {
-    float3 MIN;
-    float PADD0;
-    float3 MAX;
-    float PADD1;
+    AABB GetAABB()
+    {
+        const float3 minn = float3(unpackHalf2x16ToFloat(MIN_MAX_PACKED.x), unpackHalf2x16ToFloat(MIN_MAX_PACKED.y).x);
+        const float3 maxx = float3(unpackHalf2x16ToFloat(MIN_MAX_PACKED.y).y, unpackHalf2x16ToFloat(MIN_MAX_PACKED.z));
+
+        return AABB(minn, maxx);
+    }
+
+    uint3 MIN_MAX_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint PADDING;
 };
 
 
@@ -96,6 +102,8 @@ struct COMMON_INST_DATA
 
 struct COMMON_CB_DATA
 {
+    FRUSTUM CAMERA_FRUSTUM;
+
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
     float4x4 VIEW_PROJ_MATRIX;
@@ -104,7 +112,8 @@ struct COMMON_CB_DATA
     float4x4 INV_PROJ_MATRIX;
     float4x4 INV_VIEW_PROJ_MATRIX;
 
-    FRUSTUM CAMERA_FRUSTUM;
+    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
 
     uint2 SCREEN_SIZE;
     float Z_NEAR;
