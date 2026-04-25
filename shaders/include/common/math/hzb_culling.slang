@@ -36,15 +36,10 @@ bool HZB_Visibility(in float2 minUV, in float2 maxUV, in float closestZ)
         return true;
     }
 
-    minUV = saturate(minUV);
-    maxUV = saturate(maxUV);
-
     const float2 sizeInPixels = (maxUV - minUV) * (float2)HZB_CULLING_HZB_MIP_0_SIZE;
 
     const float maxSizeInPixels = max(sizeInPixels.x, sizeInPixels.y);
     float mip = clamp(floor(log2(maxSizeInPixels)), 0.f, HZB_CULLING_HZB_MIPS_COUNT - 1);
-
-    const float4 sbox = float4(minUV, maxUV);
 
     const float levelLower = max(mip - 1.f, 0.f);
     const float2 scale = exp2(-levelLower) * (float2)HZB_CULLING_HZB_MIP_0_SIZE;
@@ -56,6 +51,8 @@ bool HZB_Visibility(in float2 minUV, in float2 maxUV, in float closestZ)
         mip = levelLower;
     }
 
+    const float4 sbox = float4(minUV, maxUV);
+
     float4 samples = ZEROF4;
     samples.x = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.xy, mip).x;
     samples.y = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.zy, mip).x;
@@ -63,10 +60,10 @@ bool HZB_Visibility(in float2 minUV, in float2 maxUV, in float closestZ)
     samples.w = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.zw, mip).x;
 
 #ifdef ENV_REVERSED_Z
-    const float depth = Max4(samples);
+    const float depth = Min4(samples);
     return closestZ >= depth;
 #else
-    const float depth = Min4(samples);
+    const float depth = Max4(samples);
     return closestZ <= depth;
 #endif
 }

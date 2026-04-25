@@ -32,7 +32,7 @@ bool Contribution_Visibility(in float2 minUV, in float2 maxUV)
 
 bool Pass_Visibility(in COMMON_INST_DATA instData)
 {
-#ifdef ENV_DEBUG
+#ifndef ENV_RELEASE
     if (!COMMON_DBG_IS_MESH_GPU_CULLING_ENABLED) {
         return true;
     }
@@ -40,7 +40,7 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
 
     AABB aabb = GetInstAABB(instData);
 
-#ifdef ENV_DEBUG
+#ifndef ENV_RELEASE
     if (COMMON_DBG_IS_MESH_GPU_FRUSTUM_CULLING_ENABLED)
 #endif
     {
@@ -55,7 +55,11 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
 
     aabb.GetMinMaxUVZ(COMMON_CB.VIEW_PROJ_MATRIX, minUV, maxUV, closestZ);
 
-#ifdef ENV_DEBUG
+    minUV = saturate(minUV);
+    maxUV = saturate(maxUV);
+    closestZ = saturate(closestZ);
+
+#ifndef ENV_RELEASE
     if (COMMON_DBG_IS_MESH_GPU_CONTRIBUTION_CULLING_ENABLED)
 #endif
     {
@@ -64,7 +68,7 @@ bool Pass_Visibility(in COMMON_INST_DATA instData)
         }
     }
 
-#ifdef ENV_DEBUG
+#ifndef ENV_RELEASE
     if (COMMON_DBG_IS_MESH_GPU_HZB_CULLING_ENABLED)
 #endif
     {

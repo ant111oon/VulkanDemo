@@ -3,6 +3,7 @@
 
 #include "common/system/sys_constants.slang"
 
+#include "common/dbg_vis.slang"
 #include "common/brdf.slang"
 
 #include "pass/deferred_lighting/vsout.slang"
@@ -180,7 +181,7 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     GBUFFER gbuffer = SampleGBuffer(texCoord);
 
-#ifdef ENV_DEBUG
+#ifdef DBG_RT_OUTPUT_ENABLED
     if (!COMMON_DBG_VIS_NONE) {
         return gbuffer.albedo.rgb;
     }
@@ -209,7 +210,7 @@ float3 ComputeLighting(in int2 pixelCoord)
         result += ptRes;
     }
 
-#ifdef ENV_DEBUG
+#ifndef ENV_RELEASE
     if (COMMON_DBG_USE_INDIRECT_LIGHTING)
 #endif
     {

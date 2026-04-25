@@ -53,21 +53,16 @@ struct AABB
     #endif
 
         for (uint i = 0; i < 8; ++i) {
-            float4 clipPos = mul(viewProjMatr, float4(verts[i], 1.f));
-
-            float3 NDC = clipPos.xyz / clipPos.w;
-            NDC.xy = clamp(NDC.xy, -ONEF2, ONEF2);
-            NDC.z = clamp(NDC.z, 0.f, 1.f);
-
+            const float3 NDC = WPosToNDC(verts[i], viewProjMatr);
             const float2 UV = NDCToUV(NDC.xy);
 
             minUV = min(UV, minUV);
             maxUV = max(UV, maxUV);
 
         #ifdef ENV_REVERSED_Z
-            closestZ = saturate(max(closestZ, NDC.z));
+            closestZ = max(closestZ, NDC.z);
         #else
-            closestZ = saturate(min(closestZ, NDC.z));
+            closestZ = min(closestZ, NDC.z);
         #endif
         }
     }    

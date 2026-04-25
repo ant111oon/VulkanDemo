@@ -178,4 +178,11 @@ float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in f
     return mul(invViewMatr, float4(viewPos, 1.f)).xyz;
 }
 
+
+float3 WPosToNDC(in float3 wpos, in float4x4 viewProjMatr)
+{
+    const float4 clipPos = mul(viewProjMatr, float4(wpos, 1.f));
+    return clipPos.xyz / clipPos.w;
+}
+
 #endif

@@ -1025,12 +1025,12 @@ static bool s_skipRender = false;
 
 static float s_commonVisContributionFalloff = 2.f;
 
-#ifdef ENG_BUILD_DEBUG
+#ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshIndirectDraw = true;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshContributionCulling = true;
-    static bool s_useMeshHZBCulling = false;
+    static bool s_useMeshHZBCulling = true;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = true;
     static bool s_drawInstAABBs = false;
@@ -1046,7 +1046,7 @@ static float s_commonVisContributionFalloff = 2.f;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshContributionCulling = true;
-    static constexpr bool s_useMeshHZBCulling = false;
+    static constexpr bool s_useMeshHZBCulling = true;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = true;
     static constexpr bool s_drawInstAABBs = false;
@@ -1379,7 +1379,6 @@ namespace DbgUI
             ImGui::NewLine();
             ImGui::SeparatorText("Culling");
             
-        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("Mesh Culling", &s_useMeshCulling);
 
             if (s_useMeshCulling) {
@@ -1397,67 +1396,34 @@ namespace DbgUI
                     }
                 }
             }
-        #else
-            ImGui::Text("Mesh Culling:");
-            ImGui::SameLine();
-            ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshCulling ? "Enabled" : "Disabled");
-            
-            ImGui::Text("Mesh Frustum Culling:");
-            ImGui::SameLine();
-            ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshFrustumCulling ? "Enabled" : "Disabled");
-            
-            ImGui::Text("Mesh HZB Culling:");
-            ImGui::SameLine();
-            ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshHZBCulling ? "Enabled" : "Disabled");
-
-            ImGui::Text("Mesh Contribution Culling:");
-            ImGui::SameLine();
-            ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_useMeshContributionCulling ? "Enabled" : "Disabled");
-
-            ImGui::Text("Vis Contribution Falloff: %.1f", s_commonVisContributionFalloff);
-
-            if (ImGui::IsItemHovered()) {
-                if (ImGui::BeginTooltip()) {
-                    ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
-                } ImGui::EndTooltip();
-            }
-        #endif
 
             ImGui::NewLine();
             ImGui::SeparatorText("Depth Pass");
-        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
-            ImGui::SameLine(); 
-        #endif
+            ImGui::SameLine();
             ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
             
             ImGui::NewLine();
             ImGui::SeparatorText("GBuffer Pass");
-        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
             ImGui::SameLine(); 
-        #endif
             ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
             
-        #ifdef ENG_BUILD_DEBUG
             if (!s_useMeshIndirectDraw) {
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Opaque Mesh Count: %zu)", s_dbgDrawnOpaqueMeshCount);
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn AKill Mesh Count: %zu)", s_dbgDrawnAkillMeshCount);
                 ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Transparent Mesh Count: %zu)", s_dbgDrawnTranspMeshCount);
             }
-        #endif
 
             ImGui::NewLine();
             ImGui::SeparatorText("Deferred Lighting Pass");
-        #ifdef ENG_BUILD_DEBUG
             ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
             ImGui::SameLine(); 
-        #endif
             ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
             
             ImGui::NewLine();
             ImGui::SeparatorText("Tonemapping");
-        #ifdef ENG_BUILD_DEBUG
+            
             if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
                 for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
                     const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
@@ -1472,11 +1438,7 @@ namespace DbgUI
                 }
                 ImGui::EndCombo();
             }
-        #else
-            ImGui::Text(DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
-        #endif
 
-        #ifdef ENG_BUILD_DEBUG
             ImGui::NewLine();
             ImGui::SeparatorText("Debug Output");
 
@@ -1484,6 +1446,7 @@ namespace DbgUI
             ImGui::SameLine();
             ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
 
+        #ifdef ENG_BUILD_DEBUG
             if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
                 for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
                     const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
