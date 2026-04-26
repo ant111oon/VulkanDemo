@@ -532,10 +532,9 @@ enum class COMMON_DBG_FLAG_MASKS
     USE_ACES_TONE_MAPPING_MASK = 0x8,
     USE_INDIRECT_LIGHTING_MASK = 0x10,
     USE_MESH_INDIRECT_DRAW_MASK = 0x20,
-    USE_MESH_GPU_CULLING_MASK = 0x40,
-    USE_MESH_GPU_FRUSTUM_CULLING_MASK = 0x80,
-    USE_MESH_GPU_CONTRIBUTION_CULLING_MASK = 0x100,
-    USE_MESH_GPU_HZB_CULLING_MASK = 0x200,
+    USE_MESH_GPU_FRUSTUM_CULLING_MASK = 0x40,
+    USE_MESH_GPU_CONTRIBUTION_CULLING_MASK = 0x80,
+    USE_MESH_GPU_HZB_CULLING_MASK = 0x100,
 };
 
 
@@ -4838,8 +4837,8 @@ void UpdateGPUCommonConstBuffer()
         constBuff.CULLING_VIEW_PROJ_MATRIX = constBuff.VIEW_PROJ_MATRIX;
     }
     
-    constBuff.SCREEN_SIZE.x = s_pWnd->GetWidth();
-    constBuff.SCREEN_SIZE.y = s_pWnd->GetHeight();
+    constBuff.SCREEN_SIZE.x = static_cast<float>(s_pWnd->GetWidth());
+    constBuff.SCREEN_SIZE.y = static_cast<float>(s_pWnd->GetHeight());
 
     constBuff.Z_NEAR = s_camera.GetZNear();
     constBuff.Z_FAR = s_camera.GetZFar();
@@ -4848,7 +4847,6 @@ void UpdateGPUCommonConstBuffer()
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
     dbgFlags |= s_useMeshIndirectDraw        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
     dbgFlags |= s_useIndirectLighting        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
-    dbgFlags |= s_useMeshCulling             ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CULLING_MASK : 0;
     dbgFlags |= s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_FRUSTUM_CULLING_MASK : 0;
     dbgFlags |= s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
     dbgFlags |= s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
@@ -5194,10 +5192,6 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
 
 void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 {
-    if (!s_useDepthPass) {
-        return;
-    }
-
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
     barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
@@ -5308,6 +5302,10 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
 void DepthPass(vkn::CmdBuffer& cmdBuffer)
 {
+    if (!s_useDepthPass) {
+        return;
+    }
+
     ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass", eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass", eng::ProfileColor::Grey51);
 

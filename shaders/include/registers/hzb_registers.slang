@@ -2,7 +2,6 @@
 #define HZB_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/common_hzb.slang"
 
 
 static const uint HZB_BUILD_CS_GROUP_SIZE = 8;

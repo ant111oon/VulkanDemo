@@ -24,10 +24,11 @@
 
 #include "common/system/sys_constants.slang"
 
-#include "common/common_hzb.slang"
-
 #include "common/math/common.slang"
 #include "common/math/geom_primitives.slang"
+
+
+static const uint HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
 
 
 bool HZB_Visibility(in SBOX sbox)
