@@ -218,14 +218,18 @@ namespace eng
         m_pIO = &ImGui::GetIO();
         m_pIO->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         m_pIO->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.FrameRounding = 5.f;
+        style.WindowRounding = 7.f;
+        style.WindowBorderSize = 1.f;
 
+        for (uint32_t i = 0; i < ImGuiCol_COUNT; ++i) {
+            ImVec4& color = style.Colors[i];
+            color.x = color.y = color.z = (0.2125f * color.x) + (0.7154f * color.y) + (0.0721f * color.z);
+        }
+        
         m_pWindow = &window;
-
-        ImGui::GetStyle().Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
-        ImGui::GetStyle().Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);
-        ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
-        ImGui::GetStyle().Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
-        ImGui::GetStyle().Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
 
     #ifdef ENG_OS_WINDOWS
         if (!ImGui_ImplWin32_Init(window.GetNativeHandle())) {

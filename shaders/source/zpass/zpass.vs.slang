@@ -8,11 +8,11 @@ uint GetZPassInstIdx(uint drawID)
 {
 #ifndef ENV_RELEASE
     if (!COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED) {
-        return PUSH_CONSTS.INST_INFO_IDX;
+        return ZPASS_INST_INFO_IDX;
     } else
 #endif
     {
-        return (bool)PUSH_CONSTS.IS_AKILL_PASS ? ZPASS_AKILL_INST_INFO_IDS[drawID] : ZPASS_OPAQUE_INST_INFO_IDS[drawID];
+        return (bool)ZPASS_IS_AKILL_PASS ? ZPASS_AKILL_INST_INFO_IDS[drawID] : ZPASS_OPAQUE_INST_INFO_IDS[drawID];
     }
 }
 

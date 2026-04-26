@@ -9,14 +9,14 @@
 [numthreads(HZB_BUILD_CS_GROUP_SIZE, HZB_BUILD_CS_GROUP_SIZE, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
-    const uint mip = PUSH_CONSTS.DST_MIP_IDX;
-    const uint2 dstMipSize = max(PUSH_CONSTS.DST_MIP_RESOLUTION, ONEU2);
+    const uint mip = HZB_GEN_DST_MIP_IDX;
+    const uint2 dstMipSize = max(HZB_GEN_DST_MIP_RESOLUTION, ONEU2);
 
     if (any(DTid >= dstMipSize)) {
         return;
     }
 
-    if (HZB_IS_DEPTH_BUFFER_COPY_PASS) {
+    if (HZB_GEN_IS_DEPTH_BUFFER_COPY_PASS) {
         HZB_DST_MIP_UAVS[mip][DTid] = LOAD_TEX_ARRAY(HZB_SRC_MIPS, mip, int3(DTid, 0));
         return;
     }

@@ -38,7 +38,7 @@ float3 PreFilterEnvMap(in float roughness, in float3 vReflect)
             const float pdf = (NDF_GGX(roughness, NdotH) * NdotH / (4.f * VdotH));
 
             // Solid angle covered by 1 pixel with 6 faces that are EnvMapSize X EnvMapSize
-            const float saTexel = 4.f * M3D_PI / max(6.f * PUSH_CONSTS.ENV_MAP_FACE_SIZE.x * PUSH_CONSTS.ENV_MAP_FACE_SIZE.y, M3D_EPS);
+            const float saTexel = 4.f * M3D_PI / max(6.f * PREFILTERED_ENV_MAP_FACE_SIZE.x * PREFILTERED_ENV_MAP_FACE_SIZE.y, M3D_EPS);
             // Solid angle represented by this sample
             const float saSample = 1.f / max(SAMPLES_NUM * pdf, M3D_EPS);
 
@@ -58,12 +58,12 @@ float3 PreFilterEnvMap(in float roughness, in float3 vReflect)
 [numthreads(32, 32, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (PUSH_CONSTS.MIP >= COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT) {
+    if (PREFILTERED_ENV_MAP_MIP >= COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT) {
         return;
     }
 
     uint2 outputSize = ZEROU2;
-    outputSize.xy = COMMON_PREFILTERED_ENV_MAP_SIZE >> PUSH_CONSTS.MIP;
+    outputSize.xy = COMMON_PREFILTERED_ENV_MAP_SIZE >> PREFILTERED_ENV_MAP_MIP;
 
     if (any(DTid.xy >= outputSize)) {
         return;
@@ -74,8 +74,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 uv = 2.f * PixelCoordToUV(pixCoord, outputSize.xy) - 1.f;
     const uint face = DTid.z;
 
-    const float roughness = saturate(COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PUSH_CONSTS.MIP);
+    const float roughness = saturate(COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PREFILTERED_ENV_MAP_MIP);
 
-    const uint dstIdx = face * COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT + PUSH_CONSTS.MIP;
+    const uint dstIdx = face * COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT + PREFILTERED_ENV_MAP_MIP;
     PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV[dstIdx][pixCoord] = float4(PreFilterEnvMap(roughness, UVFaceToDir(uv, face)), 1.f);
 }

@@ -8,11 +8,11 @@ uint GetGBufferInstIdx(uint drawID)
 {
 #ifndef ENV_RELEASE
     if (!COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED) {
-        return PUSH_CONSTS.INST_INFO_IDX;
+        return GBUFFER_INST_INFO_IDX;
     } else
 #endif
     {
-        return (bool)PUSH_CONSTS.IS_AKILL_PASS ? GBUFFER_AKILL_INST_INFO_IDS[drawID] : GBUFFER_OPAQUE_INST_INFO_IDS[drawID];
+        return (bool)GBUFFER_IS_AKILL_PASS ? GBUFFER_AKILL_INST_INFO_IDS[drawID] : GBUFFER_OPAQUE_INST_INFO_IDS[drawID];
     }
 }
 

@@ -119,13 +119,12 @@ struct COMMON_CB_DATA
     float Z_NEAR;
     float Z_FAR;
 
+    float3 CAM_WPOS;
     uint FLAGS;
+
+    uint2 PAD0;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
-    uint HZB_MIPS_COUNT;
-
-    float3 CAM_WPOS;
-    float VIS_CONTRIBUTION_FALLOFF;
 };
 
 

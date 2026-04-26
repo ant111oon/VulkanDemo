@@ -1,5 +1,5 @@
-#ifndef COMMON_GEOM_CULLING_H
-#define COMMON_GEOM_CULLING_H
+#ifndef GEOM_CULLING_INCL_H
+#define GEOM_CULLING_INCL_H
 
 // NOTE:
 //  - GEOM_CULLING_FRUSTUM_ENABLED enables frustum culling
@@ -12,17 +12,16 @@
 
 
 #include "registers/common_registers.slang"
-
-#include "common/common_structs.slang"
+#include "registers/geom_culling_registers.slang"
 
 #define FRUSTUM_CULLING_VIEW_PROJ_MATR COMMON_CB.CULLING_VIEW_PROJ_MATRIX
 #include "common/math/frustum_culling.slang"
 
-#define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE)
-#define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_CB.SCREEN_SIZE
+#define HZB_CULLING_HZB_TEX         COMMON_HZB
+#define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
 #define HZB_CULLING_VIEW_PROJ_MATR  FRUSTUM_CULLING_VIEW_PROJ_MATR
-#define HZB_CULLING_HZB_MIPS_COUNT  COMMON_CB.HZB_MIPS_COUNT
+#define HZB_CULLING_HZB_MIPS_COUNT  MESH_CULLING_HZB_MIPS_COUNT
 #include "common/math/hzb_culling.slang"
 
 #include "common/math/contribution_culling.slang"
@@ -79,7 +78,7 @@ bool Geom_Visibility(in COMMON_INST_DATA inst)
 
 #if defined(GEOM_CULLING_CONTRIBUTION_ENABLED)
     if (isContribCullEnabled) {
-        if (!Contribution_Visibility(sbox, COMMON_SCREEN_SIZE, FLOAT2(COMMON_VIS_CONTRIBUTION_FALLOFF))) {
+        if (!Contribution_Visibility(sbox, COMMON_SCREEN_SIZE, FLOAT2(MESH_CULLING_VIS_CONTRIBUTION_FALLOFF))) {
             return false;
         }
     }

@@ -514,13 +514,12 @@ struct COMMON_CB_DATA
     float Z_NEAR;
     float Z_FAR;
 
+    float3 CAM_WPOS;
     uint FLAGS;
+    
+    uint2 PAD0;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
-    uint HZB_MIPS_COUNT;
-
-    float3 CAM_WPOS;
-    float VIS_CONTRIBUTION_FALLOFF;
 };
 
 
@@ -632,40 +631,42 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 };
 
 
-struct MESH_CULLING_PUSH_CONSTS
+struct MESH_CULLING_PER_DRAW_DATA
 {
     uint INST_COUNT;
+    uint HZB_MIPS_COUNT;
+    float VIS_CONTRIBUTION_FALLOFF;
 };
 
 
-struct ZPASS_PUSH_CONSTS
+struct ZPASS_PER_DRAW_DATA
 {
     uint IS_AKILL_PASS;
     uint INST_INFO_IDX;
 };
 
 
-struct GBUFFER_PUSH_CONSTS
+struct GBUFFER_PER_DRAW_DATA
 {
     uint IS_AKILL_PASS;
     uint INST_INFO_IDX;
 };
 
 
-struct IRRADIANCE_MAP_PUSH_CONSTS
+struct IRRADIANCE_MAP_PER_DRAW_DATA
 {
     uint2 ENV_MAP_FACE_SIZE;
 };
 
 
-struct PREFILTERED_ENV_MAP_PUSH_CONSTS
+struct PREFILTERED_ENV_MAP_PER_DRAW_DATA
 {
     uint2 ENV_MAP_FACE_SIZE;
     uint  MIP;
 };
 
 
-struct HZB_GEN_PUSH_CONSTS
+struct HZB_GEN_PER_DRAW_DATA
 {
     uint2 DST_MIP_RESOLUTION;
     uint  DST_MIP_IDX;
@@ -2782,7 +2783,7 @@ static void CreateMeshCullingPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::MESH_CULLING];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::MESH_CULLING].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1))
         .SetDebugName("MESH_CULLING_PIPELINE_LAYOUT");
@@ -2795,7 +2796,7 @@ static void CreateZPassPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::ZPASS];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::ZPASS].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1))
         .SetDebugName("ZPASS_PIPELINE_LAYOUT");
@@ -2808,7 +2809,7 @@ static void CreateGBufferPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GBUFFER];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::GBUFFER].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1)).SetDebugName("GBUFFER_PIPELINE_LAYOUT");
 }
@@ -2860,7 +2861,7 @@ static void CreateIrradianceMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1))
         .SetDebugName("IRRAD_MAP_GEN_PIPELINE_LAYOUT");
@@ -2873,7 +2874,7 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1))
         .SetDebugName("PREFILT_ENV_MAP_GET_PIPELINE_LAYOUT");
@@ -2920,7 +2921,7 @@ static void CreateHZBGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::HZB_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PUSH_CONSTS) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
 
     s_PSOLayouts[(size_t)PassID::HZB_GEN].Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1)).SetDebugName("HZB_GEN_PIPELINE_LAYOUT");
 }
@@ -4847,17 +4848,14 @@ void UpdateGPUCommonConstBuffer()
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
     dbgFlags |= s_useMeshIndirectDraw        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
     dbgFlags |= s_useIndirectLighting        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
-    dbgFlags |= s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_FRUSTUM_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_FRUSTUM_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
 
     constBuff.DBG_FLAGS = dbgFlags;
     constBuff.DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     
-    constBuff.HZB_MIPS_COUNT = s_HZB.GetMipCount();
-
     constBuff.CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
-    constBuff.VIS_CONTRIBUTION_FALLOFF = s_commonVisContributionFalloff;
 
     s_commonConstBuffer.Unmap();
 }
@@ -4982,7 +4980,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::IRRADIANCE_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    IRRADIANCE_MAP_PUSH_CONSTS pushConsts = {};
+    IRRADIANCE_MAP_PER_DRAW_DATA pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
     pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
@@ -5009,7 +5007,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    PREFILTERED_ENV_MAP_PUSH_CONSTS pushConsts = {};
+    PREFILTERED_ENV_MAP_PER_DRAW_DATA pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
     pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
 
@@ -5099,7 +5097,7 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 
     glm::uvec2 dstMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
 
-    HZB_GEN_PUSH_CONSTS pushConsts = {};
+    HZB_GEN_PER_DRAW_DATA pushConsts = {};
     pushConsts.DST_MIP_RESOLUTION = dstMipSize;
     pushConsts.DST_MIP_IDX = 0;
 
@@ -5181,8 +5179,10 @@ void MeshCullingPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::MESH_CULLING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    MESH_CULLING_PUSH_CONSTS pushConsts = {};
+    MESH_CULLING_PER_DRAW_DATA pushConsts = {};
     pushConsts.INST_COUNT = s_cpuInstData.size();
+    pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
+    pushConsts.VIS_CONTRIBUTION_FALLOFF = s_commonVisContributionFalloff;
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -5252,7 +5252,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
         cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
 
-        ZPASS_PUSH_CONSTS pushConsts = {};
+        ZPASS_PER_DRAW_DATA pushConsts = {};
         pushConsts.IS_AKILL_PASS = isAKillPass;
 
         if (s_useMeshIndirectDraw) {
@@ -5437,7 +5437,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         cmdBuffer.CmdSetDepthWriteEnable(s_useDepthPass ? VK_FALSE : VK_TRUE);
     #endif
 
-        GBUFFER_PUSH_CONSTS pushConsts = {};
+        GBUFFER_PER_DRAW_DATA pushConsts = {};
         pushConsts.IS_AKILL_PASS = isAKillPass;
 
         if (s_useMeshIndirectDraw) {

@@ -1,10 +1,7 @@
-#include "registers/common_registers.slang"
-#include "registers/mesh_culling_registers.slang"
-
 #define GEOM_CULLING_FRUSTUM_ENABLED
 #define GEOM_CULLING_CONTRIBUTION_ENABLED
 #define GEOM_CULLING_HZB_ENABLED
-#include "common/common_geom_culling.slang"
+#include "common/geom_culling_incl.slang"
 
 
 void FillDrawCmd(RWStructuredBuffer<uint> dst, in uint dstIndex, in uint firstIndex, in uint indexCount, in uint firstVertex, in uint firstInstance, in uint instanceCount)
@@ -55,7 +52,7 @@ void main(uint DTid : SV_DispatchThreadID)
 {
     const uint instID = DTid;
 
-    if (instID >= PUSH_CONSTS.INST_COUNT) {
+    if (instID >= MESH_CULLING_INST_COUNT) {
         return;
     }
 
