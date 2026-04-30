@@ -38,7 +38,7 @@
 #endif
 
 
-bool Geom_Visibility(in COMMON_INST_DATA inst)
+bool GeomCullingVisibility(in COMMON_INST_DATA inst)
 {
 #if !defined(GEOM_CULLING_ENABLED)
     return true;
@@ -93,6 +93,98 @@ bool Geom_Visibility(in COMMON_INST_DATA inst)
 #endif
     
     return true; 
+}
+
+namespace util
+{
+    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingMeshDataToDrawCmd(in COMMON_MESH_DATA mesh, in uint instID)
+    {
+        COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = (COMMON_CMD_DRAW_INDEXED_INDIRECT)0;
+
+        cmd.INDEX_COUNT = mesh.INDEX_COUNT;
+        cmd.INSTANCE_COUNT = 1;
+        cmd.FIRST_INDEX = mesh.FIRST_INDEX;
+        cmd.FIRST_VERTEX = mesh.FIRST_VERTEX;
+        cmd.FIRST_INSTANCE = instID;
+
+        return cmd;
+    }
+
+
+    void GeomCullingWriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in COMMON_CMD_DRAW_INDEXED_INDIRECT cmd)
+    {
+        static const uint CMD_SIZE_UINT = sizeof(cmd) / sizeof(uint);
+
+        // First uint in the buffer is counter
+        const uint indexUInt = 1 + index * CMD_SIZE_UINT;
+    
+        buffer[indexUInt + 0] = cmd.INDEX_COUNT;
+        buffer[indexUInt + 1] = cmd.INSTANCE_COUNT;
+        buffer[indexUInt + 2] = cmd.FIRST_INDEX;
+        buffer[indexUInt + 3] = cmd.FIRST_VERTEX;
+        buffer[indexUInt + 4] = cmd.FIRST_INSTANCE;
+    }
+
+
+    void GeomCullingGetInstVisBitBatchAndLocalID(in uint instID, out uint batchID, out uint localID)
+    {
+        static const uint VIS_FLAGS_BATCH_SIZE_BITS = sizeof(uint) * 8;
+
+        batchID = instID / (VIS_FLAGS_BATCH_SIZE_BITS);
+        localID = instID % (VIS_FLAGS_BATCH_SIZE_BITS);
+    }
+}
+
+
+bool GeomCullingWasInstVisibleInPrevPass(in uint instID)
+{
+    uint batchID, localID;
+    util::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
+
+    const uint mask = 1u << localID;
+
+    return IS_FLAG_SET(MESH_CULL_VIS_FLAGS_UAV[batchID], mask);
+}
+
+
+void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
+{
+    uint batchID, localID;
+    util::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
+
+    const uint mask = 1u << localID;
+
+    if (isVisible) {
+        InterlockedOr(MESH_CULL_VIS_FLAGS_UAV[batchID], mask);
+    } else {
+        InterlockedAnd(MESH_CULL_VIS_FLAGS_UAV[batchID], ~mask);
+    }
+}
+
+
+void GeomCullingPushInstToCmdQueue(in COMMON_INST_DATA inst, in uint instID)
+{
+    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = util::GeomCullingMeshDataToDrawCmd(COMMON_MESH_DATA_BUFFER[inst.MESH_IDX], instID);
+    const uint flags = COMMON_MATERIALS[inst.MATERIAL_IDX].FLAGS;
+
+    uint idx = 0;
+
+    if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)) {
+        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        MESH_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
+    } else if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_KILL)) {
+        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        MESH_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
+    } else {
+        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        MESH_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
+    }
 }
 
 

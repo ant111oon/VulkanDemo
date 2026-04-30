@@ -4,6 +4,9 @@
 #include "common/system/sys_constants.slang"
 
 
+static const uint GEOM_CULLING_CS_GPOUP_SIZE = 64;
+
+
 struct MESH_CULLING_PER_DRAW_DATA
 {
     uint INST_COUNT;
@@ -25,5 +28,7 @@ struct MESH_CULLING_PER_DRAW_DATA
 [vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> MESH_CULL_OPAQUE_INST_INFO_IDS_UAV;
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> MESH_CULL_AKILL_INST_INFO_IDS_UAV;
 [vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> MESH_CULL_TRANSP_INST_INFO_IDS_UAV;
+
+[vk::binding(6, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> MESH_CULL_VIS_FLAGS_UAV;
 
 #endif

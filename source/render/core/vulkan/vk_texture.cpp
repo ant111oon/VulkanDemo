@@ -156,6 +156,13 @@ namespace vkn
     }
 
 
+    bool TextureView::CheckLayoutConsistency() const
+    {
+        const SubresourceRange& range = GetSubresourceRange();
+        return GetOwner().CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount);
+    }
+
+
     bool TextureView::IsValid() const
     {
         return IsCreated() && m_pOwner->IsCreated();
@@ -295,6 +302,32 @@ namespace vkn
         Object::Destroy();
 
         return *this;
+    }
+
+
+    bool Texture::CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const
+    {
+    #ifdef ENG_BUILD_DEBUG
+        const uint32_t lastLayerIdx = baseLayer + layerCount - 1;
+        const uint32_t lastMipIdx = baseMip + mipCount - 1;
+
+        const VkImageLayout layout = GetAccessState(baseLayer, baseMip).layout;
+
+        for (uint32_t layerIdx = baseLayer; layerIdx <= lastLayerIdx; ++layerIdx) {
+            for (uint32_t mipIdx = baseMip; mipIdx <= lastMipIdx; ++mipIdx) {
+                if (layout != GetAccessState(layerIdx, mipIdx).layout) {
+                    VK_ASSERT_FAIL( 
+                        "Texture %s subresource range (baseLayer: %u, layerCount: %u, baseMip: %u, mipCount: %u) has inconsistent layout", 
+                        GetDebugName(), baseLayer, layerCount, baseMip, mipCount
+                    );
+                    
+                    return false;
+                }
+            }
+        }
+    #endif
+
+        return true;
     }
 
 

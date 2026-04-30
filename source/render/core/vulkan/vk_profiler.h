@@ -74,16 +74,6 @@ namespace vkn
 
 #define ENG_PROFILE_GPU_SCOPED_MARKER_N(CMD_BUFFER, NAME, LABEL) \
     ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, eng::ProfileColor::Grey51)
-
-
-#define ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, COLOR, FMT, ...)                                                            \
-    std::array<char, 256> TracyConcat(localGPUMarkerName_,TracyLine) = {};                                                                 \
-    sprintf_s(TracyConcat(localGPUMarkerName_,TracyLine).data(), TracyConcat(localGPUMarkerName_,TracyLine).size() - 1, FMT, __VA_ARGS__); \
-    ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, TracyConcat(localGPUMarkerName_,TracyLine).data(), COLOR)
-
-
-#define ENG_PROFILE_GPU_SCOPED_MARKER_N_FMT(CMD_BUFFER, NAME, FMT, ...) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 
@@ -92,16 +82,8 @@ namespace vkn
     ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, TracyConcat(localGPUMarker_,TracyLine), LABEL, COLOR)
 
 
-#define ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(CMD_BUFFER, COLOR, FMT, ...) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, TracyConcat(localGPUMarker_,TracyLine), COLOR, FMT, __VA_ARGS__)
-
-
 #define ENG_PROFILE_GPU_SCOPED_MARKER(CMD_BUFFER, LABEL) \
     ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, eng::ProfileColor::Grey51)
-
-
-#define ENG_PROFILE_GPU_SCOPED_MARKER_FMT(CMD_BUFFER, FMT, ...) \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(CMD_BUFFER, eng::ProfileColor::Grey51, FMT, __VA_ARGS__)
 #pragma endregion
 
 
@@ -110,16 +92,12 @@ namespace vkn
 #pragma region Named Markers
 #define ENG_PROFILE_GPU_SCOPED_MARKER_NC(CMD_BUFFER, NAME, LABEL, COLOR)
 #define ENG_PROFILE_GPU_SCOPED_MARKER_N(CMD_BUFFER, NAME, LABEL)
-#define ENG_PROFILE_GPU_SCOPED_MARKER_NC_FMT(CMD_BUFFER, NAME, COLOR, FMT, ...)
-#define ENG_PROFILE_GPU_SCOPED_MARKER_N_FMT(CMD_BUFFER, NAME, FMT, ...)
 #pragma endregion
 
 
 #pragma region Unamed Markers
 #define ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, LABEL, COLOR)
 #define ENG_PROFILE_GPU_SCOPED_MARKER(CMD_BUFFER, LABEL)
-#define ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(CMD_BUFFER, COLOR, FMT, ...)
-#define ENG_PROFILE_GPU_SCOPED_MARKER_FMT(CMD_BUFFER, FMT, ...)
 #pragma endregion
 
 #define ENG_PROFILE_GPU_COLLECT_STATS(CMD_BUFFER)

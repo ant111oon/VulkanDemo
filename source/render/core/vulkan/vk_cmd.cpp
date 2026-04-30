@@ -354,6 +354,20 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdSetViewport(float x, float y, float width, float height, float minDepth, float maxDepth)
+    {
+        VkViewport viewport = {};
+        viewport.x = x;
+        viewport.y = y;
+        viewport.width = width;
+        viewport.height = height;
+        viewport.minDepth = minDepth;
+        viewport.maxDepth = maxDepth;
+
+        return CmdSetViewport(0, 1, &viewport);
+    }
+
+
     CmdBuffer& CmdBuffer::CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
@@ -361,6 +375,18 @@ namespace vkn
         vkCmdSetScissor(m_cmdBuffer, firstScissor, scissorCount, pScissors);
 
         return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)
+    {
+        VkRect2D scissors = {};
+        scissors.offset.x = x;
+        scissors.offset.y = y;
+        scissors.extent.width = width;
+        scissors.extent.height = height;
+
+        return CmdSetScissor(0, 1, &scissors);
     }
 
 

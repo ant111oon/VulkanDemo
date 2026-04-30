@@ -48,6 +48,8 @@ namespace vkn
         
         TextureView& Destroy();
 
+        bool CheckLayoutConsistency() const;
+
         TextureView& SetDebugName(const char* pName);
         const char* GetDebugName() const;
 
@@ -89,6 +91,11 @@ namespace vkn
             VK_ASSERT(IsValid());
             return m_subresRange;
         }
+
+        uint32_t GetViewBaseMip() const { return GetSubresourceRange().baseMipLevel; }
+        uint32_t GetViewMipCount() const { return GetSubresourceRange().levelCount; }
+        uint32_t GetViewBaseArrayLayer() const { return GetSubresourceRange().baseArrayLayer; }
+        uint32_t GetViewLayerCount() const { return GetSubresourceRange().layerCount; }
 
         bool IsValid() const;
 
@@ -142,6 +149,9 @@ namespace vkn
 
         Texture& Create(const TextureCreateInfo& info);
         Texture& Destroy();
+
+        // Check if mips from baseMip to baseMip + mipCount - 1 in layers from baseLayer to baseLayer + layerCount - 1 have same layout
+        bool CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const;
 
         const char* GetDebugName() const
         {

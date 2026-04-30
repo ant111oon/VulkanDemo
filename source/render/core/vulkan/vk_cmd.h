@@ -12,7 +12,9 @@ namespace vkn
     class QueryPool;
     class Buffer;
     class Texture;
+    class TextureView;
     class SCTexture;
+    class SCTextureView;
     class DescriptorBuffer;
     class PSOLayout;
     class PSO;
@@ -180,7 +182,10 @@ namespace vkn
         CmdBuffer& CmdBindPSO(PSO& pso);
 
         CmdBuffer& CmdSetViewport(uint32_t firstViewport, uint32_t viewportCount, const VkViewport* pViewports);
+        CmdBuffer& CmdSetViewport(float x, float y, float width, float height, float minDepth = 0.f, float maxDepth = 1.f);
+
         CmdBuffer& CmdSetScissor(uint32_t firstScissor, uint32_t scissorCount, const VkRect2D* pScissors);
+        CmdBuffer& CmdSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
 
         CmdBuffer& CmdSetDepthCompareOp(VkCompareOp op);
         CmdBuffer& CmdSetDepthWriteEnable(VkBool32 enabled);

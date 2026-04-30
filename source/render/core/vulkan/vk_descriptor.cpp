@@ -389,9 +389,10 @@ namespace vkn
     }
 
 
-    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const TextureView& texture)
+    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const TextureView& view)
     {
         VK_ASSERT(IsCreated());
+        view.CheckLayoutConsistency();
 
         Device& device = GetDevice();
 
@@ -405,24 +406,11 @@ namespace vkn
         void* pBindingPtr = GetDescriptorBindingPtr(m_buffer, setOffset, bindingOffset, elemIdx, descrSize);
 
         VkDescriptorImageInfo imageInfo = {};
-        imageInfo.imageView = texture.Get();
+        imageInfo.imageView = view.Get();
         
-        const TextureView::SubresourceRange& range = texture.GetSubresourceRange();
-
-        const vkn::Texture& owner = texture.GetOwner();
+        const vkn::Texture& owner = view.GetOwner();
+        const TextureView::SubresourceRange& range = view.GetSubresourceRange();
         imageInfo.imageLayout = owner.GetAccessState(range.baseArrayLayer, range.baseMipLevel).layout;
-
-    #ifdef ENG_BUILD_DEBUG
-        const uint32_t lastLayerIdx = range.baseArrayLayer + range.layerCount - 1;
-        const uint32_t lastMipIdx = range.baseMipLevel + range.levelCount - 1;
-
-        for (uint32_t layerIdx = range.baseArrayLayer; layerIdx <= lastLayerIdx; ++layerIdx) {
-            for (uint32_t mipIdx = range.baseMipLevel; mipIdx <= lastMipIdx; ++mipIdx) {
-                VK_ASSERT_MSG(imageInfo.imageLayout == owner.GetAccessState(layerIdx, mipIdx).layout, 
-                    "Texture View %s descriptor subresource range has inconsistent layout", owner.GetDebugName());
-            }
-        }
-    #endif
 
         VkDescriptorGetInfoEXT descriptorGetInfo = {};
         descriptorGetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;

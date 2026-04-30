@@ -228,7 +228,7 @@ struct COMMON_CMD_DRAW_INDEXED_INDIRECT
     uint INDEX_COUNT;
     uint INSTANCE_COUNT;
     uint FIRST_INDEX;
-    int VERTEX_OFFSET;
+    int  FIRST_VERTEX;
     uint FIRST_INSTANCE;
 };
 
