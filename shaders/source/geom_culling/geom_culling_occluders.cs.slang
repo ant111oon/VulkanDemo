@@ -1,3 +1,5 @@
+#define GEOM_CULLING_OCCLUDERS_PASS
+
 #define GEOM_CULLING_FRUSTUM_ENABLED
 #define GEOM_CULLING_CONTRIBUTION_ENABLED
 #include "common/geom_culling_incl.slang"
@@ -13,9 +15,9 @@ void main(uint DTid : SV_DispatchThreadID)
         return;
     }
 
-    // if (!GeomCullingWasInstVisibleInPrevPass(instID)) {
-    //     return;
-    // }
+    if (!GeomCullingWasInstVisibleInPrevPass(instID)) {
+        return;
+    }
 
     const COMMON_INST_DATA inst = COMMON_INST_DATA_BUFFER[instID];
 

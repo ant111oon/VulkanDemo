@@ -2,9 +2,19 @@
 #define GEOM_CULLING_INCL_H
 
 // NOTE:
-//  - GEOM_CULLING_FRUSTUM_ENABLED enables frustum culling
+//  - GEOM_CULLING_FRUSTUM_ENABLED      enables frustum culling
 //  - GEOM_CULLING_CONTRIBUTION_ENABLED enables pixel contribution culling
-//  - GEOM_CULLING_HZB_ENABLED enables HZB culling
+//  - GEOM_CULLING_HZB_ENABLED          enables HZB culling
+//  - GEOM_CULLING_OCCLUDERS_PASS/GEOM_CULLING_OCCLUSION_PASS (mandatory)
+
+
+#if !defined(GEOM_CULLING_OCCLUDERS_PASS) && !defined(GEOM_CULLING_OCCLUSION_PASS)
+    #error One of GEOM_CULLING_OCCLUDERS_PASS or GEOM_CULLING_OCCLUSION_PASS macro must be defined
+#else
+    #if defined(GEOM_CULLING_OCCLUSION_PASS)
+        #define GEOM_CULLING_WRITE_GLOBAL_DATA
+    #endif
+#endif
 
 #if defined(GEOM_CULLING_FRUSTUM_ENABLED) || defined(GEOM_CULLING_CONTRIBUTION_ENABLED) || defined(GEOM_CULLING_HZB_ENABLED)
     #define GEOM_CULLING_ENABLED
@@ -170,20 +180,41 @@ void GeomCullingPushInstToCmdQueue(in COMMON_INST_DATA inst, in uint instID)
     uint idx = 0;
 
     if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)) {
-        InterlockedAdd(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+        InterlockedAdd(GEOM_CULL_TRANSP_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_TRANSP_DRAW_CMDS_UAV, idx, cmd);
         GEOM_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
+
+    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
+        InterlockedAdd(GEOM_CULL_GLOBAL_TRANSP_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_TRANSP_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_GLOBAL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
+    #endif
     } else if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_KILL)) {
-        InterlockedAdd(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+        InterlockedAdd(GEOM_CULL_AKILL_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_AKILL_DRAW_CMDS_UAV, idx, cmd);
         GEOM_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
-    } else {
-        InterlockedAdd(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
+        InterlockedAdd(GEOM_CULL_GLOBAL_AKILL_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_AKILL_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_GLOBAL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
+    #endif
+    } else {
+        InterlockedAdd(GEOM_CULL_OPAQUE_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_OPAQUE_DRAW_CMDS_UAV, idx, cmd);
         GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
+        
+    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
+        InterlockedAdd(GEOM_CULL_GLOBAL_OPAQUE_DRAW_CMDS_UAV[0], 1, idx);
+
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_OPAQUE_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_GLOBAL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
+    #endif
     }
 }
 

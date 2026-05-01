@@ -12,7 +12,7 @@ uint GetZPassInstIdx(uint drawID)
     } else
 #endif
     {
-        return (bool)ZPASS_IS_AKILL_PASS ? ZPASS_AKILL_INST_INFO_IDS[drawID] : ZPASS_OPAQUE_INST_INFO_IDS[drawID];
+        return ZPASS_IS_AKILL_PASS ? ZPASS_AKILL_INST_INFO_IDS[ZPASS_BUFF_IDX][drawID] : ZPASS_OPAQUE_INST_INFO_IDS[ZPASS_BUFF_IDX][drawID];
     }
 }
 

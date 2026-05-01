@@ -1,3 +1,5 @@
+#define GEOM_CULLING_OCCLUSION_PASS
+
 #define GEOM_CULLING_FRUSTUM_ENABLED
 #define GEOM_CULLING_CONTRIBUTION_ENABLED
 #define GEOM_CULLING_HZB_ENABLED
@@ -18,13 +20,15 @@ void main(uint DTid : SV_DispatchThreadID)
 
     const bool visible = GeomCullingVisibility(inst);
 
+    GeomCullingWriteVisFlag(instID, visible);
+
     // Only object that is visible in the current frame
     // and was not drawn in the first pass should be drawn in the second pass
-    const bool shouldDraw = visible /*&& !GeomCullingWasInstVisibleInPrevPass(instID)*/;
+    const bool shouldDraw = visible && !GeomCullingWasInstVisibleInPrevPass(instID);
 
-    if (shouldDraw) {
-        GeomCullingPushInstToCmdQueue(inst, instID);
+    if (!shouldDraw) {
+        return;
     }
 
-    // GeomCullingWriteVisFlag(instID, visible);
+    GeomCullingPushInstToCmdQueue(inst, instID);
 }

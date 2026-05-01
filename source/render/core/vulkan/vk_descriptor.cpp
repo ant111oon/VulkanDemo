@@ -218,7 +218,7 @@ namespace vkn
         VK_ASSERT(IsCreated());
         
         const uint64_t index = GetDescriptorIndex(binding);
-        VK_ASSERT(index != UINT64_MAX);
+        VK_ASSERT_MSG(index != UINT64_MAX, "Failed to find descriptor with binding %u in %s", binding, GetDebugName());
 
         return m_descriptors[index];
     }
