@@ -46,9 +46,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, COMMON_IRRADIANCE_MAP_SIZE);
+    const int2 pixCoord = DTid.xy;
 
-    float2 uv = 2.f * PixelCoordToUV(pixCoord, COMMON_IRRADIANCE_MAP_SIZE) - 1.f;
+    const float2 uv = PixelCoordToUV(pixCoord, COMMON_IRRADIANCE_MAP_SIZE);
     const uint face = DTid.z;
 
     const float3 normal = UVFaceToDir(uv, face);

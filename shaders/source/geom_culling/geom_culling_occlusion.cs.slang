@@ -20,15 +20,13 @@ void main(uint DTid : SV_DispatchThreadID)
 
     const bool visible = GeomCullingVisibility(inst);
 
-    GeomCullingWriteVisFlag(instID, visible);
-
     // Only object that is visible in the current frame
     // and was not drawn in the first pass should be drawn in the second pass
     const bool shouldDraw = visible && !GeomCullingWasInstVisibleInPrevPass(instID);
 
-    if (!shouldDraw) {
-        return;
+    if (shouldDraw) {
+        GeomCullingPushInstToCmdQueue(inst, instID);
     }
 
-    GeomCullingPushInstToCmdQueue(inst, instID);
+    GeomCullingWriteVisFlag(instID, visible);
 }

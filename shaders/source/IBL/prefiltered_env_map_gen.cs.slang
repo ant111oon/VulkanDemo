@@ -62,17 +62,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    uint2 outputSize = ZEROU2;
-    outputSize.xy = COMMON_PREFILTERED_ENV_MAP_SIZE >> PREFILTERED_ENV_MAP_MIP;
+    const int2 pixCoord = DTid.xy;
+    const uint face = DTid.z;
+    
+    const uint2 outputSize = COMMON_PREFILTERED_ENV_MAP_SIZE >> PREFILTERED_ENV_MAP_MIP;
 
-    if (any(DTid.xy >= outputSize)) {
+    if (any(pixCoord >= outputSize)) {
         return;
     }
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, outputSize.xy);
-
-    float2 uv = 2.f * PixelCoordToUV(pixCoord, outputSize.xy) - 1.f;
-    const uint face = DTid.z;
+    const float2 uv = PixelCoordToUV(pixCoord, outputSize.xy);
 
     const float roughness = saturate(COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PREFILTERED_ENV_MAP_MIP);
 

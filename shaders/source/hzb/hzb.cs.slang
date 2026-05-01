@@ -24,7 +24,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
     const uint prevMip = mip - 1u;
     const uint2 srcMipSize = dstMipSize << 1u;
 
-    const int2 dstPixCoord = DispatchThreadIDToPixCoord(DTid, dstMipSize);
+    const int2 dstPixCoord = DTid;
     const int2 srcPixCoord = min(dstPixCoord * 2, srcMipSize - 1);
 
     const int3 texCoord0 = int3(srcPixCoord, 0);

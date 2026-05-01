@@ -967,20 +967,20 @@ static vkn::Buffer s_commonTransformDataBuffer;
 static vkn::Buffer s_commonAABBDataBuffer;
 static vkn::Buffer s_commonInstDataBuffer;
 
-static std::array<vkn::Buffer, 2> s_opaqueGeomDrawCmdBuffers;
-static std::array<vkn::Buffer, 2> s_visOpaqueGeomIDBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_opaqueGeomDrawCmdBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_visOpaqueGeomIDBuffers;
 
 #define GLOBAL_OPAQUE_GEOM_DRAW_CMD_BUFFER s_opaqueGeomDrawCmdBuffers[0]
 #define GLOBAL_VIS_OPAQUE_GEOM_ID_BUFFER   s_visOpaqueGeomIDBuffers[0]
 
-static std::array<vkn::Buffer, 2> s_akillGeomDrawCmdBuffers;
-static std::array<vkn::Buffer, 2> s_visAkillGeomIDBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_akillGeomDrawCmdBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_visAkillGeomIDBuffers;
 
 #define GLOBAL_AKILL_GEOM_DRAW_CMD_BUFFER s_akillGeomDrawCmdBuffers[0]
 #define GLOBAL_VIS_AKILL_GEOM_ID_BUFFER   s_visAkillGeomIDBuffers[0]
 
-static std::array<vkn::Buffer, 2> s_transpGeomDrawCmdBuffers;
-static std::array<vkn::Buffer, 2> s_visTranspGeomIDBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_transpGeomDrawCmdBuffers;
+static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_visTranspGeomIDBuffers;
 
 #define GLOBAL_TRANSP_GEOM_DRAW_CMD_BUFFER s_transpGeomDrawCmdBuffers[0]
 #define GLOBAL_VIS_TRANSP_GEOM_ID_BUFFER   s_visTranspGeomIDBuffers[0]
@@ -4012,9 +4012,7 @@ static void CreateCommonSamplers()
 
 static void WriteZPassDescriptorSet()
 {
-    static_assert(s_visOpaqueGeomIDBuffers.size() == s_visAkillGeomIDBuffers.size());
-
-    for (size_t i = 0; i < s_visOpaqueGeomIDBuffers.size(); ++i) {
+    for (size_t i = 0; i < GEOM_CULLING_PASS_COUNT; ++i) {
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEPTH, ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, i, s_visOpaqueGeomIDBuffers[i]);
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEPTH, ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, i, s_visAkillGeomIDBuffers[i]);
     }
@@ -5298,19 +5296,25 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomCullingClearCmdBuffers(vkn::CmdBuffer& cmdBuffer)
 {
-    cmdBuffer
-        .BeginBarrierList()
-            .AddBufferBarrier(GLOBAL_OPAQUE_GEOM_DRAW_CMD_BUFFER, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-            .AddBufferBarrier(GLOBAL_AKILL_GEOM_DRAW_CMD_BUFFER, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-            .AddBufferBarrier(GLOBAL_TRANSP_GEOM_DRAW_CMD_BUFFER, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-        .Push();
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    for (size_t i = 0; i < GEOM_CULLING_PASS_COUNT; ++i) {
+        barriers
+            .AddBufferBarrier(s_opaqueGeomDrawCmdBuffers[i], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_akillGeomDrawCmdBuffers[i], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_transpGeomDrawCmdBuffers[i], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    }
+
+    barriers.Push();
 
     static constexpr VkDeviceSize COUNTER_OFFSET = 0; 
     static constexpr VkDeviceSize COUNTER_SIZE = sizeof(glm::uint);
 
-    cmdBuffer.CmdFillBuffer(GLOBAL_OPAQUE_GEOM_DRAW_CMD_BUFFER, 0, COUNTER_OFFSET, COUNTER_SIZE);
-    cmdBuffer.CmdFillBuffer(GLOBAL_AKILL_GEOM_DRAW_CMD_BUFFER,  0, COUNTER_OFFSET, COUNTER_SIZE);
-    cmdBuffer.CmdFillBuffer(GLOBAL_TRANSP_GEOM_DRAW_CMD_BUFFER, 0, COUNTER_OFFSET, COUNTER_SIZE);
+    for (size_t i = 0; i < GEOM_CULLING_PASS_COUNT; ++i) {
+        cmdBuffer.CmdFillBuffer(s_opaqueGeomDrawCmdBuffers[i], 0, COUNTER_OFFSET, COUNTER_SIZE);
+        cmdBuffer.CmdFillBuffer(s_akillGeomDrawCmdBuffers[i],  0, COUNTER_OFFSET, COUNTER_SIZE);
+        cmdBuffer.CmdFillBuffer(s_transpGeomDrawCmdBuffers[i], 0, COUNTER_OFFSET, COUNTER_SIZE);
+    }
 }
 
 
@@ -5389,7 +5393,7 @@ static void GeomCullingPassOcclusion(vkn::CmdBuffer& cmdBuffer)
 
 void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t bufferIdx, bool needClearDepth)
 {
-    CORE_ASSERT(bufferIdx <= s_opaqueGeomDrawCmdBuffers.size());
+    CORE_ASSERT(bufferIdx <= GEOM_CULLING_PASS_COUNT);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 

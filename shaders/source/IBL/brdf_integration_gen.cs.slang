@@ -56,9 +56,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const int2 pixCoord = DispatchThreadIDToPixCoord(DTid.xy, COMMON_BRDF_INTEGRATION_LUT_SIZE);
-
-    float2 uv = PixelCoordToUV(pixCoord, COMMON_BRDF_INTEGRATION_LUT_SIZE);
+    const int2 pixCoord = DTid.xy;
+    const float2 uv = PixelCoordToUV(pixCoord, COMMON_BRDF_INTEGRATION_LUT_SIZE);
 
     BRDF_INTEGRATION_GEN_OUTPUT_UAV[pixCoord] = float4(IntegrateBRDF(uv.x, uv.y), 0.f, 0.f);
 }

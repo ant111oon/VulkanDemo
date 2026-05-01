@@ -107,55 +107,46 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 }
 
 
-float3 UVFaceToDir(in float2 uv, in uint face)
+float3 UVFaceToDir(in float2 uv01, in uint face)
 {
+    float2 uv = uv01 * 2.0f - 1.0f;
+
     switch (face) {
-        case 0: return normalize(float3( 1.f,   uv.y, -uv.x)); // +X
-        case 1: return normalize(float3(-1.f,   uv.y,  uv.x)); // -X
-        case 2: return normalize(float3( uv.x,  1.f,  -uv.y)); // +Y
-        case 3: return normalize(float3( uv.x, -1.f,   uv.y)); // -Y
-        case 4: return normalize(float3( uv.x,  uv.y,  1.f));  // +Z
-        case 5: return normalize(float3(-uv.x,  uv.y, -1.f));  // -Z
+        case 0: return normalize(float3( 1.f,  -uv.y, -uv.x)); // +X
+        case 1: return normalize(float3(-1.f,  -uv.y,  uv.x)); // -X
+        case 2: return normalize(float3( uv.x,  1.f,  +uv.y)); // +Y
+        case 3: return normalize(float3( uv.x, -1.f,  -uv.y)); // -Y
+        case 4: return normalize(float3( uv.x, -uv.y,  1.f));  // +Z
+        case 5: return normalize(float3(-uv.x, -uv.y, -1.f));  // -Z
     }
 
     return M3D_AXIS_X;
 }
 
 
-float3 PixelCoordToUV(in uint3 coord, in uint3 size)
+float3 PixelCoordToUVW(in uint3 coord, in uint3 size)
 {
     size = max(size, ONEU3);
 
-    // Pixel coords have (0, 0) in top left corner but UV (0, 0) is in bottom left corner
-    return float3(coord.x, size.y - coord.y, coord.z) / size;
+    return (float3(coord) + 0.5f) / float3(size);
 }
 
 
 float2 PixelCoordToUV(in uint2 coord, in uint2 size)
 {
-    return PixelCoordToUV(uint3(coord, 0), uint3(size, 1)).xy;
+    return PixelCoordToUVW(uint3(coord, 0), uint3(size, 1)).xy;
 }
 
 
 float2 UVToNDC(in float2 uv)
 {
-#ifdef ENV_API_VULKAN
-    // Vulkan has Y NDC towards -Y
-    return 2.f * float2(uv.x, 1.f - uv.y) - 1.f;
-#else
     return 2.f * uv - 1.f;
-#endif
 }
 
 
 float2 NDCToUV(in float2 ndc)
 {
-#ifdef ENV_API_VULKAN
-    // Vulkan has Y NDC towards -Y
-    return 0.5f * float2(ndc.x, -ndc.y) + 0.5f;
-#else
     return 0.5f * ndc + 0.5f;
-#endif
 }
 
 
