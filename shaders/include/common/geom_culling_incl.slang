@@ -21,16 +21,16 @@
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
 #define HZB_CULLING_VIEW_PROJ_MATR  FRUSTUM_CULLING_VIEW_PROJ_MATR
-#define HZB_CULLING_HZB_MIPS_COUNT  MESH_CULLING_HZB_MIPS_COUNT
+#define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #include "common/math/hzb_culling.slang"
 
 #include "common/math/contribution_culling.slang"
 
 
 #ifndef ENV_RELEASE
-    #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         COMMON_DBG_IS_MESH_GPU_FRUSTUM_CULLING_ENABLED
-    #define DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED    COMMON_DBG_IS_MESH_GPU_CONTRIBUTION_CULLING_ENABLED
-    #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             COMMON_DBG_IS_MESH_GPU_HZB_CULLING_ENABLED
+    #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED
+    #define DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED    COMMON_DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED
+    #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED
 #else
     #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         true
     #define DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED    true
@@ -78,7 +78,7 @@ bool GeomCullingVisibility(in COMMON_INST_DATA inst)
 
 #if defined(GEOM_CULLING_CONTRIBUTION_ENABLED)
     if (isContribCullEnabled) {
-        if (!Contribution_Visibility(sbox, COMMON_SCREEN_SIZE, FLOAT2(MESH_CULLING_VIS_CONTRIBUTION_FALLOFF))) {
+        if (!Contribution_Visibility(sbox, COMMON_SCREEN_SIZE, FLOAT2(GEOM_CULLING_VIS_CONTRIBUTION_FALLOFF))) {
             return false;
         }
     }
@@ -143,7 +143,7 @@ bool GeomCullingWasInstVisibleInPrevPass(in uint instID)
 
     const uint mask = 1u << localID;
 
-    return IS_FLAG_SET(MESH_CULL_VIS_FLAGS_UAV[batchID], mask);
+    return IS_FLAG_SET(GEOM_CULL_VIS_FLAGS_UAV[batchID], mask);
 }
 
 
@@ -155,9 +155,9 @@ void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
     const uint mask = 1u << localID;
 
     if (isVisible) {
-        InterlockedOr(MESH_CULL_VIS_FLAGS_UAV[batchID], mask);
+        InterlockedOr(GEOM_CULL_VIS_FLAGS_UAV[batchID], mask);
     } else {
-        InterlockedAnd(MESH_CULL_VIS_FLAGS_UAV[batchID], ~mask);
+        InterlockedAnd(GEOM_CULL_VIS_FLAGS_UAV[batchID], ~mask);
     }
 }
 
@@ -170,20 +170,20 @@ void GeomCullingPushInstToCmdQueue(in COMMON_INST_DATA inst, in uint instID)
     uint idx = 0;
 
     if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)) {
-        InterlockedAdd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+        InterlockedAdd(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
-        MESH_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
     } else if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_KILL)) {
-        InterlockedAdd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+        InterlockedAdd(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
-        MESH_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
     } else {
-        InterlockedAdd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
+        InterlockedAdd(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV[0], 1, idx);
 
-        util::GeomCullingWriteDrawCmd(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
-        MESH_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
+        util::GeomCullingWriteDrawCmd(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV, idx, cmd);
+        GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
     }
 }
 

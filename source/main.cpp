@@ -530,10 +530,10 @@ enum class COMMON_DBG_FLAG_MASKS
     USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x4,
     USE_ACES_TONE_MAPPING_MASK = 0x8,
     USE_INDIRECT_LIGHTING_MASK = 0x10,
-    USE_MESH_INDIRECT_DRAW_MASK = 0x20,
-    USE_MESH_GPU_FRUSTUM_CULLING_MASK = 0x40,
-    USE_MESH_GPU_CONTRIBUTION_CULLING_MASK = 0x80,
-    USE_MESH_GPU_HZB_CULLING_MASK = 0x100,
+    USE_GEOM_INDIRECT_DRAW_MASK = 0x20,
+    USE_GEOM_GPU_FRUSTUM_CULLING_MASK = 0x40,
+    USE_GEOM_GPU_CONTRIBUTION_CULLING_MASK = 0x80,
+    USE_GEOM_GPU_HZB_CULLING_MASK = 0x100,
 };
 
 
@@ -631,10 +631,10 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 };
 
 
-struct MESH_CULLING_PER_DRAW_DATA
+struct GEOM_CULLING_PER_DRAW_DATA
 {
-    uint INST_COUNT;
-    uint HZB_MIPS_COUNT;
+    uint  INST_COUNT;
+    uint  HZB_MIPS_COUNT;
     float VIS_CONTRIBUTION_FALLOFF;
 };
 
@@ -797,13 +797,13 @@ static constexpr size_t COMMON_AABB_BUFFER_DESCRIPTOR_SLOT = 9;
 static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
 static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 11;
 
-static constexpr size_t MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 3;
-static constexpr size_t MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 5;
-static constexpr size_t MESH_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT = 6;
+static constexpr size_t GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t GEOM_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 5;
+static constexpr size_t GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT = 6;
 
 static constexpr size_t ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
@@ -2519,13 +2519,13 @@ static void CreateGeomCullingOccludersDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2543,13 +2543,13 @@ static void CreateGeomCullingOcclusionDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(MESH_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2813,7 +2813,7 @@ static void CreateDescriptorSets()
 
 static void CreateGeomCullingOccludersPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
@@ -2826,7 +2826,7 @@ static void CreateGeomCullingOccludersPipelineLayout()
 
 static void CreateGeomCullingOcclusionPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MESH_CULLING_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
@@ -3684,7 +3684,7 @@ static void CreateCullingResources()
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_commonOpaqueMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_MESH_DRAW_CMD_BUFFER");
+    s_commonOpaqueMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_OPAQUE_GEOM_DRAW_CMD_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -3696,7 +3696,7 @@ static void CreateCullingResources()
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
-    s_commonAKillMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_MESH_DRAW_CMD_BUFFER");
+    s_commonAKillMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_AKILL_GEOM_DRAW_CMD_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -3708,7 +3708,7 @@ static void CreateCullingResources()
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
-    s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_MESH_DRAW_CMD_BUFFER");
+    s_commonTranspMeshDrawCmdBuffer.Create(createInfo).SetDebugName("COMMON_TRANSP_GEOM_DRAW_CMD_BUFFER");
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
@@ -3970,38 +3970,38 @@ static void WriteZPassDescriptorSet()
 static void WriteGeomCullingOccludersDescriptorSet()
 {
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
+        GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
+        GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
+        GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
+        GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
+        GEOM_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
+        GEOM_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
-        MESH_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_commonGeomVisFlagsBuffer);
+        GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_commonGeomVisFlagsBuffer);
 }
 
 
 static void WriteGeomCullingOcclusionDescriptorSet()
 {
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
+        GEOM_CULL_OPAQUE_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonOpaqueMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
+        GEOM_CULL_AKILL_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonAKillMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
+        GEOM_CULL_TRANSP_INDIRECT_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_commonTranspMeshDrawCmdBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
+        GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledOpaqueInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
+        GEOM_CULL_AKILL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledAKillInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
+        GEOM_CULL_TRANSP_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, 0, s_commonCulledTranspInstInfoIDsBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
-        MESH_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_commonGeomVisFlagsBuffer);
+        GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_commonGeomVisFlagsBuffer);
 }
 
 
@@ -4950,11 +4950,11 @@ void UpdateGPUCommonConstBuffer()
 
     uint32_t dbgFlags = 0;
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
-    dbgFlags |= s_useMeshIndirectDraw        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_INDIRECT_DRAW_MASK : 0;
-    dbgFlags |= s_useIndirectLighting        ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_FRUSTUM_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_CONTRIBUTION_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_MESH_GPU_HZB_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshIndirectDraw                            ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_INDIRECT_DRAW_MASK : 0;
+    dbgFlags |= s_useIndirectLighting                            ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_FRUSTUM_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_CONTRIBUTION_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_HZB_CULLING_MASK : 0;
 
     constBuff.DBG_FLAGS = dbgFlags;
     constBuff.DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
@@ -5271,7 +5271,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)pass, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    MESH_CULLING_PER_DRAW_DATA pushConsts = {};
+    GEOM_CULLING_PER_DRAW_DATA pushConsts = {};
     pushConsts.INST_COUNT = s_cpuInstData.size();
     pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
     pushConsts.VIS_CONTRIBUTION_FALLOFF = s_commonVisContributionFalloff;

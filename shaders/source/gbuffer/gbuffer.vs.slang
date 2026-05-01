@@ -7,7 +7,7 @@
 uint GetGBufferInstIdx(uint drawID)
 {
 #ifndef ENV_RELEASE
-    if (!COMMON_DBG_IS_MESH_INDIRECT_DRAW_ENABLED) {
+    if (!COMMON_DBG_IS_GEOM_INDIRECT_DRAW_ENABLED) {
         return GBUFFER_INST_INFO_IDX;
     } else
 #endif
