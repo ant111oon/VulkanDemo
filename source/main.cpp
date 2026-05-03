@@ -669,6 +669,7 @@ struct PREFILTERED_ENV_MAP_PER_DRAW_DATA
 
 struct HZB_GEN_PER_DRAW_DATA
 {
+    uint2 SRC_MIP_RESOLUTION;
     uint2 DST_MIP_RESOLUTION;
     uint  DST_MIP_IDX;
 };
@@ -853,7 +854,7 @@ static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
-static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 1024;
+static constexpr uint32_t MAX_INDIRECT_DRAW_CMD_COUNT = 8192;
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 16384;
 static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 2048;
 
@@ -879,7 +880,7 @@ static constexpr glm::uvec2 COMMON_IRRADIANCE_MAP_SIZE       = glm::uvec2(32);
 static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE  = glm::uvec2(glm::uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
-static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 8;
+static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
 static constexpr uint32_t GEOM_CULLING_CS_GPOUP_SIZE = 64;
 static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 
@@ -3702,13 +3703,15 @@ static void UploadGPUDbgTextures()
 
 static void CreateCullingResources()
 {
+    CORE_ASSERT(s_cpuInstData.size() <= MAX_INDIRECT_DRAW_CMD_COUNT);
+
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
     vkn::BufferCreateInfo createInfo = {};
     createInfo.pDevice = &s_vkDevice;
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
+    createInfo.size = sizeof(glm::uint) + s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.pAllocInfo = &allocInfo;
@@ -3718,14 +3721,14 @@ static void CreateCullingResources()
     }
     
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visOpaqueGeomIDBuffers.size(); ++i) {
         s_visOpaqueGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_OPAQUE_GEOM_ID_BUFFER_%zu", i);
     }
 
 
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
+    createInfo.size = sizeof(glm::uint) + s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
@@ -3734,14 +3737,14 @@ static void CreateCullingResources()
     }
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visAkillGeomIDBuffers.size(); ++i) {
         s_visAkillGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_AKILL_GEOM_ID_BUFFER_%zu", i);
     }
 
 
-    createInfo.size = sizeof(glm::uint) + MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
+    createInfo.size = sizeof(glm::uint) + s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT | 
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
@@ -3750,7 +3753,7 @@ static void CreateCullingResources()
     }
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    createInfo.size = MAX_INDIRECT_DRAW_CMD_COUNT * sizeof(glm::uint);
+    createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visTranspGeomIDBuffers.size(); ++i) {
         s_visTranspGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_TRANSP_GEOM_ID_BUFFER_%zu", i);
@@ -5248,9 +5251,11 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
                 VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
         .Push();
 
-    glm::uvec2 dstMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
+    glm::uvec2 srcMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
+    glm::uvec2 dstMipSize = srcMipSize;
 
     HZB_GEN_PER_DRAW_DATA pushConsts = {};
+    pushConsts.SRC_MIP_RESOLUTION = dstMipSize;
     pushConsts.DST_MIP_RESOLUTION = dstMipSize;
     pushConsts.DST_MIP_IDX = 0;
 
@@ -5263,7 +5268,8 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     );
 
     for (uint32_t mip = 1; mip < s_HZB.GetMipCount(); ++mip) {
-        dstMipSize = glm::max(dstMipSize >> 1u, ONEU2);
+        srcMipSize = dstMipSize;
+        dstMipSize = glm::max(srcMipSize >> 1u, ONEU2);
 
         cmdBuffer
             .BeginBarrierList()
@@ -5273,6 +5279,7 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
                     VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1)
             .Push();
 
+        pushConsts.SRC_MIP_RESOLUTION = srcMipSize;
         pushConsts.DST_MIP_RESOLUTION = dstMipSize;
         pushConsts.DST_MIP_IDX = mip;
 
@@ -5458,7 +5465,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
              cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, sizeof(glm::uint), drawCmdBuffer, 0, 
-                MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
+                s_cpuInstData.size(), sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
 
@@ -5655,7 +5662,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
             
             cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, sizeof(glm::uint), drawCmdBuffer, 0, 
-                MAX_INDIRECT_DRAW_CMD_COUNT, sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
+                s_cpuInstData.size(), sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
         } else {
             ENG_PROFILE_SCOPED_MARKER_C("GBuffer_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
 

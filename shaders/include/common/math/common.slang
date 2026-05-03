@@ -35,37 +35,61 @@ bool IsZero(in float4 vec)
 }
 
 
-float Min2(in float2 val)
+float Min(in float a, in float b)
+{
+    return min(a, b);
+}
+
+
+float Min(in float a, in float b, in float c)
+{
+    return min(min(a, b), c);
+}
+
+
+float Min(in float2 val)
 {
     return min(val.x, val.y);
 }
 
 
-float Min3(in float3 val)
+float Min(in float3 val)
 {
     return min(min(val.x, val.y), val.z);
 }
 
 
-float Min4(in float4 val)
+float Min(in float4 val)
 {
     return min(min(val.x, val.y), min(val.z, val.w));
 }
 
 
-float Max2(in float2 val)
+float Max(in float a, in float b)
+{
+    return max(a, b);
+}
+
+
+float Max(in float a, in float b, in float c)
+{
+    return max(max(a, b), c);
+}
+
+
+float Max(in float2 val)
 {
     return max(val.x, val.y);
 }
 
 
-float Max3(in float3 val)
+float Max(in float3 val)
 {
     return max(max(val.x, val.y), val.z);
 }
 
 
-float Max4(in float4 val)
+float Max(in float4 val)
 {
     return max(max(val.x, val.y), max(val.z, val.w));
 }
@@ -109,7 +133,7 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 
 float3 UVFaceToDir(in float2 uv01, in uint face)
 {
-    float2 uv = uv01 * 2.0f - 1.0f;
+    float2 uv = UVToNDC(uv01);
 
     switch (face) {
         case 0: return normalize(float3( 1.f,  -uv.y, -uv.x)); // +X

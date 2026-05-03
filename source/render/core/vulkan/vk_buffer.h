@@ -97,7 +97,7 @@ namespace vkn
         bool IsPersistentlyMapped() const
         {
             VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_PERSISTANTLY_MAPPED);
+            return m_state.test(BIT_IS_PERSISTENTLY_MAPPED);
         }
 
         bool IsUniformBuffer() const
@@ -153,7 +153,7 @@ namespace vkn
             BIT_IS_INDEX_BUFFER,
             BIT_IS_DESCRIPTOR_BUFFER,
             BIT_IS_MAPPED,
-            BIT_IS_PERSISTANTLY_MAPPED,
+            BIT_IS_PERSISTENTLY_MAPPED,
             BIT_IS_DEVICE_ADDRESS,
             BIT_COUNT,
         };

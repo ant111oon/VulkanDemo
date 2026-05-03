@@ -106,7 +106,7 @@ namespace vkn
         // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
 
         VK_ASSERT_MSG(m_buffer != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
-        VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
+        VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan buffer memory");
 
         if ((info.usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0) {
             m_state.set(BIT_IS_DEVICE_ADDRESS, true);
@@ -134,12 +134,8 @@ namespace vkn
             VK_ASSERT_MSG(m_state.test(BIT_IS_DESCRIPTOR_BUFFER), "Invalid buffer usage type");
         }
 
-        if ((info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
-            m_state.set(BIT_IS_DESCRIPTOR_BUFFER, true);
-        }
-
         if ((info.pAllocInfo->flags & VMA_ALLOCATION_CREATE_MAPPED_BIT) != 0) {
-            m_state.set(BIT_IS_PERSISTANTLY_MAPPED, true);
+            m_state.set(BIT_IS_PERSISTENTLY_MAPPED, true);
         }
 
         SetCreated(true);

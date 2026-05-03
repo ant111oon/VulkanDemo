@@ -58,10 +58,10 @@ bool HZB_Visibility(in SBOX sbox)
     samples.w = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.GetCornerUR(), mip).x;
 
 #ifdef ENV_REVERSED_Z
-    const float depth = Min4(samples);
+    const float depth = Min(samples);
     return sbox.closestZ >= depth;
 #else
-    const float depth = Max4(samples);
+    const float depth = Max(samples);
     return sbox.closestZ <= depth;
 #endif
 }
