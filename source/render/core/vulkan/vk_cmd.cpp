@@ -420,10 +420,10 @@ namespace vkn
         blitInfo.dstImage = dstTexture.Get();
         
         const VkImageSubresourceLayers& srcSubres = regions[0].srcSubresource;
-        blitInfo.srcImageLayout = srcTexture.GetAccessState(srcSubres.baseArrayLayer, srcSubres.mipLevel).layout;
+        blitInfo.srcImageLayout = srcTexture.GetAccessTracker().GetState(srcSubres.baseArrayLayer, srcSubres.mipLevel).layout;
 
         const VkImageSubresourceLayers& dstSubres = regions[0].dstSubresource;
-        blitInfo.dstImageLayout = dstTexture.GetAccessState(dstSubres.baseArrayLayer, dstSubres.mipLevel).layout;
+        blitInfo.dstImageLayout = dstTexture.GetAccessTracker().GetState(dstSubres.baseArrayLayer, dstSubres.mipLevel).layout;
 
         m_blitCache.resize(regions.size());
         for (size_t i = 0; i < m_blitCache.size(); ++i) {
@@ -531,7 +531,7 @@ namespace vkn
         copyInfo.dstImage = dstTexture.Get();
 
         const VkImageSubresourceLayers& dstSubres = regions[0].texSubresource;
-        copyInfo.dstImageLayout = dstTexture.GetAccessState(dstSubres.baseArrayLayer, dstSubres.mipLevel).layout;
+        copyInfo.dstImageLayout = dstTexture.GetAccessTracker().GetState(dstSubres.baseArrayLayer, dstSubres.mipLevel).layout;
 
         m_bufImageCopyCache.resize(regions.size());
         for (size_t i = 0; i < m_bufImageCopyCache.size(); ++i) {
@@ -703,11 +703,14 @@ namespace vkn
         for (size_t i = 0; i < m_barrierList.GetBufferBarriersCount(); ++i) {
             const BarrierList::BufferBarrierData& data = m_barrierList.GetBufferBarrierByIdx(i);
 
+            BufferAccessTracker& tracker = data.pBuffer->GetAccessTracker();
+            const BufferAccessTracker::State& state = tracker.GetState();
+
             VkBufferMemoryBarrier2 barrier = {};
             barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
             barrier.buffer = data.pBuffer->Get();
-            barrier.srcStageMask = data.pBuffer->GetStageMask();
-            barrier.srcAccessMask = data.pBuffer->GetAccessMask();
+            barrier.srcStageMask = state.stageMask;
+            barrier.srcAccessMask = state.accessMask;
             barrier.dstStageMask = data.dstStageMask;
             barrier.dstAccessMask = data.dstAccessMask;
             barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -715,7 +718,7 @@ namespace vkn
             barrier.offset = data.offset;
             barrier.size = data.size;
 
-            data.pBuffer->Transit(data.dstStageMask, data.dstAccessMask);
+            tracker.Transit(data.dstStageMask, data.dstAccessMask);
 
             bufferBarriers.emplace_back(barrier);
         }
@@ -727,16 +730,11 @@ namespace vkn
             const BarrierList::TextureBarrierData& data = m_barrierList.GetTextureBarrierByIdx(i);
 
             Texture* pTexture = data.pTexture;
-            const Texture::AccessState& currState = pTexture->GetAccessState(data.baseLayer, data.baseMip);
+            
+            TextureAccessTracker& accessTracker = pTexture->GetAccessTracker();
+            accessTracker.CheckLayoutConsistency(data.baseLayer, data.layerCount, data.baseMip, data.mipCount);
 
-        #ifdef ENG_BUILD_DEBUG
-            for (uint32_t layer = 0; layer < data.layerCount; ++layer) {
-                for (uint32_t mip = 0; mip < data.mipCount; ++mip) {
-                    VK_ASSERT_MSG(currState == pTexture->GetAccessState(data.baseLayer + layer, data.baseMip + mip),
-                        "Texture %s has different access state for required layers and mips", pTexture->GetDebugName().data());
-                }
-            }
-        #endif
+            const TextureAccessTracker::State& currState = accessTracker.GetState(data.baseLayer, data.baseMip);
 
             VkImageMemoryBarrier2 barrier = CreateImageMemoryBarrier2Data(
                 pTexture->Get(),
@@ -746,7 +744,7 @@ namespace vkn
                 data.dstAspectMask, data.baseMip, data.mipCount, data.baseLayer, data.layerCount
             );
 
-            pTexture->Transit(data.baseMip, data.mipCount, data.baseLayer, data.layerCount, data.dstLayout, data.dstStageMask, data.dstAccessMask);
+            accessTracker.Transit(data.baseMip, data.mipCount, data.baseLayer, data.layerCount, data.dstLayout, data.dstStageMask, data.dstAccessMask);
 
             textureBarriers.emplace_back(barrier);
         }
@@ -754,15 +752,18 @@ namespace vkn
         for (size_t i = 0; i < m_barrierList.GetSCTextureBarriersCount(); ++i) {
             const BarrierList::SCTextureBarrierData& data = m_barrierList.GetSCTextureBarrierByIdx(i);
 
+            TextureAccessTracker& tracker = data.pTexture->GetAccessTracker();
+            const TextureAccessTracker::State& accessState = tracker.GetState(0, 0);
+
             VkImageMemoryBarrier2 barrier = CreateImageMemoryBarrier2Data(
                 data.pTexture->Get(),
-                data.pTexture->GetStageMask(), data.dstStageMask,
-                data.pTexture->GetAccessMask(), data.dstAccessMask,
-                data.pTexture->GetLayout(), data.dstLayout,
+                accessState.stageMask, data.dstStageMask,
+                accessState.accessMask, data.dstAccessMask,
+                accessState.layout, data.dstLayout,
                 data.dstAspectMask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
             );
 
-            data.pTexture->Transit(data.dstLayout, data.dstStageMask, data.dstAccessMask);
+            tracker.Transit(0, 1, 0, 1, data.dstLayout, data.dstStageMask, data.dstAccessMask);
 
             textureBarriers.emplace_back(barrier);
         }

@@ -148,9 +148,7 @@ namespace vkn
         m_extent = extent;
         m_format = format;
 
-        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        m_currAccessMask = VK_ACCESS_2_NONE;
+        m_accessTracker.Create(VK_IMAGE_LAYOUT_UNDEFINED, 1, 1);
 
         return *this;
     }
@@ -167,15 +165,27 @@ namespace vkn
         m_extent = {};
         m_format = {};
 
-        m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        m_currAccessMask = VK_ACCESS_2_NONE;
+        m_accessTracker.Destroy();
 
         Base::Destroy([](VkImage& image) {
             image = VK_NULL_HANDLE;
         });
 
         return *this;        
+    }
+
+
+    TextureAccessTracker& SCTexture::GetAccessTracker()
+    {
+        VK_ASSERT(IsCreated());
+        return m_accessTracker;
+    }
+
+
+    const TextureAccessTracker& SCTexture::GetAccessTracker() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_accessTracker;
     }
 
 
@@ -216,16 +226,6 @@ namespace vkn
     uint32_t SCTexture::GetSizeY() const
     {
         return GetSize().height;
-    }
-
-
-    void SCTexture::Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
-    {
-        VK_ASSERT(IsCreated());
-        
-        m_currLayout = dstLayout;
-        m_currStageMask = dstStageMask;
-        m_currAccessMask = dstAccessMask;
     }
 
 

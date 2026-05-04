@@ -46,11 +46,9 @@ namespace vkn
         std::swap(m_allocInfo, buffer.m_allocInfo);
         
         std::swap(m_size, buffer.m_size);
-
         std::swap(m_deviceAddress, buffer.m_deviceAddress);
 
-        std::swap(m_currStageMask, buffer.m_currStageMask);
-        std::swap(m_currAccessMask, buffer.m_currAccessMask);
+        std::swap(m_accessTracker, buffer.m_accessTracker);
 
         std::swap(m_state, buffer.m_state);
 
@@ -166,13 +164,10 @@ namespace vkn
         VK_ASSERT(!IsMapped());
 
         m_allocInfo = {};
-
         m_size = 0;
-
         m_deviceAddress = 0;
 
-        m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        m_currAccessMask = VK_ACCESS_2_NONE;
+        m_accessTracker.Destroy();
 
         m_pDevice = nullptr;
         m_state.reset();
@@ -315,11 +310,16 @@ namespace vkn
     }
 
 
-    void Buffer::Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask)
+    BufferAccessTracker& Buffer::GetAccessTracker()
     {
         VK_ASSERT(IsCreated());
+        return m_accessTracker;
+    }
 
-        m_currStageMask = dstStage;
-        m_currAccessMask = dstAccessMask;
+
+    const BufferAccessTracker& Buffer::GetAccessTracker() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_accessTracker;
     }
 }

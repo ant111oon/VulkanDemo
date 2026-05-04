@@ -3,6 +3,8 @@
 #include "vk_device.h"
 #include "vk_memory.h"
 
+#include "vk_resource_access_tracker.h"
+
 
 namespace vkn
 {
@@ -63,19 +65,8 @@ namespace vkn
         bool HasDeviceAddress() const;
 
     private:
-        void Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask);
-
-        VkPipelineStageFlags2 GetStageMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currStageMask;
-        }
-
-        VkAccessFlags2 GetAccessMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currAccessMask;
-        }
+        BufferAccessTracker& GetAccessTracker();
+        const BufferAccessTracker& GetAccessTracker() const;
 
     private:
         enum StateBits
@@ -97,11 +88,9 @@ namespace vkn
         VmaAllocationInfo m_allocInfo = {};
 
         VkDeviceSize m_size = 0;
-
         VkDeviceAddress m_deviceAddress = 0;
 
-        VkPipelineStageFlags2 m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        VkAccessFlags2        m_currAccessMask = VK_ACCESS_2_NONE;
+        BufferAccessTracker m_accessTracker = {};
 
         std::bitset<BIT_COUNT> m_state = {};
     };

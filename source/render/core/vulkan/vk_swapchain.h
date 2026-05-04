@@ -1,7 +1,9 @@
 #pragma once
 
 #include "vk_surface.h"
-#include "vk_texture.h"
+#include "vk_device.h"
+
+#include "vk_resource_access_tracker.h"
 
 
 namespace vkn
@@ -35,25 +37,8 @@ namespace vkn
         SCTexture& Create(Device* pDevice, VkImage image, VkImageType type, VkExtent2D extent, VkFormat format);
         SCTexture& Destroy();
 
-        void Transit(VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
-
-        VkImageLayout GetLayout() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currLayout;
-        }
-
-        VkPipelineStageFlags2 GetStageMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currStageMask;
-        }
-
-        VkAccessFlags2 GetAccessMask() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currAccessMask;
-        }
+        TextureAccessTracker& GetAccessTracker();
+        const TextureAccessTracker& GetAccessTracker() const;
 
     private:
         Device* m_pDevice = nullptr;
@@ -62,9 +47,7 @@ namespace vkn
         VkExtent2D m_extent = {};
         VkFormat m_format = {};
 
-        VkImageLayout         m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED; 
-        VkPipelineStageFlags2 m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
-        VkAccessFlags2        m_currAccessMask = VK_ACCESS_2_NONE;
+        TextureAccessTracker m_accessTracker = {};
     };
 
 

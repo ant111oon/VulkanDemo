@@ -242,7 +242,7 @@ namespace vkn
         std::swap(m_mipCount, image.m_mipCount);
         std::swap(m_layersCount, image.m_layersCount);
 
-        std::swap(m_accessStates, image.m_accessStates);
+        std::swap(m_accessTracker, image.m_accessTracker);
 
         std::swap(m_pDevice, image.m_pDevice);
 
@@ -303,7 +303,7 @@ namespace vkn
         m_mipCount = info.mipLevels;
         m_layersCount = info.arrayLayers;
 
-        InitAccessStates(info);
+        m_accessTracker.Create(info.initialLayout, info.arrayLayers, info.mipLevels);
 
         return *this;
     }
@@ -330,35 +330,36 @@ namespace vkn
         m_mipCount = 1;
         m_layersCount = 1;
 
-        m_accessStates = AccessState{};
+        m_accessTracker.Destroy();
 
         return *this;
     }
 
 
+    TextureAccessTracker& Texture::GetAccessTracker()
+    {
+        VK_ASSERT(IsCreated());
+        return m_accessTracker;
+    }
+
+
+    const TextureAccessTracker& Texture::GetAccessTracker() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_accessTracker;
+    }
+
+
     bool Texture::CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const
     {
-    #ifdef ENG_BUILD_DEBUG
-        const uint32_t lastLayerIdx = baseLayer + layerCount - 1;
-        const uint32_t lastMipIdx = baseMip + mipCount - 1;
+        const bool isConsistent = m_accessTracker.CheckLayoutConsistency(baseLayer, layerCount, baseMip, mipCount);
 
-        const VkImageLayout layout = GetAccessState(baseLayer, baseMip).layout;
+        VK_ASSERT_MSG(isConsistent,
+            "Texture %s subresource range (baseLayer: %u, layerCount: %u, baseMip: %u, mipCount: %u) has inconsistent layout", 
+            GetDebugName().data(), baseLayer, layerCount, baseMip, mipCount
+        );
 
-        for (uint32_t layerIdx = baseLayer; layerIdx <= lastLayerIdx; ++layerIdx) {
-            for (uint32_t mipIdx = baseMip; mipIdx <= lastMipIdx; ++mipIdx) {
-                if (layout != GetAccessState(layerIdx, mipIdx).layout) {
-                    VK_ASSERT_FAIL( 
-                        "Texture %s subresource range (baseLayer: %u, layerCount: %u, baseMip: %u, mipCount: %u) has inconsistent layout", 
-                        GetDebugName().data(), baseLayer, layerCount, baseMip, mipCount
-                    );
-                    
-                    return false;
-                }
-            }
-        }
-    #endif
-
-        return true;
+        return isConsistent;
     }
 
 
@@ -433,67 +434,6 @@ namespace vkn
     uint32_t Texture::GetSizeZ() const
     {
         return GetSize().depth;
-    }
-
-
-    void Texture::Transit(uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount,
-            VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask
-    ) {
-        VK_ASSERT(IsCreated());
-        VK_ASSERT(mipCount >= 1);
-        VK_ASSERT(layerCount >= 1);
-        VK_ASSERT(baseMip + mipCount <= m_mipCount);
-        VK_ASSERT(baseLayer + layerCount <= m_layersCount);
-
-        auto FillAccessState = [](AccessState& outState, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask)
-        {
-            outState.layout = dstLayout;
-            outState.stageMask = dstStageMask;
-            outState.accessMask = dstAccessMask;
-        };
-
-        if (std::holds_alternative<AccessState>(m_accessStates)) {
-            AccessState& state = std::get<AccessState>(m_accessStates);
-            FillAccessState(state, dstLayout, dstStageMask, dstAccessMask);
-        } else {
-            AccessStateArray& states = std::get<AccessStateArray>(m_accessStates);
-
-            for (uint32_t i = 0; i < layerCount; ++i) {
-                const uint32_t layer = baseLayer + i;
-
-                for (uint32_t j = 0; j < mipCount; ++j) {
-                    const uint32_t mip = baseMip + j;
-                    const uint32_t index = layer * m_mipCount + mip;
-
-                    FillAccessState(states[index], dstLayout, dstStageMask, dstAccessMask);
-                }
-            }
-        }
-    }
-
-
-    void Texture::InitAccessStates(const TextureCreateInfo& info)
-    {
-        if (info.arrayLayers == 1 && info.mipLevels == 1) {
-            m_accessStates = AccessState { info.initialLayout, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
-        } else {
-            m_accessStates = AccessStateArray(info.arrayLayers * info.mipLevels);
-        }
-    }
-
-
-    const Texture::AccessState& Texture::GetAccessState(uint32_t layer, uint32_t mip) const
-    {
-        VK_ASSERT(IsCreated());
-
-        VK_ASSERT(mip < m_mipCount);
-        VK_ASSERT(layer < m_layersCount);
-
-        if (std::holds_alternative<AccessState>(m_accessStates)) {
-            return std::get<AccessState>(m_accessStates);
-        } else {
-            return std::get<AccessStateArray>(m_accessStates)[layer * m_mipCount + mip];
-        }
     }
 
 

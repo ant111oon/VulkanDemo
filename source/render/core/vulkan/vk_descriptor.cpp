@@ -445,7 +445,7 @@ namespace vkn
         
         const vkn::Texture& owner = view.GetOwner();
         const TextureView::SubresourceRange& range = view.GetSubresourceRange();
-        imageInfo.imageLayout = owner.GetAccessState(range.baseArrayLayer, range.baseMipLevel).layout;
+        imageInfo.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
 
         VkDescriptorGetInfoEXT descriptorGetInfo = {};
         descriptorGetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
