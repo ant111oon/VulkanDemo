@@ -1392,137 +1392,163 @@ namespace DbgUI
 {
     static void FillData()
     {
-        if (ImGui::Begin("Settings")) {
-            ImGui::SeparatorText("Common Info");
-            ImGui::Text("Build Type: %s", APP_BUILD_TYPE_STR);
-            ImGui::Text("CPU: %.3f ms (%.1f FPS)", s_frameTime, 1000.f / s_frameTime);
+        static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
+        static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
 
-            ImGui::NewLine();
-            ImGui::SeparatorText("Memory Info");
+        if (ImGui::Begin("Debug")) {
+            if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Text("Fly Camera Mode (F5):");
+                ImGui::SameLine(); 
+                ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
 
-            VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
-            vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+                ImGui::Text("Fixed Culling Camera (F6):");
+                if (ImGui::IsItemHovered()) {
+                    if (ImGui::BeginTooltip()) {
+                        ImGui::Text("Perform culling from fixed pos frustum view");
+                    } ImGui::EndTooltip();
+                }
+                ImGui::SameLine(); 
+                ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
+            }
 
-            for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
-                const VmaBudget& budget = budgets[i];
-                
-                if (budget.usage > 0) {
-                    const float usageMB = budget.usage / 1024.f / 1024.f;
-                    const float budgetMB = budget.budget / 1024.f / 1024.f;
-                    ImGui::Text("Heap %u: Usage: %.2f / %.2f MB (%.2f%%)", i, usageMB, budgetMB, usageMB / budgetMB * 100.f);
+            if (ImGui::CollapsingHeader("Memory")) {
+                VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
+                vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+
+                for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+                    const VmaBudget& budget = budgets[i];
+                    
+                    if (budget.usage > 0) {
+                        const float usageMB = budget.usage / 1024.f / 1024.f;
+                        const float budgetMB = budget.budget / 1024.f / 1024.f;
+                        ImGui::Text("Heap %u: Usage: %.2f / %.2f MB (%.2f%%)", i, usageMB, budgetMB, usageMB / budgetMB * 100.f);
+                    }
+                }
+
+                ImGui::NewLine();
+                ImGui::TextDisabled("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
+                ImGui::TextDisabled("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
+                ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
+                ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
+            }
+            
+            if (ImGui::CollapsingHeader("Geom Culling")) {
+                ImGui::Checkbox("##GeomCulling", &s_useMeshCulling);
+                ImGui::SameLine(); 
+                ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                if (s_useMeshCulling) {
+                    if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
+                            ImGui::SameLine(); 
+                            ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                            ImGui::TreePop();
+                        }
+                        
+                        if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
+                            ImGui::SameLine(); 
+                            ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                            ImGui::TreePop();
+                        }
+
+                        if (ImGui::TreeNodeEx("Contribution", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##ContributionCulling", &s_useMeshContributionCulling);
+                            ImGui::SameLine(); 
+                            ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                            ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
+        
+                            if (ImGui::IsItemHovered()) {
+                                if (ImGui::BeginTooltip()) {
+                                    ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
+                                } ImGui::EndTooltip();
+                            }
+
+                            ImGui::TreePop();
+                        }
+                    
+                        ImGui::TreePop();
+                    }
+                }
+            }
+            
+            if (ImGui::CollapsingHeader("Passes")) {
+                if (ImGui::TreeNodeEx("Depth", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
+                    ImGui::SameLine();
+                    ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("GBuffer", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
+                    ImGui::SameLine(); 
+                    ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
+
+                    if (!s_useMeshIndirectDraw) {
+                        ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Opaque Mesh Count: %zu)", s_dbgDrawnOpaqueMeshCount);
+                        ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn AKill Mesh Count: %zu)", s_dbgDrawnAkillMeshCount);
+                        ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Transparent Mesh Count: %zu)", s_dbgDrawnTranspMeshCount);
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Deferred Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
+                    ImGui::SameLine(); 
+                    ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Debug Draw", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
+                    ImGui::SameLine();
+                    ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
+        
+                #ifdef ENG_BUILD_DEBUG
+                    if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
+                        for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
+                            const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
+                            
+                            if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
+                                s_dbgOutputRTIdx = i;
+                            }
+                            
+                            if (isSelected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                #endif
+
+                    ImGui::TreePop();
                 }
             }
 
-            ImGui::NewLine();
-            ImGui::TextDisabled("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
-            ImGui::TextDisabled("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
-            ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
-            ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
-            
-            static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
-            static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
-
-            ImGui::NewLine();
-            ImGui::SeparatorText("Camera Info");
-            ImGui::Text("Fly Camera Mode (F5):");
-            ImGui::SameLine(); 
-            ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
-
-            ImGui::Text("Fixed Culling Camera (F6):");
-            if (ImGui::IsItemHovered()) {
-                if (ImGui::BeginTooltip()) {
-                    ImGui::Text("Perform culling from fixed pos frustum view");
-                } ImGui::EndTooltip();
-            }
-            ImGui::SameLine(); 
-            ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
-
-            ImGui::NewLine();
-            ImGui::SeparatorText("Culling");
-            
-            ImGui::Checkbox("Mesh Culling", &s_useMeshCulling);
-
-            if (s_useMeshCulling) {
-                ImGui::Checkbox("Mesh Frustum Culling", &s_useMeshFrustumCulling);
-                ImGui::Checkbox("Mesh HZB Culling", &s_useMeshHZBCulling);
-                ImGui::Checkbox("Mesh Contribution Culling", &s_useMeshContributionCulling);
-
-                if (s_useMeshContributionCulling) {
-                    ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
-
-                    if (ImGui::IsItemHovered()) {
-                        if (ImGui::BeginTooltip()) {
-                            ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
-                        } ImGui::EndTooltip();
+            if (ImGui::CollapsingHeader("Tonemapping")) {
+                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
+                    for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
+                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
+                        
+                        if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
+                            s_tonemappingPreset = i;
+                        }
+                        
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
                     }
+                    ImGui::EndCombo();
                 }
             }
-
-            ImGui::NewLine();
-            ImGui::SeparatorText("Depth Pass");
-            ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
-            ImGui::SameLine();
-            ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-            
-            ImGui::NewLine();
-            ImGui::SeparatorText("GBuffer Pass");
-            ImGui::Checkbox("##UseMeshIndirectDraw", &s_useMeshIndirectDraw);
-            ImGui::SameLine(); 
-            ImGui::TextColored(s_useMeshIndirectDraw ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Draw");
-            
-            if (!s_useMeshIndirectDraw) {
-                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Opaque Mesh Count: %zu)", s_dbgDrawnOpaqueMeshCount);
-                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn AKill Mesh Count: %zu)", s_dbgDrawnAkillMeshCount);
-                ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.f, 1.f), "(Drawn Transparent Mesh Count: %zu)", s_dbgDrawnTranspMeshCount);
-            }
-
-            ImGui::NewLine();
-            ImGui::SeparatorText("Deferred Lighting Pass");
-            ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
-            ImGui::SameLine(); 
-            ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
-            
-            ImGui::NewLine();
-            ImGui::SeparatorText("Tonemapping");
-            
-            if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
-                for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
-                    const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
-                    
-                    if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                        s_tonemappingPreset = i;
-                    }
-                    
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::NewLine();
-            ImGui::SeparatorText("Debug Output");
-
-            ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
-            ImGui::SameLine();
-            ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
-
-        #ifdef ENG_BUILD_DEBUG
-            if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
-                for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
-                    const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
-                    
-                    if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                        s_dbgOutputRTIdx = i;
-                    }
-                    
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-        #endif
 
             // if (ImGui::Begin("Viewport")) {
             //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
