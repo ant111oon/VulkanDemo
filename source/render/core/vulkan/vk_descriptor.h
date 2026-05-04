@@ -179,15 +179,15 @@ namespace vkn
             return m_entries.size();
         }
 
-        const char* GetDebugName() const
+        std::string_view GetDebugName() const
         {
-            return m_buffer.GetDebugName();
+            return m_buffer.GetDebugName().data();
         }
 
         template <typename... Args>
-        DescriptorBuffer& SetDebugName(const char* pFmt, Args&&... args)
+        DescriptorBuffer& SetDebugName(std::string_view fmt, Args&&... args)
         {
-            m_buffer.SetDebugName(pFmt, std::forward<Args>(args)...);
+            GetDevice().SetObjDebugName(m_buffer, fmt, std::forward<Args>(args)...);
             return *this;
         }
 

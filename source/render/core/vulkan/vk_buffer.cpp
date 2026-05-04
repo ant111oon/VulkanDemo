@@ -7,14 +7,12 @@
 namespace vkn
 {
     Buffer::Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo)
-        : Object()
     {
         Create(pDevice, size, usage, allocInfo);
     }
 
 
     Buffer::Buffer(const BufferCreateInfo& info)
-        : Object()
     {
         Create(info);
     }
@@ -44,7 +42,6 @@ namespace vkn
 
         std::swap(m_pDevice, buffer.m_pDevice);
 
-        std::swap(m_buffer, buffer.m_buffer);
         std::swap(m_allocation, buffer.m_allocation);
         std::swap(m_allocInfo, buffer.m_allocInfo);
         
@@ -57,7 +54,7 @@ namespace vkn
 
         std::swap(m_state, buffer.m_state);
 
-        Object::operator=(std::move(buffer));
+        Base::operator=(std::move(buffer));
 
         return *this; 
     }
@@ -99,13 +96,14 @@ namespace vkn
         allocCI.usage = info.pAllocInfo->usage;
         allocCI.flags = info.pAllocInfo->flags;
 
-        m_buffer = VK_NULL_HANDLE;
-        m_allocation = VK_NULL_HANDLE;
-        VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &ci, &allocCI, &m_buffer, &m_allocation, &m_allocInfo));
+        Base::Create([&allocation = m_allocation, &ci, &allocCI, &allocInfo = m_allocInfo](VkBuffer& buffer) {
+            VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &ci, &allocCI, &buffer, &allocation, &allocInfo));
+            return buffer != VK_NULL_HANDLE && allocation != VK_NULL_HANDLE;
+        });
 
         // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
 
-        VK_ASSERT_MSG(m_buffer != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
+        VK_ASSERT_MSG(Get() != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan buffer memory");
 
         if ((info.usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0) {
@@ -113,7 +111,7 @@ namespace vkn
 
             VkBufferDeviceAddressInfo addressInfo = {};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            addressInfo.buffer = m_buffer;
+            addressInfo.buffer = Get();
             m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
         }
 
@@ -137,8 +135,6 @@ namespace vkn
         if ((info.pAllocInfo->flags & VMA_ALLOCATION_CREATE_MAPPED_BIT) != 0) {
             m_state.set(BIT_IS_PERSISTENTLY_MAPPED, true);
         }
-
-        SetCreated(true);
 
         return *this;
     }
@@ -169,10 +165,6 @@ namespace vkn
 
         VK_ASSERT(!IsMapped());
 
-        vmaDestroyBuffer(GetAllocator().Get(), m_buffer, m_allocation);
-        m_allocation = VK_NULL_HANDLE;
-        m_buffer = VK_NULL_HANDLE;
-
         m_allocInfo = {};
 
         m_size = 0;
@@ -185,7 +177,12 @@ namespace vkn
         m_pDevice = nullptr;
         m_state.reset();
 
-        Object::Destroy();
+        Base::Destroy([&allocation = m_allocation](VkBuffer& buffer) {
+            vmaDestroyBuffer(GetAllocator().Get(), buffer, allocation);
+            
+            allocation = VK_NULL_HANDLE;
+            buffer = VK_NULL_HANDLE;
+        });
 
         return *this;
     }
@@ -238,6 +235,83 @@ namespace vkn
         m_state.set(BIT_IS_MAPPED, false);
 
         return *this;
+    }
+
+
+    Device& Buffer::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    VkDeviceMemory Buffer::GetMemory() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_allocInfo.deviceMemory;
+    }
+
+
+    VkDeviceAddress Buffer::GetDeviceAddress() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_deviceAddress;
+    }
+
+
+    VkDeviceSize Buffer::GetMemorySize() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_size;
+    }
+
+
+    bool Buffer::IsMapped() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_MAPPED);
+    }
+
+
+    bool Buffer::IsPersistentlyMapped() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_PERSISTENTLY_MAPPED);
+    }
+
+
+    bool Buffer::IsUniformBuffer() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_UNIFORM_BUFFER);
+    }
+
+
+    bool Buffer::IsStorageBuffer() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_STORAGE_BUFFER);
+    }
+
+
+    bool Buffer::IsIndexBuffer() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_INDEX_BUFFER);
+    }
+
+
+    bool Buffer::IsDescriptorBuffer() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_DESCRIPTOR_BUFFER);
+    }
+
+
+    bool Buffer::HasDeviceAddress() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_DEVICE_ADDRESS);
     }
 
 

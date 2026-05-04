@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_device.h"
 #include "vk_memory.h"
 
@@ -18,9 +17,12 @@ namespace vkn
     };
 
 
-    class Buffer : public Object
+    class Buffer : public Handle<VkBuffer>
     {
         friend class CmdBuffer;
+
+    public:
+        using Base = Handle<VkBuffer>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Buffer);
@@ -46,89 +48,19 @@ namespace vkn
 
         Buffer& Unmap();
 
-        template <typename... Args>
-        Buffer& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_buffer, VK_OBJECT_TYPE_BUFFER, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
+        Device& GetDevice() const;
 
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("Buffer");
-        }
+        VkDeviceMemory GetMemory() const;
+        VkDeviceAddress GetDeviceAddress() const;
+        VkDeviceSize GetMemorySize() const;
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
-
-        const VkBuffer& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_buffer;
-        }
-
-        VkDeviceMemory GetMemory() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_allocInfo.deviceMemory;
-        }
-
-        VkDeviceAddress GetDeviceAddress() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_deviceAddress;
-        }
-
-        VkDeviceSize GetMemorySize() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_size;
-        }
-
-        bool IsMapped() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_MAPPED);
-        }
-
-        bool IsPersistentlyMapped() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_PERSISTENTLY_MAPPED);
-        }
-
-        bool IsUniformBuffer() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_UNIFORM_BUFFER);
-        }
-
-        bool IsStorageBuffer() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_STORAGE_BUFFER);
-        }
-
-        bool IsIndexBuffer() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_INDEX_BUFFER);
-        }
-
-        bool IsDescriptorBuffer() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_DESCRIPTOR_BUFFER);
-        }
-
-        bool HasDeviceAddress() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_DEVICE_ADDRESS);
-        }
+        bool IsMapped() const;
+        bool IsPersistentlyMapped() const;
+        bool IsUniformBuffer() const;
+        bool IsStorageBuffer() const;
+        bool IsIndexBuffer() const;
+        bool IsDescriptorBuffer() const;
+        bool HasDeviceAddress() const;
 
     private:
         void Transit(VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccessMask);
@@ -160,8 +92,6 @@ namespace vkn
 
     private:
         Device* m_pDevice = nullptr;
-
-        VkBuffer m_buffer = VK_NULL_HANDLE;
 
         VmaAllocation m_allocation = VK_NULL_HANDLE;
         VmaAllocationInfo m_allocInfo = {};

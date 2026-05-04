@@ -46,10 +46,10 @@ namespace vkn
 
         m_cmdPool.Create(cmdPoolCreateInfo);
         CORE_ASSERT(m_cmdPool.IsCreated());
-        m_cmdPool.SetDebugName("PROFILER_CMD_POOL");
+        pDevice->SetObjDebugName(m_cmdPool, "PROFILER_CMD_POOL");
 
         m_pCmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        m_pCmdBuffer->SetDebugName("PROFILER_CMD_BUFFER");
+        pDevice->SetObjDebugName(*m_pCmdBuffer, "PROFILER_CMD_BUFFER");
 
         m_context = TracyVkContext(m_pDevice->GetPhysDevice().Get(), m_pDevice->Get(), m_pDevice->GetQueue().Get(), m_pCmdBuffer->Get());
 

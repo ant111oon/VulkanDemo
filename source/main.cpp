@@ -1852,7 +1852,8 @@ static void CreateCommonStagingBuffers()
     stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
     for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
-        s_commonStagingBuffers[i].Create(stagingBufCreateInfo).SetDebugName("STAGING_BUFFER_%zu", i);
+        s_commonStagingBuffers[i].Create(stagingBufCreateInfo);
+        s_vkDevice.SetObjDebugName(s_commonStagingBuffers[i], "STAGING_BUFFER_%zu", i);
     }
 }
 
@@ -2442,7 +2443,8 @@ static void CreateDbgDrawResources()
         createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
         createInfo.pAllocInfo = &allocInfo;
     
-        s_dbgLineDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_LINE_DATA_BUFFER");
+        s_dbgLineDataGPU.Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
     }
 
     {
@@ -2458,7 +2460,8 @@ static void CreateDbgDrawResources()
         createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
         createInfo.pAllocInfo = &allocInfo;
     
-        s_dbgLineVertexDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_LINE_VERT_BUFFER");
+        s_dbgLineVertexDataGPU.Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_dbgLineVertexDataGPU, "DBG_DRAW_LINE_VERT_BUFFER");
     }
 
     {
@@ -2474,7 +2477,8 @@ static void CreateDbgDrawResources()
         createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
         createInfo.pAllocInfo = &allocInfo;
     
-        s_dbgTriangleDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_TRIANGLE_DATA_BUFFER");
+        s_dbgTriangleDataGPU.Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
     }
 
     {
@@ -2490,7 +2494,8 @@ static void CreateDbgDrawResources()
         createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
         createInfo.pAllocInfo = &allocInfo;
     
-        s_dbgTriangleVertexDataGPU.Create(createInfo).SetDebugName("DBG_DRAW_TRIANGLE_VERT_BUFFER");
+        s_dbgTriangleVertexDataGPU.Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_dbgTriangleVertexDataGPU, "DBG_DRAW_TRIANGLE_VERT_BUFFER");
     }
 #endif
 }
@@ -3747,14 +3752,16 @@ static void CreateCullingResources()
     createInfo.pAllocInfo = &allocInfo;
 
     for (size_t i = 0; i < s_opaqueGeomDrawCmdBuffers.size(); ++i) {
-        s_opaqueGeomDrawCmdBuffers[i].Create(createInfo).SetDebugName("OPAQUE_GEOM_DRAW_CMD_BUFFER_%zu", i);
+        s_opaqueGeomDrawCmdBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_opaqueGeomDrawCmdBuffers[i], "OPAQUE_GEOM_DRAW_CMD_BUFFER_%zu", i);
     }
     
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visOpaqueGeomIDBuffers.size(); ++i) {
-        s_visOpaqueGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_OPAQUE_GEOM_ID_BUFFER_%zu", i);
+        s_visOpaqueGeomIDBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_visOpaqueGeomIDBuffers[i], "VIS_OPAQUE_GEOM_ID_BUFFER_%zu", i);
     }
 
 
@@ -3763,14 +3770,16 @@ static void CreateCullingResources()
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
     for (size_t i = 0; i < s_akillGeomDrawCmdBuffers.size(); ++i) {
-        s_akillGeomDrawCmdBuffers[i].Create(createInfo).SetDebugName("AKILL_GEOM_DRAW_CMD_BUFFER_%zu", i);
+        s_akillGeomDrawCmdBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_akillGeomDrawCmdBuffers[i], "AKILL_GEOM_DRAW_CMD_BUFFER_%zu", i);
     }
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visAkillGeomIDBuffers.size(); ++i) {
-        s_visAkillGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_AKILL_GEOM_ID_BUFFER_%zu", i);
+        s_visAkillGeomIDBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_visAkillGeomIDBuffers[i], "VIS_AKILL_GEOM_ID_BUFFER_%zu", i);
     }
 
 
@@ -3779,21 +3788,24 @@ static void CreateCullingResources()
         VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
     for (size_t i = 0; i < s_transpGeomDrawCmdBuffers.size(); ++i) {
-        s_transpGeomDrawCmdBuffers[i].Create(createInfo).SetDebugName("TRANSP_GEOM_DRAW_CMD_BUFFER_%zu", i);
+        s_transpGeomDrawCmdBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_transpGeomDrawCmdBuffers[i], "TRANSP_GEOM_DRAW_CMD_BUFFER_%zu", i);
     }
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
     
     for (size_t i = 0; i < s_visTranspGeomIDBuffers.size(); ++i) {
-        s_visTranspGeomIDBuffers[i].Create(createInfo).SetDebugName("VIS_TRANSP_GEOM_ID_BUFFER_%zu", i);
+        s_visTranspGeomIDBuffers[i].Create(createInfo);
+        s_vkDevice.SetObjDebugName(s_visTranspGeomIDBuffers[i], "VIS_TRANSP_GEOM_ID_BUFFER_%zu", i);
     }
 
 
     createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     createInfo.size = (uint32_t)glm::ceil(s_cpuInstData.size() / 32.f) * sizeof(glm::uint);
 
-    s_geomVisFlagsBuffer.Create(createInfo).SetDebugName("GEOM_VIS_FLAGS_BUFFER");
+    s_geomVisFlagsBuffer.Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_geomVisFlagsBuffer, "GEOM_VIS_FLAGS_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer
@@ -4680,7 +4692,8 @@ static void UploadGPUMeshData()
     vertBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
-    s_vertexBuffer.Create(vertBufCreateInfo).SetDebugName("COMMON_VB");
+    s_vertexBuffer.Create(vertBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_vertexBuffer, "COMMON_VB");
 
     vkn::AllocationInfo idxBufAllocInfo = {};
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4692,7 +4705,8 @@ static void UploadGPUMeshData()
     idxBufCreateInfo.usage = VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
-    s_indexBuffer.Create(idxBufCreateInfo).SetDebugName("COMMON_IB");
+    s_indexBuffer.Create(idxBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_indexBuffer, "COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(stagingVertBuffer, s_vertexBuffer, gpuVertBufferSize);
@@ -4718,7 +4732,8 @@ static void UploadGPUMeshData()
     meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
-    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo).SetDebugName("COMMON_MESH_DATA");
+    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonMeshDataBuffer, "COMMON_MESH_DATA");
 
     vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[1];
 
@@ -4739,7 +4754,8 @@ static void UploadGPUMeshData()
     commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
 
-    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo).SetDebugName("COMMON_TRANSFORM_DATA");
+    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonTransformDataBuffer, "COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(stagingMeshInfosBuffer, s_commonMeshDataBuffer, meshDataBufferSize);
@@ -4878,7 +4894,8 @@ static void UploadGPUMaterialData()
     mtlBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
 
-    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo).SetDebugName("COMMON_MATERIAL_DATA");
+    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonMaterialDataBuffer, "COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         cmdBuffer.CmdCopyBuffer(stagingMtlDataBuffer, s_commonMaterialDataBuffer, mtlDataBufferSize);
@@ -4915,7 +4932,8 @@ static void UploadGPUInstData()
     instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
-    s_commonInstDataBuffer.Create(instInfosBufCreateInfo).SetDebugName("COMMON_INSTANCE_DATA");
+    s_commonInstDataBuffer.Create(instInfosBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonInstDataBuffer, "COMMON_INSTANCE_DATA");
 
     vkn::Buffer& aabbStagingBuffer = s_commonStagingBuffers[1];
 
@@ -4938,7 +4956,8 @@ static void UploadGPUInstData()
     aabbBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     aabbBufCreateInfo.pAllocInfo = &aabbBufAllocInfo;
 
-    s_commonAABBDataBuffer.Create(aabbBufCreateInfo).SetDebugName("COMMON_AABB_DATA");
+    s_commonAABBDataBuffer.Create(aabbBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonAABBDataBuffer, "COMMON_AABB_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(instStagingBuffer, s_commonInstDataBuffer, instBufferSize);
@@ -5007,8 +5026,8 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    s_commonConstBuffer
-        .CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT).SetDebugName("COMMON_CB");
+    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT);
+    s_vkDevice.SetObjDebugName(s_commonConstBuffer, "COMMON_CB");
 }
 
 
@@ -6415,10 +6434,11 @@ int main(int argc, char* argv[])
     cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cmdPoolCreateInfo.size = 2;
     
-    s_commonCmdPool.Create(cmdPoolCreateInfo).SetDebugName("COMMON_CMD_POOL");
+    s_commonCmdPool.Create(cmdPoolCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonCmdPool, "COMMON_CMD_POOL");
     
     s_pImmediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_pImmediateSubmitCmdBuffer->SetDebugName("IMMEDIATE_CMD_BUFFER");
+    s_vkDevice.SetObjDebugName(*s_pImmediateSubmitCmdBuffer, "IMMEDIATE_CMD_BUFFER");
 
     s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 
@@ -6457,7 +6477,7 @@ int main(int argc, char* argv[])
     s_renderFinishedFence.Create(&s_vkDevice).SetDebugName("RND_FINISH_FENCE");
     
     s_pRenderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_pRenderCmdBuffer->SetDebugName("RND_CMD_BUFFER");
+    s_vkDevice.SetObjDebugName(*s_pRenderCmdBuffer, "RND_CMD_BUFFER");
 
     UploadGPUResources();
     CreateIBLResources();

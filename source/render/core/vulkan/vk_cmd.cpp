@@ -228,17 +228,16 @@ namespace vkn
             Free();
         }
 
-        Object::operator=(std::move(cmdBuffer));
-
         m_barrierList.Swap(cmdBuffer.m_barrierList);
 
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
-        std::swap(m_cmdBuffer, cmdBuffer.m_cmdBuffer);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
         std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
         std::swap(m_pPSOCache, cmdBuffer.m_pPSOCache);
         std::swap(m_state, cmdBuffer.m_state);
+
+        Base::operator=(std::move(cmdBuffer));
 
         return *this;
     }
@@ -253,7 +252,7 @@ namespace vkn
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = flags;
 
-        VK_CHECK(vkBeginCommandBuffer(m_cmdBuffer, &beginInfo));
+        VK_CHECK(vkBeginCommandBuffer(Get(), &beginInfo));
 
         ResetCache();
         m_state.set(FLAG_IS_STARTED, true);
@@ -267,7 +266,7 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT_MSG(!m_barrierList.IsStarted(), "Attempt to end command buffer with started buffer barrier list");
 
-        VK_CHECK(vkEndCommandBuffer(m_cmdBuffer));
+        VK_CHECK(vkEndCommandBuffer(Get()));
 
         m_state.set(FLAG_IS_STARTED, false);
 
@@ -280,7 +279,7 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(firstQuery + queryCount <= queryPool.GetQueryCount());
 
-        vkCmdResetQueryPool(m_cmdBuffer, queryPool.Get(), firstQuery, queryCount);
+        vkCmdResetQueryPool(Get(), queryPool.Get(), firstQuery, queryCount);
 
         return *this;
     }
@@ -297,7 +296,7 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(queryPool.IsQueryIndexValid(queryIndex));
 
-        vkCmdWriteTimestamp2(m_cmdBuffer, stage, queryPool.Get(), queryIndex);
+        vkCmdWriteTimestamp2(Get(), stage, queryPool.Get(), queryIndex);
 
         return *this;
     }
@@ -308,7 +307,7 @@ namespace vkn
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(!IsRenderingStarted());
 
-        vkCmdBeginRendering(m_cmdBuffer, &renderingInfo);
+        vkCmdBeginRendering(Get(), &renderingInfo);
 
         m_state.set(FLAG_IS_RENDERING_STARTED, true);
 
@@ -320,7 +319,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
-        vkCmdEndRendering(m_cmdBuffer);
+        vkCmdEndRendering(Get());
 
         m_state.set(FLAG_IS_RENDERING_STARTED, false);
 
@@ -336,7 +335,7 @@ namespace vkn
             return *this;
         }
         
-        vkCmdBindPipeline(m_cmdBuffer, pso.GetBindPoint(), pso.Get());
+        vkCmdBindPipeline(Get(), pso.GetBindPoint(), pso.Get());
 
         m_pPSOCache = &pso;
 
@@ -348,7 +347,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdSetViewport(m_cmdBuffer, firstViewport, viewportCount, pViewports);
+        vkCmdSetViewport(Get(), firstViewport, viewportCount, pViewports);
 
         return *this;
     }
@@ -372,7 +371,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdSetScissor(m_cmdBuffer, firstScissor, scissorCount, pScissors);
+        vkCmdSetScissor(Get(), firstScissor, scissorCount, pScissors);
 
         return *this;
     }
@@ -394,7 +393,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdSetDepthCompareOp(m_cmdBuffer, op);
+        vkCmdSetDepthCompareOp(Get(), op);
 
         return *this;
     }
@@ -404,7 +403,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdSetDepthWriteEnable(m_cmdBuffer, enabled);
+        vkCmdSetDepthWriteEnable(Get(), enabled);
 
         return *this;
     }
@@ -446,7 +445,7 @@ namespace vkn
         
         blitInfo.filter = filter;
 
-        vkCmdBlitImage2(m_cmdBuffer, &blitInfo);
+        vkCmdBlitImage2(Get(), &blitInfo);
 
         return *this;
     }
@@ -468,7 +467,7 @@ namespace vkn
         size = size == VK_WHOLE_SIZE ? buffer.GetMemorySize() : size;
         VK_ASSERT(offset + size <= buffer.GetMemorySize());
 
-        vkCmdFillBuffer(m_cmdBuffer, buffer.Get(), offset, size, value);
+        vkCmdFillBuffer(Get(), buffer.Get(), offset, size, value);
 
         return *this;
     }
@@ -491,7 +490,7 @@ namespace vkn
         }
     #endif
 
-        vkCmdCopyBuffer(m_cmdBuffer, srcBuffer.Get(), dstBuffer.Get(), regions.size(), regions.data());
+        vkCmdCopyBuffer(Get(), srcBuffer.Get(), dstBuffer.Get(), regions.size(), regions.data());
 
         return *this;
     }
@@ -552,7 +551,7 @@ namespace vkn
         copyInfo.regionCount = m_bufImageCopyCache.size();
         copyInfo.pRegions = m_bufImageCopyCache.data();
 
-        vkCmdCopyBufferToImage2(m_cmdBuffer, &copyInfo);
+        vkCmdCopyBufferToImage2(Get(), &copyInfo);
 
         return *this;
     }
@@ -569,7 +568,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdDispatch(m_cmdBuffer, groupCountX, groupCountY, groupCountZ);
+        vkCmdDispatch(Get(), groupCountX, groupCountY, groupCountZ);
 
         return *this;
     }
@@ -579,7 +578,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdBindIndexBuffer(m_cmdBuffer, idxBuffer.Get(), offset, idxType);
+        vkCmdBindIndexBuffer(Get(), idxBuffer.Get(), offset, idxType);
 
         return *this;
     }
@@ -589,7 +588,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
-        vkCmdDraw(m_cmdBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+        vkCmdDraw(Get(), vertexCount, instanceCount, firstVertex, firstInstance);
 
         return *this;
     }
@@ -599,7 +598,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
-        vkCmdDrawIndexed(m_cmdBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+        vkCmdDrawIndexed(Get(), indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 
         return *this;
     }
@@ -609,7 +608,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_RENDERING_STARTED(this);
 
-        vkCmdDrawIndexedIndirectCount(m_cmdBuffer, argBuffer.Get(), argBufferOffset, countBuffer.Get(), countBufferOffset, maxDrawCount, argStride);
+        vkCmdDrawIndexedIndirectCount(Get(), argBuffer.Get(), argBufferOffset, countBuffer.Get(), countBufferOffset, maxDrawCount, argStride);
 
         return *this;
     }
@@ -631,7 +630,7 @@ namespace vkn
         bindingInfo.address = buffer.Get().GetDeviceAddress();
         bindingInfo.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-        vkCmdBindDescriptorBuffers(m_cmdBuffer, 1, &bindingInfo);
+        vkCmdBindDescriptorBuffers(Get(), 1, &bindingInfo);
 
         return *this;
     }
@@ -652,7 +651,7 @@ namespace vkn
         const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(bindigInfo.bufferSetIdx);
 
         constexpr uint32_t bufferIdx = 0;
-        vkCmdSetDescriptorBufferOffsets(m_cmdBuffer, pso.GetBindPoint(), pso.GetLayout().Get(), bindigInfo.shaderSetIdx, 1, &bufferIdx, &offset);
+        vkCmdSetDescriptorBufferOffsets(Get(), pso.GetBindPoint(), pso.GetLayout().Get(), bindigInfo.shaderSetIdx, 1, &bufferIdx, &offset);
 
         return *this;
     }
@@ -672,7 +671,7 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        vkCmdPushConstants(m_cmdBuffer, pso.GetLayout().Get(), stagesMask, offset, size, pData);
+        vkCmdPushConstants(Get(), pso.GetLayout().Get(), stagesMask, offset, size, pData);
 
         return *this;
     }
@@ -775,7 +774,7 @@ namespace vkn
         dependencyInfo.imageMemoryBarrierCount = textureBarriers.size();
         dependencyInfo.pImageMemoryBarriers = textureBarriers.data();
 
-        vkCmdPipelineBarrier2(m_cmdBuffer, &dependencyInfo);
+        vkCmdPipelineBarrier2(Get(), &dependencyInfo);
 
         m_barrierList.End();
 
@@ -786,7 +785,7 @@ namespace vkn
     CmdBuffer& CmdBuffer::Reset(VkCommandBufferResetFlags flags)
     {
         VK_ASSERT(IsValid());
-        VK_CHECK(vkResetCommandBuffer(m_cmdBuffer, flags));
+        VK_CHECK(vkResetCommandBuffer(Get(), flags));
 
         return *this;
     }
@@ -795,6 +794,27 @@ namespace vkn
     Device& CmdBuffer::GetDevice() const
     {
         return m_pOwner->GetDevice();
+    }
+
+
+    CmdPool& CmdBuffer::GetOwnerPool() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pOwner;
+    }
+
+
+    bool CmdBuffer::IsStarted() const
+    {
+        VK_ASSERT(IsValid());
+        return m_state.test(FLAG_IS_STARTED);
+    }
+
+
+    bool CmdBuffer::IsRenderingStarted() const
+    {
+        VK_ASSERT(IsValid());
+        return m_state.test(FLAG_IS_RENDERING_STARTED);
     }
 
 
@@ -824,15 +844,15 @@ namespace vkn
         cmdBufferAllocInfo.level = level;
         cmdBufferAllocInfo.commandBufferCount = 1;
 
-        m_cmdBuffer = VK_NULL_HANDLE;
-        VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &m_cmdBuffer));
+        Base::Create([vkDevice, &cmdBufferAllocInfo](VkCommandBuffer& cmdBuffer) {
+            VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &cmdBuffer));
+            return cmdBuffer != VK_NULL_HANDLE;
+        });
 
-        VK_ASSERT(m_cmdBuffer != VK_NULL_HANDLE);
+        VK_ASSERT(IsCreated());
 
         m_pOwner = pOwnerPool;
         m_ID = id;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -844,9 +864,6 @@ namespace vkn
             return *this;
         }
         
-        vkFreeCommandBuffers(GetDevice().Get(), m_pOwner->Get(), 1, &m_cmdBuffer);
-        m_cmdBuffer = VK_NULL_HANDLE;
-
         m_barrierList = {};
 
         m_blitCache = {};
@@ -854,12 +871,15 @@ namespace vkn
         m_pDescrBufferBindingCache = nullptr;
         m_pPSOCache = nullptr;
 
-        m_pOwner = nullptr;
         m_ID = INVALID_ID;
 
         m_state.reset();
 
-        Object::Destroy();
+        Base::Destroy([device = GetDevice().Get(), pool = GetOwnerPool().Get()](VkCommandBuffer& cmdBuffer) {
+            vkFreeCommandBuffers(device, pool, 1, &cmdBuffer);
+        });
+
+        m_pOwner = nullptr;
 
         return *this;
     }
@@ -904,13 +924,12 @@ namespace vkn
             Destroy();
         }
 
-        Object::operator=(std::move(pool));
-
         std::swap(m_pDevice, pool.m_pDevice);
-        std::swap(m_pool, pool.m_pool);
 
         std::swap(m_allocatedBuffers, pool.m_allocatedBuffers);
         std::swap(m_freeIds, pool.m_freeIds);
+
+        Base::operator=(std::move(pool));
 
         return *this;
     }
@@ -933,17 +952,17 @@ namespace vkn
         cmdPoolCreateInfo.flags = info.flags;
         cmdPoolCreateInfo.queueFamilyIndex = info.queueFamilyIndex;
 
-        m_pool = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &m_pool));
+        Base::Create([vkDevice, &cmdPoolCreateInfo](VkCommandPool& pool) {
+            VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &pool));
+            return pool != VK_NULL_HANDLE;
+        });
 
-        VK_ASSERT(m_pool != VK_NULL_HANDLE);
+        VK_ASSERT(IsCreated());
 
         m_pDevice = info.pDevice;
 
         m_allocatedBuffers.reserve(info.size);
         m_freeIds.reserve(info.size);
-
-        SetCreated(true);
 
         return *this;
     }
@@ -955,16 +974,13 @@ namespace vkn
             return *this;
         }
 
-        Object::Destroy();
-
-        VkDevice vkDevice = m_pDevice->Get();
-
-        vkDestroyCommandPool(vkDevice, m_pool, nullptr);
-        m_pool = VK_NULL_HANDLE;
-
         m_allocatedBuffers.clear();
         m_allocatedBuffers.shrink_to_fit();        
         m_freeIds = {};
+
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkCommandPool& pool) {
+            vkDestroyCommandPool(vkDevice, pool, nullptr);
+        });
 
         m_pDevice = nullptr;
 
@@ -975,7 +991,7 @@ namespace vkn
     CmdPool& CmdPool::Reset(VkCommandPoolResetFlags flags)
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkResetCommandPool(m_pDevice->Get(), m_pool, flags));
+        VK_CHECK(vkResetCommandPool(m_pDevice->Get(), Get(), flags));
 
         return *this;
     }
@@ -1011,6 +1027,13 @@ namespace vkn
         FreeCmdBufferID(ID);
 
         return *this;
+    }
+
+
+    Device& CmdPool::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
     }
 
 

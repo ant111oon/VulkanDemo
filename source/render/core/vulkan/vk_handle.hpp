@@ -76,8 +76,13 @@ namespace vkn
         static_assert(std::invocable<DestroyerFunc, VkHandle&>, "DestroyerFunc signature must be \"AnyType Func(VkHandle&)\"");
 
         Func(m_handle);
+
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        m_debugName = "";
+    #endif
+
         m_handle = VK_NULL_HANDLE;
-        m_handleState.set(HANDLE_BIT_IS_CREATED, false);
+        m_handleState.reset();
     }
 
 
