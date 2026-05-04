@@ -129,15 +129,18 @@ namespace vkn
 
         for (VkPhysicalDevice vkPhysDevice : vkPhysDevices) {
             if (IsPhysicalDeviceSuitable(vkPhysDevice, *info.pFeaturesRequirenments, *info.pPropertiesRequirenments, m_deviceProps, m_memoryProps, m_features2)) {
-                m_physDevice = vkPhysDevice;
-                isPicked = true;
+                Base::Create([vkPhysDevice, &isPicked](VkPhysicalDevice& device) {
+                    device = vkPhysDevice;
+                    isPicked = device != VK_NULL_HANDLE;
+
+                    return isPicked;
+                });
 
                 break;
             }
         }
 
         VK_ASSERT(isPicked);
-        SetCreated(isPicked);
 
         return *this;
     }
@@ -149,7 +152,6 @@ namespace vkn
             return *this;
         }
 
-        m_physDevice = VK_NULL_HANDLE;
         m_pInstance = nullptr;
 
         m_memoryProps = {};
@@ -161,8 +163,73 @@ namespace vkn
         m_features11 = {};
         m_features2 = {};
 
-        Object::Destroy();
+        Base::Destroy([](VkPhysicalDevice& device) {
+            device = VK_NULL_HANDLE;
+        });
 
         return *this;
+    }
+
+
+    const VkPhysicalDeviceMemoryProperties& PhysicalDevice::GetMemoryProperties() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_memoryProps;
+    }
+
+
+    const VkPhysicalDeviceProperties2& PhysicalDevice::GetProperties() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_deviceProps;
+    }
+
+
+    const VkPhysicalDeviceDescriptorBufferPropertiesEXT& PhysicalDevice::GetDescBufferProperties() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_deviceDescBufferProps;
+    }
+
+
+    const VkPhysicalDeviceVulkan11Features& PhysicalDevice::GetFeatures11() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_features11;
+    }
+
+
+    const VkPhysicalDeviceVulkan12Features& PhysicalDevice::GetFeatures12() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_features12;
+    }
+
+
+    const VkPhysicalDeviceVulkan13Features& PhysicalDevice::GetFeatures13() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_features13;
+    }
+
+
+    const VkPhysicalDeviceFeatures2& PhysicalDevice::GetFeatures2() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_features2;
+    }
+
+
+    const Instance& PhysicalDevice::GetInstance() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pInstance;
+    }
+
+
+    Instance& PhysicalDevice::GetInstance()
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pInstance;
     }
 }

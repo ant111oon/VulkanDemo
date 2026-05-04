@@ -91,7 +91,7 @@ namespace vkn
         submitInfo2.signalSemaphoreInfoCount = m_signalSemaphoreCache.size();
         submitInfo2.pSignalSemaphoreInfos    = m_signalSemaphoreCache.empty() ? nullptr : m_signalSemaphoreCache.data();
         
-        VK_CHECK(vkQueueSubmit2(m_queue, 1, &submitInfo2, pFinishFence ? pFinishFence->Get() : VK_NULL_HANDLE));
+        VK_CHECK(vkQueueSubmit2(Get(), 1, &submitInfo2, pFinishFence ? pFinishFence->Get() : VK_NULL_HANDLE));
     
         return *this;
     }
@@ -137,7 +137,21 @@ namespace vkn
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr;
 
-        return vkQueuePresentKHR(m_queue, &presentInfo);
+        return vkQueuePresentKHR(Get(), &presentInfo);
+    }
+
+
+    Device& Queue::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pOwner;
+    }
+
+
+    uint32_t Queue::GetFamilyIndex() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_familyIndex;
     }
 
 
@@ -164,14 +178,13 @@ namespace vkn
         }
 
         std::swap(m_pOwner, queue.m_pOwner);
-        std::swap(m_queue, queue.m_queue);
         std::swap(m_familyIndex, queue.m_familyIndex);
         std::swap(m_presentSemaphoreCache, queue.m_presentSemaphoreCache);
         std::swap(m_cmdBuffCache, queue.m_cmdBuffCache);
         std::swap(m_waitSemaphoreCache, queue.m_waitSemaphoreCache);
         std::swap(m_signalSemaphoreCache, queue.m_signalSemaphoreCache);
 
-        Object::operator=(std::move(queue));
+        Base::operator=(std::move(queue));
 
         return *this;
     }
@@ -188,10 +201,14 @@ namespace vkn
         VK_ASSERT(queue != VK_NULL_HANDLE);
 
         m_pOwner = pOwner;
-        m_queue = queue;
         m_familyIndex = familyIndex;
 
-        SetCreated(true);
+        Base::Create([vkQueue = queue](VkQueue& queue) {
+            queue = vkQueue;
+            return queue != VK_NULL_HANDLE;
+        });
+
+        VK_ASSERT(IsCreated());
 
         return *this;
     }
@@ -203,7 +220,6 @@ namespace vkn
             return *this;
         }
 
-        m_queue = VK_NULL_HANDLE;
         m_familyIndex = UINT32_MAX;
         m_pOwner = nullptr;
         m_presentSemaphoreCache = {};
@@ -211,7 +227,9 @@ namespace vkn
         m_waitSemaphoreCache = {};
         m_signalSemaphoreCache = {};
 
-        Object::Destroy();
+        Base::Destroy([](VkQueue& queue) {
+            queue = VK_NULL_HANDLE;
+        });
 
         return *this;
     }
@@ -307,15 +325,16 @@ namespace vkn
         deviceCreateInfo.enabledExtensionCount = info.extensions.size();
         deviceCreateInfo.ppEnabledExtensionNames = info.extensions.empty() ? nullptr : info.extensions.data();
 
-        m_device = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateDevice(m_pPhysDevice->Get(), &deviceCreateInfo, nullptr, &m_device));
-        VK_ASSERT(m_device != VK_NULL_HANDLE);
+        Base::Create([pPhysDevice = m_pPhysDevice, &deviceCreateInfo](VkDevice& device) {
+            VK_CHECK(vkCreateDevice(pPhysDevice->Get(), &deviceCreateInfo, nullptr, &device));
+            return device != VK_NULL_HANDLE;
+        });
+        
+        VK_ASSERT(IsCreated());
         
         VkQueue queue = VK_NULL_HANDLE;
-        vkGetDeviceQueue(m_device, queueFamilyIndex, 0, &queue);
+        vkGetDeviceQueue(Get(), queueFamilyIndex, 0, &queue);
         m_queue.Create(this, queue, queueFamilyIndex);
-
-        SetCreated(true);
 
         m_queue.SetDebugName("DEVICE_GFX_CMP_TRANSFER_QUEUE");
 
@@ -329,14 +348,12 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyDevice(m_device, nullptr);
-        m_device = VK_NULL_HANDLE;
-
         m_pPhysDevice = VK_NULL_HANDLE;
-
         m_queue.Destroy();
 
-        Object::Destroy();
+        Base::Destroy([](VkDevice& device) {
+            vkDestroyDevice(device, nullptr);
+        });
 
         return *this;
     }
@@ -345,20 +362,40 @@ namespace vkn
     const Device& Device::WaitIdle() const
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkDeviceWaitIdle(m_device));
+        VK_CHECK(vkDeviceWaitIdle(Get()));
 
         return *this;
     }
 
 
-    PFN_vkVoidFunction Device::GetProcAddr(const char* pFuncName) const
+    PFN_vkVoidFunction Device::GetProcAddr(std::string_view procName) const
     {
         VK_ASSERT(IsCreated());
-        VK_ASSERT(pFuncName != nullptr);
 
-        PFN_vkVoidFunction pFunc = vkGetDeviceProcAddr(m_device, pFuncName);
-        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", pFuncName);
+        PFN_vkVoidFunction pFunc = vkGetDeviceProcAddr(Get(), procName.data());
+        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", procName.data());
 
         return pFunc;
+    }
+
+
+    PhysicalDevice& Device::GetPhysDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pPhysDevice;
+    }
+
+
+    const Queue& Device::GetQueue() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_queue;
+    }
+
+
+    Queue& Device::GetQueue()
+    {
+        VK_ASSERT(IsCreated());
+        return m_queue;
     }
 }

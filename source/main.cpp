@@ -1832,6 +1832,10 @@ static void CreateVkPhysAndLogicalDevices()
 
     s_vkDevice.Create(deviceCreateInfo);
     CORE_ASSERT(s_vkDevice.IsCreated());
+
+    s_vkDevice.SetObjDebugName(s_vkInstance, "VK_INSTANCE");
+    s_vkDevice.SetObjDebugName(s_vkPhysDevice, "VK_PHYS_DEVICE");
+    s_vkDevice.SetObjDebugName(s_vkDevice, "VK_DEVICE");
 }
 
 

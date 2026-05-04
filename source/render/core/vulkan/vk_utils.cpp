@@ -1,28 +1,28 @@
 #include "pch.h"
 
 #include "vk_utils.h"
-#include "vk_instance.h"
+#include "vk_device.h"
 
 
 namespace vkn::utils
 { 
-    void SetObjectName(Device& device, uint64_t objectHandle, VkObjectType objectType, const char* pObjectName)
+    void SetHandleGPUName(Device& device, uint64_t handle, VkObjectType type, std::string_view name)
     {
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         static PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName = nullptr;
 
         if (!vkSetDebugUtilsObjectName) {
             vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)GetInstance().GetProcAddr("vkSetDebugUtilsObjectNameEXT");
         }
 
-        VK_ASSERT(pObjectName != nullptr);
-
         VkDebugUtilsObjectNameInfoEXT dbgUtilsObjNameInfo = {};
         dbgUtilsObjNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-        dbgUtilsObjNameInfo.objectHandle = objectHandle;
-        dbgUtilsObjNameInfo.objectType = objectType;
-        dbgUtilsObjNameInfo.pObjectName = pObjectName;
+        dbgUtilsObjNameInfo.objectHandle = handle;
+        dbgUtilsObjNameInfo.objectType = type;
+        dbgUtilsObjNameInfo.pObjectName = name.data();
 
         VK_CHECK(vkSetDebugUtilsObjectName(device.Get(), &dbgUtilsObjNameInfo));
+    #endif
     }
 
 

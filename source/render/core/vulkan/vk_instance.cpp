@@ -143,19 +143,20 @@ namespace vkn
         vkInstCreateInfo.enabledExtensionCount = info.extensions.size();
         vkInstCreateInfo.ppEnabledExtensionNames = info.extensions.empty() ? nullptr : info.extensions.data();
 
-        m_instance = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &m_instance));
+        Base::Create([&vkInstCreateInfo](VkInstance& instance) {
+            VK_CHECK(vkCreateInstance(&vkInstCreateInfo, nullptr, &instance));
 
-        VK_ASSERT(m_instance != VK_NULL_HANDLE);
+            return instance != VK_NULL_HANDLE;
+        });
+        
+        VK_ASSERT(IsCreated());
 
         if (dbgMessengerEnabled) {
-            m_dbgMessenger = CreateDebugMessenger(m_instance, vkDbgMessengerCreateInfo);
+            m_dbgMessenger = CreateDebugMessenger(Get(), vkDbgMessengerCreateInfo);
             VK_ASSERT(m_dbgMessenger != VK_NULL_HANDLE);
         }
 
         m_apiVersion = info.apiVersion;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -167,26 +168,24 @@ namespace vkn
             return *this;
         }
 
-        DestroyDebugMessenger(m_instance, m_dbgMessenger);
+        DestroyDebugMessenger(Get(), m_dbgMessenger);
         
-        vkDestroyInstance(m_instance, nullptr);
-        m_instance = VK_NULL_HANDLE;
-
         m_apiVersion = UINT32_MAX;
 
-        Object::Destroy();
+        Base::Destroy([](VkInstance& instance) {
+            vkDestroyInstance(instance, nullptr);
+        });
 
         return *this;
     }
 
 
-    PFN_vkVoidFunction Instance::GetProcAddr(const char* pFuncName) const
+    PFN_vkVoidFunction Instance::GetProcAddr(std::string_view procName) const
     {
         VK_ASSERT(IsCreated());
-        VK_ASSERT(pFuncName != nullptr);
 
-        PFN_vkVoidFunction pFunc = vkGetInstanceProcAddr(m_instance, pFuncName);
-        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", pFuncName);
+        PFN_vkVoidFunction pFunc = vkGetInstanceProcAddr(Get(), procName.data());
+        VK_ASSERT_MSG(pFunc != nullptr, "Failed to load Vulkan function: %s", procName.data());
 
         return pFunc;
     }

@@ -60,7 +60,7 @@ namespace vkn
         m_debugName.fill('\0');
         memcpy_s(m_debugName.data(), m_debugName.size(), pName, nameLength);
 
-        utils::SetObjectName(device, objectHandle, objectType, pName);
+        utils::SetHandleGPUName(device, objectHandle, objectType, pName);
     #endif
     }
 

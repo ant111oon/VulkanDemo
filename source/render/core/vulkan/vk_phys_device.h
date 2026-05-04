@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_instance.h"
 
 
@@ -36,9 +35,12 @@ namespace vkn
     };
 
 
-    class PhysicalDevice : public Object
+    class PhysicalDevice : public Handle<VkPhysicalDevice>
     {
         friend PhysicalDevice& GetPhysicalDevice();
+
+    public:
+        using Base = Handle<VkPhysicalDevice>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PhysicalDevice);
@@ -49,72 +51,25 @@ namespace vkn
         PhysicalDevice& Create(const PhysicalDeviceCreateInfo& info);
         PhysicalDevice& Destroy();
 
-        const VkPhysicalDevice& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_physDevice;
-        }
+        const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const;
 
-        const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_memoryProps;
-        }
+        const VkPhysicalDeviceProperties2& GetProperties() const;
 
-        const VkPhysicalDeviceProperties2& GetProperties() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_deviceProps;
-        }
+        const VkPhysicalDeviceDescriptorBufferPropertiesEXT& GetDescBufferProperties() const;
 
-        const VkPhysicalDeviceDescriptorBufferPropertiesEXT& GetDescBufferProperties() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_deviceDescBufferProps;
-        }
+        const VkPhysicalDeviceVulkan11Features& GetFeatures11() const;
+        const VkPhysicalDeviceVulkan12Features& GetFeatures12() const;
+        const VkPhysicalDeviceVulkan13Features& GetFeatures13() const;
+        const VkPhysicalDeviceFeatures2& GetFeatures2() const;
 
-        const VkPhysicalDeviceVulkan11Features& GetFeatures11() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_features11;
-        }
-
-        const VkPhysicalDeviceVulkan12Features& GetFeatures12() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_features12;
-        }
-
-        const VkPhysicalDeviceVulkan13Features& GetFeatures13() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_features13;
-        }
-
-        const VkPhysicalDeviceFeatures2& GetFeatures2() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_features2;
-        }
-
-        const Instance& GetInstance() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pInstance;
-        }
-
-        Instance& GetInstance()
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pInstance;
-        }
+        const Instance& GetInstance() const;
+        Instance& GetInstance();
 
     private:
         PhysicalDevice() = default;
 
     private:
         Instance* m_pInstance = nullptr;
-        VkPhysicalDevice m_physDevice = VK_NULL_HANDLE;
 
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};
         VkPhysicalDeviceProperties2 m_deviceProps = {};

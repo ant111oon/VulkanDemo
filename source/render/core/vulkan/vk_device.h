@@ -3,7 +3,8 @@
 
 #include "vk_phys_device.h"
 #include "vk_surface.h"
-#include "vk_object.h"
+
+#include "vk_utils.h"
 
 #include <span>
 
@@ -23,9 +24,13 @@ namespace vkn
     };
 
 
-    class Queue : public Object
+    class Queue : public Handle<VkQueue>
     {
         friend class Device;
+
+    public:
+        using Base = Handle<VkQueue>;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Queue);
 
@@ -45,28 +50,9 @@ namespace vkn
         VkResult Present(Swapchain& swapchain, uint32_t imageIndex, Semaphore* pWaitSemaphores);
         VkResult Present(Swapchain& swapchain, uint32_t imageIndex, std::span<Semaphore*> waitSemaphores = {});
 
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("Queue");
-        }
+        Device& GetDevice() const;
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pOwner;
-        }
-
-        const VkQueue& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_queue;
-        }
-
-        uint32_t GetFamilyIndex() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_familyIndex;
-        }
+        uint32_t GetFamilyIndex() const;
 
     private:
         Queue(Device* pOwner, VkQueue queue, uint32_t familyIndex);
@@ -77,17 +63,9 @@ namespace vkn
         Queue& Create(Device* pOwner, VkQueue queue, uint32_t familyIndex);
         Queue& Destroy();
 
-        template <typename... Args>
-        Queue& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_queue, VK_OBJECT_TYPE_QUEUE, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
     private:
         Device* m_pOwner = nullptr;
 
-        VkQueue m_queue = VK_NULL_HANDLE;
         uint32_t m_familyIndex = UINT32_MAX;
 
         std::vector<VkSemaphore> m_presentSemaphoreCache;
@@ -111,9 +89,12 @@ namespace vkn
     };
 
 
-    class Device : public Object
+    class Device : public Handle<VkDevice>
     {
         friend Device& GetDevice();
+
+    public:
+        using Base = Handle<VkDevice>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Device);
@@ -126,39 +107,29 @@ namespace vkn
 
         const Device& WaitIdle() const;
 
-        PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
-
-        const VkDevice& Get() const
+        template <typename Handle, typename... Args>
+        Device& SetObjDebugName(Handle& handle, std::string_view fmt, Args&&... args)
         {
             VK_ASSERT(IsCreated());
-            return m_device;
+
+            handle.SetDebugName(fmt, std::forward<Args>(args)...);
+            utils::SetHandleGPUName(*this, handle, fmt, std::forward<Args>(args)...);
+
+            return *this;
         }
 
-        PhysicalDevice& GetPhysDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pPhysDevice;
-        }
+        PFN_vkVoidFunction GetProcAddr(std::string_view procName) const;
 
-        const Queue& GetQueue() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_queue;
-        }
+        PhysicalDevice& GetPhysDevice() const;
 
-        Queue& GetQueue()
-        {
-            VK_ASSERT(IsCreated());
-            return m_queue;
-        }
+        const Queue& GetQueue() const;
+        Queue& GetQueue();
 
     private:
         Device() = default;
 
     private:
         PhysicalDevice* m_pPhysDevice = nullptr;
-        VkDevice m_device = VK_NULL_HANDLE;
-
         Queue m_queue;
     };
 

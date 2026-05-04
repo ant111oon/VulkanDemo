@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vk_object.h"
+#include "vk_handle.h"
 
 #include <span>
 
@@ -32,9 +32,12 @@ namespace vkn
     };
 
 
-    class Instance : public Object
+    class Instance : public Handle<VkInstance>
     {
         friend Instance& GetInstance();
+
+    public:
+        using Base = Handle<VkInstance>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Instance);
@@ -45,13 +48,7 @@ namespace vkn
         Instance& Create(const InstanceCreateInfo& info);
         Instance& Destroy();
 
-        PFN_vkVoidFunction GetProcAddr(const char* pFuncName) const;
-
-        const VkInstance& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_instance;
-        }
+        PFN_vkVoidFunction GetProcAddr(std::string_view procName) const;
 
         uint32_t GetApiVersion() const
         {
@@ -63,9 +60,7 @@ namespace vkn
         Instance() = default;
 
     private:
-        VkInstance m_instance = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT m_dbgMessenger = VK_NULL_HANDLE;
-
         uint32_t m_apiVersion = UINT32_MAX;
     };
 
