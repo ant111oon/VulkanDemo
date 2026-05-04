@@ -43,7 +43,7 @@ namespace eng
     }
 
 
-    void LogInternal(FILE* pStream, LogLevel level, const char* file, uint32_t line, const char* system, const char* fmt, ...) noexcept
+    void LogInternal(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, ...) noexcept
     {
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
@@ -55,19 +55,17 @@ namespace eng
         SetConsoleTextAttribute(hConsole, OUTPUT_COLOR_DEFAULT);
         fputs("] ", pStream);
 
-        if (system) {
-            fprintf_s(pStream, "[%s]: ", system);
-        }
+        fprintf_s(pStream, "[%s]: ", system.data());
 
         va_list args;
-        va_start(args, fmt);
+        va_start(args, fmt.data());
             SetConsoleTextAttribute(hConsole, logColor);
-                vfprintf_s(pStream, fmt, args);
+                vfprintf_s(pStream, fmt.data(), args);
             SetConsoleTextAttribute(hConsole, OUTPUT_COLOR_DEFAULT);
 
         #ifdef ENG_PROFILING_ENABLED
             char profilerMsgBuffer[2048] = {'\0'};
-            vsprintf_s(profilerMsgBuffer, fmt, args);
+            vsprintf_s(profilerMsgBuffer, fmt.data(), args);
             
             switch (level) {
                 case LogLevel::TRACE:
@@ -86,7 +84,7 @@ namespace eng
         #endif
         va_end(args);
 
-        fprintf_s(pStream, " (%s:%u)\n", file, line);
+        fprintf_s(pStream, " (%s:%u)\n", file.data(), line);
     }
 }
 #else

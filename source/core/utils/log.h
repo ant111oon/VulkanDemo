@@ -17,11 +17,11 @@ namespace eng
     enum class LogLevel { TRACE, INFO, WARN, ERROR };
     
     
-    void LogInternal(FILE* pStream, LogLevel level, const char* file, uint32_t line, const char* system, const char* fmt, ...) noexcept;
+    void LogInternal(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, ...) noexcept;
     
     
     template <typename... Args>
-    inline void Log(FILE* pStream, LogLevel level, const char* file, uint32_t line, const char* system, const char* fmt, Args&&... args) noexcept
+    inline void Log(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, Args&&... args) noexcept
     {
         LogInternal(pStream, level, file, line, system, fmt, std::forward<Args>(args)...);
     }

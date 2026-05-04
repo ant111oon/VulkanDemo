@@ -58,12 +58,11 @@ namespace vkn
         }
 
         std::swap(m_pDevice, layout.m_pDevice);
-        std::swap(m_layout, layout.m_layout);
         std::swap(m_descriptors, layout.m_descriptors);
         std::swap(m_size, layout.m_size);
         std::swap(m_state, layout.m_state);
 
-        Object::operator=(std::move(layout));
+        Base::operator=(std::move(layout));
 
         return *this;
     }
@@ -78,7 +77,7 @@ namespace vkn
     DescriptorSetLayout& DescriptorSetLayout::Create(Device* pDevice, VkDescriptorSetLayoutCreateFlags flags, std::span<const DescriptorInfo> descriptorInfos)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of descriptor layout %s", GetDebugName());
+            VK_LOG_WARN("Recreation of descriptor layout %s", GetDebugName().data());
             Destroy();
         }
 
@@ -145,19 +144,23 @@ namespace vkn
 
         createInfo.pNext = &bindingFlagsCreateInfo;
 
-        VK_CHECK(vkCreateDescriptorSetLayout(pDevice->Get(), &createInfo, nullptr, &m_layout));
-        VK_ASSERT(m_layout != VK_NULL_HANDLE);
+        Base::Create([pDevice, &createInfo](VkDescriptorSetLayout& layout) {
+            VK_CHECK(vkCreateDescriptorSetLayout(pDevice->Get(), &createInfo, nullptr, &layout));
+            return layout != VK_NULL_HANDLE;
+        });
+        
+        VK_ASSERT(IsCreated());
 
         m_pDevice = pDevice;
 
         if ((flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
             m_state.set(BIT_IS_DESCRIPTOR_BUFFER_SOMPATIBLE, true);
 
-            vkGetDescriptorSetLayoutSize(pDevice->Get(), m_layout, &m_size);
+            vkGetDescriptorSetLayoutSize(pDevice->Get(), Get(), &m_size);
             m_size = GetAlignedSize(m_size, pDevice->GetPhysDevice().GetDescBufferProperties().descriptorBufferOffsetAlignment);
     
             for (size_t i = 0; i < bindings.size(); ++i) {
-                vkGetDescriptorSetLayoutBindingOffset(pDevice->Get(), m_layout, descriptorInfos[i].binding, &m_descriptors[i].offset);
+                vkGetDescriptorSetLayoutBindingOffset(pDevice->Get(), Get(), descriptorInfos[i].binding, &m_descriptors[i].offset);
             }
         }
 
@@ -166,8 +169,6 @@ namespace vkn
                 return l.binding < r.binding;
             });
         }
-
-        SetCreated(true);
 
         return *this;
     }
@@ -179,8 +180,10 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyDescriptorSetLayout(m_pDevice->Get(), m_layout, nullptr);        
-        m_layout = VK_NULL_HANDLE;
+
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkDescriptorSetLayout& layout) {
+            vkDestroyDescriptorSetLayout(vkDevice, layout, nullptr);        
+        });
         
         m_pDevice = nullptr;
         
@@ -188,8 +191,6 @@ namespace vkn
         m_descriptors = {};
 
         m_state = {};
-
-        Object::Destroy();
 
         return *this;
     }
@@ -218,7 +219,7 @@ namespace vkn
         VK_ASSERT(IsCreated());
         
         const uint64_t index = GetDescriptorIndex(binding);
-        VK_ASSERT_MSG(index != UINT64_MAX, "Failed to find descriptor with binding %u in %s", binding, GetDebugName());
+        VK_ASSERT_MSG(index != UINT64_MAX, "Failed to find descriptor with binding %u in %s", binding, GetDebugName().data());
 
         return m_descriptors[index];
     }
@@ -232,6 +233,44 @@ namespace vkn
         VK_ASSERT(index != UINT64_MAX);
 
         return m_descriptors[index];
+    }
+
+
+    bool DescriptorSetLayout::HasDescriptor(uint32_t binding) const
+    {
+        VK_ASSERT(IsCreated());
+        return GetDescriptorIndex(binding) != UINT64_MAX;
+    }
+
+
+    size_t DescriptorSetLayout::GetDescriptorsCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_descriptors.size();
+    }
+
+
+    Device& DescriptorSetLayout::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    // Size of descriptor set in bytes
+    VkDeviceSize DescriptorSetLayout::GetSize() const
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(IsDescriptorBufferCompatible());
+
+        return m_size;
+    }
+
+
+    bool DescriptorSetLayout::IsDescriptorBufferCompatible() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_DESCRIPTOR_BUFFER_SOMPATIBLE);
     }
 
 
@@ -286,8 +325,6 @@ namespace vkn
         std::swap(m_buffer, buffer.m_buffer);
         std::swap(m_entries, buffer.m_entries);
 
-        Object::operator=(std::move(buffer));
-
         return *this;
     }
 
@@ -305,7 +342,7 @@ namespace vkn
     DescriptorBuffer& DescriptorBuffer::Create(const DescriptorBufferCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of buffer %s", GetDebugName());
+            VK_LOG_WARN("Recreation of buffer %s", GetDebugName().data());
             Destroy();
         }
 
@@ -334,7 +371,7 @@ namespace vkn
 
         m_buffer.Create(info.pDevice, bufferSize, usage, allocInfo);
 
-        SetCreated(m_buffer.IsCreated());
+        VK_ASSERT(m_buffer.IsCreated());
 
         return *this;
     }
@@ -349,8 +386,6 @@ namespace vkn
         m_buffer.Destroy();
         m_entries = {};
 
-        Object::Destroy();
-
         return *this;
     }
 
@@ -358,7 +393,7 @@ namespace vkn
     DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Buffer& buffer)
     {
         VK_ASSERT(IsCreated());
-        VK_ASSERT_MSG(buffer.HasDeviceAddress(), "Buffer %s must have device address to be compatible with descriptor buffer", buffer.GetDebugName());
+        VK_ASSERT_MSG(buffer.HasDeviceAddress(), "Buffer %s must have device address to be compatible with descriptor buffer", buffer.GetDebugName().data());
 
         Device& device = GetDevice();
 
@@ -464,5 +499,38 @@ namespace vkn
         VK_ASSERT(index < m_entries.size());
 
         return m_entries[index].pLayout;
+    }
+
+
+    std::string_view DescriptorBuffer::GetDebugName() const
+    {
+        return m_buffer.GetDebugName();
+    }
+
+
+    size_t DescriptorBuffer::GetSetCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_entries.size();
+    }
+
+
+    Device& DescriptorBuffer::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_buffer.GetDevice();
+    }
+
+
+    const Buffer& DescriptorBuffer::Get() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_buffer;
+    }
+
+
+    bool DescriptorBuffer::IsCreated() const
+    {
+        return m_buffer.IsCreated();
     }
 }

@@ -35,7 +35,7 @@ namespace vkn
     };
 
 
-    class DescriptorSetLayout : public Object
+    class DescriptorSetLayout : public Handle<VkDescriptorSetLayout>
     {
     public:
         struct Descriptor
@@ -45,6 +45,8 @@ namespace vkn
             uint32_t         count;
             VkDeviceSize     offset; // Byte offset inside descriptor set
         };
+
+        using Base = Handle<VkDescriptorSetLayout>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(DescriptorSetLayout);
@@ -68,56 +70,15 @@ namespace vkn
         Descriptor& GetDescriptorByBinding(uint32_t binding);
         const Descriptor& GetDescriptorByBinding(uint32_t binding) const;
 
-        bool HasDescriptor(uint32_t binding) const
-        {
-            VK_ASSERT(IsCreated());
-            return GetDescriptorIndex(binding) != UINT64_MAX;
-        }
+        bool HasDescriptor(uint32_t binding) const;
+        size_t GetDescriptorsCount() const;
 
-        size_t GetDescriptorsCount() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_descriptors.size();
-        }
-
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("DescriptorSetLayout");
-        }
-
-        template <typename... Args>
-        DescriptorSetLayout& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
-
-        const VkDescriptorSetLayout& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_layout;
-        }
+        Device& GetDevice() const;
 
         // Size of descriptor set in bytes
-        VkDeviceSize GetSize() const
-        {
-            VK_ASSERT(IsCreated());
-            VK_ASSERT(IsDescriptorBufferCompatible());
+        VkDeviceSize GetSize() const;
 
-            return m_size;
-        }
-
-        bool IsDescriptorBufferCompatible() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_DESCRIPTOR_BUFFER_SOMPATIBLE);
-        }
+        bool IsDescriptorBufferCompatible() const;
 
     private:
         uint64_t GetDescriptorIndex(uint32_t binding) const;
@@ -131,8 +92,6 @@ namespace vkn
 
     private:        
         Device* m_pDevice = nullptr;
-
-        VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
         
         std::vector<Descriptor> m_descriptors;
         VkDeviceSize m_size = 0;
@@ -148,7 +107,7 @@ namespace vkn
     };
 
 
-    class DescriptorBuffer : public Object
+    class DescriptorBuffer
     {
     public:
         ENG_DECL_CLASS_NO_COPIABLE(DescriptorBuffer);
@@ -173,17 +132,6 @@ namespace vkn
         VkDeviceSize GetSetOffset(uint32_t index) const;
         const DescriptorSetLayout* GetDescriptorSetLayout(uint32_t index) const;
 
-        size_t GetSetCount() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_entries.size();
-        }
-
-        std::string_view GetDebugName() const
-        {
-            return m_buffer.GetDebugName().data();
-        }
-
         template <typename... Args>
         DescriptorBuffer& SetDebugName(std::string_view fmt, Args&&... args)
         {
@@ -191,17 +139,15 @@ namespace vkn
             return *this;
         }
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_buffer.GetDevice();
-        }
+        std::string_view GetDebugName() const;
 
-        const Buffer& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_buffer;
-        }
+        size_t GetSetCount() const;
+
+        Device& GetDevice() const;
+
+        const Buffer& Get() const;
+
+        bool IsCreated() const;
 
     private:
         struct Entry

@@ -43,9 +43,8 @@ namespace vkn
         }
 
         std::swap(m_pDevice, layout.m_pDevice);
-        std::swap(m_layout, layout.m_layout);
 
-        Object::operator=(std::move(layout));
+        Base::operator=(std::move(layout));
 
         return *this;
     }
@@ -60,7 +59,7 @@ namespace vkn
     PSOLayout& PSOLayout::Create(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges, VkPipelineLayoutCreateFlags flags)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of PSO layout %s", GetDebugName());
+            VK_LOG_WARN("Recreation of PSO layout %s", GetDebugName().data());
             Destroy();
         }
 
@@ -91,12 +90,14 @@ namespace vkn
         createInfo.pushConstantRangeCount = pushConstantRanges.size();
         createInfo.pPushConstantRanges = pushConstantRanges.empty() ? nullptr : pushConstantRanges.data();
 
-        VK_CHECK(vkCreatePipelineLayout(pDevice->Get(), &createInfo, nullptr, &m_layout));
-        VK_ASSERT(m_layout != VK_NULL_HANDLE);
+        Base::Create([pDevice, &createInfo](VkPipelineLayout& layout) {
+            VK_CHECK(vkCreatePipelineLayout(pDevice->Get(), &createInfo, nullptr, &layout));
+            return layout != VK_NULL_HANDLE;
+        });
+
+        VK_ASSERT(IsCreated());
 
         m_pDevice = pDevice;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -108,14 +109,20 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyPipelineLayout(m_pDevice->Get(), m_layout, nullptr);
-        m_layout = VK_NULL_HANDLE;
+        Base::Destroy([pDevice = m_pDevice](VkPipelineLayout& layout) {
+            vkDestroyPipelineLayout(pDevice->Get(), layout, nullptr);
+        });
 
         m_pDevice = nullptr;
 
-        Object::Destroy();
-
         return *this;
+    }
+
+
+    Device& PSOLayout::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
     }
 
 
@@ -128,18 +135,19 @@ namespace vkn
     PSO& PSO::Create(PSOLayout* pLayout, VkPipeline pso, State state)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of PSO %s", GetDebugName());
+            VK_LOG_WARN("Recreation of PSO %s", GetDebugName().data());
             Destroy();
         }
 
         VK_ASSERT(pLayout && pLayout->IsCreated());
-        VK_ASSERT(pso != VK_NULL_HANDLE);
+        
+        Base::Create([&pso](VkPipeline& dstPSO) {
+            dstPSO = pso;
+            return dstPSO != VK_NULL_HANDLE;
+        });
 
         m_pLayout = pLayout;
-        m_pso = pso;
         m_state = state;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -168,11 +176,9 @@ namespace vkn
         }
 
         std::swap(m_pLayout, pso.m_pLayout);
-
-        std::swap(m_pso, pso.m_pso);
         std::swap(m_state, pso.m_state);
 
-        Object::operator=(std::move(pso));
+        Base::operator=(std::move(pso));
 
         return *this; 
     }
@@ -184,14 +190,12 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyPipeline(m_pLayout->GetDevice().Get(), m_pso, nullptr);
-        m_pso = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = GetDevice().Get()](VkPipeline& pso) {
+            vkDestroyPipeline(vkDevice, pso, nullptr);
+        });
 
         m_pLayout = nullptr;
-
         m_state.reset();
-
-        Object::Destroy();
 
         return *this;
     }
@@ -209,6 +213,33 @@ namespace vkn
 
         VK_ASSERT_FAIL("Unknown PSO type");
         return VK_PIPELINE_BIND_POINT_MAX_ENUM;
+    }
+
+
+    Device& PSO::GetDevice() const
+    {
+        return GetLayout().GetDevice();
+    }
+
+
+    PSOLayout& PSO::GetLayout() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pLayout;
+    }
+
+
+    bool PSO::IsRasterization() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_RASTERIZATION_PSO);
+    }
+
+
+    bool PSO::IsCompute() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_state.test(BIT_IS_COMPUTE_PSO);
     }
 
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_instance.h"
 
 
@@ -13,9 +12,12 @@ namespace vkn
     };
 
 
-    class Surface : public Object
+    class Surface : public Handle<VkSurfaceKHR>
     {
         friend Surface& GetSurface();
+
+    public:
+        using Base = Handle<VkSurfaceKHR>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Surface);
@@ -26,18 +28,11 @@ namespace vkn
         Surface& Create(const SurfaceCreateInfo& info);
         Surface& Destroy();
 
-        const VkSurfaceKHR& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_surface;
-        }
-
     private:
         Surface() = default;
 
     private:
         Instance* m_pInstance = nullptr;
-        VkSurfaceKHR m_surface = VK_NULL_HANDLE;
     };
 
 

@@ -40,10 +40,9 @@ namespace vkn
             Destroy();
         }
 
-        Object::operator=(std::move(semaphore));
-
         std::swap(m_pDevice, semaphore.m_pDevice);
-        std::swap(m_semaphore, semaphore.m_semaphore);
+        
+        Base::operator=(std::move(semaphore));
 
         return *this; 
     }
@@ -52,25 +51,24 @@ namespace vkn
     Semaphore& Semaphore::Create(const SemaphoreCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of semaphore %s", GetDebugName());
+            VK_LOG_WARN("Recreation of semaphore %s", GetDebugName().data());
             Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
 
-        VkDevice vkDevice = info.pDevice->Get();
-
         VkSemaphoreCreateInfo semaphoreCreateInfo = {};
         semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         semaphoreCreateInfo.flags = info.flags;
 
-        m_semaphore = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, &m_semaphore));
-        VK_ASSERT(m_semaphore != VK_NULL_HANDLE);
+        Base::Create([vkDevice = info.pDevice->Get(), &semaphoreCreateInfo](VkSemaphore& semaphore) {
+            VK_CHECK(vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, &semaphore));
+            return semaphore != VK_NULL_HANDLE;
+        });
+        
+        VK_ASSERT(IsCreated());
 
         m_pDevice = info.pDevice;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -92,19 +90,19 @@ namespace vkn
             return *this;
         }
 
-        vkDestroySemaphore(m_pDevice->Get(), m_semaphore, nullptr);
-        m_semaphore = VK_NULL_HANDLE;
+        Base::Destroy([device = m_pDevice->Get()](VkSemaphore& semaphore) {
+            vkDestroySemaphore(device, semaphore, nullptr);
+        });
 
         m_pDevice = nullptr;
-
-        Object::Destroy();
 
         return *this;
     }
 
 
-    const char* Semaphore::GetDebugName() const
+    Device& Semaphore::GetDevice() const
     {
-        return Object::GetDebugName("Semaphore");
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
     }
 }

@@ -128,7 +128,7 @@ namespace vkn
     {
         if (IsCreated()) {
             VK_LOG_WARN("Recreation of swapchain texture %s, Old Size: [%u, %u]; New Size: [%u, %u]", 
-                GetDebugName(), m_extent.width, m_extent.height, extent.width, extent.height);
+                GetDebugName().data(), m_extent.width, m_extent.height, extent.width, extent.height);
             
             Destroy();
         }
@@ -136,8 +136,14 @@ namespace vkn
         VK_ASSERT(pDevice && pDevice->IsCreated());
         VK_ASSERT(image != VK_NULL_HANDLE);
 
+        Base::Create([vkImage = image](VkImage& dstImage) {
+            dstImage = vkImage;
+            return dstImage != VK_NULL_HANDLE;
+        });
+
+        VK_ASSERT(IsCreated());
+
         m_pDevice = pDevice;
-        m_image = image;        
         m_type = type;
         m_extent = extent;
         m_format = format;
@@ -145,8 +151,6 @@ namespace vkn
         m_currLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
         m_currAccessMask = VK_ACCESS_2_NONE;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -159,7 +163,6 @@ namespace vkn
         }
 
         m_pDevice = nullptr;
-        m_image = VK_NULL_HANDLE;
         m_type = {};
         m_extent = {};
         m_format = {};
@@ -168,9 +171,51 @@ namespace vkn
         m_currStageMask = VK_PIPELINE_STAGE_2_NONE;
         m_currAccessMask = VK_ACCESS_2_NONE;
 
-        Object::Destroy();
+        Base::Destroy([](VkImage& image) {
+            image = VK_NULL_HANDLE;
+        });
 
         return *this;        
+    }
+
+
+    Device& SCTexture::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    VkImageType SCTexture::GetType() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_type;
+    }
+
+
+    VkFormat SCTexture::GetFormat() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_format;    
+    }
+
+
+    VkExtent2D SCTexture::GetSize() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_extent;    
+    }
+
+
+    uint32_t SCTexture::GetSizeX() const
+    {
+        return GetSize().width;
+    }
+
+
+    uint32_t SCTexture::GetSizeY() const
+    {
+        return GetSize().height;
     }
 
 
@@ -190,6 +235,41 @@ namespace vkn
     }
 
 
+    const SCTexture& SCTextureView::GetOwner() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pOwner;
+    }
+
+
+    VkImageViewType SCTextureView::GetType() const
+    {
+        VK_ASSERT(IsValid());
+        return m_type;
+    }
+
+
+    VkFormat SCTextureView::GetFormat() const
+    {
+        VK_ASSERT(IsValid());
+        return m_format;
+    }
+
+    
+    VkComponentMapping SCTextureView::GetComponentMapping() const
+    {
+        VK_ASSERT(IsValid());
+        return m_components;
+    }
+
+
+    VkImageSubresourceRange SCTextureView::GetSubresoureRange() const
+    {
+        VK_ASSERT(IsValid());
+        return m_subresourceRange;
+    }
+
+
     Device& SCTextureView::GetDevice() const
     {
         VK_ASSERT(IsValid());
@@ -206,7 +286,7 @@ namespace vkn
     SCTextureView& SCTextureView::Create(const SCTexture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of swapchain texture view %s", GetDebugName());
+            VK_LOG_WARN("Recreation of swapchain texture view %s", GetDebugName().data());
             Destroy();
         }
 
@@ -222,12 +302,12 @@ namespace vkn
         imageViewCreateInfo.components = mapping;
         imageViewCreateInfo.subresourceRange = subresourceRange;
 
-        m_view = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &m_view));
+        Base::Create([vkDevice = pOwner->GetDevice().Get(), &imageViewCreateInfo](VkImageView& view) {
+            VK_CHECK(vkCreateImageView(vkDevice, &imageViewCreateInfo, nullptr, &view));
+            return view != VK_NULL_HANDLE;
+        });
 
-        VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan swapchain texture view");
-
-        SetCreated(true);
+        VK_ASSERT_MSG(IsCreated(), "Failed to create Vulkan swapchain texture view");
 
         m_pOwner = pOwner;
 
@@ -246,16 +326,15 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyImageView(GetDevice().Get(), m_view, nullptr);
-        m_view = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = GetDevice().Get()](VkImageView& view) {
+            vkDestroyImageView(vkDevice, view, nullptr);
+        });
 
         m_pOwner = nullptr;
         m_type = {};
         m_format = {};
         m_components = {};
         m_subresourceRange = {};
-
-        Object::Destroy();
 
         return *this;
     }
@@ -288,8 +367,9 @@ namespace vkn
         DestroyTextureViews();
         DestroyTextures();
 
-        vkDestroySwapchainKHR(m_pDevice->Get(), m_swapchain, nullptr);
-        m_swapchain = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkSwapchainKHR& swapchain) {
+            vkDestroySwapchainKHR(vkDevice, swapchain, nullptr);
+        });
 
         m_pDevice = nullptr;
         m_pSurface = nullptr;
@@ -305,8 +385,6 @@ namespace vkn
         m_transform = {};
         m_compositeAlpha = {};
         m_presentMode = {};
-
-        Object::Destroy();
 
         return *this;
     }
@@ -337,18 +415,21 @@ namespace vkn
             return *this;
         }
 
-        if (m_swapchain) {
-            vkDestroySwapchainKHR(info.pDevice->Get(), m_swapchain, nullptr);
+        if (IsCreated()) {
+            Base::Destroy([vkDevice = GetDevice().Get()](VkSwapchainKHR& swapchain) {
+                vkDestroySwapchainKHR(vkDevice, swapchain, nullptr);
+            });
         }
 
-        SetCreated(true);
         succeded = true;
+
+        Base::Create([newSwapchain](VkSwapchainKHR& swapchain) {
+            swapchain = newSwapchain;
+            return swapchain != VK_NULL_HANDLE;
+        });
 
         m_pSurface = info.pSurface;
         m_pDevice = info.pDevice;
-
-        m_swapchain = newSwapchain;
-
         m_flags = swapchainCreateInfo.flags;
         m_minImageCount = swapchainCreateInfo.minImageCount;
         m_textureFormat = swapchainCreateInfo.imageFormat;
@@ -397,20 +478,79 @@ namespace vkn
     }
 
 
+    Device& Swapchain::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    Surface& Swapchain::GetSurface() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pSurface;
+    }
+
+
+    SCTexture& Swapchain::GetTexture(size_t idx)
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(idx < GetTextureCount());
+        return m_textures[idx];
+    }
+
+
+    SCTextureView& Swapchain::GetTextureView(size_t idx)
+    {
+        VK_ASSERT(IsCreated());
+        VK_ASSERT(idx < GetTextureCount());
+        return m_textureViews[idx];
+    }
+
+
+    VkFormat Swapchain::GetTextureFormat() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_textureFormat;
+    }
+
+
+    VkColorSpaceKHR Swapchain::GetTextureColorSpace() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_textureColorSpace;
+    }
+
+
+    VkExtent2D Swapchain::GetTextureExtent() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_textureExtent;
+    }
+
+
+    uint32_t Swapchain::GetTextureCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_currImageCount;
+    }
+
+
     void Swapchain::PullTextures()
     {
         VkDevice vkDevice = m_pDevice->Get();
 
         VK_ASSERT(vkDevice != VK_NULL_HANDLE);
-        VK_ASSERT(m_swapchain != VK_NULL_HANDLE);
+        VK_ASSERT(Get() != VK_NULL_HANDLE);
 
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &m_currImageCount, nullptr));
+        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, Get(), &m_currImageCount, nullptr));
         
         std::vector<VkImage> images(m_currImageCount);
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, m_swapchain, &m_currImageCount, images.data()));
+        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, Get(), &m_currImageCount, images.data()));
 
         for (uint32_t i = 0; i < m_currImageCount; ++i) {
-            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat).SetDebugName("SWAPCHAIN_TEXTURE_%u", i);
+            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat);
+            m_pDevice->SetObjDebugName(m_textures[i], "SWAPCHAIN_TEXTURE_%u", i);
         }
     }
 
@@ -427,9 +567,6 @@ namespace vkn
     {
         VK_ASSERT(!m_textures.empty());
 
-        VkDevice vkDevice = m_pDevice->Get();
-        VK_ASSERT(vkDevice != VK_NULL_HANDLE);
-
         for (size_t i = 0; i < m_currImageCount; ++i) {
             const VkComponentMapping components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
@@ -440,7 +577,8 @@ namespace vkn
             subresourceRange.layerCount = 1;
             subresourceRange.levelCount = 1;
 
-            m_textureViews[i].Create(m_textures[i], components, subresourceRange).SetDebugName("SWAPCHAIN_TEXTURE_VIEW_%u", i);
+            m_textureViews[i].Create(m_textures[i], components, subresourceRange);
+            GetDevice().SetObjDebugName(m_textureViews[i], "SWAPCHAIN_TEXTURE_VIEW_%u", i);
         }
     }
 

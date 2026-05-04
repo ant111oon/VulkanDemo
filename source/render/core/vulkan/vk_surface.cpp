@@ -21,19 +21,21 @@ namespace vkn
         VK_ASSERT(info.pInstance && info.pInstance->IsCreated());
         VK_ASSERT(info.pWndHandle != nullptr);
 
-        m_pInstance = info.pInstance;
-
     #ifdef ENG_OS_WINDOWS
         VkWin32SurfaceCreateInfoKHR vkWin32SurfCreateInfo = {};
         vkWin32SurfCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
         vkWin32SurfCreateInfo.hinstance = GetModuleHandle(nullptr);
         vkWin32SurfCreateInfo.hwnd = (HWND)info.pWndHandle;
 
-        VK_CHECK(vkCreateWin32SurfaceKHR(m_pInstance->Get(), &vkWin32SurfCreateInfo, nullptr, &m_surface));
+        Base::Create([vkInst = info.pInstance->Get(), &vkWin32SurfCreateInfo](VkSurfaceKHR& surface) {
+            VK_CHECK(vkCreateWin32SurfaceKHR(vkInst, &vkWin32SurfCreateInfo, nullptr, &surface));
+            return surface != VK_NULL_HANDLE;
+        });
     #endif
-        VK_ASSERT(m_surface != VK_NULL_HANDLE);
 
-        SetCreated(true);
+        VK_ASSERT(IsCreated());
+
+        m_pInstance = info.pInstance;
 
         return *this;
     }
@@ -45,12 +47,11 @@ namespace vkn
             return *this;
         }
         
-        vkDestroySurfaceKHR(m_pInstance->Get(), m_surface, nullptr);
-        m_surface = VK_NULL_HANDLE;
+        Base::Destroy([vkInst = m_pInstance->Get()](VkSurfaceKHR& surface) {
+            vkDestroySurfaceKHR(vkInst, surface, nullptr);
+        });
 
         m_pInstance = nullptr;
-
-        Object::Destroy();
 
         return *this;
     }

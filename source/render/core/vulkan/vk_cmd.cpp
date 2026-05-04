@@ -12,11 +12,11 @@
 namespace vkn
 {
     #define VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR) \
-        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsStarted(), "Cmd Buffer \'%s\' is not started", CMD_BUFFER_PTR->GetDebugName())
+        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsStarted(), "Cmd Buffer \'%s\' is not started", CMD_BUFFER_PTR->GetDebugName().data())
 
     #define VK_CHECK_CMD_BUFFER_RENDERING_STARTED(CMD_BUFFER_PTR)   \
         VK_CHECK_CMD_BUFFER_STARTED(CMD_BUFFER_PTR);                \
-        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName())
+        VK_ASSERT_MSG(CMD_BUFFER_PTR->IsRenderingStarted(), "Cmd Buffer \'%s\' rendering is not started", CMD_BUFFER_PTR->GetDebugName().data())
 
     static PFN_vkCmdBindDescriptorBuffersEXT vkCmdBindDescriptorBuffers = nullptr;
     static PFN_vkCmdSetDescriptorBufferOffsetsEXT vkCmdSetDescriptorBufferOffsets = nullptr;
@@ -733,7 +733,7 @@ namespace vkn
             for (uint32_t layer = 0; layer < data.layerCount; ++layer) {
                 for (uint32_t mip = 0; mip < data.mipCount; ++mip) {
                     VK_ASSERT_MSG(currState == pTexture->GetAccessState(data.baseLayer + layer, data.baseMip + mip),
-                        "Texture %s has different access state for required layers and mips", pTexture->GetDebugName());
+                        "Texture %s has different access state for required layers and mips", pTexture->GetDebugName().data());
                 }
             }
         #endif
@@ -829,7 +829,7 @@ namespace vkn
         VK_ASSERT(pOwnerPool->IsCreated());
 
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of command buffer %s", GetDebugName());
+            VK_LOG_WARN("Recreation of command buffer %s", GetDebugName().data());
             m_pOwner->FreeCmdBuffer(*this);
         }
 
@@ -938,7 +938,7 @@ namespace vkn
     CmdPool& CmdPool::Create(const CmdPoolCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of command pool %s", GetDebugName());
+            VK_LOG_WARN("Recreation of command pool %s", GetDebugName().data());
             Destroy();
         }
 

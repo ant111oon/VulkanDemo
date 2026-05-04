@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_device.h"
 
 
@@ -13,8 +12,11 @@ namespace vkn
     };
 
 
-    class Semaphore : public Object
+    class Semaphore : public Handle<VkSemaphore>
     {
+    public:
+        using Base = Handle<VkSemaphore>;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Semaphore);
 
@@ -32,30 +34,9 @@ namespace vkn
 
         Semaphore& Destroy();
 
-        template <typename... Args>
-        Semaphore& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_semaphore, VK_OBJECT_TYPE_SEMAPHORE, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
-        const char* GetDebugName() const;
-
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
-
-        const VkSemaphore& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_semaphore;
-        }
+        Device& GetDevice() const;
 
     private:
         Device* m_pDevice = nullptr;
-
-        VkSemaphore m_semaphore = VK_NULL_HANDLE;
     };
 }

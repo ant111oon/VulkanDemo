@@ -6,19 +6,6 @@
 
 namespace vkn
 {
-    TextureView& TextureView::SetDebugName(const char* pName)
-    {
-        Object::SetDebugName(GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pName);
-        return *this;
-    }
-
-
-    const char* TextureView::GetDebugName() const
-    { 
-        return Object::GetDebugName("TextureView");
-    }
-
-
     Device& TextureView::GetDevice() const
     {
         VK_ASSERT(IsValid());
@@ -27,7 +14,6 @@ namespace vkn
 
 
     TextureView::TextureView(const TextureViewCreateInfo& info)
-        : Object()
     {
         Create(info);
     }
@@ -56,12 +42,11 @@ namespace vkn
         }
 
         std::swap(m_pOwner, view.m_pOwner);
-        std::swap(m_view, view.m_view);
         std::swap(m_type, view.m_type);
         std::swap(m_format, view.m_format);
         std::swap(m_subresRange, view.m_subresRange);
 
-        Object::operator=(std::move(view));
+        Base::operator=(std::move(view));
 
         return *this;
     }
@@ -70,7 +55,7 @@ namespace vkn
     TextureView& TextureView::Create(const TextureViewCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of texture view %s", GetDebugName());
+            VK_LOG_WARN("Recreation of texture view %s", GetDebugName().data());
             Destroy();
         }
 
@@ -101,12 +86,12 @@ namespace vkn
         imageViewCreateInfo.components = info.components;
         imageViewCreateInfo.subresourceRange = subresourceRange;
 
-        m_view = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &m_view));
+        Base::Create([vkDevice = pOwner->GetDevice().Get(), &imageViewCreateInfo](VkImageView& view) {
+            VK_CHECK(vkCreateImageView(vkDevice, &imageViewCreateInfo, nullptr, &view));
+            return view != VK_NULL_HANDLE;
+        });
 
-        VK_ASSERT_MSG(m_view != VK_NULL_HANDLE, "Failed to create Vulkan texture view");
-
-        SetCreated(true);
+        VK_ASSERT(IsCreated());
 
         m_pOwner = pOwner;
 
@@ -142,15 +127,14 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyImageView(GetDevice().Get(), m_view, nullptr);
-        m_view = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = GetDevice().Get()](VkImageView& view) {
+            vkDestroyImageView(vkDevice, view, nullptr);
+        });
 
         m_pOwner = nullptr;
         m_type = {};
         m_format = {};
         m_subresRange = {};
-
-        Object::Destroy();
 
         return *this;
     }
@@ -163,6 +147,58 @@ namespace vkn
     }
 
 
+    const Texture& TextureView::GetOwner() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pOwner;
+    }
+
+
+    VkImageViewType TextureView::GetType() const
+    {
+        VK_ASSERT(IsValid());
+        return m_type;
+    }
+
+
+    VkFormat TextureView::GetFormat() const
+    {
+        VK_ASSERT(IsValid());
+        return m_format;
+    }
+
+
+    const TextureView::SubresourceRange& TextureView::GetSubresourceRange() const
+    {
+        VK_ASSERT(IsValid());
+        return m_subresRange;
+    }
+
+
+    uint32_t TextureView::GetViewBaseMip() const
+    {
+        return GetSubresourceRange().baseMipLevel; 
+    }
+
+
+    uint32_t TextureView::GetViewMipCount() const
+    {
+        return GetSubresourceRange().levelCount; 
+    }
+
+
+    uint32_t TextureView::GetViewBaseArrayLayer() const
+    {
+        return GetSubresourceRange().baseArrayLayer; 
+    }
+
+
+    uint32_t TextureView::GetViewLayerCount() const
+    {
+        return GetSubresourceRange().layerCount; 
+    }
+
+
     bool TextureView::IsValid() const
     {
         return IsCreated() && m_pOwner->IsCreated();
@@ -170,7 +206,6 @@ namespace vkn
 
 
     Texture::Texture(const TextureCreateInfo& info)
-        : Object()
     {
         Create(info);
     }
@@ -198,8 +233,6 @@ namespace vkn
             Destroy();
         }
         
-        std::swap(m_image, image.m_image);
-        
         std::swap(m_allocation, image.m_allocation);
         std::swap(m_allocInfo, image.m_allocInfo);
         
@@ -213,7 +246,7 @@ namespace vkn
 
         std::swap(m_pDevice, image.m_pDevice);
 
-        Object::operator=(std::move(image));
+        Base::operator=(std::move(image));
 
         return *this;
     }
@@ -222,7 +255,7 @@ namespace vkn
     Texture& Texture::Create(const TextureCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of texture %s", GetDebugName());
+            VK_LOG_WARN("Recreation of texture %s", GetDebugName().data());
             Destroy();
         }
 
@@ -254,11 +287,12 @@ namespace vkn
         allocCI.usage = info.pAllocInfo->usage;
         allocCI.flags = info.pAllocInfo->flags;
 
-        m_image = VK_NULL_HANDLE;
-        m_allocation = VK_NULL_HANDLE;
-        VK_CHECK(vmaCreateImage(GetAllocator().Get(), &ci, &allocCI, &m_image, &m_allocation, &m_allocInfo));
+        Base::Create([&ci, &allocCI, &allocation = m_allocation, &allocInfo = m_allocInfo](VkImage& dstImage) {
+            VK_CHECK(vmaCreateImage(GetAllocator().Get(), &ci, &allocCI, &dstImage, &allocation, &allocInfo));
+            return dstImage != VK_NULL_HANDLE;
+        });
         
-        VK_ASSERT_MSG(m_image != VK_NULL_HANDLE, "Failed to create Vulkan texture");
+        VK_ASSERT_MSG(IsCreated(), "Failed to create Vulkan texture");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
 
         m_pDevice = info.pDevice;
@@ -271,8 +305,6 @@ namespace vkn
 
         InitAccessStates(info);
 
-        SetCreated(true);
-
         return *this;
     }
 
@@ -283,9 +315,10 @@ namespace vkn
             return *this;
         }
 
-        vmaDestroyImage(GetAllocator().Get(), m_image, m_allocation);
-        m_allocation = VK_NULL_HANDLE;
-        m_image = VK_NULL_HANDLE;
+        Base::Destroy([&allocation = m_allocation](VkImage& image) {
+            vmaDestroyImage(GetAllocator().Get(), image, allocation);
+            allocation = VK_NULL_HANDLE;
+        });
 
         m_allocInfo = {};
 
@@ -298,8 +331,6 @@ namespace vkn
         m_layersCount = 1;
 
         m_accessStates = AccessState{};
-
-        Object::Destroy();
 
         return *this;
     }
@@ -318,7 +349,7 @@ namespace vkn
                 if (layout != GetAccessState(layerIdx, mipIdx).layout) {
                     VK_ASSERT_FAIL( 
                         "Texture %s subresource range (baseLayer: %u, layerCount: %u, baseMip: %u, mipCount: %u) has inconsistent layout", 
-                        GetDebugName(), baseLayer, layerCount, baseMip, mipCount
+                        GetDebugName().data(), baseLayer, layerCount, baseMip, mipCount
                     );
                     
                     return false;
@@ -328,6 +359,80 @@ namespace vkn
     #endif
 
         return true;
+    }
+
+
+    Device& Texture::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    VkDeviceMemory Texture::GetMemory() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_allocInfo.deviceMemory;
+    }
+
+
+    VkDeviceSize Texture::GetMemorySize() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_allocInfo.size;
+    }
+
+
+    VkImageType Texture::GetType() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_type;
+    }
+
+
+    VkFormat Texture::GetFormat() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_format;    
+    }
+
+
+    const VkExtent3D& Texture::GetSize() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_extent;    
+    }
+
+
+    uint32_t Texture::GetMipCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_mipCount;
+    }
+
+
+    uint32_t Texture::GetLayerCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_layersCount;
+    }
+
+
+    uint32_t Texture::GetSizeX() const
+    {
+        return GetSize().width;
+    }
+
+
+    uint32_t Texture::GetSizeY() const
+    {
+        return GetSize().height;
+    }
+
+
+    uint32_t Texture::GetSizeZ() const
+    {
+        return GetSize().depth;
     }
 
 
@@ -393,7 +498,6 @@ namespace vkn
 
 
     Sampler::Sampler(const SamplerCreateInfo& info)
-        : Object()
     {
         Create(info);
     }
@@ -421,10 +525,9 @@ namespace vkn
             Destroy();
         }
         
-        std::swap(m_sampler, sampler.m_sampler);
         std::swap(m_pDevice, sampler.m_pDevice);
 
-        Object::operator=(std::move(sampler));
+        Base::operator=(std::move(sampler));
 
         return *this;
     }
@@ -433,13 +536,11 @@ namespace vkn
     Sampler& Sampler::Create(const SamplerCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of sampler %s", GetDebugName());
+            VK_LOG_WARN("Recreation of sampler %s", GetDebugName().data());
             Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
-
-        VkDevice vkDevice = info.pDevice->Get();
 
         VkSamplerCreateInfo createInfo = {};
 
@@ -460,12 +561,12 @@ namespace vkn
         createInfo.borderColor = info.borderColor;
         createInfo.unnormalizedCoordinates = info.unnormalizedCoordinates;
 
-        m_sampler = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateSampler(vkDevice, &createInfo, nullptr, &m_sampler));
+        Base::Create([vkDevice = info.pDevice->Get(), &createInfo](VkSampler& sampler) {
+            VK_CHECK(vkCreateSampler(vkDevice, &createInfo, nullptr, &sampler));
+            return sampler != VK_NULL_HANDLE;
+        });
 
-        VK_ASSERT_MSG(m_sampler != VK_NULL_HANDLE, "Failed to create Vulkan sampler");
-
-        SetCreated(true);
+        VK_ASSERT_MSG(IsCreated(), "Failed to create Vulkan sampler");
 
         m_pDevice = info.pDevice;
 
@@ -479,21 +580,19 @@ namespace vkn
             return *this;
         }
 
-        VkDevice vkDevice = m_pDevice->Get();
-
-        vkDestroySampler(vkDevice, m_sampler, nullptr);
-        m_sampler = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkSampler& sampler) {
+            vkDestroySampler(vkDevice, sampler, nullptr);
+        });
 
         m_pDevice = nullptr;
-
-        Object::Destroy();
 
         return *this;
     }
 
 
-    const char* Sampler::GetDebugName() const
+    Device& Sampler::GetDevice() const
     {
-        return Object::GetDebugName("Sampler");
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
     }
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_device.h"
 
 #include <vk_mem_alloc.h>
@@ -27,7 +26,7 @@ namespace vkn
     };
 
 
-    class Allocator : public Object
+    class Allocator
     {
         friend Allocator& GetAllocator();
 
@@ -40,17 +39,10 @@ namespace vkn
         Allocator& Create(const AllocatorCreateInfo& info);
         Allocator& Destroy();
 
-        const VmaAllocator& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_allocator;
-        }
+        const VmaAllocator& Get() const;
+        Device& GetDevice() const;
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
+        bool IsCreated() const;
 
     private:
         Allocator() = default;

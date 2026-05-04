@@ -4,7 +4,6 @@
 
 #ifdef ENG_PROFILING_ENABLED
 
-#include "vk_object.h"
 #include "vk_cmd.h"
 
 #include <tracy/TracyVulkan.hpp>
@@ -12,7 +11,7 @@
 
 namespace vkn
 {
-    class Profiler : public Object
+    class Profiler
     {
         friend Profiler& GetProfiler();
 
@@ -33,6 +32,8 @@ namespace vkn
         const Profiler& CollectCmdStats(CmdBuffer& cmd) const;
 
         TracyVkCtx GetTracyContext() const;
+
+        bool IsCreated() const;
 
     private:
         Profiler() = default;

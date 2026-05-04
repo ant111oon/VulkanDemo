@@ -34,12 +34,10 @@ namespace vkn
         }
 
         std::swap(m_pDevice, shader.m_pDevice);
-
-        std::swap(m_module, shader.m_module);
         std::swap(m_stage, shader.m_stage);
         std::swap(m_entryName, shader.m_entryName);
 
-        Object::operator=(std::move(shader));
+        Base::operator=(std::move(shader));
 
         return *this; 
     }
@@ -48,7 +46,7 @@ namespace vkn
     Shader& Shader::Create(Device* pDevice, VkShaderStageFlagBits stage, std::span<const uint8_t> spirv, std::string_view entryName)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of shader %s", GetDebugName());
+            VK_LOG_WARN("Recreation of shader %s", GetDebugName().data());
             Destroy();
         }
 
@@ -68,15 +66,17 @@ namespace vkn
         shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(spirv.data());
         shaderCreateInfo.codeSize = spirv.size();
 
-        VK_CHECK(vkCreateShaderModule(pDevice->Get(), &shaderCreateInfo, nullptr, &m_module));
-        VK_ASSERT(m_module != VK_NULL_HANDLE);
+        Base::Create([vkDevice = pDevice->Get(), &shaderCreateInfo](VkShaderModule& shader) {
+            VK_CHECK(vkCreateShaderModule(vkDevice, &shaderCreateInfo, nullptr, &shader));
+            return shader != VK_NULL_HANDLE;
+        });
+
+        VK_ASSERT(IsCreated());
 
         m_pDevice = pDevice;
         m_stage = stage;
 
         memcpy(m_entryName.data(), entryName.data(), std::min(m_entryName.size() - 1, entryName.size()));
-
-        SetCreated(true);
 
         return *this;
     }
@@ -88,16 +88,57 @@ namespace vkn
             return *this;
         }
         
-        vkDestroyShaderModule(m_pDevice->Get(), m_module, nullptr);
-        m_module = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkShaderModule& shader) {
+            vkDestroyShaderModule(vkDevice, shader, nullptr);
+        });
         
         m_stage = {};
         m_entryName.fill(0);
         
         m_pDevice = nullptr;
 
-        Object::Destroy();
-
         return *this;
+    }
+
+
+    Device& Shader::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    const VkShaderStageFlagBits& Shader::GetStage() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_stage;
+    }
+
+
+    const std::string_view Shader::GetEntryName() const
+    {
+        VK_ASSERT(IsCreated());
+        return std::string_view(m_entryName.data(), m_entryName.size() - 1);
+    }
+
+
+    bool Shader::IsVertexShader() const
+    {
+        VK_ASSERT(IsCreated());
+        return (m_stage & VK_SHADER_STAGE_VERTEX_BIT) != 0;
+    }
+
+
+    bool Shader::IsPixelShader() const
+    {
+        VK_ASSERT(IsCreated());
+        return (m_stage & VK_SHADER_STAGE_FRAGMENT_BIT) != 0;
+    }
+
+
+    bool Shader::IsComputeShader() const
+    {
+        VK_ASSERT(IsCreated());
+        return (m_stage & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
     }
 }

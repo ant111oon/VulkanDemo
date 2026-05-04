@@ -36,8 +36,6 @@ namespace vkn
 
         m_pDevice = info.pDevice;
         
-        SetCreated(true);
-        
         return *this;
     }
 
@@ -53,8 +51,26 @@ namespace vkn
 
         m_pDevice = nullptr;
 
-        Object::Destroy();
-
         return *this;
+    }
+
+
+    const VmaAllocator& Allocator::Get() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_allocator;
+    }
+
+
+    Device& Allocator::GetDevice() const
+    {
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    bool Allocator::IsCreated() const
+    {
+        return m_allocator != VK_NULL_HANDLE;
     }
 }

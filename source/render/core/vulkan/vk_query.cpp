@@ -12,7 +12,6 @@ namespace vkn
 
 
     QueryPool::QueryPool(const QueryCreateInfo& info)
-        : Object()
     {
         Create(info);
     }
@@ -34,12 +33,10 @@ namespace vkn
             Destroy();
         }
 
-        Object::operator=(std::move(pool));
-
         std::swap(m_pDevice, pool.m_pDevice);
-
-        std::swap(m_pool, pool.m_pool);
         std::swap(m_queryCount, pool.m_queryCount);
+
+        Base::operator=(std::move(pool));
 
         return *this; 
     }
@@ -48,13 +45,11 @@ namespace vkn
     QueryPool& QueryPool::Create(const QueryCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of query pool %s", GetDebugName());
+            VK_LOG_WARN("Recreation of query pool %s", GetDebugName().data());
             Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
-
-        VkDevice vkDevice = info.pDevice->Get();
 
         VkQueryPoolCreateInfo queryPoolCreateInfo = {};
         queryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
@@ -63,14 +58,15 @@ namespace vkn
         queryPoolCreateInfo.queryCount = info.queryCount;
         queryPoolCreateInfo.pipelineStatistics = info.pipelineStatistics;
 
-        m_pool = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, nullptr, &m_pool));
-        VK_ASSERT(m_pool != VK_NULL_HANDLE);
+        Base::Create([vkDevice = info.pDevice->Get(), &queryPoolCreateInfo](VkQueryPool& pool) {
+            VK_CHECK(vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, nullptr, &pool));
+            return pool != VK_NULL_HANDLE;
+        });
+        
+        VK_ASSERT(IsCreated());
 
         m_pDevice = info.pDevice;
         m_queryCount = info.queryCount;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -82,16 +78,13 @@ namespace vkn
             return *this;
         }
 
-        VkDevice vkDevice = m_pDevice->Get();
-
-        vkDestroyQueryPool(vkDevice, m_pool, nullptr);
-        m_pool = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkQueryPool& pool) {
+            vkDestroyQueryPool(vkDevice, pool, nullptr);
+        });
         
         m_queryCount = 0;
 
         m_pDevice = nullptr;
-
-        Object::Destroy();
 
         return *this;
     }
@@ -103,7 +96,7 @@ namespace vkn
         VK_ASSERT(pData);
         VK_ASSERT(firstQuery + queryCount <= m_queryCount);
 
-        const VkResult result = vkGetQueryPoolResults(m_pDevice->Get(), m_pool, firstQuery, queryCount, dataSize, pData, stride, flags);
+        const VkResult result = vkGetQueryPoolResults(m_pDevice->Get(), Get(), firstQuery, queryCount, dataSize, pData, stride, flags);
 
         if (result != VK_NOT_READY) {
             VK_CHECK(result);
@@ -119,8 +112,16 @@ namespace vkn
     }
 
 
-    const char* QueryPool::GetDebugName() const
+    Device& QueryPool::GetDevice() const
     {
-        return Object::GetDebugName("QueryPool");
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
+    }
+
+
+    size_t QueryPool::GetQueryCount() const
+    {
+        VK_ASSERT(IsCreated());
+        return m_queryCount;
     }
 }

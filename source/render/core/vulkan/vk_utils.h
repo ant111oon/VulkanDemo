@@ -33,6 +33,9 @@ namespace vkn::utils
     inline VkObjectType GetObjectType<VkFence>() { return VK_OBJECT_TYPE_FENCE; }
 
     template <>
+    inline VkObjectType GetObjectType<VkSemaphore>() { return VK_OBJECT_TYPE_SEMAPHORE; }
+
+    template <>
     inline VkObjectType GetObjectType<VkDeviceMemory>() { return VK_OBJECT_TYPE_DEVICE_MEMORY; }
 
     template <>

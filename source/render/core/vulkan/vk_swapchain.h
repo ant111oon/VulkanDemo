@@ -1,18 +1,19 @@
 #pragma once
 
-#include "vk_device.h"
 #include "vk_surface.h"
-
 #include "vk_texture.h"
 
 
 namespace vkn
 {
     // Swapchain texture wrapper
-    class SCTexture : public Object
+    class SCTexture : public Handle<VkImage>
     {
         friend class CmdBuffer;
         friend class Swapchain;
+
+    public:
+        using Base = Handle<VkImage>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(SCTexture);
@@ -21,43 +22,14 @@ namespace vkn
         SCTexture() = default;
         ~SCTexture();
 
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("SCTexture");
-        }
+        Device& GetDevice() const;
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
+        VkImageType GetType() const;
+        VkFormat GetFormat() const;
 
-        const VkImage& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_image;
-        }
-
-        VkImageType GetType() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_type;
-        }
-
-        VkFormat GetFormat() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_format;    
-        }
-
-        VkExtent2D GetSize() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_extent;    
-        }
-
-        uint32_t GetSizeX() const { return GetSize().width; }
-        uint32_t GetSizeY() const { return GetSize().height; }
+        VkExtent2D GetSize() const;
+        uint32_t GetSizeX() const;
+        uint32_t GetSizeY() const;
 
     private:
         SCTexture& Create(Device* pDevice, VkImage image, VkImageType type, VkExtent2D extent, VkFormat format);
@@ -83,17 +55,8 @@ namespace vkn
             return m_currAccessMask;
         }
 
-        template <typename... Args>
-        SCTexture& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_image, VK_OBJECT_TYPE_IMAGE, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
     private:
         Device* m_pDevice = nullptr;
-
-        VkImage m_image = VK_NULL_HANDLE;
 
         VkImageType m_type = {};
         VkExtent2D m_extent = {};
@@ -106,9 +69,12 @@ namespace vkn
 
 
     // Swapchain texture view wrapper
-    class SCTextureView : public Object
+    class SCTextureView : public Handle<VkImageView>
     {
         friend class Swapchain;
+
+    public:
+        using Base = Handle<VkImageView>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(SCTextureView);
@@ -117,45 +83,13 @@ namespace vkn
         SCTextureView() = default;
         ~SCTextureView();
 
-        const char* GetDebugName() const { return Object::GetDebugName("SCTextureView"); }
-
-        const SCTexture& GetOwner() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pOwner;
-        }
-
         Device& GetDevice() const;
+        const SCTexture& GetOwner() const;
 
-        const VkImageView& Get() const
-        {
-            VK_ASSERT(IsValid());
-            return m_view;
-        }
-
-        VkImageViewType GetType() const
-        {
-            VK_ASSERT(IsValid());
-            return m_type;
-        }
-
-        VkFormat GetFormat() const
-        {
-            VK_ASSERT(IsValid());
-            return m_format;
-        }
-        
-        VkComponentMapping GetComponentMapping() const
-        {
-            VK_ASSERT(IsValid());
-            return m_components;
-        }
-
-        VkImageSubresourceRange GetSubresoureRange() const
-        {
-            VK_ASSERT(IsValid());
-            return m_subresourceRange;
-        }
+        VkFormat GetFormat() const;
+        VkImageViewType GetType() const;
+        VkComponentMapping GetComponentMapping() const;
+        VkImageSubresourceRange GetSubresoureRange() const;
 
         bool IsValid() const;
 
@@ -163,17 +97,8 @@ namespace vkn
         SCTextureView& Create(const SCTexture& texture, const VkComponentMapping mapping, const VkImageSubresourceRange& subresourceRange);
         SCTextureView& Destroy();
 
-        template <typename... Args>
-        SCTextureView& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_view, VK_OBJECT_TYPE_IMAGE_VIEW, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
     private:
         const SCTexture* m_pOwner = nullptr;
-
-        VkImageView m_view = VK_NULL_HANDLE;
 
         VkImageViewType         m_type = {};
         VkFormat                m_format = {};
@@ -202,9 +127,12 @@ namespace vkn
     };
 
 
-    class Swapchain : public Object
+    class Swapchain : public Handle<VkSwapchainKHR>
     {
         friend Swapchain& GetSwapchain();
+
+    public:
+        using Base = Handle<VkSwapchainKHR>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Swapchain);
@@ -218,61 +146,17 @@ namespace vkn
         Swapchain& Recreate(const SwapchainCreateInfo& info, bool& succeded);
         Swapchain& Resize(uint32_t width, uint32_t height, bool& succeded);
 
-        const VkSwapchainKHR& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_swapchain;
-        }
+        Device& GetDevice() const;
+        Surface& GetSurface() const;
 
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
+        SCTexture& GetTexture(size_t idx);
+        SCTextureView& GetTextureView(size_t idx);
 
-        Surface& GetSurface() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pSurface;
-        }
+        VkFormat GetTextureFormat() const;
+        VkColorSpaceKHR GetTextureColorSpace() const;
+        VkExtent2D GetTextureExtent() const;
 
-        SCTexture& GetTexture(size_t idx)
-        {
-            VK_ASSERT(IsCreated());
-            VK_ASSERT(idx < GetTextureCount());
-            return m_textures[idx];
-        }
-
-        SCTextureView& GetTextureView(size_t idx)
-        {
-            VK_ASSERT(IsCreated());
-            VK_ASSERT(idx < GetTextureCount());
-            return m_textureViews[idx];
-        }
-
-        VkFormat GetTextureFormat() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_textureFormat;
-        }
-
-        VkColorSpaceKHR GetTextureColorSpace() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_textureColorSpace;
-        }
-
-        VkExtent2D GetTextureExtent() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_textureExtent;
-        }
-
-        uint32_t GetTextureCount() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_currImageCount;
-        }
+        uint32_t GetTextureCount() const;
 
     private:
         Swapchain() = default;
@@ -289,8 +173,6 @@ namespace vkn
     private:
         Device* m_pDevice = nullptr;
         Surface* m_pSurface = nullptr;
-
-        VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
 
         std::array<SCTexture, MAX_TEXTURE_COUNT> m_textures;
         std::array<SCTextureView, MAX_TEXTURE_COUNT> m_textureViews;

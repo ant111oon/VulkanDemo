@@ -40,10 +40,9 @@ namespace vkn
             Destroy();
         }
 
-        Object::operator=(std::move(fence));
-
         std::swap(m_pDevice, fence.m_pDevice);
-        std::swap(m_fence, fence.m_fence);
+        
+        Base::operator=(std::move(fence));
 
         return *this; 
     }
@@ -52,25 +51,24 @@ namespace vkn
     Fence& Fence::Create(const FenceCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of fence %s", GetDebugName());
+            VK_LOG_WARN("Recreation of fence %s", GetDebugName().data());
             Destroy();
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
 
-        VkDevice vkDevice = info.pDevice->Get();
-
         VkFenceCreateInfo fenceCreateInfo = {};
         fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceCreateInfo.flags = info.flags;
 
-        m_fence = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateFence(vkDevice, &fenceCreateInfo, nullptr, &m_fence));
-        VK_ASSERT(m_fence != VK_NULL_HANDLE);
+        Base::Create([vkDevice = info.pDevice->Get(), &fenceCreateInfo](VkFence& fence) {
+            VK_CHECK(vkCreateFence(vkDevice, &fenceCreateInfo, nullptr, &fence));
+            return fence != VK_NULL_HANDLE;
+        });
+
+        VK_ASSERT(IsCreated());
 
         m_pDevice = info.pDevice;
-
-        SetCreated(true);
 
         return *this;
     }
@@ -92,12 +90,11 @@ namespace vkn
             return *this;
         }
 
-        vkDestroyFence(m_pDevice->Get(), m_fence, nullptr);
-        m_fence = VK_NULL_HANDLE;
+        Base::Destroy([vkDevice = m_pDevice->Get()](VkFence& fence) {
+            vkDestroyFence(vkDevice, fence, nullptr);
+        });
 
         m_pDevice = nullptr;
-
-        Object::Destroy();
 
         return *this;
     }
@@ -106,7 +103,7 @@ namespace vkn
     Fence& Fence::Reset()
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkResetFences(m_pDevice->Get(), 1, &m_fence));
+        VK_CHECK(vkResetFences(m_pDevice->Get(), 1, &Get()));
         
         return *this;
     }
@@ -115,7 +112,7 @@ namespace vkn
     Fence& Fence::WaitFor(uint64_t timeout)
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &m_fence, VK_TRUE, timeout));
+        VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &Get(), VK_TRUE, timeout));
     
         return *this;
     }
@@ -124,7 +121,7 @@ namespace vkn
     VkResult Fence::GetStatus() const
     {
         VK_ASSERT(IsCreated());
-        return vkGetFenceStatus(m_pDevice->Get(), m_fence);
+        return vkGetFenceStatus(m_pDevice->Get(), Get());
     }
 
 
@@ -133,10 +130,11 @@ namespace vkn
         status = GetStatus();
         return *this;
     }
+    
 
-
-    const char* Fence::GetDebugName() const
+    Device& Fence::GetDevice() const
     {
-        return Object::GetDebugName("Fence");
+        VK_ASSERT(IsCreated());
+        return *m_pDevice;
     }
 }

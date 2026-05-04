@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vk_object.h"
 #include "vk_device.h"
 
 #include <array>
@@ -18,8 +17,11 @@ namespace vkn
     };
 
 
-    class QueryPool : public Object
+    class QueryPool : public Handle<VkQueryPool>
     {
+    public:
+        using Base = Handle<VkQueryPool>;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(QueryPool);
 
@@ -56,37 +58,12 @@ namespace vkn
 
         bool IsQueryIndexValid(uint32_t queryIndex) const;
 
-        template <typename... Args>
-        QueryPool& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_pool, VK_OBJECT_TYPE_QUERY_POOL, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
+        Device& GetDevice() const;
 
-        const char* GetDebugName() const;
-
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
-
-        const VkQueryPool& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_pool;
-        }
-
-        size_t GetQueryCount() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_queryCount;
-        }
+        size_t GetQueryCount() const;
 
     private:
         Device* m_pDevice = nullptr;
-
-        VkQueryPool m_pool = VK_NULL_HANDLE;
         size_t m_queryCount = 0;
     };
 }

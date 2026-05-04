@@ -75,7 +75,7 @@ namespace vkn
     Buffer& Buffer::Create(const BufferCreateInfo& info)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of buffer %s", GetDebugName());
+            VK_LOG_WARN("Recreation of buffer %s", GetDebugName().data());
             Destroy();
         }
 
@@ -224,7 +224,7 @@ namespace vkn
         VK_ASSERT(IsCreated());
 
         if (IsPersistentlyMapped()) {
-            VK_LOG_WARN("Attempt to unmap persistently mapped buffer %s", GetDebugName());
+            VK_LOG_WARN("Attempt to unmap persistently mapped buffer %s", GetDebugName().data());
             return *this;
         }
 

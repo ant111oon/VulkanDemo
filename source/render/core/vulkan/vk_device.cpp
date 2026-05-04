@@ -193,7 +193,7 @@ namespace vkn
     Queue& Queue::Create(Device* pOwner, VkQueue queue, uint32_t familyIndex)
     {
         if (IsCreated()) {
-            VK_LOG_WARN("Recreation of queue %s", GetDebugName());
+            VK_LOG_WARN("Recreation of queue %s", GetDebugName().data());
             Destroy();
         }
 

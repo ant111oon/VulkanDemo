@@ -1,15 +1,11 @@
 #pragma once
 
-#include "vk_object.h"
+#include "vk_descriptor.h"
+#include "vk_shader.h"
 
 
 namespace vkn
-{
-    class Device;
-    class DescriptorSetLayout;
-    class Shader;
-
-    
+{    
     struct PSOLayoutCreateInfo
     {
         Device*                               pDevice;
@@ -19,8 +15,11 @@ namespace vkn
     };
 
 
-    class PSOLayout : public Object
+    class PSOLayout : public Handle<VkPipelineLayout>
     {
+    public:
+        using Base = Handle<VkPipelineLayout>;
+
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PSOLayout);
 
@@ -37,41 +36,20 @@ namespace vkn
         PSOLayout& Create(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges = {}, VkPipelineLayoutCreateFlags flags = 0);
         PSOLayout& Destroy();
 
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("PSOLayout");
-        }
-
-        template <typename... Args>
-        PSOLayout& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
-
-        Device& GetDevice() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pDevice;
-        }
-
-        const VkPipelineLayout& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_layout;
-        }
+        Device& GetDevice() const;
 
     private:
         Device* m_pDevice = nullptr;
-
-        VkPipelineLayout m_layout = VK_NULL_HANDLE;
     };
 
 
-    class PSO : public Object
+    class PSO : public Handle<VkPipeline>
     {
         friend class GraphicsPSOBuilder;
         friend class ComputePSOBuilder;
+
+    public:
+        using Base = Handle<VkPipeline>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PSO);
@@ -84,48 +62,14 @@ namespace vkn
 
         PSO& Destroy();
 
-        template <typename... Args>
-        PSO& SetDebugName(const char* pFmt, Args&&... args)
-        {
-            Object::SetDebugName(GetDevice(), (uint64_t)m_pso, VK_OBJECT_TYPE_PIPELINE, pFmt, std::forward<Args>(args)...);
-            return *this;
-        }
+        Device& GetDevice() const;
 
-        const char* GetDebugName() const
-        {
-            return Object::GetDebugName("PSO");
-        }
-
-        Device& GetDevice() const
-        {
-            return GetLayout().GetDevice();
-        }
-
-        PSOLayout& GetLayout() const
-        {
-            VK_ASSERT(IsCreated());
-            return *m_pLayout;
-        }
-
-        const VkPipeline& Get() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_pso;
-        }
+        PSOLayout& GetLayout() const;
 
         VkPipelineBindPoint GetBindPoint() const;
 
-        bool IsRasterization() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_RASTERIZATION_PSO);
-        }
-
-        bool IsCompute() const
-        {
-            VK_ASSERT(IsCreated());
-            return m_state.test(BIT_IS_COMPUTE_PSO);
-        }
+        bool IsRasterization() const;
+        bool IsCompute() const;
 
     private:
         enum StateBits
@@ -143,8 +87,6 @@ namespace vkn
 
     private:
         PSOLayout* m_pLayout = nullptr;
-
-        VkPipeline m_pso = VK_NULL_HANDLE;
 
         State m_state = {};
     };
