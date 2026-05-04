@@ -28,7 +28,6 @@
 #include "render/core/vulkan/vk_buffer.h"
 #include "render/core/vulkan/vk_texture.h"
 #include "render/core/vulkan/vk_pso.h"
-#include "render/core/vulkan/vk_shader.h"
 #include "render/core/vulkan/vk_descriptor.h"
 #include "render/core/vulkan/vk_query.h"
 
