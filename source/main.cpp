@@ -1138,7 +1138,7 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 }
 
 
-static bool IsInstVisible(const COMMON_INST_DATA& instInfo)
+static bool IsInstFrustumVisible(const COMMON_INST_DATA& instInfo)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
@@ -5586,27 +5586,19 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
+    vkn::RenderInfo renderInfo = {};
 
-    VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView   = s_depthRTView.Get();
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp      = needClearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-    depthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    renderInfo.renderArea.extent = extent;
+    renderInfo.depthAttachment.view = &s_depthRTView;
+    renderInfo.depthAttachment.loadOp  = needClearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+    renderInfo.depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 #ifdef ENG_REVERSED_Z
-    depthAttachment.clearValue.depthStencil.depth = 0.f;
+    renderInfo.depthAttachment.clearValue.depthStencil.depth = 0.f;
 #else
-    depthAttachment.clearValue.depthStencil.depth = 1.f;
+    renderInfo.depthAttachment.clearValue.depthStencil.depth = 1.f;
 #endif
 
-    renderingInfo.pDepthAttachment = &depthAttachment;
-    
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -5639,8 +5631,8 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
                     continue;
                 }
 
-                if (s_useMeshCulling) {
-                    if (!IsInstVisible(instInfo)) {
+                if (s_useMeshFrustumCulling) {
+                    if (!IsInstFrustumVisible(instInfo)) {
                         continue;
                     }
                 }
@@ -5741,56 +5733,41 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_depthRTView.Get();
-    depthAttachment.imageLayout = s_useDepthPass ? VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    renderInfo.depthAttachment.view = &s_depthRTView;
+    renderInfo.depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
 #ifdef ENG_BUILD_DEBUG
     if (s_useDepthPass) {
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     } else {
-        depthAttachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+        renderInfo.depthAttachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
 
         #ifdef ENG_REVERSED_Z
-            depthAttachment.clearValue.depthStencil.depth = 0.f;
+            renderInfo.depthAttachment.clearValue.depthStencil.depth = 0.f;
         #else
-            depthAttachment.clearValue.depthStencil.depth = 1.f;
+            renderInfo.depthAttachment.clearValue.depthStencil.depth = 1.f;
         #endif
     }
 #else
-    depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+    renderInfo.depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
 #endif
 
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
-    std::array<VkRenderingAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
+    std::array<vkn::RenderAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
 
     for (size_t i = 0; i < colorAttachments.size(); ++i) {
-        VkRenderingAttachmentInfo& attachment = colorAttachments[i];
+        vkn::RenderAttachmentInfo& attachment = colorAttachments[i];
 
-        attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        attachment.imageView = s_gbufferRTViews[i].Get();
-        attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment.view = &s_gbufferRTViews[i];
         attachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment.clearValue.color.float32[0] = 0.f;
-        attachment.clearValue.color.float32[1] = 0.f;
-        attachment.clearValue.color.float32[2] = 0.f;
-        attachment.clearValue.color.float32[3] = 0.f;
     }
     
-    renderingInfo.colorAttachmentCount = colorAttachments.size();
-    renderingInfo.pColorAttachments = colorAttachments.data();
+    renderInfo.colorAttachments = colorAttachments;
 
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -5844,8 +5821,8 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
                     continue;
                 }
 
-                if (s_useMeshCulling) {
-                    if (!IsInstVisible(instInfo)) {
+                if (s_useMeshFrustumCulling) {
+                    if (!IsInstFrustumVisible(instInfo)) {
                         continue;
                     }
                 }
@@ -5909,27 +5886,17 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     
     const VkExtent2D extent = VkExtent2D { s_colorRT16F.GetSizeX(), s_colorRT16F.GetSizeY() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView16F.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView16F;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.clearValue.color.float32[0] = 0.f;
-    colorAttachment.clearValue.color.float32[1] = 0.f;
-    colorAttachment.clearValue.color.float32[2] = 0.f;
-    colorAttachment.clearValue.color.float32[3] = 0.f;
     
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -5960,29 +5927,21 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView16F.Get(),
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView16F,
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_depthRTView.Get();
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    renderInfo.depthAttachment.view = &s_depthRTView;
+    renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    renderInfo.depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -6013,27 +5972,17 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView8U.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView8U;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.clearValue.color.float32[0] = 0.f;
-    colorAttachment.clearValue.color.float32[1] = 0.f;
-    colorAttachment.clearValue.color.float32[2] = 0.f;
-    colorAttachment.clearValue.color.float32[3] = 0.f;
     
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -6107,32 +6056,21 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView8U.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView8U;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    VkRenderingAttachmentInfo depthAttachment = {};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = s_depthRTView.Get();
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    renderInfo.depthAttachment.view = &s_depthRTView;
+    renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    renderInfo.depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
@@ -6182,23 +6120,17 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
                 VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = s_colorRTView8U.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView8U;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         s_dbgUI.Render(cmdBuffer);
     cmdBuffer.CmdEndRendering();
 
@@ -6226,27 +6158,17 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
 
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.extent = extent;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.layerCount = 1;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = scTextureView.Get();
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &scTextureView;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.clearValue.color.float32[0] = 0.f;
-    colorAttachment.clearValue.color.float32[1] = 0.f;
-    colorAttachment.clearValue.color.float32[2] = 0.f;
-    colorAttachment.clearValue.color.float32[3] = 0.f;
     
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
 
-    cmdBuffer.CmdBeginRendering(renderingInfo);
+    cmdBuffer.CmdBeginRendering(renderInfo);
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 

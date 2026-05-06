@@ -5,6 +5,7 @@
 #include "core/core.h"
 
 #include <span>
+#include <variant>
 
 
 namespace vkn
@@ -155,6 +156,37 @@ namespace vkn
     };
 
 
+    using RenderAttachmentTexureView = std::variant<TextureView*, SCTextureView*>;
+
+    struct RenderAttachmentInfo
+    {
+        const void*                pNext       = nullptr;
+        RenderAttachmentTexureView view        = (TextureView*)(nullptr);
+        RenderAttachmentTexureView resolveView = (TextureView*)(nullptr);
+        VkResolveModeFlagBits      resolveMode = VK_RESOLVE_MODE_NONE;
+        VkAttachmentLoadOp         loadOp      = VK_ATTACHMENT_LOAD_OP_LOAD;
+        VkAttachmentStoreOp        storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+        VkClearValue               clearValue  = {};
+    };
+
+    struct RenderInfo
+    {
+        bool HasDepthAttachment() const;
+        bool HasStencilAttachment() const;
+        
+        uint32_t GetColorAttachmentsCount() const { return colorAttachments.size(); }
+
+        const void*                           pNext = nullptr;
+        VkRect2D                              renderArea = {};
+        VkRenderingFlags                      flags = 0;
+        uint32_t                              layerCount = 1;
+        uint32_t                              viewMask = 0;
+        std::span<const RenderAttachmentInfo> colorAttachments = {};
+        RenderAttachmentInfo                  depthAttachment = {};   // If depthAttachment.view is nullptr than it assumes that there is no depth attachment
+        RenderAttachmentInfo                  stencilAttachment = {}; // If stencilAttachment.view is nullptr than it assumes that there is no stencil attachment
+    };
+
+
     class CmdBuffer : public Handle<VkCommandBuffer>
     {
         friend class CmdPool;
@@ -180,7 +212,7 @@ namespace vkn
         CmdBuffer& CmdResetQueryPool(QueryPool& queryPool);
         CmdBuffer& CmdWriteTimestamp(QueryPool& queryPool, VkPipelineStageFlags2 stage, uint32_t queryIndex);
 
-        CmdBuffer& CmdBeginRendering(const VkRenderingInfo& renderingInfo);
+        CmdBuffer& CmdBeginRendering(const RenderInfo& info);
         CmdBuffer& CmdEndRendering();
 
         CmdBuffer& CmdBindPSO(PSO& pso);

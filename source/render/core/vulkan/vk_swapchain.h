@@ -33,12 +33,13 @@ namespace vkn
         uint32_t GetSizeX() const;
         uint32_t GetSizeY() const;
 
+        const TextureAccessTracker& GetAccessTracker() const;
+        
     private:
         SCTexture& Create(Device* pDevice, VkImage image, VkImageType type, VkExtent2D extent, VkFormat format);
         SCTexture& Destroy();
 
         TextureAccessTracker& GetAccessTracker();
-        const TextureAccessTracker& GetAccessTracker() const;
 
     private:
         Device* m_pDevice = nullptr;

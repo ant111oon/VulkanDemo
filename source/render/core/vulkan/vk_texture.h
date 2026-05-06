@@ -140,9 +140,10 @@ namespace vkn
         uint32_t GetSizeY() const;
         uint32_t GetSizeZ() const;
 
+        const TextureAccessTracker& GetAccessTracker() const;
+        
     private:
         TextureAccessTracker& GetAccessTracker();
-        const TextureAccessTracker& GetAccessTracker() const;
         
     private:
         Device* m_pDevice = nullptr;

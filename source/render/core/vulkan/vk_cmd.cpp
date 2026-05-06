@@ -58,6 +58,62 @@ namespace vkn
     }
 
 
+    static VkRenderingAttachmentInfo RenderAttachmentInfoToVkRenderingAttachmentInfo(const RenderAttachmentInfo& info)
+    {
+        VkRenderingAttachmentInfo res = {};
+
+        res.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        res.pNext = info.pNext;
+        res.resolveMode = info.resolveMode;
+
+        if (std::holds_alternative<TextureView*>(info.view)) {
+            TextureView* pView = std::get<TextureView*>(info.view);
+            VK_ASSERT(pView && pView->IsCreated());
+            
+            const Texture& owner = pView->GetOwner();
+            const TextureView::SubresourceRange& range = pView->GetSubresourceRange();
+
+            res.imageView = pView->Get();
+            res.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+        } else {
+            SCTextureView* pView = std::get<SCTextureView*>(info.view);
+            VK_ASSERT(pView && pView->IsCreated());
+
+            res.imageView = pView->Get();
+            res.imageLayout = pView->GetOwner().GetAccessTracker().GetState(0, 0).layout;
+        }
+        
+        if (std::holds_alternative<TextureView*>(info.resolveView)) {
+            TextureView* pView = std::get<TextureView*>(info.resolveView);
+            
+            if (pView) {
+                VK_ASSERT(pView->IsCreated());
+                
+                const Texture& owner = pView->GetOwner();
+                const TextureView::SubresourceRange& range = pView->GetSubresourceRange();
+    
+                res.resolveImageView = pView->Get();
+                res.resolveImageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+            }
+        } else {
+            SCTextureView* pView = std::get<SCTextureView*>(info.resolveView);
+            
+            if (pView) {
+                VK_ASSERT(pView->IsCreated());
+    
+                res.resolveImageView = pView->Get();
+                res.resolveImageLayout = pView->GetOwner().GetAccessTracker().GetState(0, 0).layout;
+            }
+        }
+        
+        res.loadOp = info.loadOp;
+        res.storeOp = info.storeOp;
+        res.clearValue = info.clearValue;
+
+        return res;
+    }
+
+
     BarrierList& BarrierList::Begin()
     {
         VK_ASSERT_MSG(!IsStarted(), "Attempt to begin already started barrier list");
@@ -193,6 +249,22 @@ namespace vkn
         return m_pCmdBufferOwner && m_pCmdBufferOwner->IsCreated();
     }
 
+
+    bool RenderInfo::HasDepthAttachment() const
+    {
+        return std::holds_alternative<TextureView*>(depthAttachment.view)
+            ? std::get<TextureView*>(depthAttachment.view) != nullptr
+            : std::get<SCTextureView*>(depthAttachment.view) != nullptr;
+    }
+
+
+    bool RenderInfo::HasStencilAttachment() const
+    {
+        return std::holds_alternative<TextureView*>(stencilAttachment.view)
+            ? std::get<TextureView*>(stencilAttachment.view) != nullptr
+            : std::get<SCTextureView*>(stencilAttachment.view) != nullptr;
+    }
+
     
     bool CmdBuffer::IsValid() const
     {
@@ -302,10 +374,43 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdBeginRendering(const VkRenderingInfo& renderingInfo)
+    CmdBuffer& CmdBuffer::CmdBeginRendering(const RenderInfo& info)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(!IsRenderingStarted());
+
+        VkRenderingInfo renderingInfo = {};
+        renderingInfo.sType      = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        renderingInfo.pNext      = info.pNext;
+        renderingInfo.flags      = info.flags;
+        renderingInfo.renderArea = info.renderArea;
+        renderingInfo.layerCount = info.layerCount;
+        renderingInfo.viewMask   = info.viewMask;
+
+        const uint32_t colorAttachmentsCount = info.GetColorAttachmentsCount();
+
+        renderingInfo.colorAttachmentCount = colorAttachmentsCount;
+
+        std::array<VkRenderingAttachmentInfo, 8> colorAttachments;
+        VK_ASSERT(colorAttachmentsCount <= colorAttachments.size());
+
+        for (size_t i = 0; i < colorAttachmentsCount; ++i) {
+            colorAttachments[i] = RenderAttachmentInfoToVkRenderingAttachmentInfo(info.colorAttachments[i]);
+        }
+
+        renderingInfo.pColorAttachments = colorAttachmentsCount > 0 ? colorAttachments.data() : nullptr;
+
+        VkRenderingAttachmentInfo depthAttachment = {};
+        if (info.HasDepthAttachment()) {
+            depthAttachment = RenderAttachmentInfoToVkRenderingAttachmentInfo(info.depthAttachment);
+            renderingInfo.pDepthAttachment = &depthAttachment;
+        }
+
+        VkRenderingAttachmentInfo stencilAttachment = {};
+        if (info.HasStencilAttachment()) {
+            stencilAttachment = RenderAttachmentInfoToVkRenderingAttachmentInfo(info.stencilAttachment);
+            renderingInfo.pStencilAttachment = &depthAttachment;
+        }
 
         vkCmdBeginRendering(Get(), &renderingInfo);
 
