@@ -105,8 +105,17 @@ bool GeomCullingVisibility(in COMMON_INST_DATA inst)
     return true; 
 }
 
-namespace util
+namespace utils
 {
+    void GeomCullingGetInstVisBitBatchAndLocalID(in uint instID, out uint batchID, out uint localID)
+    {
+        static const uint VIS_FLAGS_BATCH_SIZE_BITS = sizeof(uint) * 8;
+
+        batchID = instID / (VIS_FLAGS_BATCH_SIZE_BITS);
+        localID = instID % (VIS_FLAGS_BATCH_SIZE_BITS);
+    }
+
+
     COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingMeshDataToDrawCmd(in COMMON_MESH_DATA mesh, in uint instID)
     {
         COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = (COMMON_CMD_DRAW_INDEXED_INDIRECT)0;
@@ -136,12 +145,15 @@ namespace util
     }
 
 
-    void GeomCullingGetInstVisBitBatchAndLocalID(in uint instID, out uint batchID, out uint localID)
+    void GeomCullingPushInstToCmdQueue(RWStructuredBuffer<uint> drawCmdBuffer, RWStructuredBuffer<uint> visInstIDBuffer, in COMMON_CMD_DRAW_INDEXED_INDIRECT cmd, in uint visInstID)
     {
-        static const uint VIS_FLAGS_BATCH_SIZE_BITS = sizeof(uint) * 8;
+        uint index = 0;
 
-        batchID = instID / (VIS_FLAGS_BATCH_SIZE_BITS);
-        localID = instID % (VIS_FLAGS_BATCH_SIZE_BITS);
+        // First UINT of draw cmd buffer contains counter
+        InterlockedAdd(drawCmdBuffer[0], 1, index);
+
+        GeomCullingWriteDrawCmd(drawCmdBuffer, index, cmd);
+        visInstIDBuffer[index] = visInstID;
     }
 }
 
@@ -149,7 +161,7 @@ namespace util
 bool GeomCullingWasInstVisibleInPrevPass(in uint instID)
 {
     uint batchID, localID;
-    util::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
+    utils::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
 
     const uint mask = 1u << localID;
 
@@ -160,7 +172,7 @@ bool GeomCullingWasInstVisibleInPrevPass(in uint instID)
 void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
 {
     uint batchID, localID;
-    util::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
+    utils::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
 
     const uint mask = 1u << localID;
 
@@ -174,48 +186,24 @@ void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
 
 void GeomCullingPushInstToCmdQueue(in COMMON_INST_DATA inst, in uint instID)
 {
-    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = util::GeomCullingMeshDataToDrawCmd(COMMON_MESH_DATA_BUFFER[inst.MESH_IDX], instID);
+    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingMeshDataToDrawCmd(COMMON_MESH_DATA_BUFFER[inst.MESH_IDX], instID);
     const uint flags = COMMON_MATERIALS[inst.MATERIAL_IDX].FLAGS;
 
-    uint idx = 0;
+    uint buffID = 0;
 
     if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)) {
-        InterlockedAdd(GEOM_CULL_TRANSP_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_TRANSP_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
-
-    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
-        InterlockedAdd(GEOM_CULL_GLOBAL_TRANSP_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_TRANSP_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_GLOBAL_TRANSP_INST_INFO_IDS_UAV[idx] = instID;
-    #endif
+        buffID = (uint)GEOM_CULLING_QUEUE_ID::TRANSPARENT;
     } else if (IS_FLAG_SET(flags, COMMON_MATERIAL_FLAGS::ALPHA_KILL)) {
-        InterlockedAdd(GEOM_CULL_AKILL_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_AKILL_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
-
-    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
-        InterlockedAdd(GEOM_CULL_GLOBAL_AKILL_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_AKILL_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_GLOBAL_AKILL_INST_INFO_IDS_UAV[idx] = instID;
-    #endif
+        buffID = (uint)GEOM_CULLING_QUEUE_ID::AKILL;
     } else {
-        InterlockedAdd(GEOM_CULL_OPAQUE_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_OPAQUE_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
-        
-    #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
-        InterlockedAdd(GEOM_CULL_GLOBAL_OPAQUE_DRAW_CMDS_UAV[0], 1, idx);
-
-        util::GeomCullingWriteDrawCmd(GEOM_CULL_GLOBAL_OPAQUE_DRAW_CMDS_UAV, idx, cmd);
-        GEOM_CULL_GLOBAL_OPAQUE_INST_INFO_IDS_UAV[idx] = instID;
-    #endif
+        buffID = (uint)GEOM_CULLING_QUEUE_ID::OPAQUE;
     }
+
+    utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_DRAW_CMDS_UAV[buffID], GEOM_CULL_INST_INFO_IDS_UAV[buffID], cmd, instID);
+
+#if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
+    utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_GLOBAL_DRAW_CMDS_UAV[buffID], GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV[buffID], cmd, instID);
+#endif
 }
 
 
