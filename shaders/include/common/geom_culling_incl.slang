@@ -201,6 +201,10 @@ void GeomCullingPushInstToCmdQueue(in COMMON_INST_DATA inst, in uint instID)
 
     utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_DRAW_CMDS_UAV[buffID], GEOM_CULL_INST_INFO_IDS_UAV[buffID], cmd, instID);
 
+    // NOTE: A little bit complicated logic but that's how it is:
+    //       GLOBAL and LOCAL (ocluders pass) buffers are the same memory so for that pass we write only in LOCAL buffers
+    //       For occludees pass we write in GLOBAL and LOCAL buffers to use GLOBAL data after depth pass in GBUFFER pass
+
 #if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
     utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_GLOBAL_DRAW_CMDS_UAV[buffID], GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV[buffID], cmd, instID);
 #endif

@@ -35,10 +35,6 @@ enum GEOM_CULLING_QUEUE_ID
 
 [vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_FLAGS_UAV;
 
-
-// NOTE: A little bit complicated logic but that's how it is:
-//       GLOBAL and NOT GLOBAL occluders (ocluders pass) buffers are the same memory so for that pass we write only in NOT GLOBAL buffers
-//       For occludees pass we write in GLOBAL and NOT GLOBAL buffers to use global data after depth pass in GBUFFER pass
 [vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_GLOBAL_DRAW_CMDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
 
