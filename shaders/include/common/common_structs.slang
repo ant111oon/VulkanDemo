@@ -64,15 +64,19 @@ struct COMMON_MATERIAL
 
 struct COMMON_MESH_DATA
 {
+    void GetBounds(out float3 minn, out float3 maxx)
+    {
+        minn = float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).x);
+        maxx = float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.z));
+    }
+
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
     uint FIRST_INDEX;
     uint INDEX_COUNT;
 
-    float3 BOUNDS_MIN_LCS;
-    uint   PADD0;
-    float3 BOUNDS_MAX_LCS;
-    uint   PADD1;
+    uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint  PADD;
 };
 
 

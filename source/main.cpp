@@ -405,15 +405,26 @@ struct COMMON_MATERIAL
 
 struct COMMON_MESH_DATA
 {
+    void PackBounds(const float3& min, const float3& max)
+    {
+        BOUNDS_MIN_MAX_LCS_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
+        BOUNDS_MIN_MAX_LCS_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
+        BOUNDS_MIN_MAX_LCS_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
+    }
+
+    void GetBounds(float3& minn, float3& maxx) const
+    {
+        minn = float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).x);
+        maxx = float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.z));
+    }
+
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
     uint FIRST_INDEX;
     uint INDEX_COUNT;
 
-    float3 BOUNDS_MIN_LCS;
-    uint   PADD0;
-    float3 BOUNDS_MAX_LCS;
-    uint   PADD1;
+    uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint  PADD;
 };
 
 
@@ -4494,8 +4505,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
             }
 
-            cpuMesh.BOUNDS_MIN_LCS = minVert;
-            cpuMesh.BOUNDS_MAX_LCS = maxVert;
+            cpuMesh.PackBounds(minVert, maxVert);
 
             CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
             const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
@@ -4692,7 +4702,10 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     {
         const COMMON_MESH_DATA& mesh = s_cpuMeshData[meshIdx];
 
-        const math::AABB aabb = GetWorldAABB(math::AABB(mesh.BOUNDS_MIN_LCS, mesh.BOUNDS_MAX_LCS), wMatr);
+        glm::float3 min, max;
+        mesh.GetBounds(min, max);
+        
+        const math::AABB aabb = GetWorldAABB(math::AABB(min, max), wMatr);
 
         s_cpuAABBData.emplace_back(aabb.min, aabb.max);
 
