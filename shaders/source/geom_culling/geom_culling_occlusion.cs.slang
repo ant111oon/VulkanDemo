@@ -25,7 +25,7 @@ void main(uint DTid : SV_DispatchThreadID)
     const bool shouldDraw = visible && !GeomCullingTestInstanceVisibilityFlag(instID);
 
     if (shouldDraw) {
-        GeomCullingPushInstToCmdQueue(GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]), instID, inst.MESH_IDX);
+        GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);
     }
 
     GeomCullingWriteVisFlag(instID, visible);

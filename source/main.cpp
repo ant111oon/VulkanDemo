@@ -956,8 +956,8 @@ static std::array<vkn::PSO,       (size_t)PassID::COUNT> s_PSOs;
 
 static vkn::DescriptorBuffer s_descriptorBuffer;
 
-static vkn::Buffer s_vertexBuffer;
-static vkn::Buffer s_indexBuffer;
+static vkn::Buffer s_geomVertexBuffer;
+static vkn::Buffer s_geomIndexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
 
@@ -992,14 +992,14 @@ static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
 
 static std::vector<vkn::Sampler>     s_commonSamplers;
 
-static std::vector<Vertex> s_cpuVertexBuffer;
-static std::vector<IndexType> s_cpuIndexBuffer;
+static std::vector<Vertex> s_cpuGeomVertexBuffer;
+static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
 
 static std::vector<COMMON_MESH_DATA>   s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>    s_cpuMaterialData;
-static std::vector<glm::float4x4>      s_cpuTransformData;
+static std::vector<glm::float4x3>      s_cpuTransformData;
 static std::vector<COMMON_INST_DATA>   s_cpuInstData;
 static std::vector<COMMON_INST_AABB>   s_cpuAABBData;
 
@@ -1428,8 +1428,22 @@ namespace DbgUI
                 }
 
                 ImGui::NewLine();
-                ImGui::TextDisabled("Vertex Buffer Size: %.3f MB", s_cpuVertexBuffer.size() * sizeof(Vertex) / 1024.f / 1024.f);
-                ImGui::TextDisabled("Index Buffer Size: %.3f MB", s_cpuIndexBuffer.size() * sizeof(IndexType) / 1024.f / 1024.f);
+                ImGui::TextDisabled("Geom Vertex Size: %.3f KB", s_geomVertexBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Geom Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshDataBuffer.GetMemorySize() / 1024.f);
+                
+                ImGui::NewLine();
+
+                ImGui::TextDisabled("Material Data Size: %.3f KB", s_commonMaterialDataBuffer.GetMemorySize() / 1024.f);
+                
+                ImGui::NewLine();
+
+                ImGui::TextDisabled("Inst Transform Data Size: %.3f KB", s_commonTransformDataBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Inst AABB Data Size: %.3f KB", s_commonAABBDataBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Inst Data Size: %.3f KB", s_commonInstDataBuffer.GetMemorySize() / 1024.f);
+                
+                ImGui::NewLine();
+
                 ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
                 ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
             }
@@ -4310,7 +4324,7 @@ static void WriteCommonDescriptorSet()
     }
 
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_vertexBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_geomVertexBuffer);
 
 #ifndef ENG_BUILD_RELEASE
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
@@ -4398,11 +4412,11 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
         }
     }
 
-    s_cpuVertexBuffer.reserve(vertexCount);
-    s_cpuVertexBuffer.clear();
+    s_cpuGeomVertexBuffer.reserve(vertexCount);
+    s_cpuGeomVertexBuffer.clear();
 
-    s_cpuIndexBuffer.reserve(indexCount);
-    s_cpuIndexBuffer.clear();
+    s_cpuGeomIndexBuffer.reserve(indexCount);
+    s_cpuGeomIndexBuffer.clear();
 
     s_cpuMeshData.reserve(meshesCount);
     s_cpuMeshData.clear();
@@ -4435,7 +4449,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
             COMMON_MESH_DATA cpuMesh = {};
 
-            cpuMesh.FIRST_VERTEX = s_cpuVertexBuffer.size();
+            cpuMesh.FIRST_VERTEX = s_cpuGeomVertexBuffer.size();
             cpuMesh.VERTEX_COUNT = pPosAccessor->count;
 
             for (size_t vertIdx = 0; vertIdx < pPosAccessor->count; ++vertIdx) {
@@ -4455,7 +4469,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 Vertex vertex = {};
                 vertex.Pack(lpos, lnorm, uv, tang);
 
-                s_cpuVertexBuffer.emplace_back(vertex);
+                s_cpuGeomVertexBuffer.emplace_back(vertex);
             }
 
             CORE_ASSERT(pPosAccessor->min.has_value());
@@ -4488,19 +4502,19 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
             CORE_ASSERT_MSG(indexAccessor.type == fastgltf::AccessorType::Scalar, "%zu primitive of %s mesh has invalid index accessor type", primIdx, mesh.name.c_str());
             
-            cpuMesh.FIRST_INDEX = s_cpuIndexBuffer.size();
+            cpuMesh.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
             cpuMesh.INDEX_COUNT = indexAccessor.count;
             
             if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
                 gltf::iterateAccessor<uint16_t>(asset, indexAccessor, 
                     [&](uint16_t index) {
-                        s_cpuIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
+                        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
                     }
                 );
             } else if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedInt) {
                 gltf::iterateAccessor<uint32_t>(asset, indexAccessor, 
                     [&](uint32_t index) {
-                        s_cpuIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
+                        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
                     }
                 );
             } else {
@@ -4693,10 +4707,6 @@ static void LoadSceneInstData(const gltf::Asset& asset)
             glm::float4x4 transform(1.f);
             memcpy(&transform, &trs, sizeof(transform));
 
-            // if (!math::IsZero(math::GetTranslation(transform).x) || !math::IsZero(math::GetTranslation(transform).y)) {
-            //     return;
-            // }
-
             s_cpuTransformData.emplace_back(transform);
     
             if (node.meshIndex.has_value()) {
@@ -4748,20 +4758,20 @@ static void UploadGPUMeshData()
 
     vkn::Buffer& stagingVertBuffer = s_commonStagingBuffers[0];
 
-    const size_t gpuVertBufferSize = s_cpuVertexBuffer.size() * sizeof(Vertex);
+    const size_t gpuVertBufferSize = s_cpuGeomVertexBuffer.size() * sizeof(Vertex);
     CORE_ASSERT(gpuVertBufferSize <= stagingVertBuffer.GetMemorySize());
 
     void* pVertexBufferData = stagingVertBuffer.Map();
-    memcpy(pVertexBufferData, s_cpuVertexBuffer.data(), gpuVertBufferSize);
+    memcpy(pVertexBufferData, s_cpuGeomVertexBuffer.data(), gpuVertBufferSize);
     stagingVertBuffer.Unmap();
 
     vkn::Buffer& stagingIndexBuffer = s_commonStagingBuffers[1];
 
-    const size_t gpuIndexBufferSize = s_cpuIndexBuffer.size() * sizeof(IndexType);
+    const size_t gpuIndexBufferSize = s_cpuGeomIndexBuffer.size() * sizeof(IndexType);
     CORE_ASSERT(gpuIndexBufferSize <= stagingIndexBuffer.GetMemorySize());
 
     void* pIndexBufferData = stagingIndexBuffer.Map();
-    memcpy(pIndexBufferData, s_cpuIndexBuffer.data(), gpuIndexBufferSize);
+    memcpy(pIndexBufferData, s_cpuGeomIndexBuffer.data(), gpuIndexBufferSize);
     stagingIndexBuffer.Unmap();
 
     vkn::AllocationInfo vertBufAllocInfo = {};
@@ -4774,8 +4784,8 @@ static void UploadGPUMeshData()
     vertBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
 
-    s_vertexBuffer.Create(vertBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_vertexBuffer, "COMMON_VB");
+    s_geomVertexBuffer.Create(vertBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_geomVertexBuffer, "COMMON_VB");
 
     vkn::AllocationInfo idxBufAllocInfo = {};
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4787,12 +4797,12 @@ static void UploadGPUMeshData()
     idxBufCreateInfo.usage = VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
     idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
 
-    s_indexBuffer.Create(idxBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_indexBuffer, "COMMON_IB");
+    s_geomIndexBuffer.Create(idxBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_geomIndexBuffer, "COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingVertBuffer, s_vertexBuffer, gpuVertBufferSize);
-        cmdBuffer.CmdCopyBuffer(stagingIndexBuffer, s_indexBuffer, gpuIndexBufferSize);    
+        cmdBuffer.CmdCopyBuffer(stagingVertBuffer, s_geomVertexBuffer, gpuVertBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingIndexBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 
     vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
@@ -4822,8 +4832,13 @@ static void UploadGPUMeshData()
     const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
     CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
 
-    void* pData = stagingTransformDataBuffer.Map();
-    memcpy(pData, s_cpuTransformData.data(), trsDataBufferSize);
+    glm::float3x4* pData = (glm::float3x4*)stagingTransformDataBuffer.Map();
+
+    // GLM assumes columns major, but data is stored as rows... yeah this is shit. Anyway we need to transpose matrices before coping
+    for (size_t i = 0; i < s_cpuTransformData.size(); ++i) {
+        const float4x3& trs = s_cpuTransformData[i];
+        pData[i] = glm::transpose(trs);
+    }
     stagingTransformDataBuffer.Unmap();
 
     vkn::AllocationInfo commonTrsBufAllocInfo = {};
@@ -5580,7 +5595,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DEPTH, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-        cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
+        cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
         ZPASS_PER_DRAW_DATA pushConsts = {};
         pushConsts.IS_AKILL_PASS = isAKillPass;
@@ -5749,7 +5764,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::GBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-        cmdBuffer.CmdBindIndexBuffer(s_indexBuffer, 0, GetVkIndexType());
+        cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
     #ifdef ENG_BUILD_DEBUG
         if (s_useDepthPass) {

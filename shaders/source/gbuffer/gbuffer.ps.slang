@@ -29,7 +29,7 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
     GBUFFER_SURFACE surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
-    const float4x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
+    const float3x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
     const float3 wnorm = normalize(mul(wMatr, float4(surf.lnorm, 0.f)).xyz);
 
     result.rt0 = surf.albedo;

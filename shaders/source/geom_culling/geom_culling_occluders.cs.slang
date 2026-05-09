@@ -22,6 +22,6 @@ void main(uint DTid : SV_DispatchThreadID)
     const COMMON_INST_DATA inst = COMMON_INST_DATA_BUFFER[instID];
 
     if (GeomCullingVisibility(inst)) {
-        GeomCullingPushInstToCmdQueue(GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]), instID, inst.MESH_IDX);
+        GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);
     }
 }

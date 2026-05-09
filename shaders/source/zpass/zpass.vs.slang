@@ -27,8 +27,8 @@ ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceI
     const COMMON_INST_DATA instData = COMMON_INST_DATA_BUFFER[instIdx];
 
     ZPASS_INPUT_DATA inputData = PrepareZPassVSInputData(vertID);
-    
-    const float4x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
+
+    const float3x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz;
 
     result.data.uv = inputData.uv;

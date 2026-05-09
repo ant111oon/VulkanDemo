@@ -13,10 +13,10 @@
 
 [vk::binding(1, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
-[vk::binding(2, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_DATA> COMMON_MESH_DATA_BUFFER;
-[vk::binding(3, DESC_SET_PER_FRAME)] StructuredBuffer<float4x4>         COMMON_TRANSFORMS;
-[vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>  COMMON_MATERIALS;
-[vk::binding(5, DESC_SET_PER_FRAME)] Texture2D                          COMMON_MTL_TEXTURES[];
+[vk::binding(2, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_DATA>   COMMON_MESH_DATA_BUFFER;
+[vk::binding(3, DESC_SET_PER_FRAME)] StructuredBuffer<row_major float3x4> COMMON_TRANSFORMS;
+[vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
+[vk::binding(5, DESC_SET_PER_FRAME)] Texture2D                            COMMON_MTL_TEXTURES[];
 
 [vk::binding(6, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_DATA> COMMON_INST_DATA_BUFFER;
 

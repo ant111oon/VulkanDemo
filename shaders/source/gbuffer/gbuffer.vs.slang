@@ -28,7 +28,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
 
     GBUFFER_INPUT_DATA inputData = PrepareGBufferVSInputData(vertID);
 
-    const float4x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
+    const float3x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz;
 
     result.data.lpos = inputData.position;

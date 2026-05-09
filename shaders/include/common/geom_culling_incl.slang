@@ -197,9 +197,11 @@ uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 }
 
 
-void GeomCullingPushInstToCmdQueue(in uint queueID, in uint instID, in uint meshID)
+void GeomCullingPushInstToCmdQueue(in uint instID, in uint meshID, in uint materialID)
 {
     const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_DATA_BUFFER[meshID], instID);
+
+    const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[materialID]);
 
     utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_DRAW_CMDS_UAV[queueID], GEOM_CULL_INST_INFO_IDS_UAV[queueID], cmd, instID);
 
