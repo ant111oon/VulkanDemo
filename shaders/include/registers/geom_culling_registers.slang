@@ -4,7 +4,7 @@
 #include "common/system/sys_constants.slang"
 
 
-static const uint GEOM_CULLING_CS_GPOUP_SIZE = 64;
+static const uint GEOM_CULLING_CS_GPOUP_SIZE = 1024;
 
 
 struct GEOM_CULLING_PER_DRAW_DATA

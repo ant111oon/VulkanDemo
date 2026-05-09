@@ -880,7 +880,7 @@ static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE  = glm::uvec2(glm::u
 static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
 static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
-static constexpr uint32_t GEOM_CULLING_CS_GPOUP_SIZE = 64;
+static constexpr uint32_t GEOM_CULLING_CS_GPOUP_SIZE = 1024;
 static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 
 
@@ -6394,11 +6394,6 @@ void ProcessFrame()
 
 int main(int argc, char* argv[])
 {
-    // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-
     eng::WindowInitInfo wndInitInfo = {};
     wndInitInfo.pTitle = APP_NAME;
     wndInitInfo.width = 1280;
@@ -6407,6 +6402,11 @@ int main(int argc, char* argv[])
 
     s_pWnd = std::make_unique<eng::Win32Window>(wndInitInfo);
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
+
+    // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
 

@@ -22,10 +22,10 @@ void main(uint DTid : SV_DispatchThreadID)
 
     // Only object that is visible in the current frame
     // and was not drawn in the first pass should be drawn in the second pass
-    const bool shouldDraw = visible && !GeomCullingWasInstVisibleInPrevPass(instID);
+    const bool shouldDraw = visible && !GeomCullingTestInstanceVisibilityFlag(instID);
 
     if (shouldDraw) {
-        GeomCullingPushInstToCmdQueue(inst, instID);
+        GeomCullingPushInstToCmdQueue(GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]), instID, inst.MESH_IDX);
     }
 
     GeomCullingWriteVisFlag(instID, visible);

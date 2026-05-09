@@ -15,13 +15,13 @@ void main(uint DTid : SV_DispatchThreadID)
         return;
     }
 
-    if (!GeomCullingWasInstVisibleInPrevPass(instID)) {
+    if (!GeomCullingTestInstanceVisibilityFlag(instID)) {
         return;
     }
 
     const COMMON_INST_DATA inst = COMMON_INST_DATA_BUFFER[instID];
 
     if (GeomCullingVisibility(inst)) {
-        GeomCullingPushInstToCmdQueue(inst, instID);
+        GeomCullingPushInstToCmdQueue(GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]), instID, inst.MESH_IDX);
     }
 }
