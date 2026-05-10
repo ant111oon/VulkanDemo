@@ -10,25 +10,24 @@
 
 
 [vk::binding(0, DESC_SET_PER_FRAME)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];
+[vk::binding(1, DESC_SET_PER_FRAME)] Texture2D    COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
 
-[vk::binding(1, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
-
-[vk::binding(2, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_DATA>   COMMON_MESH_DATA_BUFFER;
-[vk::binding(3, DESC_SET_PER_FRAME)] StructuredBuffer<row_major float3x4> COMMON_TRANSFORMS;
-[vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
-[vk::binding(5, DESC_SET_PER_FRAME)] Texture2D                            COMMON_MTL_TEXTURES[];
-
-[vk::binding(6, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_DATA> COMMON_INST_DATA_BUFFER;
+[vk::binding(2, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
 static const uint COMMON_VERTEX_DATA_SIZE_UI = 6;
-[vk::binding(7, DESC_SET_PER_FRAME)] StructuredBuffer<uint> COMMON_VERTEX_DATA;
+[vk::binding(3, DESC_SET_PER_FRAME)] StructuredBuffer<uint> COMMON_GEOM_VERTEX_BUFFER;
 
-[vk::binding(8, DESC_SET_PER_FRAME)] Texture2D COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
+[vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_LOD>    COMMON_MESH_LOD_BUFFER;
+[vk::binding(5, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH>        COMMON_MESH_BUFFER;
+[vk::binding(6, DESC_SET_PER_FRAME)] StructuredBuffer<row_major float3x4> COMMON_INST_TRANSFORMS;
+[vk::binding(7, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_AABB>   COMMON_INST_AABB_BUFFER;
+[vk::binding(8, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
+[vk::binding(9, DESC_SET_PER_FRAME)] Texture2D                            COMMON_MTL_TEXTURES[];
 
-[vk::binding(9, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_AABB> COMMON_AABB_BUFFER;
+[vk::binding(10, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST>       COMMON_INST_BUFFER;
 
-[vk::binding(10, DESC_SET_PER_FRAME)] Texture2D COMMON_DEPTH;
-[vk::binding(11, DESC_SET_PER_FRAME)] Texture2D COMMON_HZB;
+[vk::binding(11, DESC_SET_PER_FRAME)] Texture2D COMMON_DEPTH;
+[vk::binding(12, DESC_SET_PER_FRAME)] Texture2D COMMON_HZB;
 
 
 #define GET_COMMON_SAMPLER(SMP_IDX) COMMON_SAMPLERS[(uint)(SMP_IDX)]

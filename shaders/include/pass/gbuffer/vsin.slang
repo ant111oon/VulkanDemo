@@ -20,16 +20,16 @@ GBUFFER_INPUT_DATA PrepareGBufferVSInputData(uint vertID)
 
     const uint offset = vertID * COMMON_VERTEX_DATA_SIZE_UI;
 
-    inputData.position.xy = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 0]);
-    inputData.position.z = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 1]).x;
+    inputData.position.xy = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 0]);
+    inputData.position.z = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 1]).x;
 
-    inputData.lnorm.x = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 1]).y;
-    inputData.lnorm.yz = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 2]);
+    inputData.lnorm.x = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 1]).y;
+    inputData.lnorm.yz = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 2]);
 
-    inputData.uv = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 3]);
+    inputData.uv = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 3]);
 
-    inputData.tangent.xy = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 4]);
-    inputData.tangent.zw = unpackHalf2x16ToFloat(COMMON_VERTEX_DATA[offset + 5]);
+    inputData.tangent.xy = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 4]);
+    inputData.tangent.zw = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 5]);
 
     return inputData;
 }

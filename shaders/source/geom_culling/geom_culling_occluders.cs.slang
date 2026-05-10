@@ -19,7 +19,7 @@ void main(uint DTid : SV_DispatchThreadID)
         return;
     }
 
-    const COMMON_INST_DATA inst = COMMON_INST_DATA_BUFFER[instID];
+    const COMMON_INST inst = COMMON_INST_BUFFER[instID];
 
     if (GeomCullingVisibility(inst)) {
         GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);

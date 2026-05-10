@@ -24,11 +24,11 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
 
     const uint instIdx = GetGBufferInstIdx(drawID);
 
-    const COMMON_INST_DATA instData = COMMON_INST_DATA_BUFFER[instIdx];
+    const COMMON_INST inst = COMMON_INST_BUFFER[instIdx];
 
     GBUFFER_INPUT_DATA inputData = PrepareGBufferVSInputData(vertID);
 
-    const float3x4 wMatr = COMMON_TRANSFORMS[instData.TRANSFORM_IDX];
+    const float3x4 wMatr = COMMON_INST_TRANSFORMS[inst.TRANSFORM_IDX];
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz;
 
     result.data.lpos = inputData.position;

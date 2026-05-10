@@ -16,7 +16,7 @@ void main(uint DTid : SV_DispatchThreadID)
         return;
     }
 
-    const COMMON_INST_DATA inst = COMMON_INST_DATA_BUFFER[instID];
+    const COMMON_INST inst = COMMON_INST_BUFFER[instID];
 
     const bool visible = GeomCullingVisibility(inst);
 

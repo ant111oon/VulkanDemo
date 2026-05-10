@@ -59,13 +59,15 @@ namespace utils
     }
 
 
-    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingConstructCmd(in COMMON_MESH_DATA mesh, in uint firstInst, in uint instCount = 1)
+    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingConstructCmd(in COMMON_MESH mesh, in uint firstInst, in uint instCount = 1)
     {
         COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = (COMMON_CMD_DRAW_INDEXED_INDIRECT)0;
 
-        cmd.INDEX_COUNT    = mesh.INDEX_COUNT;
+        const COMMON_MESH_LOD lod0 = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD]; // Temp
+
+        cmd.INDEX_COUNT    = lod0.INDEX_COUNT;
         cmd.INSTANCE_COUNT = instCount;
-        cmd.FIRST_INDEX    = mesh.FIRST_INDEX;
+        cmd.FIRST_INDEX    = lod0.FIRST_INDEX;
         cmd.FIRST_VERTEX   = mesh.FIRST_VERTEX;
         cmd.FIRST_INSTANCE = firstInst;
 
@@ -101,7 +103,7 @@ namespace utils
 }
 
 
-bool GeomCullingVisibility(in COMMON_INST_DATA inst)
+bool GeomCullingVisibility(in COMMON_INST inst)
 {
 #if !defined(GEOM_CULLING_ENABLED)
     return true;
@@ -117,7 +119,7 @@ bool GeomCullingVisibility(in COMMON_INST_DATA inst)
         return true;
     }
 
-    AABB aabb = COMMON_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
+    AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
 #if defined(GEOM_CULLING_FRUSTUM_ENABLED)
     if (isFrustumCullEnabled) {
@@ -199,7 +201,7 @@ uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 
 void GeomCullingPushInstToCmdQueue(in uint instID, in uint meshID, in uint materialID)
 {
-    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_DATA_BUFFER[meshID], instID);
+    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_BUFFER[meshID], instID);
 
     const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[materialID]);
 

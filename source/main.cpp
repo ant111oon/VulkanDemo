@@ -403,7 +403,14 @@ struct COMMON_MATERIAL
 };
 
 
-struct COMMON_MESH_DATA
+struct COMMON_MESH_LOD
+{
+    uint FIRST_INDEX;
+    uint INDEX_COUNT;
+};
+
+
+struct COMMON_MESH
 {
     void PackBounds(const float3& min, const float3& max)
     {
@@ -420,8 +427,9 @@ struct COMMON_MESH_DATA
 
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
-    uint FIRST_INDEX;
-    uint INDEX_COUNT;
+
+    uint LOD_0_INDEX;
+    uint LOD_COUNT;
 
     uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint  PADD;
@@ -457,7 +465,7 @@ struct COMMON_INST_AABB
 };
 
 
-struct COMMON_INST_DATA
+struct COMMON_INST
 {
     uint TRANSFORM_IDX;
     uint MATERIAL_IDX;
@@ -806,17 +814,18 @@ enum GEOM_CULLING_QUEUE_ID
 
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t COMMON_CONST_BUFFER_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_TRANSFORMS_DESCRIPTOR_SLOT = 3;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 4;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT = 6;
-static constexpr size_t COMMON_VERTEX_DATA_DESCRIPTOR_SLOT = 7;
-static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 8;
-static constexpr size_t COMMON_AABB_BUFFER_DESCRIPTOR_SLOT = 9;
-static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
-static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 11;
+static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 1;
+static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 4;
+static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT = 7;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 9;
+static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 1;
@@ -972,11 +981,12 @@ static vkn::Buffer s_geomIndexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
 
-static vkn::Buffer s_commonMeshDataBuffer;
-static vkn::Buffer s_commonMaterialDataBuffer;
-static vkn::Buffer s_commonTransformDataBuffer;
-static vkn::Buffer s_commonAABBDataBuffer;
-static vkn::Buffer s_commonInstDataBuffer;
+static vkn::Buffer s_commonMeshLODBuffer;
+static vkn::Buffer s_commonMeshBuffer;
+static vkn::Buffer s_commonMaterialBuffer;
+static vkn::Buffer s_commonTransformBuffer;
+static vkn::Buffer s_commonAABBBuffer;
+static vkn::Buffer s_commonInstBuffer;
 
 static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_opaqueGeomDrawCmdBuffers;
 static std::array<vkn::Buffer, GEOM_CULLING_PASS_COUNT> s_visOpaqueGeomIDBuffers;
@@ -1008,10 +1018,11 @@ static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
 
-static std::vector<COMMON_MESH_DATA>   s_cpuMeshData;
+static std::vector<COMMON_MESH_LOD>    s_cpuMeshLODData;
+static std::vector<COMMON_MESH>        s_cpuMeshData;
 static std::vector<COMMON_MATERIAL>    s_cpuMaterialData;
 static std::vector<glm::float4x3>      s_cpuTransformData;
-static std::vector<COMMON_INST_DATA>   s_cpuInstData;
+static std::vector<COMMON_INST>        s_cpuInstData;
 static std::vector<COMMON_INST_AABB>   s_cpuAABBData;
 
 
@@ -1149,7 +1160,7 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 }
 
 
-static bool IsInstFrustumVisible(const COMMON_INST_DATA& instInfo)
+static bool IsInstFrustumVisible(const COMMON_INST& instInfo)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
@@ -1441,17 +1452,18 @@ namespace DbgUI
                 ImGui::NewLine();
                 ImGui::TextDisabled("Geom Vertex Size: %.3f KB", s_geomVertexBuffer.GetMemorySize() / 1024.f);
                 ImGui::TextDisabled("Geom Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshDataBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f KB", s_commonMeshLODBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshBuffer.GetMemorySize() / 1024.f);
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Material Data Size: %.3f KB", s_commonMaterialDataBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Material Data Size: %.3f KB", s_commonMaterialBuffer.GetMemorySize() / 1024.f);
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Inst Transform Data Size: %.3f KB", s_commonTransformDataBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Inst AABB Data Size: %.3f KB", s_commonAABBDataBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Inst Data Size: %.3f KB", s_commonInstDataBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Inst Transform Data Size: %.3f KB", s_commonTransformBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Inst AABB Data Size: %.3f KB", s_commonAABBBuffer.GetMemorySize() / 1024.f);
+                ImGui::TextDisabled("Inst Data Size: %.3f KB", s_commonInstBuffer.GetMemorySize() / 1024.f);
                 
                 ImGui::NewLine();
 
@@ -2587,15 +2599,16 @@ static void CreateCommonDescriptorSetLayout()
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_TRANSFORMS_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT,    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MATERIAL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkn::DescriptorInfo::Create(COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_VERTEX_DATA_DESCRIPTOR_SLOT,  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
+        vkn::DescriptorInfo::Create(COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MATERIAL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(COMMON_INST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
     };
@@ -4325,17 +4338,18 @@ static void WriteCommonDescriptorSet()
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CONST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshDataBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformDataBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_DATA_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstDataBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_VERTEX_DATA_DESCRIPTOR_SLOT, 0, s_geomVertexBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_geomVertexBuffer);
 
 #ifndef ENG_BUILD_RELEASE
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
@@ -4343,7 +4357,7 @@ static void WriteCommonDescriptorSet()
     }
 #endif
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBDataBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView);
 }
@@ -4458,7 +4472,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
                 CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
             }
 
-            COMMON_MESH_DATA cpuMesh = {};
+            COMMON_MESH cpuMesh = {};
 
             cpuMesh.FIRST_VERTEX = s_cpuGeomVertexBuffer.size();
             cpuMesh.VERTEX_COUNT = pPosAccessor->count;
@@ -4511,9 +4525,15 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
             const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
 
             CORE_ASSERT_MSG(indexAccessor.type == fastgltf::AccessorType::Scalar, "%zu primitive of %s mesh has invalid index accessor type", primIdx, mesh.name.c_str());
-            
-            cpuMesh.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
-            cpuMesh.INDEX_COUNT = indexAccessor.count;
+
+            cpuMesh.LOD_0_INDEX = s_cpuMeshLODData.size();
+            cpuMesh.LOD_COUNT = 1;
+
+            COMMON_MESH_LOD lod0 = {};
+            lod0.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
+            lod0.INDEX_COUNT = indexAccessor.count;
+
+            s_cpuMeshLODData.emplace_back(lod0);
             
             if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
                 gltf::iterateAccessor<uint16_t>(asset, indexAccessor, 
@@ -4700,7 +4720,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
     auto PushAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> uint32_t
     {
-        const COMMON_MESH_DATA& mesh = s_cpuMeshData[meshIdx];
+        const COMMON_MESH& mesh = s_cpuMeshData[meshIdx];
 
         glm::float3 min, max;
         mesh.GetBounds(min, max);
@@ -4733,7 +4753,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
                     const gltf::Primitive& primitive = mesh.primitives[i];
 
-                    COMMON_INST_DATA instData = {};
+                    COMMON_INST instData = {};
                     
                     instData.TRANSFORM_IDX = trsIdx;
                     instData.MESH_IDX = baseIdx + i;
@@ -4754,7 +4774,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     timer.Reset().Start();
 
     std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), 
-        [](const COMMON_INST_DATA& a, const COMMON_INST_DATA& b) {
+        [](const COMMON_INST& a, const COMMON_INST& b) {
             return a.MESH_IDX < b.MESH_IDX;
         }
     );
@@ -4820,7 +4840,7 @@ static void UploadGPUMeshData()
 
     vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
 
-    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH_DATA);
+    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH);
     CORE_ASSERT(meshDataBufferSize <= stagingMeshInfosBuffer.GetMemorySize());
 
     void* pMeshBufferData = stagingMeshInfosBuffer.Map();
@@ -4837,39 +4857,34 @@ static void UploadGPUMeshData()
     meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
-    s_commonMeshDataBuffer.Create(meshInfosBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonMeshDataBuffer, "COMMON_MESH_DATA");
+    s_commonMeshBuffer.Create(meshInfosBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
 
-    vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[1];
+    vkn::Buffer& stagingMeshLODInfosBuffer = s_commonStagingBuffers[1];
 
-    const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
-    CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
+    const size_t meshLODDataBufferSize = s_cpuMeshLODData.size() * sizeof(COMMON_MESH_LOD);
+    CORE_ASSERT(meshLODDataBufferSize <= stagingMeshLODInfosBuffer.GetMemorySize());
 
-    glm::float3x4* pData = (glm::float3x4*)stagingTransformDataBuffer.Map();
+    void* pMeshLODBufferData = stagingMeshLODInfosBuffer.Map();
+    memcpy(pMeshLODBufferData, s_cpuMeshLODData.data(), meshLODDataBufferSize);
+    stagingMeshLODInfosBuffer.Unmap();
 
-    // GLM assumes columns major, but data is stored as rows... yeah this is shit. Anyway we need to transpose matrices before coping
-    for (size_t i = 0; i < s_cpuTransformData.size(); ++i) {
-        const float4x3& trs = s_cpuTransformData[i];
-        pData[i] = glm::transpose(trs);
-    }
-    stagingTransformDataBuffer.Unmap();
+    vkn::AllocationInfo meshLODInfosBufAllocInfo = {};
+    meshLODInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    meshLODInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::AllocationInfo commonTrsBufAllocInfo = {};
-    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo commonTrsBufCreateInfo = {};
-    commonTrsBufCreateInfo.pDevice = &s_vkDevice;
-    commonTrsBufCreateInfo.size = trsDataBufferSize;
-    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
-
-    s_commonTransformDataBuffer.Create(commonTrsBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonTransformDataBuffer, "COMMON_TRANSFORM_DATA");
+    vkn::BufferCreateInfo meshLODInfosBufCreateInfo = {};
+    meshLODInfosBufCreateInfo.pDevice = &s_vkDevice;
+    meshLODInfosBufCreateInfo.size = meshLODDataBufferSize;
+    meshLODInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    meshLODInfosBufCreateInfo.pAllocInfo = &meshLODInfosBufAllocInfo;
+    
+    s_commonMeshLODBuffer.Create(meshLODInfosBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingMeshInfosBuffer, s_commonMeshDataBuffer, meshDataBufferSize);
-        cmdBuffer.CmdCopyBuffer(stagingTransformDataBuffer, s_commonTransformDataBuffer, trsDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingMeshInfosBuffer, s_commonMeshBuffer, meshDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingMeshLODInfosBuffer, s_commonMeshLODBuffer, meshLODDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Mesh data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5006,11 +5021,11 @@ static void UploadGPUMaterialData()
     mtlBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
 
-    s_commonMaterialDataBuffer.Create(mtlBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonMaterialDataBuffer, "COMMON_MATERIAL_DATA");
+    s_commonMaterialBuffer.Create(mtlBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        cmdBuffer.CmdCopyBuffer(stagingMtlDataBuffer, s_commonMaterialDataBuffer, mtlDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(stagingMtlDataBuffer, s_commonMaterialBuffer, mtlDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Material data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5025,7 +5040,7 @@ static void UploadGPUInstData()
 
     vkn::Buffer& instStagingBuffer = s_commonStagingBuffers[0];
 
-    const size_t instBufferSize = s_cpuInstData.size() * sizeof(COMMON_INST_DATA);
+    const size_t instBufferSize = s_cpuInstData.size() * sizeof(COMMON_INST);
     CORE_ASSERT(instBufferSize <= instStagingBuffer.GetMemorySize());
 
     {
@@ -5044,8 +5059,8 @@ static void UploadGPUInstData()
     instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
 
-    s_commonInstDataBuffer.Create(instInfosBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonInstDataBuffer, "COMMON_INSTANCE_DATA");
+    s_commonInstBuffer.Create(instInfosBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
 
     vkn::Buffer& aabbStagingBuffer = s_commonStagingBuffers[1];
 
@@ -5068,12 +5083,43 @@ static void UploadGPUInstData()
     aabbBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
     aabbBufCreateInfo.pAllocInfo = &aabbBufAllocInfo;
 
-    s_commonAABBDataBuffer.Create(aabbBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonAABBDataBuffer, "COMMON_AABB_DATA");
+    s_commonAABBBuffer.Create(aabbBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonAABBBuffer, "COMMON_AABB_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(instStagingBuffer, s_commonInstDataBuffer, instBufferSize);
-        cmdBuffer.CmdCopyBuffer(aabbStagingBuffer, s_commonAABBDataBuffer, aabbBufferSize);
+        cmdBuffer.CmdCopyBuffer(instStagingBuffer, s_commonInstBuffer, instBufferSize);
+        cmdBuffer.CmdCopyBuffer(aabbStagingBuffer, s_commonAABBBuffer, aabbBufferSize);
+    });
+
+    vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[0];
+
+    const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
+    CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
+
+    glm::float3x4* pData = (glm::float3x4*)stagingTransformDataBuffer.Map();
+
+    // GLM assumes columns major, but data is stored as rows... yeah this is shit. Anyway we need to transpose matrices before coping
+    for (size_t i = 0; i < s_cpuTransformData.size(); ++i) {
+        const float4x3& trs = s_cpuTransformData[i];
+        pData[i] = glm::transpose(trs);
+    }
+    stagingTransformDataBuffer.Unmap();
+
+    vkn::AllocationInfo commonTrsBufAllocInfo = {};
+    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo commonTrsBufCreateInfo = {};
+    commonTrsBufCreateInfo.pDevice = &s_vkDevice;
+    commonTrsBufCreateInfo.size = trsDataBufferSize;
+    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
+
+    s_commonTransformBuffer.Create(commonTrsBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonTransformBuffer, "COMMON_TRANSFORM_DATA");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        cmdBuffer.CmdCopyBuffer(stagingTransformDataBuffer, s_commonTransformBuffer, trsDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Instance data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5623,7 +5669,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
             ENG_PROFILE_SCOPED_MARKER_C("Depth_CPU_Frustum_Culling", eng::ProfileColor::Purple1);
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
-                const COMMON_INST_DATA& instInfo = s_cpuInstData[i];
+                const COMMON_INST& instInfo = s_cpuInstData[i];
                 const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
 
                 if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
@@ -5640,8 +5686,9 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
 
                 cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
-                const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
-                cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
+                const COMMON_MESH& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
+                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.LOD_0_INDEX];
+                cmdBuffer.CmdDrawIndexed(lod.INDEX_COUNT, 1, lod.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }
     cmdBuffer.CmdEndRendering();
@@ -5813,7 +5860,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         #endif
 
             for (uint32_t i = 0; i < s_cpuInstData.size(); ++i) {
-                const COMMON_INST_DATA& instInfo = s_cpuInstData[i];
+                const COMMON_INST& instInfo = s_cpuInstData[i];
                 const COMMON_MATERIAL& material = s_cpuMaterialData[instInfo.MATERIAL_IDX];
 
                 if (IsTransparentMaterial(material) || (isAKillPass && !IsAKillMaterial(material)) || (!isAKillPass && !IsOpaqueMaterial(material))) {
@@ -5838,8 +5885,9 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
 
                 cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
                 
-                const COMMON_MESH_DATA& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
-                cmdBuffer.CmdDrawIndexed(mesh.INDEX_COUNT, 1, mesh.FIRST_INDEX, mesh.FIRST_VERTEX, i);
+                const COMMON_MESH& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
+                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.LOD_0_INDEX];
+                cmdBuffer.CmdDrawIndexed(lod.INDEX_COUNT, 1, lod.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }
     cmdBuffer.CmdEndRendering();

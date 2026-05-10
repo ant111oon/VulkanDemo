@@ -37,6 +37,12 @@ enum COMMON_MATERIAL_FLAGS
 
 struct COMMON_MATERIAL
 {
+    bool IsAlphaKill() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_KILL); }
+    bool IsTransparent() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_BLEND); }
+    bool IsOpaque() { return !IsAlphaKill() && !IsTransparent(); }
+
+    bool IsDoubleSided() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::DOUBLE_SIDED); }
+
     float4 ALBEDO_MULT;
 
     float3 EMISSIVE_MULT;
@@ -57,12 +63,15 @@ struct COMMON_MATERIAL
     uint FLAGS;
 };
 
-#define IS_COMMON_MATERIAL_DOUBLE_SIDED(MTL) IS_FLAG_SET(MTL.FLAGS, COMMON_MATERIAL_FLAGS::DOUBLE_SIDED)
-#define IS_COMMON_MATERIAL_ALPHA_KILL(MTL)   IS_FLAG_SET(MTL.FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_KILL)
-#define IS_COMMON_MATERIAL_ALPHA_BLEND(MTL)  IS_FLAG_SET(MTL.FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)
+
+struct COMMON_MESH_LOD
+{
+    uint FIRST_INDEX;
+    uint INDEX_COUNT;
+};
 
 
-struct COMMON_MESH_DATA
+struct COMMON_MESH
 {
     void GetBounds(out float3 minn, out float3 maxx)
     {
@@ -72,8 +81,9 @@ struct COMMON_MESH_DATA
 
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
-    uint FIRST_INDEX;
-    uint INDEX_COUNT;
+
+    uint FIRST_LOD; // Index of LOD 0 inside LOD's buffer
+    uint LOD_COUNT;
 
     uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint  PADD;
@@ -95,7 +105,7 @@ struct COMMON_INST_AABB
 };
 
 
-struct COMMON_INST_DATA
+struct COMMON_INST
 {
     uint TRANSFORM_IDX;
     uint MATERIAL_IDX;
