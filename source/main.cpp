@@ -4410,7 +4410,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     {
         const fastgltf::Attribute* pAttrib = primitive.findAttribute(name); 
         return pAttrib != primitive.attributes.cend() ? &asset.accessors[pAttrib->accessorIndex] : nullptr;
-    };
+    }; 
 
     const gltf::Primitive& primitive = mesh.primitives[primIdx];
 
