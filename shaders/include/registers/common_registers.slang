@@ -9,13 +9,12 @@
 #include "common/common_structs.slang"
 
 
-[vk::binding(0, DESC_SET_PER_FRAME)] SamplerState COMMON_SAMPLERS[uint(COMMON_SAMPLER_IDX::COUNT)];
-[vk::binding(1, DESC_SET_PER_FRAME)] Texture2D    COMMON_DBG_TEXTURES[uint(COMMON_DBG_TEX_IDX::COUNT)];
+[vk::binding(0, DESC_SET_PER_FRAME)] SamplerState COMMON_SAMPLERS[COMMON_SAMPLER_IDX::COUNT];
+[vk::binding(1, DESC_SET_PER_FRAME)] Texture2D    COMMON_DBG_TEXTURES[COMMON_DBG_TEX_IDX::COUNT];
 
 [vk::binding(2, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_CB_DATA> COMMON_CB;
 
-static const uint COMMON_VERTEX_DATA_SIZE_UI = 6;
-[vk::binding(3, DESC_SET_PER_FRAME)] StructuredBuffer<uint> COMMON_GEOM_VERTEX_BUFFER;
+[vk::binding(3, DESC_SET_PER_FRAME)] ByteAddressBuffer COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::COUNT];
 
 [vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_LOD>    COMMON_MESH_LOD_BUFFER;
 [vk::binding(5, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH>        COMMON_MESH_BUFFER;

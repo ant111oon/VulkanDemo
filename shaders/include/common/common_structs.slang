@@ -13,6 +13,16 @@ static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(uint(1) << (COMMON_PR
 static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 
 
+enum COMMON_GEOM_STREAM_ID
+{
+    POSITION,
+    NORMAL,
+    UV,
+    TANGENT,
+    COUNT
+};
+
+
 enum COMMON_DBG_TEX_IDX
 {
     RED,

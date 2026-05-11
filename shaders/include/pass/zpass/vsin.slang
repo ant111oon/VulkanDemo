@@ -4,6 +4,8 @@
 #include "registers/common_registers.slang"
 #include "registers/zpass_registers.slang"
 
+#include "common/geom_stream_incl.slang"
+
 
 struct ZPASS_INPUT_DATA
 {
@@ -14,17 +16,12 @@ struct ZPASS_INPUT_DATA
 
 ZPASS_INPUT_DATA PrepareZPassVSInputData(uint vertID)
 {
-    ZPASS_INPUT_DATA inputData = (ZPASS_INPUT_DATA)0;
+    ZPASS_INPUT_DATA data = (ZPASS_INPUT_DATA)0;
 
-    const uint offset = vertID * COMMON_VERTEX_DATA_SIZE_UI;
+    data.position = GeomStreamLoadPosition(vertID);
+    data.uv = GeomStreamLoadUV(vertID);
 
-    inputData.position.xy = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 0]);
-    inputData.position.z = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 1]).x;
-
-    // Move this code under define for example COMMON_AKILL or to separate shader
-    inputData.uv = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 3]);
-
-    return inputData;
+    return data;
 }
 
 #endif

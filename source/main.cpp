@@ -47,6 +47,8 @@
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
 
+#include <meshoptimizer.h>
+
 
 namespace gltf = fastgltf;
 namespace fs   = std::filesystem;
@@ -66,310 +68,6 @@ using float4x4 = glm::float4x4;
 using float3x4 = glm::float3x4;
 using float4x3 = glm::float4x3;
 using float3x3 = glm::float3x3;
-
-
-class TextureLoadData
-{
-public:
-    enum class ComponentType : uint16_t
-    {
-        UINT8,
-        UINT16,
-        FLOAT,
-        COUNT
-    };
-
-public:
-    TextureLoadData() = default;
-    
-    TextureLoadData(const fs::path& filepath)
-    {
-        Load(filepath);
-    }
-
-    ~TextureLoadData()
-    {
-        Unload();
-    }
-
-    TextureLoadData(const TextureLoadData& other) = delete;
-    TextureLoadData& operator=(const TextureLoadData& other) = delete;
-
-    TextureLoadData(TextureLoadData&& other) noexcept
-    {
-        *this = std::move(other);
-    }
-
-    TextureLoadData& operator=(TextureLoadData&& other)
-    {
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        m_name = std::move(other.m_name);
-    #endif
-
-        m_pData = other.m_pData;
-        other.m_pData = nullptr;
-
-        m_format = other.m_format;
-        other.m_format = VK_FORMAT_UNDEFINED;
-
-        m_width = other.m_width;
-        m_height = other.m_height;
-        m_channels = other.m_channels;
-        m_mipsCount = other.m_mipsCount;
-        m_type = other.m_type;
-
-        other.m_width = 0;
-        other.m_height = 0;
-        other.m_channels = 0;
-        other.m_mipsCount = 1;
-        other.m_type = ComponentType::UINT8;
-
-        return *this;
-    }
-
-    bool Load(const fs::path& filepath)
-    {
-        if (IsLoaded()) {
-            Unload();
-        }
-
-        const std::string strPath = filepath.string();
-
-        int width = 0;
-        int height = 0;
-        int channels = 0;
-
-        const int result = stbi_info(strPath.c_str(), &width, &height, &channels);
-        CORE_ASSERT(result == 1);
-
-        const bool isRGB = channels == 3;
-
-        if (stbi_is_16_bit(strPath.c_str())) {
-            m_pData = stbi_load_16(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
-            m_type = ComponentType::UINT16;
-        } else if (stbi_is_hdr(strPath.c_str())) {
-            m_pData = stbi_loadf(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
-            m_type = ComponentType::FLOAT;
-        } else {
-            m_pData = stbi_load(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
-            m_type = ComponentType::UINT8;
-        }
-
-        if (!m_pData) {
-            return false;
-        }
-
-        channels = isRGB ? 4 : channels;
-
-        m_width = width;
-        m_height = height;
-        m_channels = channels;
-        m_mipsCount = CalcMipsCount(m_width, m_height);
-
-        m_format = EvaluateFormat(m_channels, m_type);
-
-        return true;
-    }
-
-    bool Load(const void* pMemory, size_t size)
-    {
-        if (IsLoaded()) {
-            Unload();
-        }
-
-        CORE_ASSERT(pMemory != nullptr);
-        CORE_ASSERT(size > 0);
-
-        int width = 0;
-        int height = 0;
-        int channels = 0;
-
-        if (stbi_is_16_bit_from_memory((const stbi_uc*)pMemory, size)) {
-            m_pData = stbi_load_16_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
-            m_type = ComponentType::UINT16;
-        } else if (stbi_is_hdr_from_memory((const stbi_uc*)pMemory, size)) {
-            m_pData = stbi_loadf_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
-            m_type = ComponentType::FLOAT;
-        } else {
-            m_pData = stbi_load_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
-            m_type = ComponentType::UINT8;
-        }
-
-        if (!m_pData) {
-            return false;
-        }
-
-        m_width = width;
-        m_height = height;
-        m_channels = channels;
-        m_mipsCount = CalcMipsCount(m_width, m_height);
-
-        m_format = EvaluateFormat(m_channels, m_type);
-
-        return true;
-    }
-
-    void Unload()
-    {
-        if (!IsLoaded()) {
-            return;
-        }
-
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        m_name = "";
-    #endif
-
-        stbi_image_free(m_pData);
-        m_pData = nullptr;
-
-        m_format = VK_FORMAT_UNDEFINED;
-
-        m_width = 0;
-        m_height = 0;
-        m_channels = 0;
-        m_mipsCount = 1;
-        m_type = ComponentType::UINT8;
-    }
-    
-    void SetName(std::string_view name)
-    {
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        m_name = name;
-    #endif
-    }
-
-    const char* GetName() const
-    {
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        return m_name.c_str();
-    #else
-        return "TEXTURE";
-    #endif
-    }
-
-    void* GetData() const { return m_pData; }
-    VkFormat GetFormat() const { return m_format; }
-
-    uint32_t GetWidth() const { return m_width; }
-    uint32_t GetHeight() const { return m_height; }
-    uint32_t GetChannels() const { return m_channels; }
-    uint16_t GetMipsCount() const { return m_mipsCount; }
-
-    ComponentType GetComponentType() const { return m_type; }
-    
-    size_t GetMemorySize() const { return m_width * m_height * m_channels * COMP_TYPE_SIZE_IN_BYTES[static_cast<size_t>(m_type)]; }
-
-    bool IsLoaded() const { return m_pData != nullptr; }
-
-private:
-    static VkFormat EvaluateFormat(uint32_t channels, ComponentType type)
-    {
-        switch (channels) {
-            case 1:
-                switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8_UNORM;
-                    case ComponentType::UINT16: return VK_FORMAT_R16_UNORM;
-                    case ComponentType::FLOAT:  return VK_FORMAT_R32_SFLOAT;
-                    default:
-                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
-                        return VK_FORMAT_UNDEFINED;
-                }
-                break;
-            case 2:
-                switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8_UNORM;
-                    case ComponentType::UINT16: return VK_FORMAT_R16G16_UNORM;
-                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32_SFLOAT;
-                    default:
-                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
-                        return VK_FORMAT_UNDEFINED;
-                }
-                break;
-            case 3:
-                switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8_UNORM;
-                    case ComponentType::UINT16: return VK_FORMAT_R16G16B16_UNORM;
-                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
-                    default:
-                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
-                        return VK_FORMAT_UNDEFINED;
-                }
-                break;
-            case 4:
-                switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8A8_UNORM;
-                    case ComponentType::UINT16: return VK_FORMAT_R16G16B16A16_UNORM;
-                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32A32_SFLOAT;
-                    default:
-                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
-                        return VK_FORMAT_UNDEFINED;
-                }
-                break;
-            default:
-                CORE_ASSERT_FAIL("Invalid texture channels count: %u", channels);
-                return VK_FORMAT_UNDEFINED;
-        }
-    }
-
-    static uint16_t CalcMipsCount(uint32_t width, uint32_t height)
-    {
-        return (uint16_t)glm::floor(glm::log2((float)glm::max(width, height))) + 1;
-    }
-    
-private:
-    static inline constexpr size_t COMP_TYPE_SIZE_IN_BYTES[] = { 1, 2, 4 };
-
-    static_assert(_countof(COMP_TYPE_SIZE_IN_BYTES) == (size_t)ComponentType::COUNT);
-
-private:
-#ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-    std::string m_name;
-#endif
-
-    void* m_pData = nullptr;
-    VkFormat m_format = VK_FORMAT_UNDEFINED;
-
-    uint32_t m_width = 0;
-    uint32_t m_height = 0;
-    uint32_t m_channels = 0;
-
-    uint16_t m_mipsCount = 1;
-    ComponentType m_type = ComponentType::UINT8;
-};
-
-
-static constexpr uint32_t COMMON_VERTEX_DATA_SIZE_UI = 6;
-
-struct Vertex
-{
-    void Pack(const glm::float3& lpos, const glm::float3& lnorm, glm::float2 uv, const glm::float4& tangent)
-    {
-        data[0] = glm::packHalf2x16(glm::float2(lpos.x, lpos.y));
-        data[1] = glm::packHalf2x16(glm::float2(lpos.z, lnorm.x));
-        data[2] = glm::packHalf2x16(glm::float2(lnorm.y, lnorm.z));
-        data[3] = glm::packHalf2x16(uv);
-        data[4] = glm::packHalf2x16(glm::float2(tangent.x, tangent.y));
-        data[5] = glm::packHalf2x16(glm::float2(tangent.z, tangent.w));
-    }
-
-    void Unpack(glm::float3& outLPos, glm::float3& outLNorm, glm::float2& outUv)
-    {
-        outLPos = GetLPos();
-        outLNorm = GetLNorm();
-        outUv = GetUV();
-    }
-
-    glm::float3 GetLPos() const { return glm::float3(glm::unpackHalf2x16(data[0]), glm::unpackHalf2x16(data[1]).x); }
-    glm::float3 GetLNorm() const { return glm::float3(glm::unpackHalf2x16(data[1]).y, glm::unpackHalf2x16(data[2])); }
-    glm::float2 GetUV() const { return glm::unpackHalf2x16(data[3]); }
-
-    glm::uint data[COMMON_VERTEX_DATA_SIZE_UI] = {};
-};
-
-
-static constexpr uint32_t DESC_SET_PER_FRAME = 0;
-static constexpr uint32_t DESC_SET_PER_DRAW = 1;
-static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
 
 
 enum class COMMON_MATERIAL_FLAGS : glm::uint
@@ -649,6 +347,25 @@ enum class COMMON_DBG_TEX_IDX : glm::uint
 };
 
 
+enum GEOM_CULLING_QUEUE_ID
+{
+    GEOM_CULLING_QUEUE_ID_OPAQUE,
+    GEOM_CULLING_QUEUE_ID_AKILL,
+    GEOM_CULLING_QUEUE_ID_TRANSPARENT,
+    GEOM_CULLING_QUEUE_ID_COUNT
+};
+
+
+enum COMMON_GEOM_STREAM_ID
+{
+    COMMON_GEOM_STREAM_ID_POSITION,
+    COMMON_GEOM_STREAM_ID_NORMAL,
+    COMMON_GEOM_STREAM_ID_UV,
+    COMMON_GEOM_STREAM_ID_TANGENT,
+    COMMON_GEOM_STREAM_ID_COUNT
+};
+
+
 struct GEOM_CULLING_PER_DRAW_DATA
 {
     uint  INST_COUNT;
@@ -741,6 +458,17 @@ static constexpr uint32_t TONEMAPPING_MASKS[] = {
 static_assert(_countof(DBG_TONEMAPPING_NAMES) == _countof(TONEMAPPING_MASKS));
 
 
+static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
+    "POSITION",
+    "NORMAL",
+    "UV",
+    "TANGENT",
+};
+
+
+static_assert(COMMON_GEOM_STREAM_ID_COUNT == _countof(COMMON_GEOM_STREAM_DBG_NAMES));
+
+
 static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
     "NEAREST_REPEAT",
     "NEAREST_MIRRORED_REPEAT",
@@ -803,20 +531,36 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
     "ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE",
 };
 
+static_assert((size_t)COMMON_SAMPLER_IDX::COUNT == _countof(COMMON_SAMPLERS_DBG_NAMES));
 
-enum GEOM_CULLING_QUEUE_ID
+
+enum class PassID
 {
-    GEOM_CULLING_QUEUE_ID_OPAQUE,
-    GEOM_CULLING_QUEUE_ID_AKILL,
-    GEOM_CULLING_QUEUE_ID_TRANSPARENT,
-    GEOM_CULLING_QUEUE_ID_COUNT
+    COMMON,
+    GEOM_CULLING_OCCLUDERS,
+    GEOM_CULLING_OCCLUSION,
+    DEPTH,
+    GBUFFER,
+    DEFERRED_LIGHTING,
+    SKYBOX,
+    POST_PROCESSING,
+    BACKBUFFER,
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    DBG_DRAW_LINES,
+    DBG_DRAW_TRIANGLES,
+#endif
+    IRRADIANCE_MAP_GEN,
+    BRDF_LUT_GEN,
+    PREFILT_ENV_MAP_GEN,
+    HZB_GEN,
+    COUNT,
 };
 
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 1;
 static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 5;
 static constexpr size_t COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT = 6;
@@ -872,6 +616,8 @@ static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
 
 
+static constexpr uint32_t GEOM_CULLING_PASS_COUNT = (uint32_t)PassID::GEOM_CULLING_OCCLUSION - (uint32_t)PassID::GEOM_CULLING_OCCLUDERS + 1;
+
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 16384;
@@ -903,6 +649,10 @@ static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
 static constexpr uint32_t GEOM_CULLING_CS_GPOUP_SIZE = 1024;
 static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 
+static constexpr uint32_t DESC_SET_PER_FRAME = 0;
+static constexpr uint32_t DESC_SET_PER_DRAW = 1;
+static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
+
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
 
@@ -919,30 +669,274 @@ static constexpr bool VSYNC_ENABLED = false;
 static constexpr float CAMERA_SPEED = 0.0075f;
 
 
-enum class PassID
+class TextureLoadData
 {
-    COMMON,
-    GEOM_CULLING_OCCLUDERS,
-    GEOM_CULLING_OCCLUSION,
-    DEPTH,
-    GBUFFER,
-    DEFERRED_LIGHTING,
-    SKYBOX,
-    POST_PROCESSING,
-    BACKBUFFER,
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    DBG_DRAW_LINES,
-    DBG_DRAW_TRIANGLES,
+public:
+    enum class ComponentType : uint16_t
+    {
+        UINT8,
+        UINT16,
+        FLOAT,
+        COUNT
+    };
+
+public:
+    TextureLoadData() = default;
+    
+    TextureLoadData(const fs::path& filepath)
+    {
+        Load(filepath);
+    }
+
+    ~TextureLoadData()
+    {
+        Unload();
+    }
+
+    TextureLoadData(const TextureLoadData& other) = delete;
+    TextureLoadData& operator=(const TextureLoadData& other) = delete;
+
+    TextureLoadData(TextureLoadData&& other) noexcept
+    {
+        *this = std::move(other);
+    }
+
+    TextureLoadData& operator=(TextureLoadData&& other)
+    {
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        m_name = std::move(other.m_name);
+    #endif
+
+        m_pData = other.m_pData;
+        other.m_pData = nullptr;
+
+        m_format = other.m_format;
+        other.m_format = VK_FORMAT_UNDEFINED;
+
+        m_width = other.m_width;
+        m_height = other.m_height;
+        m_channels = other.m_channels;
+        m_mipsCount = other.m_mipsCount;
+        m_type = other.m_type;
+
+        other.m_width = 0;
+        other.m_height = 0;
+        other.m_channels = 0;
+        other.m_mipsCount = 1;
+        other.m_type = ComponentType::UINT8;
+
+        return *this;
+    }
+
+    bool Load(const fs::path& filepath)
+    {
+        if (IsLoaded()) {
+            Unload();
+        }
+
+        const std::string strPath = filepath.string();
+
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+
+        const int result = stbi_info(strPath.c_str(), &width, &height, &channels);
+        CORE_ASSERT(result == 1);
+
+        const bool isRGB = channels == 3;
+
+        if (stbi_is_16_bit(strPath.c_str())) {
+            m_pData = stbi_load_16(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
+            m_type = ComponentType::UINT16;
+        } else if (stbi_is_hdr(strPath.c_str())) {
+            m_pData = stbi_loadf(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
+            m_type = ComponentType::FLOAT;
+        } else {
+            m_pData = stbi_load(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
+            m_type = ComponentType::UINT8;
+        }
+
+        if (!m_pData) {
+            return false;
+        }
+
+        channels = isRGB ? 4 : channels;
+
+        m_width = width;
+        m_height = height;
+        m_channels = channels;
+        m_mipsCount = CalcMipsCount(m_width, m_height);
+
+        m_format = EvaluateFormat(m_channels, m_type);
+
+        return true;
+    }
+
+    bool Load(const void* pMemory, size_t size)
+    {
+        if (IsLoaded()) {
+            Unload();
+        }
+
+        CORE_ASSERT(pMemory != nullptr);
+        CORE_ASSERT(size > 0);
+
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+
+        if (stbi_is_16_bit_from_memory((const stbi_uc*)pMemory, size)) {
+            m_pData = stbi_load_16_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_type = ComponentType::UINT16;
+        } else if (stbi_is_hdr_from_memory((const stbi_uc*)pMemory, size)) {
+            m_pData = stbi_loadf_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_type = ComponentType::FLOAT;
+        } else {
+            m_pData = stbi_load_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_type = ComponentType::UINT8;
+        }
+
+        if (!m_pData) {
+            return false;
+        }
+
+        m_width = width;
+        m_height = height;
+        m_channels = channels;
+        m_mipsCount = CalcMipsCount(m_width, m_height);
+
+        m_format = EvaluateFormat(m_channels, m_type);
+
+        return true;
+    }
+
+    void Unload()
+    {
+        if (!IsLoaded()) {
+            return;
+        }
+
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        m_name = "";
+    #endif
+
+        stbi_image_free(m_pData);
+        m_pData = nullptr;
+
+        m_format = VK_FORMAT_UNDEFINED;
+
+        m_width = 0;
+        m_height = 0;
+        m_channels = 0;
+        m_mipsCount = 1;
+        m_type = ComponentType::UINT8;
+    }
+    
+    void SetName(std::string_view name)
+    {
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        m_name = name;
+    #endif
+    }
+
+    const char* GetName() const
+    {
+    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+        return m_name.c_str();
+    #else
+        return "TEXTURE";
+    #endif
+    }
+
+    void* GetData() const { return m_pData; }
+    VkFormat GetFormat() const { return m_format; }
+
+    uint32_t GetWidth() const { return m_width; }
+    uint32_t GetHeight() const { return m_height; }
+    uint32_t GetChannels() const { return m_channels; }
+    uint16_t GetMipsCount() const { return m_mipsCount; }
+
+    ComponentType GetComponentType() const { return m_type; }
+    
+    size_t GetMemorySize() const { return m_width * m_height * m_channels * COMP_TYPE_SIZE_IN_BYTES[static_cast<size_t>(m_type)]; }
+
+    bool IsLoaded() const { return m_pData != nullptr; }
+
+private:
+    static VkFormat EvaluateFormat(uint32_t channels, ComponentType type)
+    {
+        switch (channels) {
+            case 1:
+                switch (type) {
+                    case ComponentType::UINT8:  return VK_FORMAT_R8_UNORM;
+                    case ComponentType::UINT16: return VK_FORMAT_R16_UNORM;
+                    case ComponentType::FLOAT:  return VK_FORMAT_R32_SFLOAT;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
+                        return VK_FORMAT_UNDEFINED;
+                }
+                break;
+            case 2:
+                switch (type) {
+                    case ComponentType::UINT8:  return VK_FORMAT_R8G8_UNORM;
+                    case ComponentType::UINT16: return VK_FORMAT_R16G16_UNORM;
+                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32_SFLOAT;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
+                        return VK_FORMAT_UNDEFINED;
+                }
+                break;
+            case 3:
+                switch (type) {
+                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8_UNORM;
+                    case ComponentType::UINT16: return VK_FORMAT_R16G16B16_UNORM;
+                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
+                        return VK_FORMAT_UNDEFINED;
+                }
+                break;
+            case 4:
+                switch (type) {
+                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8A8_UNORM;
+                    case ComponentType::UINT16: return VK_FORMAT_R16G16B16A16_UNORM;
+                    case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32A32_SFLOAT;
+                    default:
+                        CORE_ASSERT_FAIL("Invalid texture component type: %u", static_cast<uint32_t>(type));
+                        return VK_FORMAT_UNDEFINED;
+                }
+                break;
+            default:
+                CORE_ASSERT_FAIL("Invalid texture channels count: %u", channels);
+                return VK_FORMAT_UNDEFINED;
+        }
+    }
+
+    static uint16_t CalcMipsCount(uint32_t width, uint32_t height)
+    {
+        return (uint16_t)glm::floor(glm::log2((float)glm::max(width, height))) + 1;
+    }
+    
+private:
+    static inline constexpr size_t COMP_TYPE_SIZE_IN_BYTES[] = { 1, 2, 4 };
+
+    static_assert(_countof(COMP_TYPE_SIZE_IN_BYTES) == (size_t)ComponentType::COUNT);
+
+private:
+#ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
+    std::string m_name;
 #endif
-    IRRADIANCE_MAP_GEN,
-    BRDF_LUT_GEN,
-    PREFILT_ENV_MAP_GEN,
-    HZB_GEN,
-    COUNT,
+
+    void* m_pData = nullptr;
+    VkFormat m_format = VK_FORMAT_UNDEFINED;
+
+    uint32_t m_width = 0;
+    uint32_t m_height = 0;
+    uint32_t m_channels = 0;
+
+    uint16_t m_mipsCount = 1;
+    ComponentType m_type = ComponentType::UINT8;
 };
-
-
-static constexpr uint32_t GEOM_CULLING_PASS_COUNT = (uint32_t)PassID::GEOM_CULLING_OCCLUSION - (uint32_t)PassID::GEOM_CULLING_OCCLUDERS + 1;
 
 
 static std::unique_ptr<eng::Window> s_pWnd = nullptr;
@@ -976,7 +970,7 @@ static std::array<vkn::PSO,       (size_t)PassID::COUNT> s_PSOs;
 
 static vkn::DescriptorBuffer s_descriptorBuffer;
 
-static vkn::Buffer s_geomVertexBuffer;
+static std::array<vkn::Buffer, COMMON_GEOM_STREAM_ID_COUNT> s_geomStreamBuffers;
 static vkn::Buffer s_geomIndexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
@@ -1011,9 +1005,9 @@ static vkn::Buffer s_geomVisFlagsBuffer;
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
 
-static std::vector<vkn::Sampler>     s_commonSamplers;
+static std::vector<vkn::Sampler> s_commonSamplers;
 
-static std::vector<Vertex> s_cpuGeomVertexBuffer;
+static std::array<std::vector<uint32_t>, COMMON_GEOM_STREAM_ID_COUNT> s_cpuGeomStreamBuffers;
 static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
@@ -1450,8 +1444,13 @@ namespace DbgUI
                 }
 
                 ImGui::NewLine();
-                ImGui::TextDisabled("Geom Vertex Size: %.3f KB", s_geomVertexBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Geom Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
+                for (size_t i = 0; i < COMMON_GEOM_STREAM_ID_COUNT; ++i) {
+                    ImGui::TextDisabled("Geom Stream %s Size: %.3f KB", COMMON_GEOM_STREAM_DBG_NAMES[i], s_geomStreamBuffers[i].GetMemorySize() / 1024.f);
+                }
+                ImGui::TextDisabled("Geom Stream Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
+                
+                ImGui::NewLine();
+                
                 ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f KB", s_commonMeshLODBuffer.GetMemorySize() / 1024.f);
                 ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshBuffer.GetMemorySize() / 1024.f);
                 
@@ -2601,7 +2600,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, (uint32_t)COMMON_SAMPLER_IDX::COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, (uint32_t)COMMON_DBG_TEX_IDX::COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT),
+        vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_ID_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
@@ -4338,26 +4337,30 @@ static void WriteCommonDescriptorSet()
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
-
-    for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
-    }
-
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON,COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_GEOM_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_geomVertexBuffer);
-
 #ifndef ENG_BUILD_RELEASE
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
     }
 #endif
 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+    
+    for (size_t i = 0; i < COMMON_GEOM_STREAM_ID_COUNT; ++i) {
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
+    }
+    
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBBuffer);
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
+
+    for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
+        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
+    }
+
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
+
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
     s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView);
 }
@@ -4401,157 +4404,151 @@ static void WriteDescriptorSets()
 }
 
 
-static void LoadSceneMeshData(const gltf::Asset& asset)
+static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& mesh, size_t primIdx)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Mesh_Data", eng::ProfileColor::DarkMagenta);
-
-    eng::Timer timer;
-
-    size_t vertexCount = 0;
-    size_t indexCount = 0;
-    size_t meshesCount = 0;
-
     auto GetVertexAttribAccessor = [](const gltf::Asset& asset, const gltf::Primitive& primitive, std::string_view name) -> const gltf::Accessor*
     {
         const fastgltf::Attribute* pAttrib = primitive.findAttribute(name); 
         return pAttrib != primitive.attributes.cend() ? &asset.accessors[pAttrib->accessorIndex] : nullptr;
     };
 
-    for (const gltf::Mesh& mesh : asset.meshes) {
-        const size_t submeshCount = mesh.primitives.size();
+    const gltf::Primitive& primitive = mesh.primitives[primIdx];
 
-        meshesCount += submeshCount;
+    const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
+    CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
 
-        for (size_t primIdx = 0; primIdx < submeshCount; ++primIdx) {
-            const gltf::Primitive& primitive = mesh.primitives[primIdx];
+    std::vector<glm::float3> positions(pPosAccessor->count);
+    gltf::copyFromAccessor<glm::float3>(asset, *pPosAccessor, positions.data());
 
-            const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
-            CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
-            
-            vertexCount += pPosAccessor->count;
+    const gltf::Accessor* pNormAccessor = GetVertexAttribAccessor(asset, primitive, "NORMAL");
+    CORE_ASSERT_MSG(pNormAccessor != nullptr, "Failed to find NORMAL vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+    CORE_ASSERT(pPosAccessor->count == pNormAccessor->count);
+    
+    std::vector<glm::float3> normals(pNormAccessor->count);
+    gltf::copyFromAccessor<glm::float3>(asset, *pNormAccessor, normals.data());
 
-            CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
-            
-            const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
-            indexCount += indexAccessor.count;
+    const gltf::Accessor* pUvAccessor = GetVertexAttribAccessor(asset, primitive, "TEXCOORD_0");
+    CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
+    CORE_ASSERT(pPosAccessor->count == pUvAccessor->count);
+
+    std::vector<glm::float2> uvs(pUvAccessor->count);
+    gltf::copyFromAccessor<glm::float2>(asset, *pUvAccessor, uvs.data());
+
+    const gltf::Accessor* pTangAccessor = GetVertexAttribAccessor(asset, primitive, "TANGENT");
+
+    std::vector<glm::float4> tangents;
+
+    if (pTangAccessor) {
+        CORE_ASSERT(pPosAccessor->count == pTangAccessor->count);
+
+        tangents.resize(pTangAccessor->count);
+        gltf::copyFromAccessor<glm::float4>(asset, *pTangAccessor, tangents.data());
+    } else {
+        CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
+
+        tangents.resize(normals.size());
+
+        for (size_t i = 0; i < tangents.size(); ++i) {
+            const glm::float3& lnorm = normals[i];
+            const glm::float3 binorm = math::IsZero(glm::dot(lnorm, -M3D_AXIS_Z)) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
+            tangents[i] = glm::float4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
         }
     }
 
-    s_cpuGeomVertexBuffer.reserve(vertexCount);
-    s_cpuGeomVertexBuffer.clear();
+    CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
+    const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
 
-    s_cpuGeomIndexBuffer.reserve(indexCount);
-    s_cpuGeomIndexBuffer.clear();
+    std::vector<IndexType> indices(indexAccessor.count);
+    gltf::copyFromAccessor<IndexType>(asset, indexAccessor, indices.data());
 
-    s_cpuMeshData.reserve(meshesCount);
-    s_cpuMeshData.clear();
+    CORE_ASSERT(pPosAccessor->min.has_value());
+    const auto& aabbLCSMin = pPosAccessor->min.value();
+    CORE_ASSERT(aabbLCSMin.size() == 3);
 
-    size_t sceneIdx = 0;
+    CORE_ASSERT(pPosAccessor->max.has_value());
+    const auto& aabbLCSMax = pPosAccessor->max.value();
+    CORE_ASSERT(aabbLCSMax.size() == 3);
+
+    glm::float3 minVert;
+    if (aabbLCSMin.isType<std::int64_t>()) {
+        minVert = glm::float3(aabbLCSMin.get<std::int64_t>(0), aabbLCSMin.get<std::int64_t>(1), aabbLCSMin.get<std::int64_t>(2));
+    } else {
+        minVert = glm::float3(aabbLCSMin.get<double>(0), aabbLCSMin.get<double>(1), aabbLCSMin.get<double>(2));
+    }
+    
+    glm::float3 maxVert;
+    if (aabbLCSMax.isType<std::int64_t>()) {
+        maxVert = glm::float3(aabbLCSMax.get<std::int64_t>(0), aabbLCSMax.get<std::int64_t>(1), aabbLCSMax.get<std::int64_t>(2));
+    } else {
+        maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
+    }
+
+    COMMON_MESH_LOD lod0 = {};
+    lod0.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
+    lod0.INDEX_COUNT = indexAccessor.count;
+
+    const uint32_t lod0Index = s_cpuMeshLODData.size();
+    s_cpuMeshLODData.emplace_back(lod0);
+
+    s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + indexAccessor.count);
+    for (IndexType index : indices) {
+        s_cpuGeomIndexBuffer.emplace_back(lod0.FIRST_INDEX + index);
+    }
+
+    COMMON_MESH cpuMesh = {};
+
+    std::vector<uint32_t>& posStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_POSITION];
+    cpuMesh.FIRST_VERTEX = posStream.size() / 2;
+    cpuMesh.VERTEX_COUNT = pPosAccessor->count;
+
+    cpuMesh.PackBounds(minVert, maxVert);
+
+    cpuMesh.LOD_0_INDEX = lod0Index;
+    cpuMesh.LOD_COUNT = 1;
+
+    s_cpuMeshData.emplace_back(cpuMesh);
+
+    posStream.reserve(posStream.size() + positions.size() * 2);
+
+    for (const glm::float3& pos : positions) {
+        posStream.emplace_back(glm::packHalf2x16(glm::float2(pos.x, pos.y)));
+        posStream.emplace_back(glm::packHalf2x16(glm::float2(pos.z, 0.f)));
+    }
+
+    std::vector<uint32_t>& normStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_NORMAL];
+    normStream.reserve(normStream.size() + normals.size() * 2);
+
+    for (const glm::float3& normal : normals) {
+        normStream.emplace_back(glm::packHalf2x16(glm::float2(normal.x, normal.y)));
+        normStream.emplace_back(glm::packHalf2x16(glm::float2(normal.z, 0.f)));
+    }
+
+    std::vector<uint32_t>& uvStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_UV];
+    uvStream.reserve(uvStream.size() + uvs.size());
+
+    for (const glm::float2& uv : uvs) {
+        uvStream.emplace_back(glm::packHalf2x16(uv));
+    }
+
+    std::vector<uint32_t>& tangStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_TANGENT];
+    tangStream.reserve(tangStream.size() + tangents.size() * 2);
+
+    for (const glm::float4& tang : tangents) {
+        tangStream.emplace_back(glm::packHalf2x16(glm::float2(tang.x, tang.y)));
+        tangStream.emplace_back(glm::packHalf2x16(glm::float2(tang.z, tang.w)));
+    }
+}
+
+
+static void LoadSceneMeshData(const gltf::Asset& asset)
+{
+    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Mesh_Data", eng::ProfileColor::DarkMagenta);
+
+    eng::Timer timer;
 
     for (const gltf::Mesh& mesh : asset.meshes) {
         for (size_t primIdx = 0; primIdx < mesh.primitives.size(); ++primIdx) {
-            const gltf::Primitive& primitive = mesh.primitives[primIdx];
-            
-            const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
-            CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
-
-            const gltf::Accessor* pNormAccessor = GetVertexAttribAccessor(asset, primitive, "NORMAL");
-            CORE_ASSERT_MSG(pNormAccessor != nullptr, "Failed to find NORMAL vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
-            
-            const gltf::Accessor* pUvAccessor = GetVertexAttribAccessor(asset, primitive, "TEXCOORD_0");
-            CORE_ASSERT_MSG(pUvAccessor != nullptr, "Failed to find TEXCOORD_0 vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
-
-            const gltf::Accessor* pTangAccessor = GetVertexAttribAccessor(asset, primitive, "TANGENT");
-            
-            CORE_ASSERT(pPosAccessor->count == pNormAccessor->count);
-            CORE_ASSERT(pPosAccessor->count == pUvAccessor->count);
-
-            if (pTangAccessor) {
-                CORE_ASSERT(pPosAccessor->count == pTangAccessor->count);
-            } else {
-                CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
-            }
-
-            COMMON_MESH cpuMesh = {};
-
-            cpuMesh.FIRST_VERTEX = s_cpuGeomVertexBuffer.size();
-            cpuMesh.VERTEX_COUNT = pPosAccessor->count;
-
-            for (size_t vertIdx = 0; vertIdx < pPosAccessor->count; ++vertIdx) {
-                const glm::float3 lpos = gltf::getAccessorElement<glm::float3>(asset, *pPosAccessor, vertIdx);
-                const glm::float3 lnorm = glm::normalize(gltf::getAccessorElement<glm::float3>(asset, *pNormAccessor, vertIdx));
-                const glm::float2 uv = gltf::getAccessorElement<glm::float2>(asset, *pUvAccessor, vertIdx);
-                
-                glm::float4 tang; 
-                if (pTangAccessor) {
-                    tang = gltf::getAccessorElement<glm::float4>(asset, *pTangAccessor, vertIdx);
-                    tang = glm::float4(glm::normalize(glm::float3(tang.x, tang.y, tang.z)), tang.w);
-                } else {
-                    const glm::float3 binorm = !math::IsEqual(lnorm, -M3D_AXIS_Z) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
-                    tang = glm::float4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
-                }
-                
-                Vertex vertex = {};
-                vertex.Pack(lpos, lnorm, uv, tang);
-
-                s_cpuGeomVertexBuffer.emplace_back(vertex);
-            }
-
-            CORE_ASSERT(pPosAccessor->min.has_value());
-            const auto& aabbLCSMin = pPosAccessor->min.value();
-            CORE_ASSERT(aabbLCSMin.size() == 3);
-
-            CORE_ASSERT(pPosAccessor->max.has_value());
-            const auto& aabbLCSMax = pPosAccessor->max.value();
-            CORE_ASSERT(aabbLCSMax.size() == 3);
-
-            glm::float3 minVert;
-            if (aabbLCSMin.isType<std::int64_t>()) {
-                minVert = glm::float3(aabbLCSMin.get<std::int64_t>(0), aabbLCSMin.get<std::int64_t>(1), aabbLCSMin.get<std::int64_t>(2));
-            } else {
-                minVert = glm::float3(aabbLCSMin.get<double>(0), aabbLCSMin.get<double>(1), aabbLCSMin.get<double>(2));
-            }
-            
-            glm::float3 maxVert;
-            if (aabbLCSMax.isType<std::int64_t>()) {
-                maxVert = glm::float3(aabbLCSMax.get<std::int64_t>(0), aabbLCSMax.get<std::int64_t>(1), aabbLCSMax.get<std::int64_t>(2));
-            } else {
-                maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
-            }
-
-            cpuMesh.PackBounds(minVert, maxVert);
-
-            CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
-            const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
-
-            CORE_ASSERT_MSG(indexAccessor.type == fastgltf::AccessorType::Scalar, "%zu primitive of %s mesh has invalid index accessor type", primIdx, mesh.name.c_str());
-
-            cpuMesh.LOD_0_INDEX = s_cpuMeshLODData.size();
-            cpuMesh.LOD_COUNT = 1;
-
-            COMMON_MESH_LOD lod0 = {};
-            lod0.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
-            lod0.INDEX_COUNT = indexAccessor.count;
-
-            s_cpuMeshLODData.emplace_back(lod0);
-            
-            if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
-                gltf::iterateAccessor<uint16_t>(asset, indexAccessor, 
-                    [&](uint16_t index) {
-                        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
-                    }
-                );
-            } else if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedInt) {
-                gltf::iterateAccessor<uint32_t>(asset, indexAccessor, 
-                    [&](uint32_t index) {
-                        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
-                    }
-                );
-            } else {
-                CORE_ASSERT_FAIL("Invalid index accessor component type: %u", static_cast<uint32_t>(indexAccessor.componentType));
-            }
-
-            s_cpuMeshData.emplace_back(cpuMesh);
+            LoadSceneMeshInstData(asset, mesh, primIdx);
         }
     }
 
@@ -4783,22 +4780,47 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 }
 
 
+static void UploadGPUGeomStream(COMMON_GEOM_STREAM_ID ID)
+{
+    vkn::Buffer& staging = s_commonStagingBuffers[0];
+
+    const size_t gpuStreamSize = s_cpuGeomStreamBuffers[ID].size() * sizeof(uint32_t);
+    CORE_ASSERT(gpuStreamSize <= staging.GetMemorySize());
+
+    void* pDataGPU = staging.Map();
+    memcpy(pDataGPU, s_cpuGeomStreamBuffers[ID].data(), gpuStreamSize);
+    staging.Unmap();
+
+    vkn::AllocationInfo streamBufAllocInfo = {};
+    streamBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+    streamBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    vkn::BufferCreateInfo streamBufCreateInfo = {};
+    streamBufCreateInfo.pDevice = &s_vkDevice;
+    streamBufCreateInfo.size = gpuStreamSize;
+    streamBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+    streamBufCreateInfo.pAllocInfo = &streamBufAllocInfo;
+
+    s_geomStreamBuffers[ID].Create(streamBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_geomStreamBuffers[ID], "COMMON_GEOM_STREAM_%s", COMMON_GEOM_STREAM_DBG_NAMES[ID]);
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        cmdBuffer.CmdCopyBuffer(staging, s_geomStreamBuffers[ID], gpuStreamSize); 
+    });
+}
+
+
 static void UploadGPUMeshData()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Mesh_Data", eng::ProfileColor::DarkMagenta);
 
     eng::Timer timer;
 
-    vkn::Buffer& stagingVertBuffer = s_commonStagingBuffers[0];
+    for (size_t i = 0; i < COMMON_GEOM_STREAM_ID_COUNT; ++i) {
+        UploadGPUGeomStream(static_cast<COMMON_GEOM_STREAM_ID>(i));
+    }
 
-    const size_t gpuVertBufferSize = s_cpuGeomVertexBuffer.size() * sizeof(Vertex);
-    CORE_ASSERT(gpuVertBufferSize <= stagingVertBuffer.GetMemorySize());
-
-    void* pVertexBufferData = stagingVertBuffer.Map();
-    memcpy(pVertexBufferData, s_cpuGeomVertexBuffer.data(), gpuVertBufferSize);
-    stagingVertBuffer.Unmap();
-
-    vkn::Buffer& stagingIndexBuffer = s_commonStagingBuffers[1];
+    vkn::Buffer& stagingIndexBuffer = s_commonStagingBuffers[0];
 
     const size_t gpuIndexBufferSize = s_cpuGeomIndexBuffer.size() * sizeof(IndexType);
     CORE_ASSERT(gpuIndexBufferSize <= stagingIndexBuffer.GetMemorySize());
@@ -4806,19 +4828,6 @@ static void UploadGPUMeshData()
     void* pIndexBufferData = stagingIndexBuffer.Map();
     memcpy(pIndexBufferData, s_cpuGeomIndexBuffer.data(), gpuIndexBufferSize);
     stagingIndexBuffer.Unmap();
-
-    vkn::AllocationInfo vertBufAllocInfo = {};
-    vertBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    vertBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo vertBufCreateInfo = {};
-    vertBufCreateInfo.pDevice = &s_vkDevice;
-    vertBufCreateInfo.size = gpuVertBufferSize;
-    vertBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    vertBufCreateInfo.pAllocInfo = &vertBufAllocInfo;
-
-    s_geomVertexBuffer.Create(vertBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_geomVertexBuffer, "COMMON_VB");
 
     vkn::AllocationInfo idxBufAllocInfo = {};
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4834,7 +4843,6 @@ static void UploadGPUMeshData()
     s_vkDevice.SetObjDebugName(s_geomIndexBuffer, "COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingVertBuffer, s_geomVertexBuffer, gpuVertBufferSize);
         cmdBuffer.CmdCopyBuffer(stagingIndexBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 

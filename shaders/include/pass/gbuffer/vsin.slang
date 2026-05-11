@@ -4,6 +4,8 @@
 #include "registers/common_registers.slang"
 #include "registers/gbuffer_registers.slang"
 
+#include "common/geom_stream_incl.slang"
+
 
 struct GBUFFER_INPUT_DATA
 {
@@ -16,22 +18,14 @@ struct GBUFFER_INPUT_DATA
 
 GBUFFER_INPUT_DATA PrepareGBufferVSInputData(uint vertID)
 {
-    GBUFFER_INPUT_DATA inputData = (GBUFFER_INPUT_DATA)0;
+    GBUFFER_INPUT_DATA data = (GBUFFER_INPUT_DATA)0;
 
-    const uint offset = vertID * COMMON_VERTEX_DATA_SIZE_UI;
+    data.position = GeomStreamLoadPosition(vertID);
+    data.lnorm = GeomStreamLoadNormal(vertID);
+    data.uv = GeomStreamLoadUV(vertID);
+    data.tangent = GeomStreamLoadTangent(vertID);
 
-    inputData.position.xy = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 0]);
-    inputData.position.z = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 1]).x;
-
-    inputData.lnorm.x = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 1]).y;
-    inputData.lnorm.yz = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 2]);
-
-    inputData.uv = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 3]);
-
-    inputData.tangent.xy = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 4]);
-    inputData.tangent.zw = unpackHalf2x16ToFloat(COMMON_GEOM_VERTEX_BUFFER[offset + 5]);
-
-    return inputData;
+    return data;
 }
 
 #endif

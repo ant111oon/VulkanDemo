@@ -75,6 +75,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(stb)
 
 
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        master
+    GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(meshoptimizer)
+
+
 if (ENG_ENABLE_TRACY)
     FetchContent_Declare(
         tracy
@@ -151,6 +160,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE vma
     PRIVATE glm
     PRIVATE fastgltf
+    PRIVATE meshoptimizer
     
     PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui>
 
