@@ -1450,7 +1450,7 @@ namespace DbgUI
                 ImGui::TextDisabled("Geom Stream Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
                 
                 ImGui::NewLine();
-                
+
                 ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f KB", s_commonMeshLODBuffer.GetMemorySize() / 1024.f);
                 ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshBuffer.GetMemorySize() / 1024.f);
                 
@@ -4490,11 +4490,6 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     const uint32_t lod0Index = s_cpuMeshLODData.size();
     s_cpuMeshLODData.emplace_back(lod0);
 
-    s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + indexAccessor.count);
-    for (IndexType index : indices) {
-        s_cpuGeomIndexBuffer.emplace_back(lod0.FIRST_INDEX + index);
-    }
-
     COMMON_MESH cpuMesh = {};
 
     std::vector<uint32_t>& posStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_POSITION];
@@ -4507,6 +4502,11 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     cpuMesh.LOD_COUNT = 1;
 
     s_cpuMeshData.emplace_back(cpuMesh);
+
+    s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + indexAccessor.count);
+    for (IndexType index : indices) {
+        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
+    }
 
     posStream.reserve(posStream.size() + positions.size() * 2);
 
