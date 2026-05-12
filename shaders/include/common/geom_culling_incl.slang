@@ -59,15 +59,15 @@ namespace utils
     }
 
 
-    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingConstructCmd(in COMMON_MESH mesh, in uint firstInst, in uint instCount = 1)
+    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingConstructCmd(in COMMON_MESH mesh, in uint lodID, in uint firstInst, in uint instCount = 1)
     {
+        const COMMON_MESH_LOD lod = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD + clamp(lodID, 0, mesh.LOD_COUNT - 1)];
+
         COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = (COMMON_CMD_DRAW_INDEXED_INDIRECT)0;
 
-        const COMMON_MESH_LOD lod0 = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD]; // Temp
-
-        cmd.INDEX_COUNT    = lod0.INDEX_COUNT;
+        cmd.INDEX_COUNT    = lod.INDEX_COUNT;
         cmd.INSTANCE_COUNT = instCount;
-        cmd.FIRST_INDEX    = lod0.FIRST_INDEX;
+        cmd.FIRST_INDEX    = lod.FIRST_INDEX;
         cmd.FIRST_VERTEX   = mesh.FIRST_VERTEX;
         cmd.FIRST_INSTANCE = firstInst;
 
@@ -201,7 +201,9 @@ uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 
 void GeomCullingPushInstToCmdQueue(in uint instID, in uint meshID, in uint materialID)
 {
-    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_BUFFER[meshID], instID);
+    const uint lodID = COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : 0;
+
+    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_BUFFER[meshID], lodID, instID);
 
     const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[materialID]);
 

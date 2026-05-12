@@ -117,16 +117,18 @@ struct COMMON_MESH
         BOUNDS_MIN_MAX_LCS_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
     }
 
-    void GetBounds(float3& minn, float3& maxx) const
+    math::AABB GetBounds() const
     {
-        minn = float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).x);
-        maxx = float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.z));
+        return math::AABB(
+            float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).x),
+            float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.z))
+        );
     }
 
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
 
-    uint LOD_0_INDEX;
+    uint FIRST_LOD;
     uint LOD_COUNT;
 
     uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
@@ -233,9 +235,10 @@ struct COMMON_CB_DATA
     float3 CAM_WPOS;
     uint FLAGS;
     
-    uint2 PAD0;
+    int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
+    uint PAD0;
 };
 
 
@@ -635,8 +638,7 @@ static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = MAX_DBG_TRIANGLE_COU
 static constexpr size_t GBUFFER_RT_COUNT = 4;
 static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 
-static constexpr size_t STAGING_BUFFER_SIZE  = 96 * 1024 * 1024; // 96 MB
-static constexpr size_t STAGING_BUFFER_COUNT = 2;
+static constexpr size_t STAGING_BUFFER_SIZE  = 256 * 1024 * 1024; // 256 MB
 
 static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
@@ -652,6 +654,10 @@ static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 static constexpr uint32_t DESC_SET_PER_FRAME = 0;
 static constexpr uint32_t DESC_SET_PER_DRAW = 1;
 static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
+
+static constexpr float LOD_SIMPLIFICATION_COEF = 0.70f; // Means that the next LOD should has on 30% less indices than current
+static constexpr float LOD_SIMPLIFICATION_ERROR = 0.005f;
+static constexpr size_t MAX_GEOM_LOD_COUNT = 8;
 
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -961,7 +967,7 @@ static vkn::Semaphore  s_presentFinishedSemaphore;
 static vkn::Fence      s_renderFinishedFence;
 static vkn::CmdBuffer* s_pRenderCmdBuffer;
 
-static std::array<vkn::Buffer, STAGING_BUFFER_COUNT> s_commonStagingBuffers;
+static vkn::Buffer s_commonStagingBuffer;
 
 static std::array<vkn::DescriptorSetLayout, (size_t)PassID::COUNT> s_descSetLayouts;
 
@@ -1082,6 +1088,8 @@ static math::Frustum s_fixedCamCullFrustum;
 static uint32_t s_dbgOutputRTIdx = 0;
 static uint32_t s_nextImageIdx = 0;
 
+static int32_t s_forcedGeomLOD = -1;
+
 static size_t s_frameNumber = 0;
 static float s_frameTime = M3D_EPS;
 static bool s_swapchainRecreateRequired = false;
@@ -1178,10 +1186,22 @@ static void ClearDebugDrawData()
 }
 
 
+static bool IsDebugLinesBufferFull()
+{
+    return s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity();
+}
+
+
+static bool IsDebugTrianglesBufferFull()
+{
+    return s_dbgTriangleDataCPU.size() == s_dbgTriangleDataCPU.capacity();
+}
+
+
 static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float4& color)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    if (s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity()) {
+    if (IsDebugLinesBufferFull()) {
         CORE_LOG_WARN("Debug lines buffer is full");
         return;
     }
@@ -1217,7 +1237,7 @@ static void RenderDebugTriangleWire(const glm::float3& wPos0, const glm::float3&
 static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float3& wPos1, const glm::float3& wPos2, const glm::float4& color)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    if (s_dbgTriangleDataCPU.size() == s_dbgTriangleDataCPU.capacity()) {
+    if (IsDebugTrianglesBufferFull()) {
         CORE_LOG_WARN("Debug triangles buffer is full");
         return;
     }
@@ -1445,24 +1465,46 @@ namespace DbgUI
 
                 ImGui::NewLine();
                 for (size_t i = 0; i < COMMON_GEOM_STREAM_ID_COUNT; ++i) {
-                    ImGui::TextDisabled("Geom Stream %s Size: %.3f KB", COMMON_GEOM_STREAM_DBG_NAMES[i], s_geomStreamBuffers[i].GetMemorySize() / 1024.f);
+                    const float kb = s_geomStreamBuffers[i].GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Stream %s Size: %.3f %s", COMMON_GEOM_STREAM_DBG_NAMES[i], kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
-                ImGui::TextDisabled("Geom Stream Index Size: %.3f KB", s_geomIndexBuffer.GetMemorySize() / 1024.f);
+                {
+                    const float kb = s_geomIndexBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Stream Index Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f KB", s_commonMeshLODBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Geom Mesh Data Size: %.3f KB", s_commonMeshBuffer.GetMemorySize() / 1024.f);
+                {
+                    const float kb = s_commonMeshLODBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                {
+                    const float kb = s_commonMeshBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Mesh Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Material Data Size: %.3f KB", s_commonMaterialBuffer.GetMemorySize() / 1024.f);
+                {
+                    const float kb = s_commonMaterialBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Material Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Inst Transform Data Size: %.3f KB", s_commonTransformBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Inst AABB Data Size: %.3f KB", s_commonAABBBuffer.GetMemorySize() / 1024.f);
-                ImGui::TextDisabled("Inst Data Size: %.3f KB", s_commonInstBuffer.GetMemorySize() / 1024.f);
+                {
+                    const float kb = s_commonTransformBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Inst Transform Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                {
+                    const float kb = s_commonAABBBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Inst AABB Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                {
+                    const float kb = s_commonInstBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
                 
                 ImGui::NewLine();
 
@@ -1470,47 +1512,63 @@ namespace DbgUI
                 ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
             }
             
-            if (ImGui::CollapsingHeader("Geom Culling")) {
-                ImGui::Checkbox("##GeomCulling", &s_useMeshCulling);
-                ImGui::SameLine(); 
-                ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                if (s_useMeshCulling) {
-                    if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
-                            ImGui::SameLine(); 
-                            ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+            if (ImGui::CollapsingHeader("Geom")) {
+                if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
 
-                            ImGui::TreePop();
-                        }
-                        
-                        if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
-                            ImGui::SameLine(); 
-                            ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                            ImGui::TreePop();
-                        }
-
-                        if (ImGui::TreeNodeEx("Contribution", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            ImGui::Checkbox("##ContributionCulling", &s_useMeshContributionCulling);
-                            ImGui::SameLine(); 
-                            ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                            ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
-        
-                            if (ImGui::IsItemHovered()) {
-                                if (ImGui::BeginTooltip()) {
-                                    ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
-                                } ImGui::EndTooltip();
-                            }
-
-                            ImGui::TreePop();
-                        }
-                    
-                        ImGui::TreePop();
+                    if (ImGui::IsItemHovered()) {
+                        if (ImGui::BeginTooltip()) {
+                            ImGui::Text("Forced LOD -1 means \'Do not force any LOD\'");
+                        } ImGui::EndTooltip();
                     }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Culling", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##GeomCulling", &s_useMeshCulling);
+                    ImGui::SameLine(); 
+                    ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+        
+                    if (s_useMeshCulling) {
+                        if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
+                                ImGui::SameLine(); 
+                                ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                                ImGui::TreePop();
+                            }
+                            
+                            if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
+                                ImGui::SameLine(); 
+                                ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                                ImGui::TreePop();
+                            }
+    
+                            if (ImGui::TreeNodeEx("Contribution", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Checkbox("##ContributionCulling", &s_useMeshContributionCulling);
+                                ImGui::SameLine(); 
+                                ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                                ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
+            
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
+                                    } ImGui::EndTooltip();
+                                }
+    
+                                ImGui::TreePop();
+                            }
+                        
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    ImGui::TreePop();
                 }
             }
             
@@ -1877,7 +1935,7 @@ static void CreateVkPhysAndLogicalDevices()
 }
 
 
-static void CreateCommonStagingBuffers()
+static void CreateCommonStagingBuffer()
 {
     vkn::AllocationInfo stagingBufAllocInfo = {};
     stagingBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
@@ -1889,10 +1947,8 @@ static void CreateCommonStagingBuffers()
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT;
     stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
-    for (size_t i = 0; i < s_commonStagingBuffers.size(); ++i) {
-        s_commonStagingBuffers[i].Create(stagingBufCreateInfo);
-        s_vkDevice.SetObjDebugName(s_commonStagingBuffers[i], "STAGING_BUFFER_%zu", i);
-    }
+    s_commonStagingBuffer.Create(stagingBufCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonStagingBuffer, "COMMON_STAGING_BUFFER");
 }
 
 
@@ -2273,20 +2329,12 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     s_skyboxTextureView.Create(viewCreateInfo);
     s_vkDevice.SetObjDebugName(s_skyboxTextureView, "COMMON_SKY_BOX_VIEW");
 
-    for (size_t i = 0; i < CUBEMAP_FACE_COUNT; i += s_commonStagingBuffers.size()) {
-        for (size_t j = 0; j < s_commonStagingBuffers.size() && i < CUBEMAP_FACE_COUNT; ++j) {
-            if (i + j >= CUBEMAP_FACE_COUNT) {
-                break;
-            }
-            
-            vkn::Buffer& stagingBuffer = s_commonStagingBuffers[j];
+    for (size_t i = 0; i < CUBEMAP_FACE_COUNT; ++i) {
+        const TextureLoadData& loadData = faceLoadDatas[i];
 
-            const TextureLoadData& loadData = faceLoadDatas[i + j];
-
-            void* pData = stagingBuffer.Map();
-            memcpy(pData, loadData.GetData(), loadData.GetMemorySize());
-            stagingBuffer.Unmap();
-        }
+        void* pData = s_commonStagingBuffer.Map();
+        memcpy(pData, loadData.GetData(), loadData.GetMemorySize());
+        s_commonStagingBuffer.Unmap();
 
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
             cmdBuffer
@@ -2295,24 +2343,16 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
                         VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
                 .Push();
 
-            for (size_t j = 0; j < s_commonStagingBuffers.size(); ++j) {
-                const uint32_t faceIdx = i + j;
-                
-                if (faceIdx >= CUBEMAP_FACE_COUNT) {
-                    break;
-                }
+            const uint32_t faceIdx = i;
 
-                vkn::Buffer& stagingBuffer = s_commonStagingBuffers[j];
+            vkn::BufferToTextureCopyInfo copyInfo = {};
+            copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyInfo.texSubresource.mipLevel = 0;
+            copyInfo.texSubresource.baseArrayLayer = faceIdx;
+            copyInfo.texSubresource.layerCount = 1;
+            copyInfo.texExtent = s_skyboxTexture.GetSize();
 
-                vkn::BufferToTextureCopyInfo copyInfo = {};
-                copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                copyInfo.texSubresource.mipLevel = 0;
-                copyInfo.texSubresource.baseArrayLayer = faceIdx;
-                copyInfo.texSubresource.layerCount = 1;
-                copyInfo.texExtent = s_skyboxTexture.GetSize();
-
-                cmdBuffer.CmdCopyBuffer(stagingBuffer, s_skyboxTexture, copyInfo);
-            }
+            cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_skyboxTexture, copyInfo);
         });
     }
 
@@ -3733,7 +3773,7 @@ static void CreateCommonDbgTextures()
 static void UploadGPUDbgTextures()
 {
 #ifndef ENG_BUILD_RELEASE
-    auto UploadDbgTexture = [](vkn::CmdBuffer& cmdBuffer, size_t texIdx, size_t stagingBufIdx) -> void
+    auto UploadDbgTexture = [](vkn::CmdBuffer& cmdBuffer, size_t texIdx) -> void
     {
         vkn::Texture& texture = s_commonDbgTextures[texIdx];
 
@@ -3750,7 +3790,7 @@ static void UploadGPUDbgTextures()
         copyInfo.texSubresource.layerCount = 1;
         copyInfo.texExtent = texture.GetSize();
 
-        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffers[stagingBufIdx], texture, copyInfo);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, texture, copyInfo);
     
         cmdBuffer
             .BeginBarrierList()
@@ -3759,85 +3799,78 @@ static void UploadGPUDbgTextures()
             .Push();
     };
 
-    vkn::Buffer& redImageStagingBuffer = s_commonStagingBuffers[0];
-
-    uint8_t* pRedImageData = (uint8_t*)redImageStagingBuffer.Map();
+    uint8_t* pRedImageData = (uint8_t*)s_commonStagingBuffer.Map();
     pRedImageData[0] = 255;
     pRedImageData[1] = 0;
     pRedImageData[2] = 0;
     pRedImageData[3] = 255;
-    redImageStagingBuffer.Unmap();
-
-    vkn::Buffer& greenImageStagingBuffer = s_commonStagingBuffers[1];
-
-    uint8_t* pGreenImageData = (uint8_t*)greenImageStagingBuffer.Map();
-    pGreenImageData[0] = 0;
-    pGreenImageData[1] = 255;
-    pGreenImageData[2] = 0;
-    pGreenImageData[3] = 255;
-    greenImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     size_t writeTexIdx = 0;
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        for (size_t i = 0; i < 2; ++i, ++writeTexIdx) {
-            UploadDbgTexture(cmdBuffer, writeTexIdx, i);
-        }
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
     });
 
-    vkn::Buffer& blueImageStagingBuffer = s_commonStagingBuffers[0];
+    uint8_t* pGreenImageData = (uint8_t*)s_commonStagingBuffer.Map();
+    pGreenImageData[0] = 0;
+    pGreenImageData[1] = 255;
+    pGreenImageData[2] = 0;
+    pGreenImageData[3] = 255;
+    s_commonStagingBuffer.Unmap();
 
-    uint8_t* pBlueImageData = (uint8_t*)blueImageStagingBuffer.Map();
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
+    });
+
+    uint8_t* pBlueImageData = (uint8_t*)s_commonStagingBuffer.Map();
     pBlueImageData[0] = 0;
     pBlueImageData[1] = 0;
     pBlueImageData[2] = 255;
     pBlueImageData[3] = 255;
-    blueImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
-    vkn::Buffer& blackImageStagingBuffer = s_commonStagingBuffers[1];
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
+    });
 
-    uint8_t* pBlackImageData = (uint8_t*)blackImageStagingBuffer.Map();
+    uint8_t* pBlackImageData = (uint8_t*)s_commonStagingBuffer.Map();
     pBlackImageData[0] = 0;
     pBlackImageData[1] = 0;
     pBlackImageData[2] = 0;
     pBlackImageData[3] = 255;
-    blackImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        for (size_t i = 0; i < 2; ++i, ++writeTexIdx) {
-            UploadDbgTexture(cmdBuffer, writeTexIdx, i);
-        }
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
     });
 
-    vkn::Buffer& whiteImageStagingBuffer = s_commonStagingBuffers[0];
-
-    uint8_t* pWhiteImageData = (uint8_t*)whiteImageStagingBuffer.Map();
+    uint8_t* pWhiteImageData = (uint8_t*)s_commonStagingBuffer.Map();
     pWhiteImageData[0] = 255;
     pWhiteImageData[1] = 255;
     pWhiteImageData[2] = 255;
     pWhiteImageData[3] = 255;
-    whiteImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
-    vkn::Buffer& greyImageStagingBuffer = s_commonStagingBuffers[1];
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
+    });
 
-    uint8_t* pGreyImageData = (uint8_t*)greyImageStagingBuffer.Map();
+    uint8_t* pGreyImageData = (uint8_t*)s_commonStagingBuffer.Map();
     pGreyImageData[0] = 128;
     pGreyImageData[1] = 128;
     pGreyImageData[2] = 128;
     pGreyImageData[3] = 255;
-    greyImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        for (size_t i = 0; i < 2; ++i, ++writeTexIdx) {
-            UploadDbgTexture(cmdBuffer, writeTexIdx, i);
-        }
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
     });
 
-    vkn::Buffer& checkerboardImageStagingBuffer = s_commonStagingBuffers[0];
 
     vkn::Texture& checkerboardTex = s_commonDbgTextures[(size_t)COMMON_DBG_TEX_IDX::CHECKERBOARD];
 
-    uint32_t* pCheckerboardImageData = (uint32_t*)checkerboardImageStagingBuffer.Map();
+    uint32_t* pCheckerboardImageData = (uint32_t*)s_commonStagingBuffer.Map();
 
     const uint32_t whiteColorU32 = glm::packUnorm4x8(glm::float4(1.f));
     const uint32_t blackColorU32 = glm::packUnorm4x8(glm::float4(0.f, 0.f, 0.f, 1.f));
@@ -3861,10 +3894,10 @@ static void UploadGPUDbgTextures()
             }
         }
     }
-    checkerboardImageStagingBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx, 0);
+        UploadDbgTexture(cmdBuffer, writeTexIdx++);
     });
 #endif
 }
@@ -4406,6 +4439,8 @@ static void WriteDescriptorSets()
 
 static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& mesh, size_t primIdx)
 {
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DarkMagenta, "Load_Scene_Mesh_Data_%s", mesh.name.c_str());
+
     auto GetVertexAttribAccessor = [](const gltf::Asset& asset, const gltf::Primitive& primitive, std::string_view name) -> const gltf::Accessor*
     {
         const fastgltf::Attribute* pAttrib = primitive.findAttribute(name); 
@@ -4413,6 +4448,12 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     }; 
 
     const gltf::Primitive& primitive = mesh.primitives[primIdx];
+
+    CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
+    const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
+
+    std::vector<IndexType> indices(indexAccessor.count);
+    gltf::copyFromAccessor<IndexType>(asset, indexAccessor, indices.data());
 
     const gltf::Accessor* pPosAccessor = GetVertexAttribAccessor(asset, primitive, "POSITION");
     CORE_ASSERT_MSG(pPosAccessor != nullptr, "Failed to find POSITION vertex attribute accessor for %zu primitive of %s mesh", primIdx, mesh.name.c_str());
@@ -4455,12 +4496,6 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
         }
     }
 
-    CORE_ASSERT_MSG(primitive.indicesAccessor.has_value(), "%zu primitive of %s mesh doesn't contation index accessor", primIdx, mesh.name.c_str());
-    const gltf::Accessor& indexAccessor = asset.accessors[primitive.indicesAccessor.value()];
-
-    std::vector<IndexType> indices(indexAccessor.count);
-    gltf::copyFromAccessor<IndexType>(asset, indexAccessor, indices.data());
-
     CORE_ASSERT(pPosAccessor->min.has_value());
     const auto& aabbLCSMin = pPosAccessor->min.value();
     CORE_ASSERT(aabbLCSMin.size() == 3);
@@ -4483,32 +4518,69 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
         maxVert = glm::float3(aabbLCSMax.get<double>(0), aabbLCSMax.get<double>(1), aabbLCSMax.get<double>(2));
     }
 
-    COMMON_MESH_LOD lod0 = {};
-    lod0.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
-    lod0.INDEX_COUNT = indexAccessor.count;
-
-    const uint32_t lod0Index = s_cpuMeshLODData.size();
-    s_cpuMeshLODData.emplace_back(lod0);
+    const size_t currVertCount = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_POSITION].size() / 2; // position is packed 2 x uint
 
     COMMON_MESH cpuMesh = {};
+    
+    cpuMesh.FIRST_VERTEX = currVertCount;
+    cpuMesh.VERTEX_COUNT = positions.size();
+    cpuMesh.FIRST_LOD = s_cpuMeshLODData.size();
 
-    std::vector<uint32_t>& posStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_POSITION];
-    cpuMesh.FIRST_VERTEX = posStream.size() / 2;
-    cpuMesh.VERTEX_COUNT = pPosAccessor->count;
+    {
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DarkMagenta, "Mesh_%s_LOD_Generation", mesh.name.c_str());
 
-    cpuMesh.PackBounds(minVert, maxVert);
+        std::vector<IndexType> currLodIndices = indices;
+        std::vector<IndexType> nextLodIndices(currLodIndices.size());
 
-    cpuMesh.LOD_0_INDEX = lod0Index;
-    cpuMesh.LOD_COUNT = 1;
+        for (size_t i = 0; i < MAX_GEOM_LOD_COUNT; ++i) {
+            COMMON_MESH_LOD lod = {};
+            lod.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
+            lod.INDEX_COUNT = currLodIndices.size();
+
+            CORE_LOG_TRACE("Mesh %s LOD %zu: index count: %u", mesh.name.c_str(), i, lod.INDEX_COUNT);
+            
+            s_cpuMeshLODData.emplace_back(lod);
+    
+            ++cpuMesh.LOD_COUNT;
+            
+            s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + currLodIndices.size());
+    
+            for (IndexType index : currLodIndices) {
+                s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
+            }
+    
+            const size_t nextLodIndexCountTarget = (size_t)(((float)currLodIndices.size() * LOD_SIMPLIFICATION_COEF) + 2) / 3 * 3;
+    
+            const size_t nextLodIndexCount = meshopt_simplify(
+                nextLodIndices.data(), 
+                currLodIndices.data(), 
+                currLodIndices.size(), 
+                &positions[0].x, 
+                positions.size(), 
+                sizeof(glm::float3), 
+                nextLodIndexCountTarget, 
+                LOD_SIMPLIFICATION_ERROR
+            );
+    
+            CORE_ASSERT(nextLodIndexCount <= currLodIndices.size());
+    
+            if (nextLodIndexCount == currLodIndices.size()) {
+                break;
+            }
+    
+            nextLodIndices.resize(nextLodIndexCount);
+            currLodIndices.swap(nextLodIndices);
+        }
+    }
+
+    cpuMesh.PackBounds(minVert, maxVert + M3D_EPS);
 
     s_cpuMeshData.emplace_back(cpuMesh);
 
-    s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + indexAccessor.count);
-    for (IndexType index : indices) {
-        s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
-    }
-
-    posStream.reserve(posStream.size() + positions.size() * 2);
+    static constexpr size_t POS_SIZE_UI = 2;
+    
+    std::vector<uint32_t>& posStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_POSITION];
+    posStream.reserve(posStream.size() + positions.size() * POS_SIZE_UI);
 
     for (const glm::float3& pos : positions) {
         posStream.emplace_back(glm::packHalf2x16(glm::float2(pos.x, pos.y)));
@@ -4516,11 +4588,10 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     }
 
     std::vector<uint32_t>& normStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_NORMAL];
-    normStream.reserve(normStream.size() + normals.size() * 2);
+    normStream.reserve(normStream.size() + normals.size());
 
     for (const glm::float3& normal : normals) {
-        normStream.emplace_back(glm::packHalf2x16(glm::float2(normal.x, normal.y)));
-        normStream.emplace_back(glm::packHalf2x16(glm::float2(normal.z, 0.f)));
+        normStream.emplace_back(glm::packSnorm4x8(glm::float4(normal.x, normal.y, normal.z, 0.f)));
     }
 
     std::vector<uint32_t>& uvStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_UV];
@@ -4531,11 +4602,10 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     }
 
     std::vector<uint32_t>& tangStream = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_ID_TANGENT];
-    tangStream.reserve(tangStream.size() + tangents.size() * 2);
+    tangStream.reserve(tangStream.size() + tangents.size());
 
     for (const glm::float4& tang : tangents) {
-        tangStream.emplace_back(glm::packHalf2x16(glm::float2(tang.x, tang.y)));
-        tangStream.emplace_back(glm::packHalf2x16(glm::float2(tang.z, tang.w)));
+        tangStream.emplace_back(glm::packSnorm4x8(glm::float4(tang.x, tang.y, tang.z, tang.w > 0.f ? 1.f : -1.f)));
     }
 }
 
@@ -4718,11 +4788,8 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     auto PushAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> uint32_t
     {
         const COMMON_MESH& mesh = s_cpuMeshData[meshIdx];
-
-        glm::float3 min, max;
-        mesh.GetBounds(min, max);
         
-        const math::AABB aabb = GetWorldAABB(math::AABB(min, max), wMatr);
+        const math::AABB aabb = GetWorldAABB(mesh.GetBounds(), wMatr);
 
         s_cpuAABBData.emplace_back(aabb.min, aabb.max);
 
@@ -4782,14 +4849,12 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
 static void UploadGPUGeomStream(COMMON_GEOM_STREAM_ID ID)
 {
-    vkn::Buffer& staging = s_commonStagingBuffers[0];
-
     const size_t gpuStreamSize = s_cpuGeomStreamBuffers[ID].size() * sizeof(uint32_t);
-    CORE_ASSERT(gpuStreamSize <= staging.GetMemorySize());
+    CORE_ASSERT(gpuStreamSize <= s_commonStagingBuffer.GetMemorySize());
 
-    void* pDataGPU = staging.Map();
+    void* pDataGPU = s_commonStagingBuffer.Map();
     memcpy(pDataGPU, s_cpuGeomStreamBuffers[ID].data(), gpuStreamSize);
-    staging.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo streamBufAllocInfo = {};
     streamBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4805,7 +4870,7 @@ static void UploadGPUGeomStream(COMMON_GEOM_STREAM_ID ID)
     s_vkDevice.SetObjDebugName(s_geomStreamBuffers[ID], "COMMON_GEOM_STREAM_%s", COMMON_GEOM_STREAM_DBG_NAMES[ID]);
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(staging, s_geomStreamBuffers[ID], gpuStreamSize); 
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomStreamBuffers[ID], gpuStreamSize); 
     });
 }
 
@@ -4820,14 +4885,12 @@ static void UploadGPUMeshData()
         UploadGPUGeomStream(static_cast<COMMON_GEOM_STREAM_ID>(i));
     }
 
-    vkn::Buffer& stagingIndexBuffer = s_commonStagingBuffers[0];
-
     const size_t gpuIndexBufferSize = s_cpuGeomIndexBuffer.size() * sizeof(IndexType);
-    CORE_ASSERT(gpuIndexBufferSize <= stagingIndexBuffer.GetMemorySize());
+    CORE_ASSERT(gpuIndexBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    void* pIndexBufferData = stagingIndexBuffer.Map();
+    void* pIndexBufferData = s_commonStagingBuffer.Map();
     memcpy(pIndexBufferData, s_cpuGeomIndexBuffer.data(), gpuIndexBufferSize);
-    stagingIndexBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo idxBufAllocInfo = {};
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4843,17 +4906,15 @@ static void UploadGPUMeshData()
     s_vkDevice.SetObjDebugName(s_geomIndexBuffer, "COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingIndexBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 
-    vkn::Buffer& stagingMeshInfosBuffer = s_commonStagingBuffers[0];
-
     const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH);
-    CORE_ASSERT(meshDataBufferSize <= stagingMeshInfosBuffer.GetMemorySize());
+    CORE_ASSERT(meshDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    void* pMeshBufferData = stagingMeshInfosBuffer.Map();
+    void* pMeshBufferData = s_commonStagingBuffer.Map();
     memcpy(pMeshBufferData, s_cpuMeshData.data(), meshDataBufferSize);
-    stagingMeshInfosBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo meshInfosBufAllocInfo = {};
     meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4868,14 +4929,16 @@ static void UploadGPUMeshData()
     s_commonMeshBuffer.Create(meshInfosBufCreateInfo);
     s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
 
-    vkn::Buffer& stagingMeshLODInfosBuffer = s_commonStagingBuffers[1];
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMeshBuffer, meshDataBufferSize);
+    });
 
     const size_t meshLODDataBufferSize = s_cpuMeshLODData.size() * sizeof(COMMON_MESH_LOD);
-    CORE_ASSERT(meshLODDataBufferSize <= stagingMeshLODInfosBuffer.GetMemorySize());
+    CORE_ASSERT(meshLODDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    void* pMeshLODBufferData = stagingMeshLODInfosBuffer.Map();
+    void* pMeshLODBufferData = s_commonStagingBuffer.Map();
     memcpy(pMeshLODBufferData, s_cpuMeshLODData.data(), meshLODDataBufferSize);
-    stagingMeshLODInfosBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo meshLODInfosBufAllocInfo = {};
     meshLODInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4891,8 +4954,7 @@ static void UploadGPUMeshData()
     s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingMeshInfosBuffer, s_commonMeshBuffer, meshDataBufferSize);
-        cmdBuffer.CmdCopyBuffer(stagingMeshLODInfosBuffer, s_commonMeshLODBuffer, meshLODDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMeshLODBuffer, meshLODDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Mesh data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -4908,97 +4970,83 @@ static void UploadGPUTextureData()
     s_commonMaterialTextures.resize(s_cpuTexturesData.size());
     s_commonMaterialTextureViews.resize(s_cpuTexturesData.size());
 
-    for (size_t i = 0; i < s_cpuTexturesData.size(); i += STAGING_BUFFER_COUNT) {
-        for (size_t j = 0; j < STAGING_BUFFER_COUNT; ++j) {
-            const size_t textureIdx = i + j;
+    for (size_t i = 0; i < s_cpuTexturesData.size(); ++i) {
+        const size_t textureIdx = i;
 
-            if (textureIdx >= s_cpuTexturesData.size()) {
-                break;
-            }
+        const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
+        const size_t texSizeInBytes = texData.GetMemorySize();
 
-            const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
-            const size_t texSizeInBytes = texData.GetMemorySize();
+        CORE_ASSERT(texSizeInBytes <= s_commonStagingBuffer.GetMemorySize());
 
-            vkn::Buffer& stagingTexBuffer = s_commonStagingBuffers[j];
-            CORE_ASSERT(texSizeInBytes <= stagingTexBuffer.GetMemorySize());
+        void* pImageData = s_commonStagingBuffer.Map();
+        memcpy(pImageData, texData.GetData(), texSizeInBytes);
+        s_commonStagingBuffer.Unmap();
 
-            void* pImageData = stagingTexBuffer.Map();
-            memcpy(pImageData, texData.GetData(), texSizeInBytes);
-            stagingTexBuffer.Unmap();
+        vkn::AllocationInfo imageAllocInfo = {};
+        imageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+        imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-            vkn::AllocationInfo imageAllocInfo = {};
-            imageAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-            imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        vkn::TextureCreateInfo imageCreateInfo = {};
 
-            vkn::TextureCreateInfo imageCreateInfo = {};
+        imageCreateInfo.pDevice = &s_vkDevice;
+        imageCreateInfo.type = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.extent.width = texData.GetWidth();
+        imageCreateInfo.extent.height = texData.GetHeight();
+        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.format = texData.GetFormat();
+        imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCreateInfo.mipLevels = texData.GetMipsCount();
+        imageCreateInfo.arrayLayers = 1;
+        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.pAllocInfo = &imageAllocInfo;
 
-            imageCreateInfo.pDevice = &s_vkDevice;
-            imageCreateInfo.type = VK_IMAGE_TYPE_2D;
-            imageCreateInfo.extent.width = texData.GetWidth();
-            imageCreateInfo.extent.height = texData.GetHeight();
-            imageCreateInfo.extent.depth = 1;
-            imageCreateInfo.format = texData.GetFormat();
-            imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            imageCreateInfo.mipLevels = texData.GetMipsCount();
-            imageCreateInfo.arrayLayers = 1;
-            imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-            imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-            imageCreateInfo.pAllocInfo = &imageAllocInfo;
+        vkn::Texture& sceneImage = s_commonMaterialTextures[textureIdx];
+        sceneImage.Create(imageCreateInfo);
+        s_vkDevice.SetObjDebugName(sceneImage, "COMMON_MTL_TEXTURE_%zu", textureIdx);
 
-            vkn::Texture& sceneImage = s_commonMaterialTextures[textureIdx];
-            sceneImage.Create(imageCreateInfo);
-            s_vkDevice.SetObjDebugName(sceneImage, "COMMON_MTL_TEXTURE_%zu", textureIdx);
+        VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+        
+        VkImageSubresourceRange subresourceRange = {};
+        subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        subresourceRange.baseMipLevel = 0;
+        subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        subresourceRange.baseArrayLayer = 0;
+        subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-            VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-            
-            VkImageSubresourceRange subresourceRange = {};
-            subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            subresourceRange.baseMipLevel = 0;
-            subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            subresourceRange.baseArrayLayer = 0;
-            subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+        vkn::TextureView& sceneImageView = s_commonMaterialTextureViews[textureIdx];
 
-            vkn::TextureView& sceneImageView = s_commonMaterialTextureViews[textureIdx];
-            sceneImageView.Create(sceneImage, mapping, subresourceRange);
-            s_vkDevice.SetObjDebugName(sceneImageView, "COMMON_MTL_TEXTURE_VIEW_%zu", textureIdx);
-        }
+        sceneImageView.Create(sceneImage, mapping, subresourceRange);
+        s_vkDevice.SetObjDebugName(sceneImageView, "COMMON_MTL_TEXTURE_VIEW_%zu", textureIdx);
 
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-            for (size_t j = 0; j < STAGING_BUFFER_COUNT; ++j) {
-                const size_t textureIdx = i + j;
+            vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
 
-                if (textureIdx >= s_cpuTexturesData.size()) {
-                    break;
-                }
+            cmdBuffer
+                .BeginBarrierList()
+                    .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+                .Push();
 
-                vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
+            vkn::BufferToTextureCopyInfo copyInfo = {};
+            copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyInfo.texSubresource.mipLevel = 0;
+            copyInfo.texSubresource.baseArrayLayer = 0;
+            copyInfo.texSubresource.layerCount = 1;
+            copyInfo.texExtent = texture.GetSize();
 
-                cmdBuffer
-                    .BeginBarrierList()
-                        .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-                            VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
-                    .Push();
+            cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, texture, copyInfo);
 
-                vkn::BufferToTextureCopyInfo copyInfo = {};
-                copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                copyInfo.texSubresource.mipLevel = 0;
-                copyInfo.texSubresource.baseArrayLayer = 0;
-                copyInfo.texSubresource.layerCount = 1;
-                copyInfo.texExtent = texture.GetSize();
+            const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
 
-                cmdBuffer.CmdCopyBuffer(s_commonStagingBuffers[j], texture, copyInfo);
+            GenerateTextureMipmaps(cmdBuffer, texture, texData);
 
-                const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
-
-                GenerateTextureMipmaps(cmdBuffer, texture, texData);
-
-                cmdBuffer
-                    .BeginBarrierList()
-                        .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
-                            VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-                    .Push();
-            }
+            cmdBuffer
+                .BeginBarrierList()
+                    .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                        VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+                .Push();
         });
     }
 }
@@ -5010,14 +5058,12 @@ static void UploadGPUMaterialData()
 
     eng::Timer timer;
 
-    vkn::Buffer& stagingMtlDataBuffer = s_commonStagingBuffers[0];
-
     const size_t mtlDataBufferSize = s_cpuMaterialData.size() * sizeof(COMMON_MATERIAL);
-    CORE_ASSERT(mtlDataBufferSize <= stagingMtlDataBuffer.GetMemorySize());
+    CORE_ASSERT(mtlDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    void* pData = stagingMtlDataBuffer.Map();
+    void* pData = s_commonStagingBuffer.Map();
     memcpy(pData, s_cpuMaterialData.data(), mtlDataBufferSize);
-    stagingMtlDataBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo mtlBufAllocInfo = {};
     mtlBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -5033,7 +5079,7 @@ static void UploadGPUMaterialData()
     s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        cmdBuffer.CmdCopyBuffer(stagingMtlDataBuffer, s_commonMaterialBuffer, mtlDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMaterialBuffer, mtlDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Material data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5046,15 +5092,13 @@ static void UploadGPUInstData()
 
     eng::Timer timer;
 
-    vkn::Buffer& instStagingBuffer = s_commonStagingBuffers[0];
-
     const size_t instBufferSize = s_cpuInstData.size() * sizeof(COMMON_INST);
-    CORE_ASSERT(instBufferSize <= instStagingBuffer.GetMemorySize());
+    CORE_ASSERT(instBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     {
-        void* pData = instStagingBuffer.Map();
+        void* pData = s_commonStagingBuffer.Map();
         memcpy(pData, s_cpuInstData.data(), instBufferSize);
-        instStagingBuffer.Unmap();
+        s_commonStagingBuffer.Unmap();
     }
 
     vkn::AllocationInfo instInfosBufAllocInfo = {};
@@ -5070,15 +5114,18 @@ static void UploadGPUInstData()
     s_commonInstBuffer.Create(instInfosBufCreateInfo);
     s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
 
-    vkn::Buffer& aabbStagingBuffer = s_commonStagingBuffers[1];
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonInstBuffer, instBufferSize);
+    });
+
 
     const size_t aabbBufferSize = s_cpuAABBData.size() * sizeof(COMMON_INST_AABB);
-    CORE_ASSERT(aabbBufferSize <= aabbStagingBuffer.GetMemorySize());
+    CORE_ASSERT(aabbBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     {
-        void* pData = aabbStagingBuffer.Map();
+        void* pData = s_commonStagingBuffer.Map();
         memcpy(pData, s_cpuAABBData.data(), aabbBufferSize);
-        aabbStagingBuffer.Unmap();
+        s_commonStagingBuffer.Unmap();
     }
 
     vkn::AllocationInfo aabbBufAllocInfo = {};
@@ -5095,23 +5142,21 @@ static void UploadGPUInstData()
     s_vkDevice.SetObjDebugName(s_commonAABBBuffer, "COMMON_AABB_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(instStagingBuffer, s_commonInstBuffer, instBufferSize);
-        cmdBuffer.CmdCopyBuffer(aabbStagingBuffer, s_commonAABBBuffer, aabbBufferSize);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonAABBBuffer, aabbBufferSize);
     });
 
-    vkn::Buffer& stagingTransformDataBuffer = s_commonStagingBuffers[0];
 
     const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
-    CORE_ASSERT(trsDataBufferSize <= stagingTransformDataBuffer.GetMemorySize());
+    CORE_ASSERT(trsDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    glm::float3x4* pData = (glm::float3x4*)stagingTransformDataBuffer.Map();
+    glm::float3x4* pData = (glm::float3x4*)s_commonStagingBuffer.Map();
 
     // GLM assumes columns major, but data is stored as rows... yeah this is shit. Anyway we need to transpose matrices before coping
     for (size_t i = 0; i < s_cpuTransformData.size(); ++i) {
         const float4x3& trs = s_cpuTransformData[i];
         pData[i] = glm::transpose(trs);
     }
-    stagingTransformDataBuffer.Unmap();
+    s_commonStagingBuffer.Unmap();
 
     vkn::AllocationInfo commonTrsBufAllocInfo = {};
     commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -5127,7 +5172,7 @@ static void UploadGPUInstData()
     s_vkDevice.SetObjDebugName(s_commonTransformBuffer, "COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(stagingTransformDataBuffer, s_commonTransformBuffer, trsDataBufferSize);
+        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonTransformBuffer, trsDataBufferSize);
     });
 
     CORE_LOG_INFO("FastGLTF: Instance data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5186,7 +5231,7 @@ static void LoadScene(const fs::path& filepath)
     LoadSceneMaterialData(asset.get());
     LoadSceneInstData(asset.get());
 
-    CORE_LOG_INFO("\"%s\" loading finished: %f ms", strPath.c_str(), timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("\"%s\" loading finished: %f ms", filepath.filename().string().c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5254,6 +5299,7 @@ void UpdateGPUCommonConstBuffer()
     dbgFlags |= s_useMeshCulling && s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_CONTRIBUTION_CULLING_MASK : 0;
     dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_HZB_CULLING_MASK : 0;
 
+    constBuff.DBG_FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.DBG_FLAGS = dbgFlags;
     constBuff.DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     
@@ -5695,7 +5741,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
                 cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
                 const COMMON_MESH& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
-                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.LOD_0_INDEX];
+                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.FIRST_LOD];
                 cmdBuffer.CmdDrawIndexed(lod.INDEX_COUNT, 1, lod.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }
@@ -5894,7 +5940,7 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
                 cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
                 
                 const COMMON_MESH& mesh = s_cpuMeshData[s_cpuInstData[i].MESH_IDX];
-                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.LOD_0_INDEX];
+                const COMMON_MESH_LOD& lod = s_cpuMeshLODData[mesh.FIRST_LOD];
                 cmdBuffer.CmdDrawIndexed(lod.INDEX_COUNT, 1, lod.FIRST_INDEX, mesh.FIRST_VERTEX, i);
             }
         }
@@ -6532,7 +6578,7 @@ int main(int argc, char* argv[])
 
     s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 
-    CreateCommonStagingBuffers();
+    CreateCommonStagingBuffer();
 
     CreateDynamicRenderTargets();
 

@@ -26,7 +26,7 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
 
     const COMMON_MATERIAL material = COMMON_MATERIALS[inst.MATERIAL_IDX];
 
-    const float3x3 TBN = CalcTBN(input.data.tangent.xyz, input.data.lnorm);
+    const float3x3 TBN = CalcTBN(input.data.tangent, input.data.lnorm);
     GBUFFER_SURFACE surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
     const float3x4 wMatr = COMMON_INST_TRANSFORMS[inst.TRANSFORM_IDX];

@@ -83,16 +83,18 @@ struct COMMON_MESH_LOD
 
 struct COMMON_MESH
 {
-    void GetBounds(out float3 minn, out float3 maxx)
+    AABB GetBounds()
     {
-        minn = float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).x);
-        maxx = float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.z));
+        return AABB(
+            float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).x),
+            float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.z))
+        );
     }
 
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
 
-    uint FIRST_LOD; // Index of LOD 0 inside LOD's buffer
+    uint FIRST_LOD; // Index of mesh LOD 0 inside LOD buffer
     uint LOD_COUNT;
 
     uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
@@ -146,9 +148,10 @@ struct COMMON_CB_DATA
     float3 CAM_WPOS;
     uint FLAGS;
 
-    uint2 PAD0;
+    int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
+    uint PAD0;
 };
 
 

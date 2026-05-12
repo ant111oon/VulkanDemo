@@ -104,12 +104,14 @@ void CalcTangBitang(in float3 norm, out float3 tang, out float3 bitang)
 }
 
 
-float3x3 CalcTBN(in float3 tang, in float3 norm)
+float3x3 CalcTBN(in float4 tangent, in float3 normal)
 {
-    const float3 T = normalize(tang - dot(tang, norm) * norm);
-    const float3 B = normalize(cross(norm, T));
+    float3 T = normalize(tangent.xyz);
+    T = normalize(T - normal * dot(normal, T));
 
-    return float3x3(T, B, norm);
+    const float3 B = cross(normal, T) * tangent.w;
+
+    return float3x3(T, B, normal);
 }
 
 

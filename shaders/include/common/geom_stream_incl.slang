@@ -21,12 +21,11 @@ float3 GeomStreamLoadNormal(in uint vertID)
 {
     ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::NORMAL];
 
-    const uint2 data = stream.Load<uint2>(vertID * sizeof(uint2));
-    
-    return float3(
-        unpackHalf2x16ToFloat(data[0]),
-        unpackHalf2x16ToFloat(data[1])[0]
-    );
+    const float3 normal = unpackSnorm4x8ToFloat(
+        stream.Load<uint>(vertID * sizeof(uint))
+    ).xyz;
+
+    return normalize(normal);
 }
 
 
@@ -44,12 +43,11 @@ float4 GeomStreamLoadTangent(in uint vertID)
 {
     ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::TANGENT];
 
-    const uint2 data = stream.Load<uint2>(vertID * sizeof(uint2));
-    
-    return float4(
-        unpackHalf2x16ToFloat(data[0]), 
-        unpackHalf2x16ToFloat(data[1])
+    const float4 tangent = unpackSnorm4x8ToFloat(
+        stream.Load<uint>(vertID * sizeof(uint))
     );
+
+    return float4(normalize(tangent.xyz), sign(tangent.w));
 }
 
 
