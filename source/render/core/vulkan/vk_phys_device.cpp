@@ -32,6 +32,11 @@ namespace vkn
         const auto pFeatures11 = static_cast<VkPhysicalDeviceVulkan11Features*>(outFeatures2.pNext);
         const auto pFeatures12 = static_cast<VkPhysicalDeviceVulkan12Features*>(pFeatures11->pNext);
         const auto pFeatures13 = static_cast<VkPhysicalDeviceVulkan13Features*>(pFeatures12->pNext);
+        const auto pFeaturesDynState3 = static_cast<VkPhysicalDeviceExtendedDynamicState3FeaturesEXT*>(pFeatures13->pNext);
+
+        if (featuresReq.dynamicPolygonMode && featuresReq.dynamicPolygonMode != pFeaturesDynState3->extendedDynamicState3PolygonMode) {
+            return false;
+        }
 
         if (featuresReq.descriptorIndexing && featuresReq.descriptorIndexing != pFeatures12->descriptorIndexing) {
             return false;
@@ -105,8 +110,12 @@ namespace vkn
 
         bool isPicked = false;
 
+        m_extendedDynStateFeatures = {};
+        m_extendedDynStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+
         m_features13 = {};
         m_features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        m_features13.pNext = &m_extendedDynStateFeatures;
 
         m_features12 = {};
         m_features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;

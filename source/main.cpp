@@ -1095,6 +1095,7 @@ static float s_frameTime = M3D_EPS;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
 static bool s_cullingTestMode = false;
+static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
@@ -1513,6 +1514,9 @@ namespace DbgUI
             }
             
             if (ImGui::CollapsingHeader("Geom")) {
+                ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
+                ImGui::NewLine();
+
                 if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
 
@@ -1747,6 +1751,12 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
+static void SetWireframeMode(vkn::CmdBuffer& cmdBuffer, bool isWireframed)
+{
+    cmdBuffer.CmdSetPolygonMode(isWireframed ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL);
+}
+
+
 template <typename Func, typename... Args>
 static void ImmediateSubmitQueue(vkn::Queue& queue, Func func, Args&&... args)
 {   
@@ -1847,6 +1857,7 @@ static void CreateVkPhysAndLogicalDevices()
     physDeviceFeturesReq.samplerMirrorClampToEdge = true;
     physDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
     physDeviceFeturesReq.bufferDeviceAddress = true;
+    physDeviceFeturesReq.dynamicPolygonMode = true;
 
 #ifndef ENG_BUILD_RETAIL
     physDeviceFeturesReq.bufferDeviceAddressCaptureReplay = VK_TRUE;
@@ -1866,6 +1877,7 @@ static void CreateVkPhysAndLogicalDevices()
     constexpr std::array deviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
+        VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descBuffFeatures = {};
@@ -3270,7 +3282,13 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     #endif
         .SetDepthWriteState(VK_TRUE)
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })        
+        .AddDynamicState(std::array{
+            VK_DYNAMIC_STATE_VIEWPORT, 
+            VK_DYNAMIC_STATE_SCISSOR,
+        #ifndef ENG_BUILD_RELEASE
+            VK_DYNAMIC_STATE_POLYGON_MODE_EXT
+        #endif
+        })        
         .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
@@ -3312,11 +3330,17 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_EQUAL)
         .SetDepthWriteState(VK_FALSE)
         .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
-        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR });
-
-    #ifdef ENG_BUILD_DEBUG
-        s_graphicsPSOBuilder.AddDynamicState(std::array{ VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE });
-    #endif
+        .AddDynamicState(std::array{
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR,
+        #ifdef ENG_BUILD_DEBUG
+            VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, 
+            VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
+        #endif
+        #ifndef ENG_BUILD_RELEASE
+            VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
+        #endif
+        });
 
     for (const vkn::Texture& colorRT : s_gbufferRTs) {
         s_graphicsPSOBuilder.AddColorAttachment(colorRT.GetFormat()); 
@@ -5761,6 +5785,10 @@ void DepthPassPrevFrameOccluders(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, s_geomWireframeMode);
+#endif
+
     ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_PrevFrameOccluders", eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_PrevFrameOccluders", eng::ProfileColor::Grey51);
 
@@ -5774,6 +5802,10 @@ void DepthPassPrevFrameOccluders(vkn::CmdBuffer& cmdBuffer)
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_PrevFrameOccluders_AKill", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, true, 0, false);
     }
+
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, false);
+#endif
 }
 
 
@@ -5782,6 +5814,10 @@ void DepthPassThisFrameGeometry(vkn::CmdBuffer& cmdBuffer)
     if (!s_useDepthPass) {
         return;
     }
+
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, s_geomWireframeMode);
+#endif
 
     ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_ThisFrameGeom", eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_ThisFrameGeom", eng::ProfileColor::Grey51);
@@ -5796,6 +5832,10 @@ void DepthPassThisFrameGeometry(vkn::CmdBuffer& cmdBuffer)
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_ThisFrameGeom_AKill", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, true, 1, false);
     }
+
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, false);
+#endif
 }
 
 
@@ -5953,6 +5993,10 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", eng::ProfileColor::ForestGreen);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", eng::ProfileColor::ForestGreen);
 
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, s_geomWireframeMode);
+#endif
+
     {
         ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
@@ -5963,6 +6007,10 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", eng::ProfileColor::ForestGreen);
         RenderPass_GBuffer(cmdBuffer, true);
     }
+
+#ifndef ENG_BUILD_RELEASE
+    SetWireframeMode(cmdBuffer, false);
+#endif
 }
 
 
@@ -6534,9 +6582,9 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
 

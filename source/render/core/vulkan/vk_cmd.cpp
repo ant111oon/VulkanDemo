@@ -20,6 +20,7 @@ namespace vkn
 
     static PFN_vkCmdBindDescriptorBuffersEXT vkCmdBindDescriptorBuffers = nullptr;
     static PFN_vkCmdSetDescriptorBufferOffsetsEXT vkCmdSetDescriptorBufferOffsets = nullptr;
+    static PFN_vkCmdSetPolygonModeEXT vkCmdSetPolygonMode = nullptr;
 
 
     static VkImageMemoryBarrier2 CreateImageMemoryBarrier2Data(
@@ -510,6 +511,20 @@ namespace vkn
 
         vkCmdSetDepthWriteEnable(Get(), enabled);
 
+        return *this;
+    }
+
+    
+    CmdBuffer& CmdBuffer::CmdSetPolygonMode(VkPolygonMode mode)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        if (!vkCmdSetPolygonMode) {
+            vkCmdSetPolygonMode = (PFN_vkCmdSetPolygonModeEXT)GetDevice().GetProcAddr("vkCmdSetPolygonModeEXT");
+        }
+
+        vkCmdSetPolygonMode(Get(), mode);
+        
         return *this;
     }
 

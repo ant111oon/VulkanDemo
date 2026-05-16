@@ -18,6 +18,7 @@ namespace vkn
         bool bufferDeviceAddress;
         bool bufferDeviceAddressCaptureReplay;
         bool shaderFloat16;
+        bool dynamicPolygonMode;
     };
 
 
@@ -75,6 +76,7 @@ namespace vkn
         VkPhysicalDeviceProperties2 m_deviceProps = {};
         VkPhysicalDeviceDescriptorBufferPropertiesEXT m_deviceDescBufferProps = {};
 
+        VkPhysicalDeviceExtendedDynamicState3FeaturesEXT m_extendedDynStateFeatures = {};
         VkPhysicalDeviceVulkan13Features m_features13 = {};
         VkPhysicalDeviceVulkan12Features m_features12 = {};
         VkPhysicalDeviceVulkan11Features m_features11 = {};

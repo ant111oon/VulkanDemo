@@ -226,6 +226,8 @@ namespace vkn
         CmdBuffer& CmdSetDepthCompareOp(VkCompareOp op);
         CmdBuffer& CmdSetDepthWriteEnable(VkBool32 enabled);
 
+        CmdBuffer& CmdSetPolygonMode(VkPolygonMode mode);
+
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const BlitInfo> regions, VkFilter filter);
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const BlitInfo& region, VkFilter filter);
         
