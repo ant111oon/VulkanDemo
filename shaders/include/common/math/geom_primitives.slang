@@ -22,6 +22,11 @@ struct SBOX
 
 struct SPHERE
 {
+    float DistanceTo(in float3 pt)
+    {
+        return distance(position, pt) - radius;
+    }
+
     float3 position;
     float radius;
 };
@@ -39,6 +44,11 @@ struct AABB
         return maxx - minn;
     }
 
+    float3 GetHalfSize()
+    {
+        return GetSize() * 0.5f;
+    }
+
     void GetVertices(out float3 verts[8])
     {
         const float3 size = GetSize();
@@ -51,6 +61,13 @@ struct AABB
         verts[5] = minn + float3(0.f, size.yz);
         verts[6] = minn + float3(size.x, 0.f, size.z);
         verts[7] = minn + size;
+    }
+
+    float DistanceTo(in float3 pt)
+    {
+        const float3 q = abs(pt - GetCenter()) - GetHalfSize();
+
+        return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
     }
 
     SBOX GetSBOX(in float4x4 viewProjMatr)

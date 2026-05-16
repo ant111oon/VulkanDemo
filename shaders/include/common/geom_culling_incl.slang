@@ -2,16 +2,16 @@
 #define GEOM_CULLING_INCL_H
 
 // NOTE:
+//  - GEOM_CULLING_PHASE_1/GEOM_CULLING_PHASE_2 (mandatory)
 //  - GEOM_CULLING_FRUSTUM_ENABLED      enables frustum culling
 //  - GEOM_CULLING_CONTRIBUTION_ENABLED enables pixel contribution culling
 //  - GEOM_CULLING_HZB_ENABLED          enables HZB culling
-//  - GEOM_CULLING_OCCLUDERS_PASS/GEOM_CULLING_OCCLUSION_PASS (mandatory)
 
 
-#if !defined(GEOM_CULLING_OCCLUDERS_PASS) && !defined(GEOM_CULLING_OCCLUSION_PASS)
-    #error One of GEOM_CULLING_OCCLUDERS_PASS or GEOM_CULLING_OCCLUSION_PASS macro must be defined
+#if !defined(GEOM_CULLING_PHASE_1) && !defined(GEOM_CULLING_PHASE_2)
+    #error One of GEOM_CULLING_PHASE_1 or GEOM_CULLING_PHASE_2 macro must be defined
 #else
-    #if defined(GEOM_CULLING_OCCLUSION_PASS)
+    #if defined(GEOM_CULLING_PHASE_2)
         #define GEOM_CULLING_WRITE_GLOBAL_DATA
     #endif
 #endif

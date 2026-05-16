@@ -1,7 +1,8 @@
-#define GEOM_CULLING_OCCLUDERS_PASS
+#define GEOM_CULLING_PHASE_2
 
 #define GEOM_CULLING_FRUSTUM_ENABLED
 #define GEOM_CULLING_CONTRIBUTION_ENABLED
+#define GEOM_CULLING_HZB_ENABLED
 #include "common/geom_culling_incl.slang"
 
 
@@ -15,13 +16,17 @@ void main(uint DTid : SV_DispatchThreadID)
         return;
     }
 
-    if (!GeomCullingTestInstanceVisibilityFlag(instID)) {
-        return;
-    }
-
     const COMMON_INST inst = COMMON_INST_BUFFER[instID];
 
-    if (GeomCullingVisibility(inst)) {
+    const bool visible = GeomCullingVisibility(inst);
+
+    // Only object that is visible in the current frame
+    // and was not drawn in the first pass should be drawn in the second pass
+    const bool shouldDraw = visible && !GeomCullingTestInstanceVisibilityFlag(instID);
+
+    if (shouldDraw) {
         GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);
     }
+
+    GeomCullingWriteVisFlag(instID, visible);
 }

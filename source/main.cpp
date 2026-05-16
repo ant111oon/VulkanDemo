@@ -540,8 +540,8 @@ static_assert((size_t)COMMON_SAMPLER_IDX::COUNT == _countof(COMMON_SAMPLERS_DBG_
 enum class PassID
 {
     COMMON,
-    GEOM_CULLING_OCCLUDERS,
-    GEOM_CULLING_OCCLUSION,
+    GEOM_CULLING_PHASE_1,
+    GEOM_CULLING_PHASE_2,
     DEPTH,
     GBUFFER,
     DEFERRED_LIGHTING,
@@ -619,7 +619,7 @@ static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
 
 
-static constexpr uint32_t GEOM_CULLING_PASS_COUNT = (uint32_t)PassID::GEOM_CULLING_OCCLUSION - (uint32_t)PassID::GEOM_CULLING_OCCLUDERS + 1;
+static constexpr uint32_t GEOM_CULLING_PASS_COUNT = (uint32_t)PassID::GEOM_CULLING_PHASE_2 - (uint32_t)PassID::GEOM_CULLING_PHASE_1 + 1;
 
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
@@ -655,7 +655,7 @@ static constexpr uint32_t DESC_SET_PER_FRAME = 0;
 static constexpr uint32_t DESC_SET_PER_DRAW = 1;
 static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
 
-static constexpr float LOD_SIMPLIFICATION_COEF = 0.70f; // Means that the next LOD should has on 30% less indices than current
+static constexpr float LOD_SIMPLIFICATION_COEF = 0.50f; // Means that the next LOD should has on 50% less indices than current
 static constexpr float LOD_SIMPLIFICATION_ERROR = 0.005f;
 static constexpr size_t MAX_GEOM_LOD_COUNT = 8;
 
@@ -2679,7 +2679,7 @@ static void CreateZPassDescriptorSetLayout()
 }
 
 
-static void CreateGeomCullingOccludersDescriptorSetLayout()
+static void CreateGeomCullingPhase1DescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
@@ -2697,12 +2697,12 @@ static void CreateGeomCullingOccludersDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUDERS].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUDERS], "GEOM_CULLING_OCCLUDERS_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1].Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1], "GEOM_CULLING_OCCLUDERS_DESCRIPTOR_SET_LAYOUT");
 }
 
 
-static void CreateGeomCullingOcclusionDescriptorSetLayout()
+static void CreateGeomCullingPhase2DescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
@@ -2720,8 +2720,8 @@ static void CreateGeomCullingOcclusionDescriptorSetLayout()
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUSION].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUSION], "GEOM_CULLING_OCCLUSION_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2].Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2], "GEOM_CULLING_OCCLUSION_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2971,8 +2971,8 @@ static void CreateDescriptorSets()
 {
     CreateCommonDescriptorSetLayout();
     CreateZPassDescriptorSetLayout();
-    CreateGeomCullingOccludersDescriptorSetLayout();
-    CreateGeomCullingOcclusionDescriptorSetLayout();
+    CreateGeomCullingPhase1DescriptorSetLayout();
+    CreateGeomCullingPhase2DescriptorSetLayout();
     CreateGBufferDescriptorSetLayout();
     CreateDeferredLightingDescriptorSetLayout();
     CreatePostProcessingDescriptorSetLayout();
@@ -2989,30 +2989,30 @@ static void CreateDescriptorSets()
 }
 
 
-static void CreateGeomCullingOccludersPipelineLayout()
+static void CreateGeomCullingPhase1PipelineLayout()
 {
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUDERS];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1];
 
-    vkn::PSOLayout& layout = s_PSOLayouts[(size_t)PassID::GEOM_CULLING_OCCLUDERS];
+    vkn::PSOLayout& layout = s_PSOLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1];
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
     s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_OCCLUDERS_PIPELINE_LAYOUT");
 }
 
 
-static void CreateGeomCullingOcclusionPipelineLayout()
+static void CreateGeomCullingPhase2PipelineLayout()
 {
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[(size_t)PassID::COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_OCCLUSION];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2];
 
-    vkn::PSOLayout& layout = s_PSOLayouts[(size_t)PassID::GEOM_CULLING_OCCLUSION];
+    vkn::PSOLayout& layout = s_PSOLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2];
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
     s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_OCCLUSION_PIPELINE_LAYOUT");
@@ -3189,7 +3189,7 @@ static void CreateHZBGenPipelineLayout()
 }
 
 
-static void CreateGeomCullingOccludersPipeline(const fs::path& csPath)
+static void CreateGeomCullingPhase1Pipeline(const fs::path& csPath)
 {
     if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
@@ -3199,19 +3199,19 @@ static void CreateGeomCullingOccludersPipeline(const fs::path& csPath)
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
     s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_OCCLUDERS_COMPUTE_SHADER");
 
-    vkn::PSO& pso = s_PSOs[(size_t)PassID::GEOM_CULLING_OCCLUDERS];
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::GEOM_CULLING_PHASE_1];
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetShader(shader)
-        .SetLayout(s_PSOLayouts[(size_t)PassID::GEOM_CULLING_OCCLUDERS])
+        .SetLayout(s_PSOLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1])
         .Build();
 
     s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_OCCLUDERS_PSO");
 }
 
 
-static void CreateGeomCullingOcclusionPipeline(const fs::path& csPath)
+static void CreateGeomCullingPhase2Pipeline(const fs::path& csPath)
 {
     if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
@@ -3221,12 +3221,12 @@ static void CreateGeomCullingOcclusionPipeline(const fs::path& csPath)
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
     s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_OCCLUSION_COMPUTE_SHADER");
 
-    vkn::PSO& pso = s_PSOs[(size_t)PassID::GEOM_CULLING_OCCLUSION];
+    vkn::PSO& pso = s_PSOs[(size_t)PassID::GEOM_CULLING_PHASE_2];
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetShader(shader)
-        .SetLayout(s_PSOLayouts[(size_t)PassID::GEOM_CULLING_OCCLUSION])
+        .SetLayout(s_PSOLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2])
         .Build();
 
     s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_OCCLUSION_PSO");
@@ -3682,8 +3682,8 @@ static void CreateHZBGenPipeline(const fs::path& csPath)
 
 static void CreatePipelines()
 {
-    CreateGeomCullingOccludersPipelineLayout();
-    CreateGeomCullingOcclusionPipelineLayout();
+    CreateGeomCullingPhase1PipelineLayout();
+    CreateGeomCullingPhase2PipelineLayout();
     CreateZPassPipelineLayout();
     CreateGBufferPipelineLayout();
     CreateDeferredLightingPipelineLayout();
@@ -3696,8 +3696,8 @@ static void CreatePipelines()
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
     CreateHZBGenPipelineLayout();
-    CreateGeomCullingOccludersPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_occluders.cs.spv"));
-    CreateGeomCullingOcclusionPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_occlusion.cs.spv"));
+    CreateGeomCullingPhase1Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_1.cs.spv"));
+    CreateGeomCullingPhase2Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_2.cs.spv"));
     CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
     CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
     CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
@@ -4230,54 +4230,54 @@ static void WriteZPassDescriptorSet()
 }
 
 
-static void WriteGeomCullingOccludersDescriptorSet()
+static void WriteGeomCullingPhase1DescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_opaqueGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_akillGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_transpGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_visOpaqueGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_visAkillGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT,  GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_visTranspGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUDERS, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomVisFlagsBuffer);
 }
 
 
-static void WriteGeomCullingOcclusionDescriptorSet()
+static void WriteGeomCullingPhase2DescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_opaqueGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_akillGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_transpGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_visOpaqueGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_visAkillGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT,  GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_visTranspGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomVisFlagsBuffer);
     
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, GLOBAL_OPAQUE_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, GLOBAL_AKILL_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, GLOBAL_TRANSP_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, GLOBAL_VIS_OPAQUE_GEOM_ID_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, GLOBAL_VIS_AKILL_GEOM_ID_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_OCCLUSION, 
+    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, GLOBAL_VIS_TRANSP_GEOM_ID_BUFFER);
 }
 
@@ -4421,8 +4421,8 @@ static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
     WriteZPassDescriptorSet();
-    WriteGeomCullingOccludersDescriptorSet();
-    WriteGeomCullingOcclusionDescriptorSet();
+    WriteGeomCullingPhase1DescriptorSet();
+    WriteGeomCullingPhase2DescriptorSet();
     WriteGBufferDescriptorSet();
     WriteDeferredLightingDescriptorSet();
     WritePostProcessingDescriptorSet();
@@ -5588,17 +5588,17 @@ static void GeomCullingClearCmdBuffers(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
 {
-    CORE_ASSERT(pass == PassID::GEOM_CULLING_OCCLUDERS || pass == PassID::GEOM_CULLING_OCCLUSION);
+    CORE_ASSERT(pass == PassID::GEOM_CULLING_PHASE_1 || pass == PassID::GEOM_CULLING_PHASE_2);
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::Blue3, "Geom_Culling_Pass_%u", (uint32_t)pass);
 
-    if (pass == PassID::GEOM_CULLING_OCCLUDERS) {
+    if (pass == PassID::GEOM_CULLING_PHASE_1) {
         GeomCullingClearCmdBuffers(cmdBuffer);
     }
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
-    const size_t buffIdx = pass == PassID::GEOM_CULLING_OCCLUDERS ? 0 : 1;
+    const size_t buffIdx = pass == PassID::GEOM_CULLING_PHASE_1 ? 0 : 1;
 
     barriers
         .AddBufferBarrier(s_opaqueGeomDrawCmdBuffers[buffIdx], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
@@ -5608,7 +5608,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
         .AddBufferBarrier(s_visAkillGeomIDBuffers[buffIdx], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
         .AddBufferBarrier(s_visTranspGeomIDBuffers[buffIdx], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
-    if (pass == PassID::GEOM_CULLING_OCCLUDERS) {
+    if (pass == PassID::GEOM_CULLING_PHASE_1) {
         barriers
             .AddBufferBarrier(s_geomVisFlagsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
     } else {
@@ -5645,17 +5645,17 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
 }
 
 
-static void GeomCullingPassOccluders(vkn::CmdBuffer& cmdBuffer)
+static void GeomCullingPassPhase1(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass_Occluders", eng::ProfileColor::Blue3);
-    GeomCullingPass(cmdBuffer, PassID::GEOM_CULLING_OCCLUDERS);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass_Phase1", eng::ProfileColor::Blue3);
+    GeomCullingPass(cmdBuffer, PassID::GEOM_CULLING_PHASE_1);
 }
 
 
-static void GeomCullingPassOcclusion(vkn::CmdBuffer& cmdBuffer)
+static void GeomCullingPassPhase2(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass_Occlusion", eng::ProfileColor::Blue3);
-    GeomCullingPass(cmdBuffer, PassID::GEOM_CULLING_OCCLUSION);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass_Phase2", eng::ProfileColor::Blue3);
+    GeomCullingPass(cmdBuffer, PassID::GEOM_CULLING_PHASE_2);
 }
 
 
@@ -5755,45 +5755,45 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
 }
 
 
-void DepthPassOccluders(vkn::CmdBuffer& cmdBuffer)
+void DepthPassPrevFrameOccluders(vkn::CmdBuffer& cmdBuffer)
 {
     if (!s_useDepthPass) {
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occluders", eng::ProfileColor::Grey51);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occluders", eng::ProfileColor::Grey51);
+    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_PrevFrameOccluders", eng::ProfileColor::Grey51);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_PrevFrameOccluders", eng::ProfileColor::Grey51);
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occluders_Opaque", eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occluders_Opaque", eng::ProfileColor::Grey51);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_PrevFrameOccluders_Opaque", eng::ProfileColor::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_PrevFrameOccluders_Opaque", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, false, 0, true);
     }
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occluders_AKill", eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occluders_AKill", eng::ProfileColor::Grey51);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_PrevFrameOccluders_AKill", eng::ProfileColor::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_PrevFrameOccluders_AKill", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, true, 0, false);
     }
 }
 
 
-void DepthPassOcclusion(vkn::CmdBuffer& cmdBuffer)
+void DepthPassThisFrameGeometry(vkn::CmdBuffer& cmdBuffer)
 {
     if (!s_useDepthPass) {
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occlusion", eng::ProfileColor::Grey51);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occlusion", eng::ProfileColor::Grey51);
+    ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_ThisFrameGeom", eng::ProfileColor::Grey51);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_ThisFrameGeom", eng::ProfileColor::Grey51);
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occlusion_Opaque", eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occlusion_Opaque", eng::ProfileColor::Grey51);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_ThisFrameGeom_Opaque", eng::ProfileColor::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_ThisFrameGeom_Opaque", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, false, 1, false);
     }
     {
-        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_Occlusion_AKill", eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_Occlusion_AKill", eng::ProfileColor::Grey51);
+        ENG_PROFILE_SCOPED_MARKER_C("Depth_Pass_ThisFrameGeom_AKill", eng::ProfileColor::Grey51);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Depth_Pass_ThisFrameGeom_AKill", eng::ProfileColor::Grey51);
         RenderPass_Depth(cmdBuffer, true, 1, false);
     }
 }
@@ -6321,13 +6321,13 @@ static void RenderScene()
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
-        GeomCullingPassOccluders(cmdBuffer);
-        DepthPassOccluders(cmdBuffer);
+        GeomCullingPassPhase1(cmdBuffer);
+        DepthPassPrevFrameOccluders(cmdBuffer);
 
         HZBGeneratePass(cmdBuffer);
 
-        GeomCullingPassOcclusion(cmdBuffer);
-        DepthPassOcclusion(cmdBuffer);
+        GeomCullingPassPhase2(cmdBuffer);
+        DepthPassThisFrameGeometry(cmdBuffer);
 
         GBufferRenderPass(cmdBuffer);
         DeferredLightingPass(cmdBuffer);
