@@ -59,22 +59,6 @@ namespace utils
     }
 
 
-    COMMON_CMD_DRAW_INDEXED_INDIRECT GeomCullingConstructCmd(in COMMON_MESH mesh, in uint lodID, in uint firstInst, in uint instCount = 1)
-    {
-        const COMMON_MESH_LOD lod = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD + clamp(lodID, 0, mesh.LOD_COUNT - 1)];
-
-        COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = (COMMON_CMD_DRAW_INDEXED_INDIRECT)0;
-
-        cmd.INDEX_COUNT    = lod.INDEX_COUNT;
-        cmd.INSTANCE_COUNT = instCount;
-        cmd.FIRST_INDEX    = lod.FIRST_INDEX;
-        cmd.FIRST_VERTEX   = mesh.FIRST_VERTEX;
-        cmd.FIRST_INSTANCE = firstInst;
-
-        return cmd;
-    }
-
-
     void GeomCullingWriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in COMMON_CMD_DRAW_INDEXED_INDIRECT cmd)
     {
         static const uint CMD_SIZE_UINT = sizeof(cmd) / sizeof(uint);
@@ -100,10 +84,24 @@ namespace utils
         GeomCullingWriteDrawCmd(drawCmdBuffer, index, cmd);
         visInstIDBuffer[index] = visInstID;
     }
+
+
+    // temp hack solution
+    uint GeomCullingGetLodIndex(in COMMON_MESH mesh, in float dist)
+    {
+        static const float LOD_DIST = 20.f;
+
+        uint lodID = 0;
+        while (lodID < mesh.LOD_COUNT && lodID * LOD_DIST < dist) {
+            ++lodID;
+        }
+        
+        return clamp(COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : lodID - 1, 0, mesh.LOD_COUNT - 1);
+    }
 }
 
 
-bool GeomCullingVisibility(in COMMON_INST inst)
+bool GeomCullingVisibility(in AABB aabb)
 {
 #if !defined(GEOM_CULLING_ENABLED)
     return true;
@@ -118,8 +116,6 @@ bool GeomCullingVisibility(in COMMON_INST inst)
     if (!isCullEnabled) {
         return true;
     }
-
-    AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
 #if defined(GEOM_CULLING_FRUSTUM_ENABLED)
     if (isFrustumCullEnabled) {
@@ -189,9 +185,9 @@ void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
 
 uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 {
-    if (IS_FLAG_SET(material.FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_BLEND)) {
+    if (material.IsTransparent()) {
         return (uint)GEOM_CULLING_QUEUE_ID::TRANSPARENT;
-    } else if (IS_FLAG_SET(material.FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_KILL)) {
+    } else if (material.IsAlphaKill()) {
         return (uint)GEOM_CULLING_QUEUE_ID::AKILL;
     } else {
         return (uint)GEOM_CULLING_QUEUE_ID::OPAQUE;
@@ -199,13 +195,18 @@ uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 }
 
 
-void GeomCullingPushInstToCmdQueue(in uint instID, in uint meshID, in uint materialID)
+void GeomCullingPushInstToCmdQueue(in uint instID, in COMMON_INST inst, in float dist)
 {
-    const uint lodID = COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : 0;
+    const COMMON_MESH mesh = COMMON_MESH_BUFFER[inst.MESH_IDX];
 
-    const COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = utils::GeomCullingConstructCmd(COMMON_MESH_BUFFER[meshID], lodID, instID);
+    const uint lodID = utils::GeomCullingGetLodIndex(mesh, dist);
+    const COMMON_MESH_LOD LOD = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD + lodID];
 
-    const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[materialID]);
+    COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = COMMON_CMD_DRAW_INDEXED_INDIRECT(
+        LOD.INDEX_COUNT, 1, LOD.FIRST_INDEX, mesh.FIRST_VERTEX, instID
+    );
+
+    const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]);
 
     utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_DRAW_CMDS_UAV[queueID], GEOM_CULL_INST_INFO_IDS_UAV[queueID], cmd, instID);
 

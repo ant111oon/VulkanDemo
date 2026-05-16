@@ -6582,9 +6582,9 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
 

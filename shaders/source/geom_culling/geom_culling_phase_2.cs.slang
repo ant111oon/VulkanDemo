@@ -17,15 +17,16 @@ void main(uint DTid : SV_DispatchThreadID)
     }
 
     const COMMON_INST inst = COMMON_INST_BUFFER[instID];
+    const AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
-    const bool visible = GeomCullingVisibility(inst);
+    const bool visible = GeomCullingVisibility(aabb);
 
     // Only object that is visible in the current frame
     // and was not drawn in the first pass should be drawn in the second pass
     const bool shouldDraw = visible && !GeomCullingTestInstanceVisibilityFlag(instID);
 
     if (shouldDraw) {
-        GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);
+        GeomCullingPushInstToCmdQueue(instID, inst, aabb.DistanceTo(COMMON_CAM_WPOS));
     }
 
     GeomCullingWriteVisFlag(instID, visible);

@@ -20,8 +20,9 @@ void main(uint DTid : SV_DispatchThreadID)
     }
 
     const COMMON_INST inst = COMMON_INST_BUFFER[instID];
+    const AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
-    if (GeomCullingVisibility(inst)) {
-        GeomCullingPushInstToCmdQueue(instID, inst.MESH_IDX, inst.MATERIAL_IDX);
+    if (GeomCullingVisibility(aabb)) {
+        GeomCullingPushInstToCmdQueue(instID, inst, aabb.DistanceTo(COMMON_CAM_WPOS));
     }
 }
