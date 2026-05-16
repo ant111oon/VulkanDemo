@@ -1,7 +1,6 @@
 #define GEOM_CULLING_PHASE_1
 
 #define GEOM_CULLING_FRUSTUM_ENABLED
-#define GEOM_CULLING_CONTRIBUTION_ENABLED
 #include "common/geom_culling_incl.slang"
 
 
@@ -23,6 +22,6 @@ void main(uint DTid : SV_DispatchThreadID)
     const AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
     if (GeomCullingVisibility(aabb)) {
-        GeomCullingPushInstToCmdQueue(instID, inst, aabb.DistanceTo(COMMON_CAM_WPOS));
+        GeomCullingPushInstToCmdQueue(instID, inst);
     }
 }

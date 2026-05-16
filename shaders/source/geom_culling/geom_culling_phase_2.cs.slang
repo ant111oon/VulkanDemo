@@ -1,7 +1,6 @@
 #define GEOM_CULLING_PHASE_2
 
 #define GEOM_CULLING_FRUSTUM_ENABLED
-#define GEOM_CULLING_CONTRIBUTION_ENABLED
 #define GEOM_CULLING_HZB_ENABLED
 #include "common/geom_culling_incl.slang"
 
@@ -26,7 +25,7 @@ void main(uint DTid : SV_DispatchThreadID)
     const bool shouldDraw = visible && !GeomCullingTestInstanceVisibilityFlag(instID);
 
     if (shouldDraw) {
-        GeomCullingPushInstToCmdQueue(instID, inst, aabb.DistanceTo(COMMON_CAM_WPOS));
+        GeomCullingPushInstToCmdQueue(instID, inst);
     }
 
     GeomCullingWriteVisFlag(instID, visible);

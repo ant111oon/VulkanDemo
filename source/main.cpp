@@ -251,8 +251,7 @@ enum class COMMON_DBG_FLAG_MASKS
     USE_INDIRECT_LIGHTING_MASK = 0x10,
     USE_GEOM_INDIRECT_DRAW_MASK = 0x20,
     USE_GEOM_GPU_FRUSTUM_CULLING_MASK = 0x40,
-    USE_GEOM_GPU_CONTRIBUTION_CULLING_MASK = 0x80,
-    USE_GEOM_GPU_HZB_CULLING_MASK = 0x100,
+    USE_GEOM_GPU_HZB_CULLING_MASK = 0x80,
 };
 
 
@@ -373,7 +372,6 @@ struct GEOM_CULLING_PER_DRAW_DATA
 {
     uint  INST_COUNT;
     uint  HZB_MIPS_COUNT;
-    float VIS_CONTRIBUTION_FALLOFF;
 };
 
 
@@ -1099,13 +1097,10 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
-static float s_commonVisContributionFalloff = 2.f;
-
 #ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshIndirectDraw = true;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
-    static bool s_useMeshContributionCulling = true;
     static bool s_useMeshHZBCulling = true;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = true;
@@ -1121,7 +1116,6 @@ static float s_commonVisContributionFalloff = 2.f;
     static constexpr bool s_useMeshIndirectDraw = true;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
-    static constexpr bool s_useMeshContributionCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = true;
@@ -1515,8 +1509,7 @@ namespace DbgUI
             
             if (ImGui::CollapsingHeader("Geom")) {
                 ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
-                ImGui::NewLine();
-
+                
                 if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
 
@@ -1548,22 +1541,6 @@ namespace DbgUI
                                 ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
                                 ImGui::SameLine(); 
                                 ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::TreePop();
-                            }
-    
-                            if (ImGui::TreeNodeEx("Contribution", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::Checkbox("##ContributionCulling", &s_useMeshContributionCulling);
-                                ImGui::SameLine(); 
-                                ImGui::TextColored(s_useMeshContributionCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::SliderFloat("##VisContributionFalloff", &s_commonVisContributionFalloff, 0.f, 100.f, "Vis Contrib Falloff: %.1f");
-            
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("If renderable entity size in pixels in any dimension is less then this value than it will be culled");
-                                    } ImGui::EndTooltip();
-                                }
     
                                 ImGui::TreePop();
                             }
@@ -1880,8 +1857,13 @@ static void CreateVkPhysAndLogicalDevices()
         VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
     };
 
+    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynStateFeatures = {};
+    extendedDynStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    extendedDynStateFeatures.extendedDynamicState3PolygonMode = VK_TRUE;
+
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descBuffFeatures = {};
     descBuffFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
+    descBuffFeatures.pNext = &extendedDynStateFeatures;
     descBuffFeatures.descriptorBuffer = VK_TRUE;
 
 #ifndef ENG_BUILD_RETAIL
@@ -1930,6 +1912,7 @@ static void CreateVkPhysAndLogicalDevices()
     features2.features.samplerAnisotropy = VK_TRUE;
     features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
     features2.features.wideLines = VK_TRUE;
+    features2.features.fillModeNonSolid = VK_TRUE;
 
     vkn::DeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
@@ -5317,11 +5300,10 @@ void UpdateGPUCommonConstBuffer()
 
     uint32_t dbgFlags = 0;
     dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
-    dbgFlags |= s_useMeshIndirectDraw                            ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_INDIRECT_DRAW_MASK : 0;
-    dbgFlags |= s_useIndirectLighting                            ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling      ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_FRUSTUM_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshContributionCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_CONTRIBUTION_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling          ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_HZB_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshIndirectDraw                       ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_INDIRECT_DRAW_MASK : 0;
+    dbgFlags |= s_useIndirectLighting                       ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_FRUSTUM_CULLING_MASK : 0;
+    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling     ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_HZB_CULLING_MASK : 0;
 
     constBuff.DBG_FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.DBG_FLAGS = dbgFlags;
@@ -5661,7 +5643,6 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
     GEOM_CULLING_PER_DRAW_DATA pushConsts = {};
     pushConsts.INST_COUNT = s_cpuInstData.size();
     pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
-    pushConsts.VIS_CONTRIBUTION_FALLOFF = s_commonVisContributionFalloff;
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6582,9 +6563,9 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
 

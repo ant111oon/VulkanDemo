@@ -4,7 +4,6 @@
 // NOTE:
 //  - GEOM_CULLING_PHASE_1/GEOM_CULLING_PHASE_2 (mandatory)
 //  - GEOM_CULLING_FRUSTUM_ENABLED      enables frustum culling
-//  - GEOM_CULLING_CONTRIBUTION_ENABLED enables pixel contribution culling
 //  - GEOM_CULLING_HZB_ENABLED          enables HZB culling
 
 
@@ -16,7 +15,7 @@
     #endif
 #endif
 
-#if defined(GEOM_CULLING_FRUSTUM_ENABLED) || defined(GEOM_CULLING_CONTRIBUTION_ENABLED) || defined(GEOM_CULLING_HZB_ENABLED)
+#if defined(GEOM_CULLING_FRUSTUM_ENABLED) || defined(GEOM_CULLING_HZB_ENABLED)
     #define GEOM_CULLING_ENABLED
 #endif
 
@@ -34,16 +33,12 @@
 #define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #include "common/math/hzb_culling.slang"
 
-#include "common/math/contribution_culling.slang"
-
 
 #ifndef ENV_RELEASE
     #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED
-    #define DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED    COMMON_DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED
     #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED
 #else
     #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         true
-    #define DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED    true
     #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             true
 #endif
 
@@ -84,20 +79,6 @@ namespace utils
         GeomCullingWriteDrawCmd(drawCmdBuffer, index, cmd);
         visInstIDBuffer[index] = visInstID;
     }
-
-
-    // temp hack solution
-    uint GeomCullingGetLodIndex(in COMMON_MESH mesh, in float dist)
-    {
-        static const float LOD_DIST = 20.f;
-
-        uint lodID = 0;
-        while (lodID < mesh.LOD_COUNT && lodID * LOD_DIST < dist) {
-            ++lodID;
-        }
-        
-        return clamp(COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : lodID - 1, 0, mesh.LOD_COUNT - 1);
-    }
 }
 
 
@@ -109,11 +90,9 @@ bool GeomCullingVisibility(in AABB aabb)
 
     // Runtime debug flags
     const bool isFrustumCullEnabled = DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED;
-    const bool isContribCullEnabled = DBG_IS_GEOM_GPU_CONTRIBUTION_CULLING_ENABLED;
     const bool isHZBCullEnabled     = DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED;
-    const bool isCullEnabled = isFrustumCullEnabled || isContribCullEnabled || isHZBCullEnabled;
 
-    if (!isCullEnabled) {
+    if (!isFrustumCullEnabled && !isHZBCullEnabled) {
         return true;
     }
 
@@ -125,8 +104,8 @@ bool GeomCullingVisibility(in AABB aabb)
     }
 #endif
 
-#if defined(GEOM_CULLING_CONTRIBUTION_ENABLED) || defined(GEOM_CULLING_HZB_ENABLED)
-    if (!isContribCullEnabled && !isHZBCullEnabled) {
+#if defined(GEOM_CULLING_HZB_ENABLED)
+    if (!isHZBCullEnabled) {
         return true;
     }
 
@@ -135,14 +114,6 @@ bool GeomCullingVisibility(in AABB aabb)
     sbox.minUV = saturate(sbox.minUV);
     sbox.maxUV = saturate(sbox.maxUV);
     sbox.closestZ = saturate(sbox.closestZ);
-#endif
-
-#if defined(GEOM_CULLING_CONTRIBUTION_ENABLED)
-    if (isContribCullEnabled) {
-        if (!Contribution_Visibility(sbox, COMMON_SCREEN_SIZE, FLOAT2(GEOM_CULLING_VIS_CONTRIBUTION_FALLOFF))) {
-            return false;
-        }
-    }
 #endif
 
 #if defined(GEOM_CULLING_HZB_ENABLED)
@@ -195,11 +166,11 @@ uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
 }
 
 
-void GeomCullingPushInstToCmdQueue(in uint instID, in COMMON_INST inst, in float dist)
+void GeomCullingPushInstToCmdQueue(in uint instID, in COMMON_INST inst)
 {
     const COMMON_MESH mesh = COMMON_MESH_BUFFER[inst.MESH_IDX];
 
-    const uint lodID = utils::GeomCullingGetLodIndex(mesh, dist);
+    const uint lodID = clamp(COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : 0, 0, mesh.LOD_COUNT - 1);
     const COMMON_MESH_LOD LOD = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD + lodID];
 
     COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = COMMON_CMD_DRAW_INDEXED_INDIRECT(
