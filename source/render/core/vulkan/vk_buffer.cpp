@@ -141,8 +141,7 @@ namespace vkn
     Buffer& Buffer::CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags)
     {
         vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
         const VkBufferUsageFlags2 usage = 

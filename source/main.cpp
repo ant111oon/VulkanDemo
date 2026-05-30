@@ -370,7 +370,6 @@ enum COMMON_GEOM_STREAM_ID
 
 struct GEOM_CULLING_PER_DRAW_DATA
 {
-    uint  INST_COUNT;
     uint  HZB_MIPS_COUNT;
 };
 
@@ -625,13 +624,15 @@ static constexpr uint32_t MAX_DBG_LINE_COUNT = 16384;
 static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 2048;
 
 static constexpr uint32_t DBG_LINE_VERTEX_COUNT = 2;
-static constexpr uint32_t DBG_TRIANGLE_VERTEX_COUNT = 3;
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_COUNT = 3; 
 
 static constexpr uint32_t DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 static constexpr uint32_t DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
 
-static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
-static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = MAX_DBG_TRIANGLE_COUNT * DBG_TRIANGLE_VERTEX_COUNT * DBG_TRIANGLE_VERTEX_DATA_SIZE_UI * sizeof(glm::uint);
+static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE_UI = MAX_DBG_LINE_COUNT * DBG_LINE_VERTEX_COUNT * DBG_LINE_VERTEX_DATA_SIZE_UI;
+static constexpr uint32_t DBG_LINE_VERTEX_BUFFER_SIZE = DBG_LINE_VERTEX_BUFFER_SIZE_UI * sizeof(glm::uint);
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI = MAX_DBG_TRIANGLE_COUNT * DBG_TRIANGLE_VERTEX_COUNT * DBG_TRIANGLE_VERTEX_DATA_SIZE_UI;
+static constexpr uint32_t DBG_TRIANGLE_VERTEX_BUFFER_SIZE = DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI * sizeof(glm::uint);
 
 static constexpr size_t GBUFFER_RT_COUNT = 4;
 static constexpr size_t CUBEMAP_FACE_COUNT = 6;
@@ -1183,13 +1184,13 @@ static void ClearDebugDrawData()
 
 static bool IsDebugLinesBufferFull()
 {
-    return s_dbgLineDataCPU.size() == s_dbgLineDataCPU.capacity();
+    return s_dbgLineDataCPU.size() == MAX_DBG_LINE_COUNT;
 }
 
 
 static bool IsDebugTrianglesBufferFull()
 {
-    return s_dbgTriangleDataCPU.size() == s_dbgTriangleDataCPU.capacity();
+    return s_dbgTriangleDataCPU.size() == MAX_DBG_TRIANGLE_COUNT;
 }
 
 
@@ -2556,7 +2557,7 @@ static void CreateDbgDrawResources()
     }
 
     {
-        s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE);
+        s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE_UI);
 
         vkn::AllocationInfo allocInfo = {};
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
@@ -2590,7 +2591,7 @@ static void CreateDbgDrawResources()
     }
 
     {
-        s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE);
+        s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI);
 
         vkn::AllocationInfo allocInfo = {};
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
@@ -5641,7 +5642,6 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)pass, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     GEOM_CULLING_PER_DRAW_DATA pushConsts = {};
-    pushConsts.INST_COUNT = s_cpuInstData.size();
     pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
@@ -6563,9 +6563,9 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
 

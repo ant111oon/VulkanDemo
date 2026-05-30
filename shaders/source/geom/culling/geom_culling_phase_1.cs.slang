@@ -10,7 +10,7 @@ void main(uint DTid : SV_DispatchThreadID)
 {
     const uint instID = DTid;
 
-    if (instID >= GEOM_CULLING_INST_COUNT) {
+    if (instID >= COMMON_INST_COUNT) {
         return;
     }
 
