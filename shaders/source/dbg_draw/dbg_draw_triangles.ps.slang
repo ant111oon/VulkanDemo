@@ -1,6 +1,6 @@
 #define DBG_DRAW_TRIANGLES_PASS
 
-#include "registers/dbg_draw_registers.slang"
+#include "registers/dbg_draw_triangles_registers.slang"
 
 #include "pass/dbg_draw/vsout.slang"
 

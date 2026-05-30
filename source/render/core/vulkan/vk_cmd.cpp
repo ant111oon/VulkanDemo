@@ -747,7 +747,7 @@ namespace vkn
 
         VkDescriptorBufferBindingInfoEXT bindingInfo = {};
         bindingInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
-        bindingInfo.address = buffer.Get().GetDeviceAddress();
+        bindingInfo.address = buffer.GetBuffer().GetDeviceAddress();
         bindingInfo.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
 
         vkCmdBindDescriptorBuffers(Get(), 1, &bindingInfo);

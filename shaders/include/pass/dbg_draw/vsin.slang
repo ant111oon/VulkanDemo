@@ -1,7 +1,13 @@
 #ifndef DBG_DRAW_VS_IN_H
 #define DBG_DRAW_VS_IN_H
 
-#include "registers/dbg_draw_registers.slang"
+#if defined(DBG_DRAW_LINES_PASS)
+    #include "registers/dbg_draw_lines_registers.slang"
+#elif defined(DBG_DRAW_TRIANGLES_PASS)
+    #include "registers/dbg_draw_triangles_registers.slang"
+#else
+    #error Unknown Debug Draw Pass
+#endif
 
 
 struct DBG_DRAW_INPUT_DATA

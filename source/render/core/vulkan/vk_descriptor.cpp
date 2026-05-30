@@ -390,14 +390,14 @@ namespace vkn
     }
 
 
-    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Buffer& buffer)
+    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const Buffer& buffer)
     {
         VK_ASSERT(IsCreated());
         VK_ASSERT_MSG(buffer.HasDeviceAddress(), "Buffer %s must have device address to be compatible with descriptor buffer", buffer.GetDebugName().data());
 
         Device& device = GetDevice();
 
-        const Entry& entry = m_entries[setIdx];
+        const Entry& entry = m_entries[index];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
@@ -424,14 +424,14 @@ namespace vkn
     }
 
 
-    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const TextureView& view)
+    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const TextureView& view, VkImageLayout layout)
     {
         VK_ASSERT(IsCreated());
         view.CheckLayoutConsistency();
 
         Device& device = GetDevice();
 
-        const Entry& entry = m_entries[setIdx];
+        const Entry& entry = m_entries[index];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
@@ -442,10 +442,7 @@ namespace vkn
 
         VkDescriptorImageInfo imageInfo = {};
         imageInfo.imageView = view.Get();
-        
-        const vkn::Texture& owner = view.GetOwner();
-        const TextureView::SubresourceRange& range = view.GetSubresourceRange();
-        imageInfo.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+        imageInfo.imageLayout = layout;
 
         VkDescriptorGetInfoEXT descriptorGetInfo = {};
         descriptorGetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
@@ -458,13 +455,13 @@ namespace vkn
     }
 
 
-    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Sampler& sampler)
+    DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const Sampler& sampler)
     {
         VK_ASSERT(IsCreated());
 
         Device& device = GetDevice();
 
-        const Entry& entry = m_entries[setIdx];
+        const Entry& entry = m_entries[index];
 
         const VkDeviceSize setOffset = entry.offset;
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
@@ -522,7 +519,7 @@ namespace vkn
     }
 
 
-    const Buffer& DescriptorBuffer::Get() const
+    const Buffer& DescriptorBuffer::GetBuffer() const
     {
         VK_ASSERT(IsCreated());
         return m_buffer;

@@ -307,30 +307,6 @@ enum class COMMON_SAMPLER_IDX : glm::uint
     ANISO_4X_LINEAR_CLAMP_TO_BORDER,
     ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE,
 
-    ANISO_8X_NEAREST_REPEAT,
-    ANISO_8X_NEAREST_MIRRORED_REPEAT,
-    ANISO_8X_NEAREST_CLAMP_TO_EDGE,
-    ANISO_8X_NEAREST_CLAMP_TO_BORDER,
-    ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE,
-
-    ANISO_8X_LINEAR_REPEAT,
-    ANISO_8X_LINEAR_MIRRORED_REPEAT,
-    ANISO_8X_LINEAR_CLAMP_TO_EDGE,
-    ANISO_8X_LINEAR_CLAMP_TO_BORDER,
-    ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE,
-
-    ANISO_16X_NEAREST_REPEAT,
-    ANISO_16X_NEAREST_MIRRORED_REPEAT,
-    ANISO_16X_NEAREST_CLAMP_TO_EDGE,
-    ANISO_16X_NEAREST_CLAMP_TO_BORDER,
-    ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE,
-
-    ANISO_16X_LINEAR_REPEAT,
-    ANISO_16X_LINEAR_MIRRORED_REPEAT,
-    ANISO_16X_LINEAR_CLAMP_TO_EDGE,
-    ANISO_16X_LINEAR_CLAMP_TO_BORDER,
-    ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE,
-
     COUNT
 };
 
@@ -378,13 +354,11 @@ struct ZPASS_PER_DRAW_DATA
 {
     uint IS_AKILL_PASS;
     uint INST_INFO_IDX;
-    uint BUFF_IDX;
 };
 
 
 struct GBUFFER_PER_DRAW_DATA
 {
-    uint IS_AKILL_PASS;
     uint INST_INFO_IDX;
 };
 
@@ -505,30 +479,6 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
     "ANISO_4X_LINEAR_CLAMP_TO_EDGE",
     "ANISO_4X_LINEAR_CLAMP_TO_BORDER",
     "ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_8X_NEAREST_REPEAT",
-    "ANISO_8X_NEAREST_MIRRORED_REPEAT",
-    "ANISO_8X_NEAREST_CLAMP_TO_EDGE",
-    "ANISO_8X_NEAREST_CLAMP_TO_BORDER",
-    "ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_8X_LINEAR_REPEAT",
-    "ANISO_8X_LINEAR_MIRRORED_REPEAT",
-    "ANISO_8X_LINEAR_CLAMP_TO_EDGE",
-    "ANISO_8X_LINEAR_CLAMP_TO_BORDER",
-    "ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_16X_NEAREST_REPEAT",
-    "ANISO_16X_NEAREST_MIRRORED_REPEAT",
-    "ANISO_16X_NEAREST_CLAMP_TO_EDGE",
-    "ANISO_16X_NEAREST_CLAMP_TO_BORDER",
-    "ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_16X_LINEAR_REPEAT",
-    "ANISO_16X_LINEAR_MIRRORED_REPEAT",
-    "ANISO_16X_LINEAR_CLAMP_TO_EDGE",
-    "ANISO_16X_LINEAR_CLAMP_TO_BORDER",
-    "ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE",
 };
 
 static_assert((size_t)COMMON_SAMPLER_IDX::COUNT == _countof(COMMON_SAMPLERS_DBG_NAMES));
@@ -541,6 +491,33 @@ enum class PassID
     GEOM_CULLING_PHASE_2,
     DEPTH,
     GBUFFER,
+    DEFERRED_LIGHTING,
+    SKYBOX,
+    POST_PROCESSING,
+    BACKBUFFER,
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    DBG_DRAW_LINES,
+    DBG_DRAW_TRIANGLES,
+#endif
+    IRRADIANCE_MAP_GEN,
+    BRDF_LUT_GEN,
+    PREFILT_ENV_MAP_GEN,
+    HZB_GEN,
+    COUNT,
+};
+
+
+enum class DescriptorSetID
+{
+    COMMON,
+    GEOM_CULLING_PHASE_1,
+    GEOM_CULLING_PHASE_2,
+    DEPTH_OPAQUE_PHASE_1,
+    DEPTH_OPAQUE_PHASE_2,
+    DEPTH_AKILL_PHASE_1,
+    DEPTH_AKILL_PHASE_2,
+    GBUFFER_OPAQUE,
+    GBUFFER_AKILL,
     DEFERRED_LIGHTING,
     SKYBOX,
     POST_PROCESSING,
@@ -577,21 +554,18 @@ static constexpr size_t GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT = 2;
 static constexpr size_t GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 3;
 static constexpr size_t GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT = 4;
 
-static constexpr size_t ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
+static constexpr size_t ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT = 0;
 
-static constexpr size_t GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GBUFFER_VIS_INST_IDS_DESCRIPTOR_SLOT = 0;
 
-static constexpr size_t DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
-static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
-static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
-static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
-static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 8;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 3;
+static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 4;
+static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 5;
+static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 6;
+static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 7;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
@@ -609,8 +583,9 @@ static constexpr size_t BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT = 1;
-static constexpr size_t DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 2;
-static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 3;
+
+static constexpr size_t DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
@@ -2664,8 +2639,7 @@ static void CreateZPassDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkn::DescriptorInfo::Create(ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2730,8 +2704,7 @@ static void CreateGBufferDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkn::DescriptorInfo::Create(GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(GBUFFER_VIS_INST_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2750,7 +2723,6 @@ static void CreateDeferredLightingDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -2952,11 +2924,32 @@ static void CreateHZBGenDescriptorSetLayout()
 
 static void CreateDescriptorBuffer()
 {
-    std::array<vkn::DescriptorSetLayout*, (size_t)PassID::COUNT> layouts = {};
+    std::array<vkn::DescriptorSetLayout*, (uint32_t)DescriptorSetID::COUNT> layouts = {};
     
+    layouts[(uint32_t)DescriptorSetID::COMMON]                  = &s_descSetLayouts[(size_t)PassID::COMMON];
+    layouts[(uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1]    = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_1];
+    layouts[(uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2]    = &s_descSetLayouts[(size_t)PassID::GEOM_CULLING_PHASE_2];
+    layouts[(uint32_t)DescriptorSetID::DEPTH_OPAQUE_PHASE_1]    = &s_descSetLayouts[(size_t)PassID::DEPTH];
+    layouts[(uint32_t)DescriptorSetID::DEPTH_OPAQUE_PHASE_2]    = &s_descSetLayouts[(size_t)PassID::DEPTH];
+    layouts[(uint32_t)DescriptorSetID::DEPTH_AKILL_PHASE_1]     = &s_descSetLayouts[(size_t)PassID::DEPTH];
+    layouts[(uint32_t)DescriptorSetID::DEPTH_AKILL_PHASE_2]     = &s_descSetLayouts[(size_t)PassID::DEPTH];
+    layouts[(uint32_t)DescriptorSetID::GBUFFER_OPAQUE]          = &s_descSetLayouts[(size_t)PassID::GBUFFER];
+    layouts[(uint32_t)DescriptorSetID::GBUFFER_AKILL]           = &s_descSetLayouts[(size_t)PassID::GBUFFER];
+    layouts[(uint32_t)DescriptorSetID::DEFERRED_LIGHTING]       = &s_descSetLayouts[(size_t)PassID::DEFERRED_LIGHTING];
+    layouts[(uint32_t)DescriptorSetID::SKYBOX]                  = &s_descSetLayouts[(size_t)PassID::SKYBOX];
+    layouts[(uint32_t)DescriptorSetID::POST_PROCESSING]         = &s_descSetLayouts[(size_t)PassID::POST_PROCESSING];
+    layouts[(uint32_t)DescriptorSetID::BACKBUFFER]              = &s_descSetLayouts[(size_t)PassID::BACKBUFFER];
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    layouts[(uint32_t)DescriptorSetID::DBG_DRAW_LINES]          = &s_descSetLayouts[(size_t)PassID::DBG_DRAW_LINES];
+    layouts[(uint32_t)DescriptorSetID::DBG_DRAW_TRIANGLES]      = &s_descSetLayouts[(size_t)PassID::DBG_DRAW_TRIANGLES];
+#endif
+    layouts[(uint32_t)DescriptorSetID::IRRADIANCE_MAP_GEN]      = &s_descSetLayouts[(size_t)PassID::IRRADIANCE_MAP_GEN];
+    layouts[(uint32_t)DescriptorSetID::BRDF_LUT_GEN]            = &s_descSetLayouts[(size_t)PassID::BRDF_LUT_GEN];
+    layouts[(uint32_t)DescriptorSetID::PREFILT_ENV_MAP_GEN]     = &s_descSetLayouts[(size_t)PassID::PREFILT_ENV_MAP_GEN];
+    layouts[(uint32_t)DescriptorSetID::HZB_GEN]                 = &s_descSetLayouts[(size_t)PassID::HZB_GEN];
+
     for (size_t i = 0; i < layouts.size(); ++i) {
-        CORE_ASSERT_MSG(s_descSetLayouts[i].IsCreated(), "Descriptor Set Layout %u is not created", (uint32_t)i);
-        layouts[i] = &s_descSetLayouts[i];
+        CORE_ASSERT_MSG(layouts[i] && layouts[i]->IsCreated(), "Descriptor Set Layout %zu is not created", i);
     }
 
     s_descriptorBuffer.Create(&s_vkDevice, layouts).SetDebugName("COMMON_DESCRIPTOR_BUFFER");
@@ -4140,88 +4133,6 @@ static void CreateCommonSamplers()
     samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
-
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_REPEAT].maxAnisotropy = 16.f;
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRRORED_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::NEAREST_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
-
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_REPEAT].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRRORED_REPEAT];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 16.f;
-    
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::LINEAR_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[(uint32_t)COMMON_SAMPLER_IDX::ANISO_16X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 16.f;
-
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
         s_commonSamplers[i].Create(samplerCreateInfo[i]);
         s_vkDevice.SetObjDebugName(s_commonSamplers[i], COMMON_SAMPLERS_DBG_NAMES[i]);
@@ -4231,130 +4142,128 @@ static void CreateCommonSamplers()
 
 static void WriteZPassDescriptorSet()
 {
-    for (size_t i = 0; i < GEOM_CULLING_PASS_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEPTH, ZPASS_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, i, s_visOpaqueGeomIDBuffers[i]);
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEPTH, ZPASS_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, i, s_visAkillGeomIDBuffers[i]);
-    }
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEPTH_OPAQUE_PHASE_1, ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, s_visOpaqueGeomIDBuffers[0]);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEPTH_OPAQUE_PHASE_2, ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, s_visOpaqueGeomIDBuffers[1]);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEPTH_AKILL_PHASE_1, ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, s_visAkillGeomIDBuffers[0]);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEPTH_AKILL_PHASE_2, ZPASS_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, s_visAkillGeomIDBuffers[1]);
 }
 
 
 static void WriteGeomCullingPhase1DescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_opaqueGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_akillGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_transpGeomDrawCmdBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_visOpaqueGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_visAkillGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT,  GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_visTranspGeomIDBuffers[0]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_1, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_1, 
         GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomVisFlagsBuffer);
 }
 
 
 static void WriteGeomCullingPhase2DescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_opaqueGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_akillGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_transpGeomDrawCmdBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, s_visOpaqueGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, s_visAkillGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT,  GEOM_CULLING_QUEUE_ID_TRANSPARENT, s_visTranspGeomIDBuffers[1]);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomVisFlagsBuffer);
     
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, GLOBAL_OPAQUE_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, GLOBAL_AKILL_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, GLOBAL_TRANSP_GEOM_DRAW_CMD_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_OPAQUE, GLOBAL_VIS_OPAQUE_GEOM_ID_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_AKILL, GLOBAL_VIS_AKILL_GEOM_ID_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GEOM_CULLING_PHASE_2, 
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GEOM_CULLING_PHASE_2, 
         GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV_DESCRIPTOR_SLOT, GEOM_CULLING_QUEUE_ID_TRANSPARENT, GLOBAL_VIS_TRANSP_GEOM_ID_BUFFER);
 }
 
 
 static void WriteGBufferDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, GBUFFER_OPAQUE_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, GLOBAL_VIS_OPAQUE_GEOM_ID_BUFFER);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::GBUFFER, GBUFFER_AKILL_INST_INFO_IDS_DESCRIPTOR_SLOT, 0, GLOBAL_VIS_AKILL_GEOM_ID_BUFFER);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GBUFFER_OPAQUE, GBUFFER_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, GLOBAL_VIS_OPAQUE_GEOM_ID_BUFFER);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::GBUFFER_AKILL, GBUFFER_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, GLOBAL_VIS_AKILL_GEOM_ID_BUFFER);
 }
 
 
 static void WriteDeferredLightingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
-
     std::array<vkn::TextureView*, GBUFFER_RT_COUNT> gbufferViews = {};
     for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
         gbufferViews[i] = &s_gbufferRTViews[i];
     }
 
     for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DEFERRED_LIGHTING, DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WritePostProcessingDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::POST_PROCESSING, POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::POST_PROCESSING, POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WriteBackbufferPassDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BACKBUFFER, BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::BACKBUFFER, BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WriteSkyboxDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::SKYBOX, SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::SKYBOX, SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WriteIrradianceMapGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::IRRADIANCE_MAP_GEN, IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 
 static void WritePrefilteredEnvMapGenDescriptorSets()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     
     for (uint32_t i = 0; i < s_prefilteredEnvMapTextureViewRWs.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::PREFILT_ENV_MAP_GEN, PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i], VK_IMAGE_LAYOUT_GENERAL);
     }
 }
 
 
 static void WriteBRDFIntegrationLUTGenDescriptorSet()
 {
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::BRDF_LUT_GEN, BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::BRDF_LUT_GEN, BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 
@@ -4363,55 +4272,55 @@ static void WriteHZBGenDescriptorSets()
     for (uint32_t i = 0; i < s_HZB.GetMipCount(); ++i) {
         vkn::TextureView& mip = s_HZBMipViews[i];
 
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip);
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::HZB_GEN, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     // First source mip must contain original depth buffer
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
 #ifndef ENG_BUILD_RELEASE
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 #endif
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_ID_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
     }
     
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBBuffer);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i]);
+        s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
 
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::COMMON, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::COMMON, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
 static void WriteDbgDrawLineDescriptorSet()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES, DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_LINES, DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DBG_DRAW_LINES, DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DBG_DRAW_LINES, DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
 #endif
 }
 
@@ -4419,8 +4328,8 @@ static void WriteDbgDrawLineDescriptorSet()
 static void WriteDbgDrawTriangleDescriptorSet()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
-    s_descriptorBuffer.WriteDescriptor((size_t)PassID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
+    s_descriptorBuffer.WriteDescriptor((uint32_t)DescriptorSetID::DBG_DRAW_TRIANGLES, DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
 #endif
 }
 
@@ -5401,8 +5310,8 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
     
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::IRRADIANCE_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::IRRADIANCE_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     IRRADIANCE_MAP_PER_DRAW_DATA pushConsts = {};
     pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
@@ -5441,8 +5350,8 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
                 VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
             .Push();
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::PREFILT_ENV_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::PREFILT_ENV_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
         pushConsts.MIP = mip;
@@ -5480,8 +5389,8 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
                 VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::BRDF_LUT_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::BRDF_LUT_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1u);
 
@@ -5508,8 +5417,8 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     
     cmdBuffer.CmdBindPSO(pso);
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::HZB_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::HZB_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     cmdBuffer
         .BeginBarrierList()
@@ -5638,8 +5547,10 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, PassID pass)
 
     cmdBuffer.CmdBindPSO(pso);
     
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)pass, .shaderSetIdx = DESC_SET_PER_DRAW });
+    const DescriptorSetID passDescID = pass == PassID::GEOM_CULLING_PHASE_1 ? DescriptorSetID::GEOM_CULLING_PHASE_1 : DescriptorSetID::GEOM_CULLING_PHASE_2;
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)passDescID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     GEOM_CULLING_PER_DRAW_DATA pushConsts = {};
     pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
@@ -5664,17 +5575,19 @@ static void GeomCullingPassPhase2(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t bufferIdx, bool needClearDepth)
+void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t phaseNmb, bool needClearDepth)
 {
-    CORE_ASSERT(bufferIdx <= GEOM_CULLING_PASS_COUNT);
+    CORE_ASSERT(phaseNmb <= GEOM_CULLING_PASS_COUNT);
+    
+    const bool isPhase1 = phaseNmb == 0;
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
     barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    vkn::Buffer& drawCmdBuffer = isAKillPass ? s_akillGeomDrawCmdBuffers[bufferIdx] : s_opaqueGeomDrawCmdBuffers[bufferIdx];
-    vkn::Buffer& visIDBuffer = isAKillPass ? s_visAkillGeomIDBuffers[bufferIdx] : s_visOpaqueGeomIDBuffers[bufferIdx];
+    vkn::Buffer& drawCmdBuffer = isAKillPass ? s_akillGeomDrawCmdBuffers[phaseNmb] : s_opaqueGeomDrawCmdBuffers[phaseNmb];
+    vkn::Buffer& visIDBuffer = isAKillPass ? s_visAkillGeomIDBuffers[phaseNmb] : s_visOpaqueGeomIDBuffers[phaseNmb];
 
     if (s_useMeshIndirectDraw) {
         barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
@@ -5710,14 +5623,17 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, bool isAKillPass, size_t buffer
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DEPTH, .shaderSetIdx = DESC_SET_PER_DRAW });
+        const DescriptorSetID passDescID = isAKillPass
+            ? (isPhase1 ? DescriptorSetID::DEPTH_AKILL_PHASE_1 : DescriptorSetID::DEPTH_AKILL_PHASE_2)
+            : (isPhase1 ? DescriptorSetID::DEPTH_OPAQUE_PHASE_1 : DescriptorSetID::DEPTH_OPAQUE_PHASE_2);
+
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)passDescID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
         ZPASS_PER_DRAW_DATA pushConsts = {};
         pushConsts.IS_AKILL_PASS = isAKillPass;
-        pushConsts.BUFF_IDX = bufferIdx;
 
         if (s_useMeshIndirectDraw) {
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
@@ -5895,9 +5811,11 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
         vkn::PSO& pso = s_PSOs[(size_t)PassID::GBUFFER];
 
         cmdBuffer.CmdBindPSO(pso);
+
+        const DescriptorSetID passDescID = isAKillPass ? DescriptorSetID::GBUFFER_AKILL : DescriptorSetID::GBUFFER_OPAQUE;
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::GBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)passDescID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
@@ -5916,7 +5834,6 @@ void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, bool isAKillPass)
     #endif
 
         GBUFFER_PER_DRAW_DATA pushConsts = {};
-        pushConsts.IS_AKILL_PASS = isAKillPass;
 
         if (s_useMeshIndirectDraw) {
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
@@ -6034,8 +5951,8 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DEFERRED_LIGHTING, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::DEFERRED_LIGHTING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -6079,8 +5996,8 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::SKYBOX, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::SKYBOX, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(36, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -6120,8 +6037,8 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::POST_PROCESSING, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::POST_PROCESSING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -6211,8 +6128,8 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
             cmdBuffer.CmdBindPSO(pso);
             
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DBG_DRAW_LINES, .shaderSetIdx = DESC_SET_PER_DRAW });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::DBG_DRAW_LINES, .shaderSetIdx = DESC_SET_PER_DRAW });
     
             cmdBuffer.CmdDraw(DBG_LINE_VERTEX_COUNT, lineInstCount, 0, 0);     
         }
@@ -6224,8 +6141,8 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
             cmdBuffer.CmdBindPSO(pso);
             
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::DBG_DRAW_TRIANGLES, .shaderSetIdx = DESC_SET_PER_DRAW });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::DBG_DRAW_TRIANGLES, .shaderSetIdx = DESC_SET_PER_DRAW });
     
             cmdBuffer.CmdDraw(DBG_TRIANGLE_VERTEX_COUNT, triInstCount, 0, 0);     
         }
@@ -6306,8 +6223,8 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)PassID::BACKBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .bufferSetIdx = (uint32_t)DescriptorSetID::BACKBUFFER, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();

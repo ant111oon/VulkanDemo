@@ -12,7 +12,7 @@ uint GetGBufferInstIdx(uint drawID)
     } else
 #endif
     {
-        return (bool)GBUFFER_IS_AKILL_PASS ? GBUFFER_AKILL_INST_INFO_IDS[drawID] : GBUFFER_OPAQUE_INST_INFO_IDS[drawID];
+        return GBUFFER_VIS_INST_IDS[drawID];
     }
 }
 

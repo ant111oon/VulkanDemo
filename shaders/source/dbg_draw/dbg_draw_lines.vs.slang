@@ -1,6 +1,6 @@
 #define DBG_DRAW_LINES_PASS
 
-#include "registers/dbg_draw_registers.slang"
+#include "registers/dbg_draw_lines_registers.slang"
 
 #include "pass/dbg_draw/vsin.slang"
 #include "pass/dbg_draw/vsout.slang"

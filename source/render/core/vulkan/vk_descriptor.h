@@ -125,9 +125,9 @@ namespace vkn
         DescriptorBuffer& Create(const DescriptorBufferCreateInfo& info);
         DescriptorBuffer& Destroy();
 
-        DescriptorBuffer& WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Buffer& buffer);
-        DescriptorBuffer& WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const TextureView& texture);
-        DescriptorBuffer& WriteDescriptor(uint32_t setIdx, uint32_t binding, uint32_t elemIdx, const Sampler& sampler);
+        DescriptorBuffer& WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const Buffer& buffer);
+        DescriptorBuffer& WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const TextureView& texture, VkImageLayout layout);
+        DescriptorBuffer& WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const Sampler& sampler);
 
         VkDeviceSize GetSetOffset(uint32_t index) const;
         const DescriptorSetLayout* GetDescriptorSetLayout(uint32_t index) const;
@@ -145,7 +145,7 @@ namespace vkn
 
         Device& GetDevice() const;
 
-        const Buffer& Get() const;
+        const Buffer& GetBuffer() const;
 
         bool IsCreated() const;
 
