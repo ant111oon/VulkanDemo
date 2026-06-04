@@ -756,7 +756,7 @@ namespace vkn
     }
 
     
-    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorSetBindingInfo& bindigInfo)
+    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorBufferSetBindingInfo& bindigInfo)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
@@ -766,9 +766,9 @@ namespace vkn
 
         VK_ASSERT(pso.IsCreated());
         VK_ASSERT_MSG(m_pDescrBufferBindingCache != nullptr, "Call CmdBindDescriptorBuffer before CmdBindDescriptorBufferSet");
-        VK_ASSERT(bindigInfo.bufferSetIdx < m_pDescrBufferBindingCache->GetSetCount());
+        VK_ASSERT(bindigInfo.elemIndex < m_pDescrBufferBindingCache->GetSetCount());
 
-        const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(bindigInfo.bufferSetIdx);
+        const VkDeviceSize offset = m_pDescrBufferBindingCache->GetSetOffset(bindigInfo.elemIndex);
 
         constexpr uint32_t bufferIdx = 0;
         vkCmdSetDescriptorBufferOffsets(Get(), pso.GetBindPoint(), pso.GetLayout().Get(), bindigInfo.shaderSetIdx, 1, &bufferIdx, &offset);
@@ -777,9 +777,9 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorSetBindingInfo> bindigInfos)
+    CmdBuffer& CmdBuffer::CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorBufferSetBindingInfo> bindigInfos)
     {
-        for (const DescriptorSetBindingInfo& info : bindigInfos) {
+        for (const DescriptorBufferSetBindingInfo& info : bindigInfos) {
             CmdBindDescriptorBufferSets(pso, info);
         }
 

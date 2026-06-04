@@ -149,9 +149,9 @@ namespace vkn
     };
 
 
-    struct DescriptorSetBindingInfo
+    struct DescriptorBufferSetBindingInfo
     {
-        uint32_t bufferSetIdx; // index of set inside bound descriptor buffer
+        uint32_t elemIndex; // index of set inside bound descriptor buffer
         uint32_t shaderSetIdx; // index of set in shader
     };
 
@@ -244,8 +244,8 @@ namespace vkn
         CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 
         CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);
-        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorSetBindingInfo& bindigInfo);
-        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorSetBindingInfo> bindigInfos);
+        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, const DescriptorBufferSetBindingInfo& bindigInfo);
+        CmdBuffer& CmdBindDescriptorBufferSets(const PSO& pso, std::span<const DescriptorBufferSetBindingInfo> bindigInfos);
 
         CmdBuffer& CmdPushConstants(PSO& pso, VkShaderStageFlags stagesMask, const void* pData, VkDeviceSize size, VkDeviceSize offset = 0);
         

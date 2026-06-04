@@ -41,15 +41,13 @@ enum COMMON_MATERIAL_FLAGS
 {
     DOUBLE_SIDED = 0x1,
     ALPHA_KILL = 0x2,
-    ALPHA_BLEND = 0x4,
 };
 
 
 struct COMMON_MATERIAL
 {
     bool IsAlphaKill() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_KILL); }
-    bool IsTransparent() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_BLEND); }
-    bool IsOpaque() { return !IsAlphaKill() && !IsTransparent(); }
+    bool IsOpaque() { return !IsAlphaKill(); }
 
     bool IsDoubleSided() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::DOUBLE_SIDED); }
 
@@ -162,9 +160,8 @@ enum class COMMON_DBG_FLAG_MASKS
     USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x4,
     USE_ACES_TONE_MAPPING_MASK = 0x8,
     USE_INDIRECT_LIGHTING_MASK = 0x10,
-    USE_GEOM_INDIRECT_DRAW_MASK = 0x20,
-    USE_GEOM_GPU_FRUSTUM_CULLING_MASK = 0x40,
-    USE_GEOM_GPU_HZB_CULLING_MASK = 0x80,
+    USE_GEOM_GPU_FRUSTUM_CULLING_MASK = 0x20,
+    USE_GEOM_GPU_HZB_CULLING_MASK = 0x40,
 };
 
 

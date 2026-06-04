@@ -4,29 +4,15 @@
 #include "pass/gbuffer/vsout.slang"
 
 
-uint GetGBufferInstIdx(uint drawID)
-{
-#ifndef ENV_RELEASE
-    if (!COMMON_DBG_IS_GEOM_INDIRECT_DRAW_ENABLED) {
-        return GBUFFER_INST_INFO_IDX;
-    } else
-#endif
-    {
-        return GBUFFER_VIS_INST_IDS[drawID];
-    }
-}
-
-
 [shader("vertex")]
-GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
+GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
 {
     GBUFFER_VS_OUTPUT result = (GBUFFER_VS_OUTPUT)0;
 
-    const uint instIdx = GetGBufferInstIdx(drawID);
-
-    const COMMON_INST inst = COMMON_INST_BUFFER[instIdx];
-
     GBUFFER_INPUT_DATA inputData = PrepareGBufferVSInputData(vertID);
+
+    const uint instID = GBUFFER_INST_ID_QUEUE[instIndex];
+    const COMMON_INST inst = COMMON_INST_BUFFER[instID];
 
     const float3x4 wMatr = COMMON_INST_TRANSFORMS[inst.TRANSFORM_IDX];
     const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz;
@@ -37,7 +23,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstanc
     result.data.uv = inputData.uv;
     result.data.tangent = inputData.tangent;
 
-    result.flatData.instID = instIdx;
+    result.flatData.instID = instID;
 
     result.hpos = mul(COMMON_CB.VIEW_PROJ_MATRIX, float4(wpos, 1.f));
 

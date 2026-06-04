@@ -9,10 +9,6 @@
 
 #if !defined(GEOM_CULLING_PHASE_1) && !defined(GEOM_CULLING_PHASE_2)
     #error One of GEOM_CULLING_PHASE_1 or GEOM_CULLING_PHASE_2 macro must be defined
-#else
-    #if defined(GEOM_CULLING_PHASE_2)
-        #define GEOM_CULLING_WRITE_GLOBAL_DATA
-    #endif
 #endif
 
 #if defined(GEOM_CULLING_FRUSTUM_ENABLED) || defined(GEOM_CULLING_HZB_ENABLED)
@@ -51,33 +47,6 @@ namespace utils
 
         batchID = instID / (VIS_FLAGS_BATCH_SIZE_BITS);
         localID = instID % (VIS_FLAGS_BATCH_SIZE_BITS);
-    }
-
-
-    void GeomCullingWriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in COMMON_CMD_DRAW_INDEXED_INDIRECT cmd)
-    {
-        static const uint CMD_SIZE_UINT = sizeof(cmd) / sizeof(uint);
-
-        // First uint in the buffer is counter
-        const uint indexUInt = 1 + index * CMD_SIZE_UINT;
-    
-        buffer[indexUInt + 0] = cmd.INDEX_COUNT;
-        buffer[indexUInt + 1] = cmd.INSTANCE_COUNT;
-        buffer[indexUInt + 2] = cmd.FIRST_INDEX;
-        buffer[indexUInt + 3] = cmd.FIRST_VERTEX;
-        buffer[indexUInt + 4] = cmd.FIRST_INSTANCE;
-    }
-
-
-    void GeomCullingPushInstToCmdQueue(RWStructuredBuffer<uint> drawCmdBuffer, RWStructuredBuffer<uint> visInstIDBuffer, in COMMON_CMD_DRAW_INDEXED_INDIRECT cmd, in uint visInstID)
-    {
-        uint index = 0;
-
-        // First UINT of draw cmd buffer contains counter
-        InterlockedAdd(drawCmdBuffer[0], 1, index);
-
-        GeomCullingWriteDrawCmd(drawCmdBuffer, index, cmd);
-        visInstIDBuffer[index] = visInstID;
     }
 }
 
@@ -128,7 +97,7 @@ bool GeomCullingVisibility(in AABB aabb)
 }
 
 
-bool GeomCullingTestInstanceVisibilityFlag(in uint instID)
+bool GeomCullingTestInstVisFlag(in uint instID)
 {
     uint batchID, localID;
     utils::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
@@ -154,40 +123,19 @@ void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
 }
 
 
-uint GeomCullingGetQueueIndex(in COMMON_MATERIAL material)
+uint GeomCullingGetQueueMask(in COMMON_INST inst)
 {
-    if (material.IsTransparent()) {
-        return (uint)GEOM_CULLING_QUEUE_ID::TRANSPARENT;
-    } else if (material.IsAlphaKill()) {
-        return (uint)GEOM_CULLING_QUEUE_ID::AKILL;
+    uint mask = 0;
+
+    const COMMON_MATERIAL material = COMMON_MATERIALS[inst.MATERIAL_IDX];
+
+    if (material.IsAlphaKill()) {
+        mask |= (1u << GEOM_QUEUE_AKILL);
     } else {
-        return (uint)GEOM_CULLING_QUEUE_ID::OPAQUE;
+        mask |= (1u << GEOM_QUEUE_OPAQUE);
     }
-}
 
-
-void GeomCullingPushInstToCmdQueue(in uint instID, in COMMON_INST inst)
-{
-    const COMMON_MESH mesh = COMMON_MESH_BUFFER[inst.MESH_IDX];
-
-    const uint lodID = clamp(COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : 0, 0, mesh.LOD_COUNT - 1);
-    const COMMON_MESH_LOD LOD = COMMON_MESH_LOD_BUFFER[mesh.FIRST_LOD + lodID];
-
-    COMMON_CMD_DRAW_INDEXED_INDIRECT cmd = COMMON_CMD_DRAW_INDEXED_INDIRECT(
-        LOD.INDEX_COUNT, 1, LOD.FIRST_INDEX, mesh.FIRST_VERTEX, instID
-    );
-
-    const uint queueID = GeomCullingGetQueueIndex(COMMON_MATERIALS[inst.MATERIAL_IDX]);
-
-    utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_DRAW_CMDS_UAV[queueID], GEOM_CULL_INST_INFO_IDS_UAV[queueID], cmd, instID);
-
-    // NOTE: A little bit complicated logic but that's how it is:
-    //       GLOBAL and LOCAL (ocluders pass) buffers are the same memory so for that pass we write only in LOCAL buffers
-    //       For occludees pass we write in GLOBAL and LOCAL buffers to use GLOBAL data after depth pass in GBUFFER pass
-
-#if defined(GEOM_CULLING_WRITE_GLOBAL_DATA)
-    utils::GeomCullingPushInstToCmdQueue(GEOM_CULL_GLOBAL_DRAW_CMDS_UAV[queueID], GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV[queueID], cmd, instID);
-#endif
+    return mask;
 }
 
 

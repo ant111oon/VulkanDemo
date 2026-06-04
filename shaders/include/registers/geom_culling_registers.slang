@@ -2,9 +2,10 @@
 #define GEOM_CULLING_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
+#include "common/geom_structs.slang"
 
 
-static const uint GEOM_CULLING_CS_GPOUP_SIZE = 1024;
+static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
 
 
 struct GEOM_CULLING_PER_DRAW_DATA
@@ -17,21 +18,9 @@ struct GEOM_CULLING_PER_DRAW_DATA
 #define GEOM_CULLING_HZB_MIPS_COUNT GEOM_CULLING_DYN.HZB_MIPS_COUNT
 
 
-enum GEOM_CULLING_QUEUE_ID
-{
-    OPAQUE,
-    AKILL,
-    TRANSPARENT,
-    COUNT
-};
-
-
-[vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_DRAW_CMDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
-[vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_INST_INFO_IDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
+[vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];
+[vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
 
 [vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_FLAGS_UAV;
-
-[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_GLOBAL_DRAW_CMDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
-[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_GLOBAL_INST_INFO_IDS_UAV[GEOM_CULLING_QUEUE_ID::COUNT];
 
 #endif
