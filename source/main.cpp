@@ -5941,7 +5941,7 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
     // GEOM_DRAW_CMD_GEN_PER_DRAW_DATA pushConsts = {};
     // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
-    // TODO: generate indirect dispatch
+    // TODO: generate indirect dispatch 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
 }
 
