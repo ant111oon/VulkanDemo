@@ -403,7 +403,19 @@ namespace vkn
         const VkDeviceSize bindingOffset = entry.pLayout->GetDescriptorByBinding(binding).offset;
 
         const VkPhysicalDeviceDescriptorBufferPropertiesEXT& buffProps = device.GetPhysDevice().GetDescBufferProperties();
-        const size_t descrSize = buffer.IsUniformBuffer() ? buffProps.uniformBufferDescriptorSize : buffProps.storageBufferDescriptorSize;
+        
+        size_t descrSize = 0;
+        VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+
+        if (buffer.IsUniformBuffer()) {
+            descrSize = buffProps.uniformBufferDescriptorSize;
+            type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        } else if (buffer.IsStorageBuffer()) {
+            descrSize = buffProps.storageBufferDescriptorSize;
+            type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        } else {
+            VK_ASSERT_FAIL("Unsupported buffer descriptor type");
+        }
 
         void* pBindingPtr = GetDescriptorBindingPtr(m_buffer, setOffset, bindingOffset, elemIdx, descrSize);
 
@@ -415,7 +427,7 @@ namespace vkn
 
         VkDescriptorGetInfoEXT descriptorGetInfo = {};
         descriptorGetInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
-        descriptorGetInfo.type = buffer.IsUniformBuffer() ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorGetInfo.type = type;
         descriptorGetInfo.data.pUniformBuffer = &descriptorAddressInfo;
 
         vkGetDescriptor(device.Get(), &descriptorGetInfo, descrSize, pBindingPtr);
