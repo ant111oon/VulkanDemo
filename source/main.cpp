@@ -2540,13 +2540,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        vkn::BufferCreateInfo createInfo = {};
-        createInfo.pDevice = &s_vkDevice;
-        createInfo.size = MAX_DBG_LINE_COUNT * sizeof(DBG_LINE_DATA);
-        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-        createInfo.pAllocInfo = &allocInfo;
-    
-        s_dbgLineDataGPU.Create(createInfo);
+        s_dbgLineDataGPU.Create(&s_vkDevice, MAX_DBG_LINE_COUNT * sizeof(DBG_LINE_DATA), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
     }
 
@@ -2557,13 +2551,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        vkn::BufferCreateInfo createInfo = {};
-        createInfo.pDevice = &s_vkDevice;
-        createInfo.size = DBG_LINE_VERTEX_BUFFER_SIZE;
-        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-        createInfo.pAllocInfo = &allocInfo;
-    
-        s_dbgLineVertexDataGPU.Create(createInfo);
+        s_dbgLineVertexDataGPU.Create(&s_vkDevice, DBG_LINE_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgLineVertexDataGPU, "DBG_DRAW_LINE_VERT_BUFFER");
     }
 
@@ -2574,13 +2562,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        vkn::BufferCreateInfo createInfo = {};
-        createInfo.pDevice = &s_vkDevice;
-        createInfo.size = MAX_DBG_TRIANGLE_COUNT * sizeof(DBG_TRIANGLE_DATA);
-        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-        createInfo.pAllocInfo = &allocInfo;
-    
-        s_dbgTriangleDataGPU.Create(createInfo);
+        s_dbgTriangleDataGPU.Create(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT * sizeof(DBG_TRIANGLE_DATA), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
     }
 
@@ -2591,13 +2573,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        vkn::BufferCreateInfo createInfo = {};
-        createInfo.pDevice = &s_vkDevice;
-        createInfo.size = DBG_TRIANGLE_VERTEX_BUFFER_SIZE;
-        createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-        createInfo.pAllocInfo = &allocInfo;
-    
-        s_dbgTriangleVertexDataGPU.Create(createInfo);
+        s_dbgTriangleVertexDataGPU.Create(&s_vkDevice, DBG_TRIANGLE_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgTriangleVertexDataGPU, "DBG_DRAW_TRIANGLE_VERT_BUFFER");
     }
 #endif
@@ -4066,9 +4042,7 @@ static void CreateGeomCullingAndInstancingResources()
 
     for (size_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
         for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {    
-            createInfo.usage = 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | 
-                VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+            createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT;
 
             // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
             createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
@@ -4089,10 +4063,7 @@ static void CreateGeomCullingAndInstancingResources()
             s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffers[phase][queue], "%s_SORTED_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
 
 
-            createInfo.usage = 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | 
-                VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT |
-                VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
+            createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
 
             createInfo.size = s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
 
@@ -4101,8 +4072,7 @@ static void CreateGeomCullingAndInstancingResources()
             
             
             createInfo.usage = 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | 
-                VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT |  
                 VK_BUFFER_USAGE_2_TRANSFER_DST_BIT |
                 VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
 
@@ -4119,10 +4089,7 @@ static void CreateGeomCullingAndInstancingResources()
         }
     }
 
-    createInfo.usage = 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | 
-        VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | 
-        VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
+    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
 
     createInfo.size = (uint32_t)glm::ceil(s_cpuInstData.size() / 32.f) * sizeof(glm::uint);
 
@@ -5026,13 +4993,7 @@ static void UploadGPUGeomStream(COMMON_GEOM_STREAM ID)
     streamBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     streamBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo streamBufCreateInfo = {};
-    streamBufCreateInfo.pDevice = &s_vkDevice;
-    streamBufCreateInfo.size = gpuStreamSize;
-    streamBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    streamBufCreateInfo.pAllocInfo = &streamBufAllocInfo;
-
-    s_geomStreamBuffers[ID].Create(streamBufCreateInfo);
+    s_geomStreamBuffers[ID].Create(&s_vkDevice, gpuStreamSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, streamBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_geomStreamBuffers[ID], "COMMON_GEOM_STREAM_%s", COMMON_GEOM_STREAM_DBG_NAMES[ID]);
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5062,13 +5023,7 @@ static void UploadGPUMeshData()
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     idxBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo idxBufCreateInfo = {};
-    idxBufCreateInfo.pDevice = &s_vkDevice;
-    idxBufCreateInfo.size = gpuIndexBufferSize;
-    idxBufCreateInfo.usage = VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
-    idxBufCreateInfo.pAllocInfo = &idxBufAllocInfo;
-
-    s_geomIndexBuffer.Create(idxBufCreateInfo);
+    s_geomIndexBuffer.Create(&s_vkDevice, gpuIndexBufferSize, VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, idxBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_geomIndexBuffer, "COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5085,14 +5040,8 @@ static void UploadGPUMeshData()
     vkn::AllocationInfo meshInfosBufAllocInfo = {};
     meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     meshInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo meshInfosBufCreateInfo = {};
-    meshInfosBufCreateInfo.pDevice = &s_vkDevice;
-    meshInfosBufCreateInfo.size = meshDataBufferSize;
-    meshInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    meshInfosBufCreateInfo.pAllocInfo = &meshInfosBufAllocInfo;
     
-    s_commonMeshBuffer.Create(meshInfosBufCreateInfo);
+    s_commonMeshBuffer.Create(&s_vkDevice, meshDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, meshInfosBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5109,14 +5058,8 @@ static void UploadGPUMeshData()
     vkn::AllocationInfo meshLODInfosBufAllocInfo = {};
     meshLODInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     meshLODInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    vkn::BufferCreateInfo meshLODInfosBufCreateInfo = {};
-    meshLODInfosBufCreateInfo.pDevice = &s_vkDevice;
-    meshLODInfosBufCreateInfo.size = meshLODDataBufferSize;
-    meshLODInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    meshLODInfosBufCreateInfo.pAllocInfo = &meshLODInfosBufAllocInfo;
     
-    s_commonMeshLODBuffer.Create(meshLODInfosBufCreateInfo);
+    s_commonMeshLODBuffer.Create(&s_vkDevice, meshLODDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, meshLODInfosBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5235,13 +5178,7 @@ static void UploadGPUMaterialData()
     mtlBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     mtlBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo mtlBufCreateInfo = {};
-    mtlBufCreateInfo.pDevice = &s_vkDevice;
-    mtlBufCreateInfo.size = mtlDataBufferSize;
-    mtlBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    mtlBufCreateInfo.pAllocInfo = &mtlBufAllocInfo;
-
-    s_commonMaterialBuffer.Create(mtlBufCreateInfo);
+    s_commonMaterialBuffer.Create(&s_vkDevice, mtlDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, mtlBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
@@ -5271,13 +5208,7 @@ static void UploadGPUInstData()
     instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     instInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo instInfosBufCreateInfo = {};
-    instInfosBufCreateInfo.pDevice = &s_vkDevice;
-    instInfosBufCreateInfo.size = instBufferSize;
-    instInfosBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    instInfosBufCreateInfo.pAllocInfo = &instInfosBufAllocInfo;
-
-    s_commonInstBuffer.Create(instInfosBufCreateInfo);
+    s_commonInstBuffer.Create(&s_vkDevice, instBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, instInfosBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5298,13 +5229,7 @@ static void UploadGPUInstData()
     aabbBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     aabbBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo aabbBufCreateInfo = {};
-    aabbBufCreateInfo.pDevice = &s_vkDevice;
-    aabbBufCreateInfo.size = aabbBufferSize;
-    aabbBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    aabbBufCreateInfo.pAllocInfo = &aabbBufAllocInfo;
-
-    s_commonAABBBuffer.Create(aabbBufCreateInfo);
+    s_commonAABBBuffer.Create(&s_vkDevice, aabbBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, aabbBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonAABBBuffer, "COMMON_AABB_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5328,13 +5253,7 @@ static void UploadGPUInstData()
     commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo commonTrsBufCreateInfo = {};
-    commonTrsBufCreateInfo.pDevice = &s_vkDevice;
-    commonTrsBufCreateInfo.size = trsDataBufferSize;
-    commonTrsBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
-    commonTrsBufCreateInfo.pAllocInfo = &commonTrsBufAllocInfo;
-
-    s_commonTransformBuffer.Create(commonTrsBufCreateInfo);
+    s_commonTransformBuffer.Create(&s_vkDevice, trsDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, commonTrsBufAllocInfo);
     s_vkDevice.SetObjDebugName(s_commonTransformBuffer, "COMMON_TRANSFORM_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -5403,7 +5322,7 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA), VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT);
+    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA));
     s_vkDevice.SetObjDebugName(s_commonConstBuffer, "COMMON_CB");
 }
 

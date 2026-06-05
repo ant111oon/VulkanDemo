@@ -363,7 +363,7 @@ namespace vkn
             bufferSize += entry.pLayout->GetSize();
         }
 
-        const VkBufferUsageFlags2 usage = VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
+        const VkBufferUsageFlags2 usage = VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
 
         AllocationInfo allocInfo = {};
         allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -393,8 +393,7 @@ namespace vkn
     DescriptorBuffer& DescriptorBuffer::WriteDescriptor(uint32_t index, uint32_t binding, uint32_t elemIdx, const Buffer& buffer)
     {
         VK_ASSERT(IsCreated());
-        VK_ASSERT_MSG(buffer.HasDeviceAddress(), "Buffer %s must have device address to be compatible with descriptor buffer", buffer.GetDebugName().data());
-
+        
         Device& device = GetDevice();
 
         const Entry& entry = m_entries[index];

@@ -62,7 +62,6 @@ namespace vkn
         bool IsStorageBuffer() const;
         bool IsIndexBuffer() const;
         bool IsDescriptorBuffer() const;
-        bool HasDeviceAddress() const;
 
     private:
         BufferAccessTracker& GetAccessTracker();
@@ -77,7 +76,6 @@ namespace vkn
             BIT_IS_DESCRIPTOR_BUFFER,
             BIT_IS_MAPPED,
             BIT_IS_PERSISTENTLY_MAPPED,
-            BIT_IS_DEVICE_ADDRESS,
             BIT_COUNT,
         };
 

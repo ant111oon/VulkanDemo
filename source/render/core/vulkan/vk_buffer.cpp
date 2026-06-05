@@ -87,7 +87,7 @@ namespace vkn
         VkBufferCreateInfo ci = {};
         ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         ci.size = info.size;
-        ci.usage = info.usage;
+        ci.usage = info.usage | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
         ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // TODO: fix
 
         VmaAllocationCreateInfo allocCI = {};
@@ -104,14 +104,10 @@ namespace vkn
         VK_ASSERT_MSG(Get() != VK_NULL_HANDLE, "Failed to create Vulkan buffer");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan buffer memory");
 
-        if ((info.usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0) {
-            m_state.set(BIT_IS_DEVICE_ADDRESS, true);
-
-            VkBufferDeviceAddressInfo addressInfo = {};
-            addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            addressInfo.buffer = Get();
-            m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
-        }
+        VkBufferDeviceAddressInfo addressInfo = {};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = Get();
+        m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
 
         m_pDevice = info.pDevice;
         m_size = info.size;
@@ -140,6 +136,9 @@ namespace vkn
 
     Buffer& Buffer::CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags)
     {
+        static constexpr size_t alignment = 4 * sizeof(float);
+        VK_ASSERT_MSG(size % alignment == 0, "Size of constant buffer must me multiple of %zu", alignment);
+
         vkn::AllocationInfo allocInfo = {};
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -299,13 +298,6 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         return m_state.test(BIT_IS_DESCRIPTOR_BUFFER);
-    }
-
-
-    bool Buffer::HasDeviceAddress() const
-    {
-        VK_ASSERT(IsCreated());
-        return m_state.test(BIT_IS_DEVICE_ADDRESS);
     }
 
 
