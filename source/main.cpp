@@ -2685,7 +2685,7 @@ static void CreateGeomCullingPhase1DescriptorSetLayout()
     createInfo.descriptorInfos = descriptors;
 
     s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1], "GEOM_CULLING_PHASE_1_DESCRIPTOR_SET_LAYOUT");
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1], "PREV_FRAME_OCCLUDERS_CULLING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -2706,7 +2706,7 @@ static void CreateGeomCullingPhase2DescriptorSetLayout()
     createInfo.descriptorInfos = descriptors;
 
     s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2], "GEOM_CULLING_PHASE_2_DESCRIPTOR_SET_LAYOUT");
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2], "THIS_FRAME_GEOMETRY_CULLING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -3061,7 +3061,7 @@ static void CreateGeomCullingPhase1PipelineLayout()
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_1];
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_PHASE_1_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "PREV_FRAME_OCCLUDERS_CULLING_PIPELINE_LAYOUT");
 }
 
 
@@ -3076,7 +3076,7 @@ static void CreateGeomCullingPhase2PipelineLayout()
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_2];
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_PHASE_2_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "THIS_FRAME_GEOMETRY_CULLING_PIPELINE_LAYOUT");
 }
 
 
@@ -3288,7 +3288,7 @@ static void CreateGeomCullingPhase1Pipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_PHASE_1_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "PREV_FRAME_OCCLUDERS_CULLING_COMPUTE_SHADER");
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_CULLING_PHASE_1];
 
@@ -3298,7 +3298,7 @@ static void CreateGeomCullingPhase1Pipeline(const fs::path& csPath)
         .SetLayout(s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_1])
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_PHASE_1_PSO");
+    s_vkDevice.SetObjDebugName(pso, "PREV_FRAME_OCCLUDERS_CULLING_PSO");
 }
 
 
@@ -3310,7 +3310,7 @@ static void CreateGeomCullingPhase2Pipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_PHASE_2_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "THIS_FRAME_GEOMETRY_CULLING_COMPUTE_SHADER");
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_CULLING_PHASE_2];
 
@@ -3320,7 +3320,7 @@ static void CreateGeomCullingPhase2Pipeline(const fs::path& csPath)
         .SetLayout(s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_2])
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_PHASE_2_PSO");
+    s_vkDevice.SetObjDebugName(pso, "THIS_FRAME_GEOMETRY_CULLING_PSO");
 }
 
 

@@ -2,7 +2,6 @@
 #define GBUFFER_INCL_H
 
 #include "registers/common_registers.slang"
-#include "registers/gbuffer_registers.slang"
 
 #include "common/math/color_space.slang"
 
@@ -18,7 +17,7 @@ struct GBUFFER_SURFACE
 };
 
 
-float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
+float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in COMMON_SAMPLER_IDX smpIdx, in float2 uv)
 {
     float4 albedo = ONEF4;
 
@@ -35,7 +34,7 @@ float4 SampleGBufferSurfaceAlbedo(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
 }
 
 
-float3 SampleGBufferSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv)
+float3 SampleGBufferSurfaceEmissive(in COMMON_MATERIAL mtl, in COMMON_SAMPLER_IDX smpIdx, in float2 uv)
 {
     if (mtl.EMISSIVE_TEX_IDX < 0) {
         return ZEROF3;
@@ -50,7 +49,7 @@ float3 SampleGBufferSurfaceEmissive(in COMMON_MATERIAL mtl, in uint smpIdx, in f
 }
 
 
-float3 SampleGBufferSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, in float3x3 TBN)
+float3 SampleGBufferSurfaceNormal(in COMMON_MATERIAL mtl, in COMMON_SAMPLER_IDX smpIdx, in float2 uv, in float3x3 TBN)
 {
     if (mtl.NORMAL_TEX_IDX < 0) {
         return TBN[2];
@@ -63,7 +62,7 @@ float3 SampleGBufferSurfaceNormal(in COMMON_MATERIAL mtl, in uint smpIdx, in flo
 }
 
 
-void SampleGBufferSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in uint smpIdx, in float2 uv, out float metalness, out float roughness, out float ao)
+void SampleGBufferSurfaceMetRoughAO(in COMMON_MATERIAL mtl, in COMMON_SAMPLER_IDX smpIdx, in float2 uv, out float metalness, out float roughness, out float ao)
 {
     float3 aoMetRough = float3(1.f, 1.f, 1.f);
 
@@ -91,7 +90,7 @@ GBUFFER_SURFACE SampleGBufferSurface(in COMMON_MATERIAL material, in float3x3 TB
 {
     GBUFFER_SURFACE surf = (GBUFFER_SURFACE)0;
 
-    const uint smpIdx = (uint)COMMON_SAMPLER_IDX::ANISO_4X_LINEAR_REPEAT;
+    const COMMON_SAMPLER_IDX smpIdx = COMMON_SAMPLER_IDX::ANISO_2X_LINEAR_REPEAT;
 
     surf.albedo = SampleGBufferSurfaceAlbedo(material, smpIdx, uv);
     surf.emissive = SampleGBufferSurfaceEmissive(material, smpIdx, uv);
