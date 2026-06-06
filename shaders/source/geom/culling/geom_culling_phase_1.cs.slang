@@ -1,4 +1,3 @@
-#define GEOM_CULLING_PHASE_1
 #include "common/geom_culling_incl.slang"
 
 
@@ -6,5 +5,5 @@
 [shader("compute")]
 void main(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
 {
-    ExecuteGeomCulling(DTid, GI);
+    ExecuteGeomCulling<GEOM_CULLING_PHASE::PHASE_1>(DTid, GI);
 }

@@ -7,6 +7,68 @@
 
 struct SBOX
 {
+    __init()
+    {
+        this.minUV = ZEROF2;
+        this.maxUV = ONEF2;
+
+    #ifdef ENV_REVERSED_Z
+        this.closestZ = 1.f;
+    #else
+        this.closestZ = 0.f;
+    #endif
+    }
+
+    __init(in float2 minUV, in float2 maxUV, in float closestZ)
+    {
+        this.minUV = minUV;
+        this.maxUV = maxUV;
+        this.closestZ = closestZ;
+    }
+
+    [mutating]
+    void BeginUpdate()
+    {
+        this.minUV = ONEF2;
+        this.maxUV = ZEROF2;
+
+    #ifdef ENV_REVERSED_Z
+        this.closestZ = 0.f;
+    #else
+        this.closestZ = 1.f;
+    #endif
+    }
+
+    [mutating]
+    void UpdateMinUV(in float2 newMinUV)
+    {
+        minUV = min(minUV, newMinUV);
+    }
+
+    [mutating]
+    void UpdateMaxUV(in float2 newMaxUV)
+    {
+        maxUV = max(maxUV, newMaxUV);
+    }
+
+    [mutating]
+    void UpdateClosestZ(in float newClosestZ)
+    {
+    #ifdef ENV_REVERSED_Z
+        closestZ = max(closestZ, newClosestZ);
+    #else
+        closestZ = min(closestZ, newClosestZ);
+    #endif
+    }
+
+    [mutating]
+    void Saturate()
+    {
+        this.minUV = saturate(this.minUV);
+        this.maxUV = saturate(this.maxUV);
+        this.closestZ = saturate(this.closestZ);
+    }
+
     float2 GetDeltaUV() { return maxUV - minUV; }
 
     float2 GetCornerBL() { return minUV; }
@@ -22,6 +84,18 @@ struct SBOX
 
 struct SPHERE
 {
+    __init()
+    {
+        this.position = ZEROF3;
+        this.radius = M3D_EPS;
+    }
+
+    __init(in float3 position, in float radius)
+    {
+        this.position = position;
+        this.radius = radius;
+    }
+
     float DistanceTo(in float3 pt)
     {
         return distance(position, pt) - radius;
@@ -34,6 +108,18 @@ struct SPHERE
 
 struct AABB
 {
+    __init()
+    {
+        this.minn = -EPSF3;
+        this.maxx = EPSF3;
+    }
+
+    __init(in float3 minn, in float3 maxx)
+    {
+        this.minn = minn;
+        this.maxx = maxx;
+    }
+
     float3 GetCenter()
     {
         return (minn + maxx) * 0.5f;
@@ -75,29 +161,16 @@ struct AABB
         float3 verts[8];
         GetVertices(verts);
 
-        SBOX sbox = (SBOX)0;
-
-        sbox.minUV = ONEF2;
-        sbox.maxUV = ZEROF2;
-
-    #ifdef ENV_REVERSED_Z
-        sbox.closestZ = 0.f;
-    #else
-        sbox.closestZ = 1.f;
-    #endif
+        SBOX sbox = SBOX();
+        sbox.BeginUpdate();
 
         for (uint i = 0; i < 8; ++i) {
             const float3 NDC = WPosToNDC(verts[i], viewProjMatr);
             const float2 UV = NDCToUV(NDC.xy);
 
-            sbox.minUV = min(UV, sbox.minUV);
-            sbox.maxUV = max(UV, sbox.maxUV);
-
-        #ifdef ENV_REVERSED_Z
-            sbox.closestZ = max(sbox.closestZ, NDC.z);
-        #else
-            sbox.closestZ = min(sbox.closestZ, NDC.z);
-        #endif
+            sbox.UpdateMinUV(UV);
+            sbox.UpdateMaxUV(UV);
+            sbox.UpdateClosestZ(NDC.z);
         }
 
         return sbox;
@@ -115,6 +188,18 @@ struct AABB
 
 struct PLANE
 {
+    __init()
+    {
+        this.normal = M3D_AXIS_X;
+        this.distance = 0.f;
+    }
+
+    __init(in float3 normal, in float distance)
+    {
+        this.normal = normal;
+        this.distance = distance;
+    }
+
     float3 normal;
     float distance;
 };

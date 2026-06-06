@@ -1,21 +1,6 @@
 #ifndef GEOM_CULLING_INCL_H
 #define GEOM_CULLING_INCL_H
 
-// NOTE:
-//  - GEOM_CULLING_PHASE_1/GEOM_CULLING_PHASE_2 (mandatory)
-
-
-#if !defined(GEOM_CULLING_PHASE_1) && !defined(GEOM_CULLING_PHASE_2)
-    #error One of GEOM_CULLING_PHASE_1 or GEOM_CULLING_PHASE_2 macro must be defined
-#endif
-
-#if defined(GEOM_CULLING_PHASE_1)
-    #define GEOM_CULLING_FRUSTUM_ENABLED
-#elif defined(GEOM_CULLING_PHASE_2)
-    #define GEOM_CULLING_FRUSTUM_ENABLED
-    #define GEOM_CULLING_HZB_ENABLED
-#endif
-
 
 #include "registers/common_registers.slang"
 #include "registers/geom_culling_registers.slang"
@@ -40,6 +25,13 @@
 #endif
 
 
+enum GEOM_CULLING_PHASE
+{
+    PHASE_1,
+    PHASE_2
+}
+
+
 groupshared uint GROUP_VIS_ID_QUEUE_SIZES[GEOM_QUEUE_COUNT];
 groupshared uint GROUP_VIS_ID_QUEUE_OFFSETS[GEOM_QUEUE_COUNT];
 
@@ -56,7 +48,7 @@ namespace utils
 }
 
 
-bool GeomCullingVisibility(in AABB aabb)
+bool GeomCullingVisibility<let PHASE : GEOM_CULLING_PHASE>(in AABB aabb)
 {
     // Runtime debug flags
     const bool isFrustumCullEnabled = DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED;
@@ -66,33 +58,24 @@ bool GeomCullingVisibility(in AABB aabb)
         return true;
     }
 
-#if defined(GEOM_CULLING_FRUSTUM_ENABLED)
     if (isFrustumCullEnabled) {
         if (!Frustum_Visibility(COMMON_CULLING_CAMERA_FRUSTUM, aabb)) {
             return false;
         }
     }
-#endif
 
-#if defined(GEOM_CULLING_HZB_ENABLED)
-    if (!isHZBCullEnabled) {
-        return true;
-    }
+    if (PHASE == GEOM_CULLING_PHASE::PHASE_2) {
+        if (!isHZBCullEnabled) {
+            return true;
+        }
 
-    SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+        SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+        sbox.Saturate();
 
-    sbox.minUV = saturate(sbox.minUV);
-    sbox.maxUV = saturate(sbox.maxUV);
-    sbox.closestZ = saturate(sbox.closestZ);
-#endif
-
-#if defined(GEOM_CULLING_HZB_ENABLED)
-    if (isHZBCullEnabled) {
         if (!HZB_Visibility(sbox)) {
             return false;
         }
     }
-#endif
     
     return true; 
 }
@@ -140,7 +123,7 @@ uint GeomCullingGetQueueMask(in COMMON_INST inst)
 }
 
 
-void ExecuteGeomCulling(in uint3 DTid, in uint GI)
+void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint3 DTid, in uint GI)
 {
     if (GI < GEOM_QUEUE_COUNT) {
         GROUP_VIS_ID_QUEUE_SIZES[GI] = 0;
@@ -163,26 +146,23 @@ void ExecuteGeomCulling(in uint3 DTid, in uint GI)
 
     bool shouldEnqueue = false;
 
-#if defined(GEOM_CULLING_PHASE_1)
-    if (wasVisibleInPrevFrame)
-#elif defined(GEOM_CULLING_PHASE_2)
-    if (isValidInstID)
-#endif
-    {
+    if ((PHASE == GEOM_CULLING_PHASE::PHASE_1 && wasVisibleInPrevFrame) ||
+        (PHASE == GEOM_CULLING_PHASE::PHASE_2 && isValidInstID)
+    ) {
         const COMMON_INST inst = COMMON_INST_BUFFER[instID];
         const AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
 
-        const bool isVisible = GeomCullingVisibility(aabb);
+        const bool isVisible = GeomCullingVisibility<PHASE>(aabb);
 
-    #if defined(GEOM_CULLING_PHASE_1)
-        shouldEnqueue = isVisible;
-    #elif defined(GEOM_CULLING_PHASE_2)
-        // Only object that is visible in the current frame
-        // and was not drawn after the first pass should be added to queue in the second pass
-        shouldEnqueue = isVisible && !wasVisibleInPrevFrame;
+        if (PHASE == GEOM_CULLING_PHASE::PHASE_1) {
+            shouldEnqueue = isVisible;
+        } else if (PHASE == GEOM_CULLING_PHASE::PHASE_2) {
+            // Only object that is visible in the current frame
+            // and was not drawn after the first pass should be added to queue in the second pass
+            shouldEnqueue = isVisible && !wasVisibleInPrevFrame;
 
-        GeomCullingWriteVisFlag(instID, isVisible);
-    #endif
+            GeomCullingWriteVisFlag(instID, isVisible);
+        }
 
         if (shouldEnqueue) {
             uint queueMask = GeomCullingGetQueueMask(inst);
