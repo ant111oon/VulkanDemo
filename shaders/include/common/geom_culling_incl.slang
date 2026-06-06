@@ -150,9 +150,7 @@ void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint3 DTid, in uint G
         (PHASE == GEOM_CULLING_PHASE::PHASE_2 && isValidInstID)
     ) {
         const COMMON_INST inst = COMMON_INST_BUFFER[instID];
-        const AABB aabb = COMMON_INST_AABB_BUFFER[inst.VOLUME_IDX].GetAABB();
-
-        const bool isVisible = GeomCullingVisibility<PHASE>(aabb);
+        const bool isVisible = GeomCullingVisibility<PHASE>(inst.AABB_WCS);
 
         if (PHASE == GEOM_CULLING_PHASE::PHASE_1) {
             shouldEnqueue = isVisible;

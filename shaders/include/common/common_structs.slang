@@ -66,7 +66,7 @@ struct COMMON_MATERIAL
     int MR_TEX_IDX;
     int AO_TEX_IDX;
 
-    uint2 PAD0;
+    private uint2 PADDING;
     int EMISSIVE_TEX_IDX;
     uint FLAGS;
 };
@@ -81,12 +81,15 @@ struct COMMON_MESH_LOD
 
 struct COMMON_MESH
 {
-    AABB GetBounds()
+    property AABB AABB_LCS
     {
-        return AABB(
-            float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).x),
-            float3(unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(BOUNDS_MIN_MAX_LCS_PACKED.z))
-        );
+        get
+        {
+            const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).x);
+            const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.z));
+
+            return AABB(minn, maxx);
+        }
     }
 
     uint FIRST_VERTEX;
@@ -95,32 +98,32 @@ struct COMMON_MESH
     uint FIRST_LOD; // Index of mesh LOD 0 inside LOD buffer
     uint LOD_COUNT;
 
-    uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint  PADD;
-};
-
-
-struct COMMON_INST_AABB
-{
-    AABB GetAABB()
-    {
-        const float3 minn = float3(unpackHalf2x16ToFloat(MIN_MAX_PACKED.x), unpackHalf2x16ToFloat(MIN_MAX_PACKED.y).x);
-        const float3 maxx = float3(unpackHalf2x16ToFloat(MIN_MAX_PACKED.y).y, unpackHalf2x16ToFloat(MIN_MAX_PACKED.z));
-
-        return AABB(minn, maxx);
-    }
-
-    uint3 MIN_MAX_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint PADDING;
+    private uint3 AABB_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    private uint  PADDING;
 };
 
 
 struct COMMON_INST
 {
-    uint TRANSFORM_IDX;
-    uint MATERIAL_IDX;
+    property AABB AABB_WCS
+    {
+        get
+        {
+            const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).x);
+            const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.z));
+
+            return AABB(minn, maxx);
+        }
+    }
+
+    row_major float3x4 MATR_WCS;
+
+    private uint3 AABB_MIN_MAX_WCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    private uint  PADDING_0;
+
     uint MESH_IDX;
-    uint VOLUME_IDX;
+    uint MATERIAL_IDX;
+    private uint2 PADDING_1;
 };
 
 
@@ -149,7 +152,8 @@ struct COMMON_CB_DATA
     int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
-    uint PAD0;
+
+    private uint PADDING_0;
 };
 
 

@@ -14,8 +14,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInst
     const uint instID = GBUFFER_INST_ID_QUEUE[instIndex];
     const COMMON_INST inst = COMMON_INST_BUFFER[instID];
 
-    const float3x4 wMatr = COMMON_INST_TRANSFORMS[inst.TRANSFORM_IDX];
-    const float3 wpos = mul(wMatr, float4(inputData.position, 1.f)).xyz;
+    const float3 wpos = mul(inst.MATR_WCS, float4(inputData.position, 1.f)).xyz;
 
     result.data.lpos = inputData.position;
     result.data.wpos = wpos;

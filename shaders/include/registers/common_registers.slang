@@ -18,15 +18,13 @@
 
 [vk::binding(4, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH_LOD>    COMMON_MESH_LOD_BUFFER;
 [vk::binding(5, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MESH>        COMMON_MESH_BUFFER;
-[vk::binding(6, DESC_SET_PER_FRAME)] StructuredBuffer<row_major float3x4> COMMON_INST_TRANSFORMS;
-[vk::binding(7, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST_AABB>   COMMON_INST_AABB_BUFFER;
-[vk::binding(8, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
-[vk::binding(9, DESC_SET_PER_FRAME)] Texture2D                            COMMON_MTL_TEXTURES[];
+[vk::binding(6, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_MATERIAL>    COMMON_MATERIALS;
+[vk::binding(7, DESC_SET_PER_FRAME)] Texture2D                            COMMON_MTL_TEXTURES[];
 
-[vk::binding(10, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST>       COMMON_INST_BUFFER;
+[vk::binding(8, DESC_SET_PER_FRAME)] StructuredBuffer<COMMON_INST>       COMMON_INST_BUFFER;
 
-[vk::binding(11, DESC_SET_PER_FRAME)] Texture2D COMMON_DEPTH;
-[vk::binding(12, DESC_SET_PER_FRAME)] Texture2D COMMON_HZB;
+[vk::binding(9, DESC_SET_PER_FRAME)] Texture2D COMMON_DEPTH;
+[vk::binding(10, DESC_SET_PER_FRAME)] Texture2D COMMON_HZB;
 
 
 #define GET_COMMON_SAMPLER(SMP_IDX) COMMON_SAMPLERS[(uint)(SMP_IDX)]

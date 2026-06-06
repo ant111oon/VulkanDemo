@@ -108,7 +108,7 @@ struct COMMON_CB_DATA
     int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
     uint DBG_VIS_FLAGS;
-    uint PAD0;
+    uint PADDING_0;
 };
 
 
@@ -136,7 +136,7 @@ struct COMMON_MATERIAL
     int MR_TEX_IDX = -1;
     int AO_TEX_IDX = -1;
 
-    uint2 PAD0;
+    uint2 PADDING;
     int EMISSIVE_TEX_IDX = -1;
     uint FLAGS;
 };
@@ -151,67 +151,57 @@ struct COMMON_MESH_LOD
 
 struct COMMON_MESH
 {
-    void PackBounds(const float3& min, const float3& max)
+    void PackAABB_LCS(const float3& min, const float3& max)
     {
-        BOUNDS_MIN_MAX_LCS_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
-        BOUNDS_MIN_MAX_LCS_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
-        BOUNDS_MIN_MAX_LCS_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
+        AABB_MIN_MAX_LCS_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
+        AABB_MIN_MAX_LCS_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
+        AABB_MIN_MAX_LCS_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
     }
 
-    math::AABB GetBounds() const
+    math::AABB GetAABB_LCS() const
     {
         return math::AABB(
-            float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).x),
-            float3(glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(BOUNDS_MIN_MAX_LCS_PACKED.z))
+            float3(glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.y).x),
+            float3(glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.z))
         );
     }
 
     uint FIRST_VERTEX;
     uint VERTEX_COUNT;
 
-    uint FIRST_LOD;
+    uint FIRST_LOD; // Index of mesh LOD 0 inside LOD buffer
     uint LOD_COUNT;
 
-    uint3 BOUNDS_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint  PADD;
-};
-
-
-struct COMMON_INST_AABB
-{
-    COMMON_INST_AABB() = default;
-    
-    COMMON_INST_AABB(const float3& min, const float3& max)
-    {
-        Pack(min, max);
-    }
-
-    void Pack(const float3& min, const float3& max)
-    {
-        MIN_MAX_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
-        MIN_MAX_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
-        MIN_MAX_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
-    }
-
-    math::AABB GetAABB() const
-    {
-        const float3 minn = float3(glm::unpackHalf2x16(MIN_MAX_PACKED.x), glm::unpackHalf2x16(MIN_MAX_PACKED.y).x);
-        const float3 maxx = float3(glm::unpackHalf2x16(MIN_MAX_PACKED.y).y, glm::unpackHalf2x16(MIN_MAX_PACKED.z));
-
-        return math::AABB(minn, maxx);
-    }
-
-    uint3 MIN_MAX_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint PADDING;
+    uint3 AABB_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint  PADDING;
 };
 
 
 struct COMMON_INST
 {
-    uint TRANSFORM_IDX;
-    uint MATERIAL_IDX;
+    void PackAABB_WCS(const math::AABB& aabb)
+    {
+        AABB_MIN_MAX_WCS_PACKED.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
+        AABB_MIN_MAX_WCS_PACKED.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
+        AABB_MIN_MAX_WCS_PACKED.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
+    }
+
+    math::AABB GetAABB_WCS() const
+    {
+        const float3 minn = float3(glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.x), glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.y).x);
+        const float3 maxx = float3(glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.y).y, glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.z));
+
+        return math::AABB(minn, maxx);
+    }
+
+    float3x4 MATR_WCS;
+
+    uint3 AABB_MIN_MAX_WCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint  PADDING_0;
+
     uint MESH_IDX;
-    uint VOLUME_IDX;
+    uint MATERIAL_IDX;
+    uint2 PADDING_1;
 };
 
 
@@ -573,13 +563,11 @@ static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 2;
 static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT = 6;
-static constexpr size_t COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT = 7;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 8;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 9;
-static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 10;
-static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
-static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 7;
+static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 9;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 10;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
@@ -1004,8 +992,6 @@ static vkn::Buffer s_commonConstBuffer;
 static vkn::Buffer s_commonMeshLODBuffer;
 static vkn::Buffer s_commonMeshBuffer;
 static vkn::Buffer s_commonMaterialBuffer;
-static vkn::Buffer s_commonTransformBuffer;
-static vkn::Buffer s_commonAABBBuffer;
 static vkn::Buffer s_commonInstBuffer;
 
 static vkn::Buffer s_geomInstVisFlagsBuffer;
@@ -1033,12 +1019,10 @@ static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
 
-static std::vector<COMMON_MESH_LOD>    s_cpuMeshLODData;
-static std::vector<COMMON_MESH>        s_cpuMeshData;
-static std::vector<COMMON_MATERIAL>    s_cpuMaterialData;
-static std::vector<glm::float4x3>      s_cpuTransformData;
-static std::vector<COMMON_INST>        s_cpuInstData;
-static std::vector<COMMON_INST_AABB>   s_cpuAABBData;
+static std::vector<COMMON_MESH_LOD> s_cpuMeshLODData;
+static std::vector<COMMON_MESH>     s_cpuMeshData;
+static std::vector<COMMON_MATERIAL> s_cpuMaterialData;
+static std::vector<COMMON_INST>     s_cpuInstData;
 
 
 static std::vector<DBG_LINE_DATA>     s_dbgLineDataCPU;
@@ -1172,15 +1156,13 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 }
 
 
-static bool IsInstFrustumVisible(const COMMON_INST& instInfo)
+static bool IsInstFrustumVisible(const COMMON_INST& inst)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
-    const math::AABB aabb = s_cpuAABBData[instInfo.VOLUME_IDX].GetAABB();
-
     const math::Frustum& frustum = s_camera.GetFrustum();
 
-    return frustum.IsIntersect(aabb); 
+    return frustum.IsIntersect(inst.GetAABB_WCS()); 
 }
 
 
@@ -1503,14 +1485,6 @@ namespace DbgUI
                 
                 ImGui::NewLine();
 
-                {
-                    const float kb = s_commonTransformBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Inst Transform Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                {
-                    const float kb = s_commonAABBBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Inst AABB Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
                 {
                     const float kb = s_commonInstBuffer.GetMemorySize() / 1024.f;
                     ImGui::TextDisabled("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
@@ -2609,8 +2583,6 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MATERIAL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(COMMON_INST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
@@ -4515,8 +4487,6 @@ static void WriteCommonDescriptorSet()
     
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshLODBuffer);
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, 0, s_commonMeshBuffer);
-    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_INST_TRANSFORMS_DESCRIPTOR_SLOT, 0, s_commonTransformBuffer);
-    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_INST_AABB_BUFFER_DESCRIPTOR_SLOT, 0, s_commonAABBBuffer);
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
@@ -4705,7 +4675,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
         }
     }
 
-    cpuMesh.PackBounds(minVert, maxVert + M3D_EPS);
+    cpuMesh.PackAABB_LCS(minVert, maxVert + M3D_EPS);
 
     s_cpuMeshData.emplace_back(cpuMesh);
 
@@ -4912,21 +4882,11 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     s_cpuInstData.reserve(meshInstCount);
     s_cpuInstData.clear();
 
-    s_cpuTransformData.reserve(asset.nodes.size());
-    s_cpuTransformData.clear();
-
-    s_cpuAABBData.reserve(meshInstCount);
-    s_cpuAABBData.clear();
-
-    auto PushAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> uint32_t
+    auto GetInstAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> math::AABB
     {
         const COMMON_MESH& mesh = s_cpuMeshData[meshIdx];
         
-        const math::AABB aabb = GetWorldAABB(mesh.GetBounds(), wMatr);
-
-        s_cpuAABBData.emplace_back(aabb.min, aabb.max);
-
-        return s_cpuAABBData.size() - 1;
+        return GetWorldAABB(mesh.GetAABB_LCS(), wMatr);
     };
 
     for (size_t sceneId = 0; sceneId < asset.scenes.size(); ++sceneId) {
@@ -4936,12 +4896,8 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     
             glm::float4x4 transform(1.f);
             memcpy(&transform, &trs, sizeof(transform));
-
-            s_cpuTransformData.emplace_back(transform);
     
-            if (node.meshIndex.has_value()) {
-                const uint32_t trsIdx = s_cpuTransformData.size() - 1;
-                
+            if (node.meshIndex.has_value()) {                
                 const uint32_t meshIdx = node.meshIndex.value();
                 const gltf::Mesh& mesh = asset.meshes[meshIdx];
 
@@ -4950,17 +4906,19 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
                     const gltf::Primitive& primitive = mesh.primitives[i];
 
-                    COMMON_INST instData = {};
+                    COMMON_INST inst = {};
+
+                    inst.MATR_WCS = glm::transpose(transform);
+
+                    const math::AABB aabb = GetInstAABB(inst.MESH_IDX, transform);
+                    inst.PackAABB_WCS(aabb);
                     
-                    instData.TRANSFORM_IDX = trsIdx;
-                    instData.MESH_IDX = baseIdx + i;
+                    inst.MESH_IDX = baseIdx + i;
     
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
-                    instData.MATERIAL_IDX = primitive.materialIndex.value();
+                    inst.MATERIAL_IDX = primitive.materialIndex.value();
 
-                    instData.VOLUME_IDX = PushAABB(instData.MESH_IDX, transform);
-
-                    s_cpuInstData.emplace_back(instData);
+                    s_cpuInstData.emplace_back(inst);
                 }
             }
         });
@@ -5215,51 +5173,6 @@ static void UploadGPUInstData()
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonInstBuffer, instBufferSize);
     });
 
-
-    const size_t aabbBufferSize = s_cpuAABBData.size() * sizeof(COMMON_INST_AABB);
-    CORE_ASSERT(aabbBufferSize <= s_commonStagingBuffer.GetMemorySize());
-
-    {
-        void* pData = s_commonStagingBuffer.Map();
-        memcpy(pData, s_cpuAABBData.data(), aabbBufferSize);
-        s_commonStagingBuffer.Unmap();
-    }
-
-    vkn::AllocationInfo aabbBufAllocInfo = {};
-    aabbBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    aabbBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    s_commonAABBBuffer.Create(&s_vkDevice, aabbBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, aabbBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonAABBBuffer, "COMMON_AABB_DATA");
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonAABBBuffer, aabbBufferSize);
-    });
-
-
-    const size_t trsDataBufferSize = s_cpuTransformData.size() * sizeof(s_cpuTransformData[0]);
-    CORE_ASSERT(trsDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
-
-    glm::float3x4* pData = (glm::float3x4*)s_commonStagingBuffer.Map();
-
-    // GLM assumes columns major, but data is stored as rows... yeah this is shit. Anyway we need to transpose matrices before coping
-    for (size_t i = 0; i < s_cpuTransformData.size(); ++i) {
-        const float4x3& trs = s_cpuTransformData[i];
-        pData[i] = glm::transpose(trs);
-    }
-    s_commonStagingBuffer.Unmap();
-
-    vkn::AllocationInfo commonTrsBufAllocInfo = {};
-    commonTrsBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    commonTrsBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    s_commonTransformBuffer.Create(&s_vkDevice, trsDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, commonTrsBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonTransformBuffer, "COMMON_TRANSFORM_DATA");
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonTransformBuffer, trsDataBufferSize);
-    });
-
     CORE_LOG_INFO("FastGLTF: Instance data GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
@@ -5432,8 +5345,8 @@ void UpdateScene()
 
         static constexpr glm::float4 COLOR = glm::float4(1.f, 1.f, 0.f, 1.f);
 
-        for (const COMMON_INST_AABB& volume : s_cpuAABBData) {
-            const math::AABB aabb = volume.GetAABB(); 
+        for (const COMMON_INST& inst : s_cpuInstData) {
+            const math::AABB aabb = inst.GetAABB_WCS(); 
 
             if (frustum.IsIntersect(aabb)) {
                 RenderDebugAABBWired(math::MakeTS(aabb.GetCenter(), aabb.GetSize()), COLOR);
