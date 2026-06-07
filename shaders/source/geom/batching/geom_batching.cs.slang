@@ -11,7 +11,7 @@ groupshared uint GROUP_BATCH_FIRST_INST_GLOBAL;
 
 [numthreads(GEOM_BATCH_CS_GROUP_SIZE, 1, 1)]
 [shader("compute")]
-void main(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
+void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_DispatchThreadID)
 {
     if (GI == 0) {
         GROUP_BATCH_FIRST_INST_ACCUM = 0;
@@ -30,8 +30,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
     uint localIndex = ~0u;
     uint meshID = ~0u;
 
-    if (DTid.x < instCount) {
-        instID = GEOM_BATCH_VIS_INST_ID_QUEUE[DTid.x];
+    if (DTid < instCount) {
+        instID = GEOM_BATCH_VIS_INST_ID_QUEUE[DTid];
 
         meshID = COMMON_INST_BUFFER[instID].MESH_IDX;
 
@@ -54,7 +54,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (DTid.x < instCount && localIndex != ~0u) {
+    if (DTid < instCount && localIndex != ~0u) {
         const uint writeIdx = GROUP_BATCH_FIRST_INST_GLOBAL + GROUP_BATCH_FIRST_INST_LOCAL[meshID] + localIndex;
         GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV[writeIdx] = instID;
     }
@@ -73,5 +73,15 @@ void main(uint3 DTid : SV_DispatchThreadID, uint GI : SV_GroupIndex)
         );
 
         GEOM_BATCH_BATCH_QUEUE_UAV[writeIdx] = batch;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (DTid == 0) {
+        const uint groupSizeX = (uint)ceil(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV[0] / (float)GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE);
+
+        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[0] = groupSizeX;
+        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[1] = groupSizeX > 0 ? 1 : 0;
+        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[2] = groupSizeX > 0 ? 1 : 0;
     }
 }

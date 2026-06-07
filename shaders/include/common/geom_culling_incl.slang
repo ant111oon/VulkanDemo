@@ -123,7 +123,7 @@ uint GeomCullingGetQueueMask(in COMMON_INST inst)
 }
 
 
-void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint3 DTid, in uint GI)
+void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint Gid, in uint GI, in uint DTid)
 {
     if (GI < GEOM_QUEUE_COUNT) {
         GROUP_VIS_ID_QUEUE_SIZES[GI] = 0;
@@ -132,7 +132,7 @@ void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint3 DTid, in uint G
 
     GroupMemoryBarrierWithGroupSync();
 
-    const uint instID = DTid.x;
+    const uint instID = DTid;
 
     const bool isValidInstID = instID < COMMON_INST_COUNT;
     const bool wasVisibleInPrevFrame = isValidInstID && GeomCullingTestInstVisFlag(instID);
@@ -190,6 +190,14 @@ void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint3 DTid, in uint G
                 GEOM_CULL_VIS_INST_ID_QUEUES_UAV[queue][index] = instID;
             }
         }
+    }
+
+    if (Gid == 0 && GI < GEOM_QUEUE_COUNT) {
+        const uint groupSizeX = (uint)ceil(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GI][0] / (float)GEOM_BATCH_CS_GROUP_SIZE);
+
+        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][0] = groupSizeX;
+        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][1] = groupSizeX > 0 ? 1 : 0;
+        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][2] = groupSizeX > 0 ? 1 : 0;
     }
 }
 

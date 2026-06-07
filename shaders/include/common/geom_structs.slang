@@ -21,4 +21,10 @@ struct GEOM_BATCH
     uint INST_COUNT;
 };
 
+
+static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
+static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
+static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
+
+
 #endif

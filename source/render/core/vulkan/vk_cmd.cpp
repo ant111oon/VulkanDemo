@@ -694,6 +694,17 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdDispatchIndirect(Buffer& argBuffer, VkDeviceSize offset)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdDispatchIndirect(Get(), argBuffer.Get(), offset);
+
+        return *this;
+    }
+
+
+
     CmdBuffer& CmdBuffer::CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);

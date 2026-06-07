@@ -236,4 +236,13 @@ struct COMMON_CMD_DRAW_INDEXED_INDIRECT
 };
 
 
+struct COMMON_CMD_DISPATCH_INDIRECT
+{
+    // NOTE: Don't change order of this variables!!!
+    uint GROUP_SIZE_X;
+    uint GROUP_SIZE_Y;
+    uint GROUP_SIZE_Z;
+};
+
+
 #endif

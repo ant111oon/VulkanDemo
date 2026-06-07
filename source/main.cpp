@@ -215,6 +215,19 @@ struct COMMON_CMD_DRAW_INDEXED_INDIRECT
     uint FIRST_INSTANCE;
 };
 
+static_assert(sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT) == sizeof(VkDrawIndexedIndirectCommand));
+
+
+struct COMMON_CMD_DISPATCH_INDIRECT
+{
+    // NOTE: Don't change order of this variables!!!
+    uint GROUP_SIZE_X;
+    uint GROUP_SIZE_Y;
+    uint GROUP_SIZE_Z;
+};
+
+static_assert(sizeof(COMMON_CMD_DISPATCH_INDIRECT) == sizeof(VkDispatchIndirectCommand));
+
 
 enum class COMMON_DBG_FLAG_MASKS
 {
@@ -572,6 +585,7 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 10;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_BATCH_DISPATCH_CMDS_UAV_DESCRIPTOR_SLOT = 3;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -579,6 +593,7 @@ static constexpr size_t GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT = 2;
 static constexpr size_t GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT = 3;
 static constexpr size_t GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT = 4;
 static constexpr size_t GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT = 5;
+static constexpr size_t GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV_DESCRIPTOR_SLOT = 6;
 
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -1002,12 +1017,16 @@ static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomBatchQueueBuffers;
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomBatchQueueSizeBuffers;
 
+static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueBuffers;
+static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueSizeBuffers;
+
 // We have two phase occlusion culling so basically we build two sets of draw commands and two sets of
 // appropriate visible instance IDs (one for HZB generation and one for remaining visible instances). 
 // We weant to render GBUFFER with one pass so we need to merge draw commands and IDs buffers into one
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomDrawCmdQueueBuffers;
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueBuffers;
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueSizeBuffers;
+
+static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomBatchDispatchCmdBuffers;
+static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomDrawCmdGenDispatchCmdBuffers;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
@@ -2628,6 +2647,7 @@ static void CreateGeomCullingPhase1DescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_BATCH_DISPATCH_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2649,6 +2669,7 @@ static void CreateGeomCullingPhase2DescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_BATCH_DISPATCH_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -2673,6 +2694,7 @@ static void CreateGeomBatchingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4008,64 +4030,89 @@ static void CreateGeomCullingAndInstancingResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::BufferCreateInfo createInfo = {};
-    createInfo.pAllocInfo = &allocInfo;
-    createInfo.pDevice = &s_vkDevice;
-
     for (size_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {    
-            createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT;
-
+        for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
             // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
-            createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
-            
-            s_visGeomIDQueueBuffers[phase][queue].Create(createInfo);
+            s_visGeomIDQueueBuffers[phase][queue].Create(
+                &s_vkDevice, 
+                s_cpuInstData.size() * sizeof(glm::uint), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_visGeomIDQueueBuffers[phase][queue], "%s_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
             
-            
-            createInfo.size = s_cpuInstData.size() * sizeof(GEOM_BATCH);
-
-            s_geomBatchQueueBuffers[phase][queue].Create(createInfo);
+            s_geomBatchQueueBuffers[phase][queue].Create(
+                &s_vkDevice, 
+                s_cpuInstData.size() * sizeof(GEOM_BATCH), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_geomBatchQueueBuffers[phase][queue], "%s_BATCH_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
 
-            
-            createInfo.size = s_cpuInstData.size() * sizeof(glm::uint);
-
-            s_sortedVisGeomIDQueueBuffers[phase][queue].Create(createInfo);
+            s_sortedVisGeomIDQueueBuffers[phase][queue].Create(
+                &s_vkDevice, 
+                s_cpuInstData.size() * sizeof(glm::uint), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffers[phase][queue], "%s_SORTED_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
 
-
-            createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
-
-            createInfo.size = s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT);
-
-            s_geomDrawCmdQueueBuffers[phase][queue].Create(createInfo);
+            s_geomDrawCmdQueueBuffers[phase][queue].Create(
+                &s_vkDevice,
+                s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT),
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_geomDrawCmdQueueBuffers[phase][queue], "%s_DRAW_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
             
+            s_geomBatchDispatchCmdBuffers[phase][queue].Create(
+                &s_vkDevice,
+                sizeof(COMMON_CMD_DISPATCH_INDIRECT),
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
+            s_vkDevice.SetObjDebugName(s_geomBatchDispatchCmdBuffers[phase][queue], "%s_GEOM_BATCH_DISPATCH_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
             
-            createInfo.usage = 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT |  
-                VK_BUFFER_USAGE_2_TRANSFER_DST_BIT |
-                VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT;
-
-            createInfo.size = sizeof(glm::uint);
-
-            s_visGeomIDQueueSizeBuffers[phase][queue].Create(createInfo);
+            s_geomDrawCmdGenDispatchCmdBuffers[phase][queue].Create(
+                &s_vkDevice,
+                sizeof(COMMON_CMD_DISPATCH_INDIRECT),
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
+            s_vkDevice.SetObjDebugName(s_geomDrawCmdGenDispatchCmdBuffers[phase][queue], "%s_GEOM_DRAW_CMD_GEN_DISPATCH_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
+            
+            s_visGeomIDQueueSizeBuffers[phase][queue].Create(
+                &s_vkDevice,
+                sizeof(glm::uint), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_visGeomIDQueueSizeBuffers[phase][queue], "%s_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
 
-            s_geomBatchQueueSizeBuffers[phase][queue].Create(createInfo);
+            s_geomBatchQueueSizeBuffers[phase][queue].Create(
+                &s_vkDevice,
+                sizeof(glm::uint), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_geomBatchQueueSizeBuffers[phase][queue], "%s_BATCH_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
 
-            s_sortedVisGeomIDQueueSizeBuffers[phase][queue].Create(createInfo);
+            s_sortedVisGeomIDQueueSizeBuffers[phase][queue].Create(
+                &s_vkDevice,
+                sizeof(glm::uint), 
+                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+                allocInfo
+            );
             s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], "%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
         }
     }
 
-    createInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT;
-
-    createInfo.size = (uint32_t)glm::ceil(s_cpuInstData.size() / 32.f) * sizeof(glm::uint);
-
-    s_geomInstVisFlagsBuffer.Create(createInfo);
+    s_geomInstVisFlagsBuffer.Create(
+        &s_vkDevice,
+        (uint32_t)glm::ceil(s_cpuInstData.size() / 32.f) * sizeof(glm::uint), 
+        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+        allocInfo
+    );
     s_vkDevice.SetObjDebugName(s_geomInstVisFlagsBuffer, "GEOM_INST_VIS_FLAGS_BUFFER");
 
 
@@ -4251,6 +4298,9 @@ static void WriteGeomCullingDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
         
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 
         0, s_geomInstVisFlagsBuffer);
+
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_BATCH_DISPATCH_CMDS_UAV_DESCRIPTOR_SLOT, 
+        queue, s_geomBatchDispatchCmdBuffers[phase][queue]);
 }
 
 
@@ -4288,6 +4338,8 @@ static void WriteGeomBatchingDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
 
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffers[phase][queue]);
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueSizeBuffers[phase][queue]);
+    
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdGenDispatchCmdBuffers[phase][queue]);
 }
 
 
@@ -5595,6 +5647,8 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase)
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         barriers.AddBufferBarrier(s_visGeomIDQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
         barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+        
+        barriers.AddBufferBarrier(s_geomBatchDispatchCmdBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
     if (phase == 0) {
@@ -5673,6 +5727,9 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUE
             .AddBufferBarrier(s_geomBatchQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
             .AddBufferBarrier(s_sortedVisGeomIDQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
             .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_geomDrawCmdGenDispatchCmdBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            
+            .AddBufferBarrier(s_geomBatchDispatchCmdBuffers[phase][queue], VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
         .Push();
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_BATCHING];
@@ -5685,8 +5742,7 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUE
     // GEOM_BATCH_PER_DRAW_DATA pushConsts = {};
     // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
-    // TODO: generate indirect dispatch
-    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
+    cmdBuffer.CmdDispatchIndirect(s_geomBatchDispatchCmdBuffers[phase][queue]);
 }
 
 
@@ -5761,6 +5817,8 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
             .AddBufferBarrier(s_geomBatchQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
             .AddBufferBarrier(s_geomBatchQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
             .AddBufferBarrier(s_geomDrawCmdQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+
+            .AddBufferBarrier(s_geomDrawCmdGenDispatchCmdBuffers[phase][queue], VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
         .Push();
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_DRAW_CMD_GEN];
@@ -5773,8 +5831,7 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
     // GEOM_DRAW_CMD_GEN_PER_DRAW_DATA pushConsts = {};
     // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
-    // TODO: generate indirect dispatch 
-    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
+    cmdBuffer.CmdDispatchIndirect(s_geomDrawCmdGenDispatchCmdBuffers[phase][queue]);
 }
 
 

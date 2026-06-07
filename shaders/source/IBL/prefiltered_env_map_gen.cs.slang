@@ -3,8 +3,6 @@
 
 #include "common/math/distribution.slang"
 
-#include "common/common_cs.slang"
-
 #include "common/brdf.slang"
 
 

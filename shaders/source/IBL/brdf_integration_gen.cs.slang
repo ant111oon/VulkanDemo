@@ -1,8 +1,6 @@
 #include "registers/common_registers.slang"
 #include "registers/brdf_integration_gen_registers.slang"
 
-#include "common/common_cs.slang"
-
 #include "common/math/distribution.slang"
 #include "common/brdf.slang"
 

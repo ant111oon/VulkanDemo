@@ -5,9 +5,6 @@
 #include "common/geom_structs.slang"
 
 
-static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 1024;
-
-
 struct GEOM_DRAW_CMD_GEN_PER_DRAW_DATA
 {
     uint PADDING;

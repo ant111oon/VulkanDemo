@@ -5,9 +5,6 @@
 #include "common/geom_structs.slang"
 
 
-static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
-
-
 struct GEOM_CULLING_PER_DRAW_DATA
 {
     uint  HZB_MIPS_COUNT;
@@ -22,5 +19,7 @@ struct GEOM_CULLING_PER_DRAW_DATA
 [vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
 
 [vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_FLAGS_UAV;
+
+[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GEOM_QUEUE_COUNT];
 
 #endif

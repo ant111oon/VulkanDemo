@@ -1,8 +1,6 @@
 #include "registers/common_registers.slang"
 #include "registers/irradiance_map_gen_registers.slang"
 
-#include "common/common_cs.slang"
-
 #include "common/math/distribution.slang"
 
 
