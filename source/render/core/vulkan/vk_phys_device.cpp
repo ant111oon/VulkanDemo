@@ -29,6 +29,10 @@ namespace vkn
             return false;
         }
 
+        if (featuresReq.shaderInt64 && featuresReq.shaderInt64 != outFeatures2.features.shaderInt64) {
+            return false;
+        }
+
         const auto pFeatures11 = static_cast<VkPhysicalDeviceVulkan11Features*>(outFeatures2.pNext);
         const auto pFeatures12 = static_cast<VkPhysicalDeviceVulkan12Features*>(pFeatures11->pNext);
         const auto pFeatures13 = static_cast<VkPhysicalDeviceVulkan13Features*>(pFeatures12->pNext);

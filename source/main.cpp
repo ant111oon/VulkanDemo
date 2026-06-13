@@ -668,10 +668,10 @@ static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
 static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
 
-static constexpr uint32_t COPY_BUFFER_CS_GROUP_SIZE = 512;
 static constexpr uint32_t GEOM_CULLING_CS_GROUP_SIZE = 1024;
 static constexpr uint32_t GEOM_BATCH_CS_GROUP_SIZE = 1024;
-static constexpr uint32_t GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 1024;
+static constexpr uint32_t GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
+
 static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
 
 static constexpr uint32_t DESC_SET_PER_FRAME = 0;
@@ -1823,6 +1823,7 @@ static void CreateVkPhysAndLogicalDevices()
     physDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
     physDeviceFeturesReq.bufferDeviceAddress = true;
     physDeviceFeturesReq.dynamicPolygonMode = true;
+    physDeviceFeturesReq.shaderInt64 = true;
 
 #ifndef ENG_BUILD_RETAIL
     physDeviceFeturesReq.bufferDeviceAddressCaptureReplay = VK_TRUE;
@@ -1901,6 +1902,7 @@ static void CreateVkPhysAndLogicalDevices()
     features2.features.vertexPipelineStoresAndAtomics = VK_TRUE;
     features2.features.wideLines = VK_TRUE;
     features2.features.fillModeNonSolid = VK_TRUE;
+    features2.features.shaderInt64 = VK_TRUE;
 
     vkn::DeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.pPhysDevice = &s_vkPhysDevice;

@@ -19,6 +19,7 @@ namespace vkn
         bool bufferDeviceAddressCaptureReplay;
         bool shaderFloat16;
         bool dynamicPolygonMode;
+        bool shaderInt64;
     };
 
 

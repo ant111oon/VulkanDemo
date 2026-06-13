@@ -82,7 +82,6 @@ namespace vkn
         }
 
         VK_ASSERT(pDevice && pDevice->IsCreated());
-        VK_ASSERT(!descriptorInfos.empty());
 
         if (vkGetDescriptorSetLayoutSize == nullptr) {
             vkGetDescriptorSetLayoutSize = (PFN_vkGetDescriptorSetLayoutSizeEXT)pDevice->GetProcAddr("vkGetDescriptorSetLayoutSizeEXT");
@@ -135,12 +134,12 @@ namespace vkn
         createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         createInfo.flags = flags;
         createInfo.bindingCount = bindings.size();
-        createInfo.pBindings = bindings.data();
+        createInfo.pBindings = bindings.empty() ? nullptr : bindings.data();
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = {};
         bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
         bindingFlagsCreateInfo.bindingCount = bindingsFlags.size();
-        bindingFlagsCreateInfo.pBindingFlags = bindingsFlags.data();
+        bindingFlagsCreateInfo.pBindingFlags = bindingsFlags.empty() ? nullptr : bindingsFlags.data();
 
         createInfo.pNext = &bindingFlagsCreateInfo;
 
