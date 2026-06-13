@@ -3,7 +3,6 @@
 
 #include "common/system/sys_constants.slang"
 
-#include "common/dbg_vis.slang"
 #include "common/brdf.slang"
 
 #include "pass/deferred_lighting/vsout.slang"
@@ -180,12 +179,6 @@ float3 ComputeLighting(in int2 pixelCoord)
     const int3 texCoord = int3(pixelCoord, 0);
 
     GBUFFER gbuffer = SampleGBuffer(texCoord);
-
-#ifdef DBG_RT_OUTPUT_ENABLED
-    if (!COMMON_DBG_VIS_NONE) {
-        return gbuffer.albedo.rgb;
-    }
-#endif
 
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
 

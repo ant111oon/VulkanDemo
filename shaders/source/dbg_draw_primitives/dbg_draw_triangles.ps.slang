@@ -1,8 +1,8 @@
-#define DBG_DRAW_LINES_PASS
+#define DBG_DRAW_TRIANGLES_PASS
 
-#include "registers/dbg_draw_lines_registers.slang"
+#include "registers/dbg_draw_triangles_registers.slang"
 
-#include "pass/dbg_draw/vsout.slang"
+#include "pass/dbg_draw_primitives/vsout.slang"
 
 
 struct DBG_DRAW_PS_OUTPUT

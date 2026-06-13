@@ -1,7 +1,5 @@
 #include "common/gbuffer_incl.slang"
 
-#include "common/dbg_vis.slang"
-
 #include "pass/gbuffer/vsout.slang"
 
 
@@ -35,10 +33,6 @@ GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
     result.rt1 = float4(wnorm, 0.f);
     result.rt2 = float4(surf.metalness, surf.roughness, surf.ao, 0.f);
     result.rt3 = float4(surf.emissive, 0.f);
-
-#ifdef DBG_RT_OUTPUT_ENABLED
-    DbgRTVisOutput(result.rt0, surf.albedo, wnorm, surf.metalness, surf.roughness, surf.ao, surf.emissive, input.data.lnorm, input.data.tangent);
-#endif
 
     return result;
 }

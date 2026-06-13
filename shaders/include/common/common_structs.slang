@@ -2,7 +2,6 @@
 #define COMMON_STRUCTS_H
 
 #include "common/math/geom_primitives.slang"
-#include "common/math/constants.slang"
 
 
 static const uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
@@ -13,13 +12,21 @@ static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(uint(1) << (COMMON_PR
 static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 
 
-enum COMMON_GEOM_STREAM_ID
+enum DBG_RT_VIEW_TYPE
 {
-    POSITION,
-    NORMAL,
-    UV,
-    TANGENT,
-    COUNT
+    NONE,
+    COMMON_DEPTH,
+    COMMON_HZB,
+    GBUFFER_ALBEDO,
+    GBUFFER_NORMAL,
+    GBUFFER_ROUGHNESS,
+    GBUFFER_METALNESS,
+    GBUFFER_AO,
+    GBUFFER_EMISSIVE,
+    IRRADIANCE_MAP,
+    PREFILTERED_ENV_MAP,
+    BRDF_LUT,
+    SKYBOX
 };
 
 
@@ -33,6 +40,16 @@ enum COMMON_DBG_TEX_IDX
     GREY,
     CHECKERBOARD,
 
+    COUNT
+};
+
+
+enum COMMON_GEOM_STREAM_ID
+{
+    POSITION,
+    NORMAL,
+    UV,
+    TANGENT,
     COUNT
 };
 
@@ -151,9 +168,8 @@ struct COMMON_CB_DATA
 
     int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
-    uint DBG_VIS_FLAGS;
 
-    private uint PADDING_0;
+    private uint2 PADDING_0;
 };
 
 

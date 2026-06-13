@@ -2,19 +2,12 @@
 #include "registers/post_processing_registers.slang"
 
 #include "common/tonemapping.slang"
-#include "common/dbg_vis.slang"
 
 #include "pass/post_processing/vsout.slang"
 
 
 float3 Tonemap(in float3 color)
 {
-#ifdef DBG_RT_OUTPUT_ENABLED
-    if (!COMMON_DBG_VIS_NONE) {
-        return color;
-    }
-#endif
-
 #if defined(ENV_RELEASE)
     return ACES_Tonemap(color);
 #else

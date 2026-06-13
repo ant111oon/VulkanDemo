@@ -2,8 +2,8 @@
 
 #include "registers/dbg_draw_lines_registers.slang"
 
-#include "pass/dbg_draw/vsin.slang"
-#include "pass/dbg_draw/vsout.slang"
+#include "pass/dbg_draw_primitives/vsin.slang"
+#include "pass/dbg_draw_primitives/vsout.slang"
 
 
 [shader("vertex")]

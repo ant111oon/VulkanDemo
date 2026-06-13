@@ -107,8 +107,7 @@ struct COMMON_CB_DATA
     
     int  DBG_FORCED_GEOM_LOD;
     uint DBG_FLAGS;
-    uint DBG_VIS_FLAGS;
-    uint PADDING_0;
+    uint2 PADDING_0;
 };
 
 
@@ -241,20 +240,6 @@ enum class COMMON_DBG_FLAG_MASKS
 };
 
 
-enum class COMMON_DBG_VIS_FLAG_MASKS
-{
-    DBG_VIS_NONE_MASK = 0x1,
-    DBG_VIS_GBUFFER_ALBEDO_MASK = 0x2,
-    DBG_VIS_GBUFFER_NORMAL_MASK = 0x4,
-    DBG_VIS_GBUFFER_METALNESS_MASK = 0x8,
-    DBG_VIS_GBUFFER_ROUGHNESS_MASK = 0x10,
-    DBG_VIS_GBUFFER_AO_MASK = 0x20,
-    DBG_VIS_GBUFFER_EMISSIVE_MASK = 0x40,
-    DBG_VIS_VERT_NORMAL_MASK = 0x80,
-    DBG_VIS_VERT_TANGENT_MASK = 0x100,
-};
-
-
 enum COMMON_SAMPLER_IDX : uint32_t
 {
     SAMPLER_IDX_NEAREST_REPEAT,
@@ -304,6 +289,24 @@ enum COMMON_GEOM_STREAM
     COMMON_GEOM_STREAM_UV,
     COMMON_GEOM_STREAM_TANGENT,
     COMMON_GEOM_STREAM_COUNT
+};
+
+
+enum DBG_RT_VIEW_TYPE : uint32_t
+{
+    DBG_RT_VIEW_TYPE_NONE,
+    DBG_RT_VIEW_TYPE_COMMON_DEPTH,
+    DBG_RT_VIEW_TYPE_COMMON_HZB,
+    DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO,
+    DBG_RT_VIEW_TYPE_GBUFFER_NORMAL,
+    DBG_RT_VIEW_TYPE_GBUFFER_ROUGHNESS,
+    DBG_RT_VIEW_TYPE_GBUFFER_METALNESS,
+    DBG_RT_VIEW_TYPE_GBUFFER_AO,
+    DBG_RT_VIEW_TYPE_GBUFFER_EMISSIVE,
+    DBG_RT_VIEW_TYPE_IRRADIANCE_MAP,
+    DBG_RT_VIEW_TYPE_PREFILTERED_ENV_MAP,
+    DBG_RT_VIEW_TYPE_BRDF_LUT,
+    DBG_RT_VIEW_TYPE_SKYBOX
 };
 
 
@@ -400,33 +403,31 @@ struct HZB_GEN_PER_DRAW_DATA
 };
 
 
+struct DBG_RT_VIEW_PER_DRAW_DATA
+{
+    DBG_RT_VIEW_TYPE TYPE;
+    uint MIP;
+    uint FACE;
+    float DEPTH_Z_NEAR;
+    float DEPTH_Z_FAR;
+};
+
+
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
-    "GBUFFER ALBEDO",
-    "GBUFFER NORMAL",
-    "GBUFFER METALNESS",
-    "GBUFFER ROUGHNESS",
-    "GBUFFER AO",
-    "GBUFFER EMISSIVE",
-    "VERT NORMAL",
-    "VERT TANGENT",
+    "COMMON_DEPTH",
+    "COMMON_HZB",
+    "GBUFFER_ALBEDO",
+    "GBUFFER_NORMAL",
+    "GBUFFER_ROUGHNESS",
+    "GBUFFER_METALNESS",
+    "GBUFFER_AO",
+    "GBUFFER_EMISSIVE",
+    "IRRADIANCE_MAP",
+    "PREFILTERED_ENV_MAP",
+    "BRDF_LUT",
+    "SKYBOX",
 };
-
-
-static constexpr uint32_t DBG_RT_OUTPUT_MASKS[] = {
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_NONE_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ALBEDO_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_NORMAL_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_METALNESS_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_ROUGHNESS_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_AO_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_GBUFFER_EMISSIVE_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_NORMAL_MASK,
-    (uint32_t)COMMON_DBG_VIS_FLAG_MASKS::DBG_VIS_VERT_TANGENT_MASK,
-};
-
-
-static_assert(_countof(DBG_RT_OUTPUT_NAMES) == _countof(DBG_RT_OUTPUT_MASKS));
 
 
 static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
@@ -521,14 +522,15 @@ enum PassID : uint32_t
     PASS_ID_SKYBOX,
     PASS_ID_POST_PROCESSING,
     PASS_ID_BACKBUFFER,
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    PASS_ID_DBG_DRAW_LINES,
-    PASS_ID_DBG_DRAW_TRIANGLES,
-#endif
     PASS_ID_IRRADIANCE_MAP_GEN,
     PASS_ID_BRDF_LUT_GEN,
     PASS_ID_PREFILT_ENV_MAP_GEN,
     PASS_ID_HZB_GEN,
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    PASS_ID_DBG_DRAW_LINES,
+    PASS_ID_DBG_DRAW_TRIANGLES,
+    PASS_ID_DBG_RT_VIEW,
+#endif
     PASS_ID_COUNT,
 };
 
@@ -558,14 +560,15 @@ enum DescSetID : uint32_t
     DESC_SET_ID_SKYBOX,
     DESC_SET_ID_POST_PROCESSING,
     DESC_SET_ID_BACKBUFFER,
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    DESC_SET_ID_DBG_DRAW_LINES,
-    DESC_SET_ID_DBG_DRAW_TRIANGLES,
-#endif
     DESC_SET_ID_IRRADIANCE_MAP_GEN,
     DESC_SET_ID_BRDF_LUT_GEN,
     DESC_SET_ID_PREFILT_ENV_MAP_GEN,
     DESC_SET_ID_HZB_GEN,
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    DESC_SET_ID_DBG_DRAW_LINES,
+    DESC_SET_ID_DBG_DRAW_TRIANGLES,
+    DESC_SET_ID_DBG_RT_VIEW,
+#endif
     DESC_SET_ID_COUNT,
 };
 
@@ -626,14 +629,25 @@ static constexpr size_t PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 0;
 
+static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
+static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
+
 static constexpr size_t DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT = 1;
 
-static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT = 3;
+static constexpr size_t DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT = 4;
+static constexpr size_t DBG_RT_VIEW_GBUFFER_3_DESCRIPTOR_SLOT = 5;
+static constexpr size_t DBG_RT_VIEW_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
+static constexpr size_t DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
+static constexpr size_t DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT = 8;
+static constexpr size_t DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT = 9;
 
 
 static constexpr uint32_t GEOM_CULLING_PHASES_COUNT = 2;
@@ -696,6 +710,8 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 static constexpr bool VSYNC_ENABLED = false;
 
 static constexpr float CAMERA_SPEED = 0.0075f;
+static constexpr float CAMERA_ZNEAR = 0.01f;
+static constexpr float CAMERA_ZFAR = 5'000.f;
 
 
 class TextureLoadData
@@ -1079,6 +1095,7 @@ static std::array<vkn::TextureView, GBUFFER_RT_COUNT> s_gbufferRTViews;
 
 static vkn::Texture     s_depthRT;
 static vkn::TextureView s_depthRTView;
+static vkn::TextureView s_depthRTColorView;
 
 static vkn::Texture     s_colorRT8U;
 static vkn::TextureView s_colorRTView8U;
@@ -1104,6 +1121,12 @@ static glm::float4x4 s_fixedCamCullInvViewProjMatr;
 static math::Frustum s_fixedCamCullFrustum;
 
 static uint32_t s_dbgOutputRTIdx = 0;
+static float s_dbgDepthOutputRTZNear = 0.01f;
+static float s_dbgDepthOutputRTZFar = 100.0f;
+
+static int32_t s_dbgOutputRTMip = 0;
+static int32_t s_dbgOutputRTFace = 0;
+
 static uint32_t s_nextImageIdx = 0;
 
 static int32_t s_forcedGeomLOD = -1;
@@ -1577,31 +1600,6 @@ namespace DbgUI
 
                     ImGui::TreePop();
                 }
-
-                if (ImGui::TreeNodeEx("Debug Draw", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
-                    ImGui::SameLine();
-                    ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
-        
-                #ifdef ENG_BUILD_DEBUG
-                    if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
-                        for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
-                            const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
-                            
-                            if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                                s_dbgOutputRTIdx = i;
-                            }
-                            
-                            if (isSelected) {
-                                ImGui::SetItemDefaultFocus();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                #endif
-
-                    ImGui::TreePop();
-                }
             }
 
             if (ImGui::CollapsingHeader("Tonemapping")) {
@@ -1619,6 +1617,43 @@ namespace DbgUI
                     }
                     ImGui::EndCombo();
                 }
+            }
+
+            if (ImGui::CollapsingHeader("Debug Vis")) {
+                ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
+                ImGui::SameLine();
+                ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
+
+            #ifdef ENG_BUILD_DEBUG
+                if (ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::SliderFloat("Z Near", &s_dbgDepthOutputRTZNear, CAMERA_ZNEAR, CAMERA_ZFAR, "%.2f");
+                    ImGui::SliderFloat("Z Far", &s_dbgDepthOutputRTZFar, CAMERA_ZNEAR, CAMERA_ZFAR, "%.2f");
+                    
+                    if (s_dbgDepthOutputRTZFar <= s_dbgDepthOutputRTZNear) {
+                        s_dbgDepthOutputRTZFar = s_dbgDepthOutputRTZNear + 0.1f;
+                    }
+
+                    ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT, 20));
+                    ImGui::SliderInt("Face", &s_dbgOutputRTFace, 0, (int32_t)M3D_CUBEMAP_FACE_COUNT - 1);
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
+                    for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
+                        const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
+                        
+                        if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
+                            s_dbgOutputRTIdx = i;
+                        }
+                        
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            #endif
             }
 
             // if (ImGui::Begin("Viewport")) {
@@ -2108,6 +2143,21 @@ static void CreateDepthRT()
     
     s_depthRTView.Create(s_depthRT, mapping, subresourceRange);
     s_vkDevice.SetObjDebugName(s_depthRTView, "COMMON_DEPTH_RT_VIEW");
+
+
+    vkn::TextureViewCreateInfo depthColorViewCreateInfo = {};
+    depthColorViewCreateInfo.pOwner = &s_depthRT;
+    depthColorViewCreateInfo.type = s_depthRTView.GetType();
+    depthColorViewCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    depthColorViewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+    depthColorViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depthColorViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    depthColorViewCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    depthColorViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    depthColorViewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    s_depthRTColorView.Create(depthColorViewCreateInfo);
+    s_vkDevice.SetObjDebugName(s_depthRTColorView, "COMMON_DEPTH_RT_COLOR_VIEW");
 }
 
 
@@ -2181,6 +2231,7 @@ static void DestroyDynamicRenderTargets()
         s_gbufferRTs[i].Destroy();
     }
 
+    s_depthRTColorView.Destroy();
     s_depthRTView.Destroy();
     s_depthRT.Destroy();
 
@@ -2890,6 +2941,26 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 }
 
 
+static void CreateHZBGenDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(HZB_SRC_MIPS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    s_descSetLayouts[PASS_ID_HZB_GEN].Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_HZB_GEN], "HZB_GEN_DESCRIPTOR_SET_LAYOUT");
+}
+
+
 static void CreateDbgDrawLineDescriptorSetLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
@@ -2934,8 +3005,9 @@ static void CreateDbgDrawTriangleDescriptorSetLayout()
 }
 
 
-static void CreateHZBGenDescriptorSetLayout()
+static void CreateDbgRTViewDescriptorSetLayout()
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
@@ -2943,14 +3015,23 @@ static void CreateHZBGenDescriptorSetLayout()
     // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(HZB_SRC_MIPS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_GBUFFER_3_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[PASS_ID_HZB_GEN].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_HZB_GEN], "HZB_GEN_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[PASS_ID_DBG_RT_VIEW].Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_DBG_RT_VIEW], "DBG_RT_VIEW_DESCRIPTOR_SET_LAYOUT");
+#endif
 }
 
 
@@ -2981,14 +3062,15 @@ static void CreateDescriptorBuffer()
     layouts[DESC_SET_ID_SKYBOX]                 = &s_descSetLayouts[PASS_ID_SKYBOX];
     layouts[DESC_SET_ID_POST_PROCESSING]        = &s_descSetLayouts[PASS_ID_POST_PROCESSING];
     layouts[DESC_SET_ID_BACKBUFFER]             = &s_descSetLayouts[PASS_ID_BACKBUFFER];
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    layouts[DESC_SET_ID_DBG_DRAW_LINES]       = &s_descSetLayouts[PASS_ID_DBG_DRAW_LINES];
-    layouts[DESC_SET_ID_DBG_DRAW_TRIANGLES]   = &s_descSetLayouts[PASS_ID_DBG_DRAW_TRIANGLES];
-#endif
     layouts[DESC_SET_ID_IRRADIANCE_MAP_GEN]   = &s_descSetLayouts[PASS_ID_IRRADIANCE_MAP_GEN];
     layouts[DESC_SET_ID_BRDF_LUT_GEN]         = &s_descSetLayouts[PASS_ID_BRDF_LUT_GEN];
     layouts[DESC_SET_ID_PREFILT_ENV_MAP_GEN]  = &s_descSetLayouts[PASS_ID_PREFILT_ENV_MAP_GEN];
     layouts[DESC_SET_ID_HZB_GEN]              = &s_descSetLayouts[PASS_ID_HZB_GEN];
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    layouts[DESC_SET_ID_DBG_DRAW_LINES]       = &s_descSetLayouts[PASS_ID_DBG_DRAW_LINES];
+    layouts[DESC_SET_ID_DBG_DRAW_TRIANGLES]   = &s_descSetLayouts[PASS_ID_DBG_DRAW_TRIANGLES];
+    layouts[DESC_SET_ID_DBG_RT_VIEW]          = &s_descSetLayouts[PASS_ID_DBG_RT_VIEW];
+#endif
 
     for (size_t i = 0; i < layouts.size(); ++i) {
         CORE_ASSERT_MSG(layouts[i] && layouts[i]->IsCreated(), "Descriptor Set Layout %zu is not created", i);
@@ -3014,9 +3096,10 @@ static void CreateDescriptorSets()
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
+    CreateHZBGenDescriptorSetLayout();
     CreateDbgDrawLineDescriptorSetLayout();
     CreateDbgDrawTriangleDescriptorSetLayout();
-    CreateHZBGenDescriptorSetLayout();
+    CreateDbgRTViewDescriptorSetLayout();
 
     CreateDescriptorBuffer();
 }
@@ -3207,6 +3290,21 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
 }
 
 
+static void CreateHZBGenPipelineLayout()
+{
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_HZB_GEN];
+
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
+
+    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_HZB_GEN];
+
+    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
+    s_vkDevice.SetObjDebugName(layout, "HZB_GEN_PIPELINE_LAYOUT");
+}
+
+
 static void CreateDbgDrawLinePipelineLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
@@ -3237,18 +3335,20 @@ static void CreateDbgDrawTrianglePipelineLayout()
 }
 
 
-static void CreateHZBGenPipelineLayout()
+static void CreateDbgRTViewPipelineLayout()
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_HZB_GEN];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_DBG_RT_VIEW];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DBG_RT_VIEW_PER_DRAW_DATA) };
 
-    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_HZB_GEN];
+    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_DBG_RT_VIEW];
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "HZB_GEN_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "DBG_RT_VIEW_PIPELINE_LAYOUT");
+#endif
 }
 
 
@@ -3677,6 +3777,28 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
 }
 
 
+static void CreateHZBGenPipeline(const fs::path& csPath)
+{
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
+    
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
+    s_vkDevice.SetObjDebugName(shader, "HZB_GEN_COMPUTE_SHADER");
+
+    vkn::PSO& pso = s_PSOs[PASS_ID_HZB_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetShader(shader)
+        .SetLayout(s_PSOLayouts[PASS_ID_HZB_GEN])
+        .Build();
+
+    s_vkDevice.SetObjDebugName(pso, "HZB_GEN_PSO");
+}
+
+
 static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& psPath)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
@@ -3777,25 +3899,44 @@ static void CreateDbgDrawTrianglePipeline(const fs::path& vsPath, const fs::path
 }
 
 
-static void CreateHZBGenPipeline(const fs::path& csPath)
+static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
     }
     
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "HZB_GEN_COMPUTE_SHADER");
+    vkn::Shader vsShader;
+    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
+    s_vkDevice.SetObjDebugName(vsShader, "DBG_RT_VIEW_VERTEX_SHADER");
 
-    vkn::PSO& pso = s_PSOs[PASS_ID_HZB_GEN];
+    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
+    }
+    
+    vkn::Shader psShader;
+    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
+    s_vkDevice.SetObjDebugName(psShader, "DBG_RT_VIEW_FRAGMENT_SHADER");
 
-    pso = s_computePSOBuilder.Reset()
+    vkn::PSO& pso = s_PSOs[PASS_ID_DBG_RT_VIEW];
+
+    s_graphicsPSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(s_PSOLayouts[PASS_ID_HZB_GEN])
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "HZB_GEN_PSO");
+        .AddShader(vsShader)
+        .AddShader(psShader)
+        .SetLayout(s_PSOLayouts[PASS_ID_DBG_RT_VIEW])
+        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
+        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+        .SetRasterizerLineWidth(1.f)
+        .AddDynamicState(std::array{ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR })
+        .AddColorAttachment(s_colorRT8U.GetFormat());
+    
+    pso = s_graphicsPSOBuilder.Build();
+    
+    s_vkDevice.SetObjDebugName(pso, "DBG_RT_VIEW_PSO");
+#endif
 }
 
 
@@ -3814,9 +3955,11 @@ static void CreatePipelines()
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
     CreateBRDFIntegrationLUTGenPipelineLayout();
+    CreateHZBGenPipelineLayout();
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
-    CreateHZBGenPipelineLayout();
+    CreateDbgRTViewPipelineLayout();
+
     CreateGeomCullingPhase1Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_1.cs.spv"));
     CreateGeomCullingPhase2Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_2.cs.spv"));
     CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_batching.cs.spv"));
@@ -3830,9 +3973,10 @@ static void CreatePipelines()
     CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("irradiance_map_gen.cs.spv"));
     CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("prefiltered_env_map_gen.cs.spv"));
     CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("brdf_integration_gen.cs.spv"));
+    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
     CreateDbgDrawLinePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.ps.spv"));
     CreateDbgDrawTrianglePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.ps.spv"));
-    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
+    CreateDbgRTViewPipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.ps.spv"));
 }
 
 
@@ -4572,6 +4716,23 @@ static void WriteDbgDrawTriangleDescriptorSet()
 }
 
 
+static void WriteDbgRTViewDescriptorSet()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTColorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+#endif
+}
+
+
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
@@ -4587,9 +4748,10 @@ static void WriteDescriptorSets()
     WriteIrradianceMapGenDescriptorSet();
     WritePrefilteredEnvMapGenDescriptorSets();
     WriteBRDFIntegrationLUTGenDescriptorSet();
+    WriteHZBGenDescriptorSets();
     WriteDbgDrawLineDescriptorSet();
     WriteDbgDrawTriangleDescriptorSet();
-    WriteHZBGenDescriptorSets();
+    WriteDbgRTViewDescriptorSet();
 }
 
 
@@ -5351,7 +5513,6 @@ void UpdateGPUCommonConstBuffer()
 
     constBuff.DBG_FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.DBG_FLAGS = dbgFlags;
-    constBuff.DBG_VIS_FLAGS = DBG_RT_OUTPUT_MASKS[s_dbgOutputRTIdx];
     
     constBuff.CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
 
@@ -6266,7 +6427,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_DEFERRED_LIGHTING, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-        cmdBuffer.CmdDraw(6, 1, 0, 0);        
+        cmdBuffer.CmdDraw(6, 1, 0, 0);
     cmdBuffer.CmdEndRendering();
 }
 
@@ -6358,6 +6519,102 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
 
 #ifdef ENG_DEBUG_DRAW_ENABLED
+static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
+{
+    const DBG_RT_VIEW_TYPE type = DBG_RT_VIEW_TYPE(s_dbgOutputRTIdx);
+
+    if (type == DBG_RT_VIEW_TYPE_NONE) {
+        return;
+    }
+
+    ENG_PROFILE_SCOPED_MARKER_C("Dbg_RT_View_Render_Pass", eng::ProfileColor::Red);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_RT_View_Render_Pass", eng::ProfileColor::Red);
+
+    vkn::Texture* pVisTex = nullptr;
+
+    switch (type) {
+        case DBG_RT_VIEW_TYPE_COMMON_DEPTH:
+            pVisTex = &s_depthRT;
+            break;
+        case DBG_RT_VIEW_TYPE_COMMON_HZB:
+            pVisTex = &s_HZB;
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO:
+            pVisTex = &s_gbufferRTs[0];
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_NORMAL:
+            pVisTex = &s_gbufferRTs[1];
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_ROUGHNESS:
+            pVisTex = &s_gbufferRTs[2];
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_METALNESS:
+            pVisTex = &s_gbufferRTs[2];
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_AO:
+            pVisTex = &s_gbufferRTs[2];
+            break;
+        case DBG_RT_VIEW_TYPE_GBUFFER_EMISSIVE:
+            pVisTex = &s_gbufferRTs[3];
+            break;
+        case DBG_RT_VIEW_TYPE_IRRADIANCE_MAP:
+            pVisTex = &s_irradianceMapTexture;
+            break;
+        case DBG_RT_VIEW_TYPE_PREFILTERED_ENV_MAP:
+            pVisTex = &s_prefilteredEnvMapTexture;
+            break;
+        case DBG_RT_VIEW_TYPE_BRDF_LUT:
+            pVisTex = &s_brdfLUTTexture;
+            break;
+        case DBG_RT_VIEW_TYPE_SKYBOX:
+            pVisTex = &s_skyboxTexture;
+            break;
+    }
+
+    cmdBuffer.BeginBarrierList()
+        .AddTextureBarrier(*pVisTex, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT, pVisTex == &s_depthRT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT)
+        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+    .Push();
+
+    const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
+
+    vkn::RenderInfo renderInfo = {};
+    renderInfo.renderArea.extent = extent;
+    
+    vkn::RenderAttachmentInfo colorAttachment = {};
+    colorAttachment.view = &s_colorRTView8U;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    
+    renderInfo.colorAttachments = std::span(&colorAttachment, 1);
+
+    cmdBuffer.CmdBeginRendering(renderInfo);
+        cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
+        cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
+
+        vkn::PSO& pso = s_PSOs[PASS_ID_DBG_RT_VIEW];
+
+        cmdBuffer.CmdBindPSO(pso);
+        
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_DBG_RT_VIEW, .shaderSetIdx = DESC_SET_PER_DRAW });
+
+        DBG_RT_VIEW_PER_DRAW_DATA pushConsts = {};
+        pushConsts.TYPE = type;
+        pushConsts.MIP = s_dbgOutputRTMip;
+        pushConsts.FACE = s_dbgOutputRTFace;
+        pushConsts.DEPTH_Z_NEAR = s_dbgDepthOutputRTZNear;
+        pushConsts.DEPTH_Z_FAR = s_dbgDepthOutputRTZFar;
+
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
+
+        cmdBuffer.CmdDraw(6, 1, 0, 0);
+    cmdBuffer.CmdEndRendering();
+}
+
+
 static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 {
     const uint32_t lineInstCount = s_dbgLineDataCPU.size();
@@ -6595,6 +6852,7 @@ static void RenderScene()
         PostProcessingPass(cmdBuffer);
 
     #ifdef ENG_DEBUG_DRAW_ENABLED
+        DbgRTViewPass(cmdBuffer);
         DbgDrawPass(cmdBuffer);
     #endif
 
@@ -6893,7 +7151,7 @@ int main(int argc, char* argv[])
 
     s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
     s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
-    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), 0.01f, 10'000.f);
+    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
 
     s_pWnd->SetVisible(true);
 

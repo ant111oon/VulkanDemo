@@ -1,6 +1,8 @@
 #ifndef DEFERRED_LIGHTING_REGISTERS_H
 #define DEFERRED_LIGHTING_REGISTERS_H
 
+#include "common/system/sys_constants.slang"
+
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D DEFERRED_LIGHTING_GBUFFER_0;
 [vk::binding(1, DESC_SET_PER_DRAW)] Texture2D DEFERRED_LIGHTING_GBUFFER_1;

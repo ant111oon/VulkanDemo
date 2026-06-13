@@ -29,11 +29,12 @@
 #define MATH_ASSERT_FAIL(FMT, ...)      MATH_ASSERT_MSG(false, FMT, __VA_ARGS__)
 
 
-constexpr inline float M3D_EPS     = 0.000001f;
-constexpr inline float M3D_2_EPS   = 2.f * M3D_EPS;
-constexpr inline float M3D_PI      = glm::pi<float>();
-constexpr inline float M3D_2_PI    = 2.0f * M3D_PI;
-constexpr inline float M3D_HALF_PI = 0.5f * M3D_PI;
+constexpr inline float    M3D_EPS     = 0.000001f;
+constexpr inline float    M3D_2_EPS   = 2.f * M3D_EPS;
+constexpr inline float    M3D_PI      = glm::pi<float>();
+constexpr inline float    M3D_2_PI    = 2.0f * M3D_PI;
+constexpr inline float    M3D_HALF_PI = 0.5f * M3D_PI;
+constexpr inline uint32_t M3D_CUBEMAP_FACE_COUNT = 6;
 
 
 constexpr inline glm::float2 ZEROF2 = glm::float2(0.f);
