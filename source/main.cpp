@@ -1684,6 +1684,7 @@ namespace DbgUI
                     case DBG_RT_VIEW_TYPE_SKYBOX:
                         needExtraParams = true;
                         needExtraFace = true;
+                        needExtraMip = true;
                         break;
                 }
 

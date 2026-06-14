@@ -107,12 +107,12 @@ void PrefiltEnvMapView(out float4 color, in uint2 pixCoord, in uint face, in uin
 }
 
 
-void SkyboxView(out float4 color, in uint2 pixCoord, in uint face)
+void SkyboxView(out float4 color, in uint2 pixCoord, in uint face, in uint mip)
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
     const float3 dir = UVFaceToDir(uv, face);
 
-    const float3 skybox = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_SKYBOX, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), dir, 0).rgb;
+    const float3 skybox = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_SKYBOX, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
 
     color = float4(skybox, 1.f);
 }
@@ -166,7 +166,7 @@ DBG_RT_VIEW_PS_OUTPUT main(DBG_RT_VIEW_VS_OUTPUT input, uint2 pixCoord : SV_Posi
             BRDF_LUTView(result.color, pixCoord);
             break;
         case DBG_RT_VIEW_TYPE::SKYBOX:
-            SkyboxView(result.color, pixCoord, DBG_RT_VIEW_FACE);
+            SkyboxView(result.color, pixCoord, DBG_RT_VIEW_FACE, DBG_RT_VIEW_MIP);
             break;
     }
 
