@@ -7,3 +7,4 @@ assets/*
 !assets/**/LightSponza/
 !assets/**/TestPBR/
 !assets/**/GPUOcclusionTest/
+!assets/**/ShadowTest/

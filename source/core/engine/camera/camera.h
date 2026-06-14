@@ -38,6 +38,7 @@ namespace eng
 
         void SetRotation(const glm::quat& rotation) noexcept;
         void SetPosition(const glm::float3& position) noexcept;
+        void SetTransform(const glm::float4x4& transform) noexcept;
 
         float GetFovY() const noexcept  { return m_fovY; }
         float GetAspectRatio() const noexcept { return m_aspectRatio; }

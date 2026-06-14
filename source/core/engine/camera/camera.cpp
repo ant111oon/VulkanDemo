@@ -3,6 +3,8 @@
 #include "camera.h"
 #include "core/core.h"
 
+#include "core/math/transform.h"
+
 
 namespace eng
 {
@@ -210,6 +212,13 @@ namespace eng
             m_position = position;
             RequestRecalcViewMatrix();
         }
+    }
+
+
+    void Camera::SetTransform(const glm::float4x4& transform) noexcept
+    {
+        SetPosition(math::GetTranslation(transform));
+        SetRotation(math::GetRotation(transform));
     }
 
 

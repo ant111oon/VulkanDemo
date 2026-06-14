@@ -1115,12 +1115,13 @@ static eng::DbgUI s_dbgUI;
 
 static eng::Camera s_camera;
 static glm::float3 s_cameraVel = ZEROF3;
+static bool s_cameraLoaded = false;
 
 static glm::float4x4 s_fixedCamCullViewProjMatr;
 static glm::float4x4 s_fixedCamCullInvViewProjMatr;
 static math::Frustum s_fixedCamCullFrustum;
 
-static uint32_t s_dbgOutputRTIdx = 0;
+static DBG_RT_VIEW_TYPE s_dbgOutputRTType = DBG_RT_VIEW_TYPE_NONE;
 static float s_dbgDepthOutputRTZNear = 0.01f;
 static float s_dbgDepthOutputRTZFar = 100.0f;
 
@@ -1619,32 +1620,18 @@ namespace DbgUI
                 }
             }
 
+        #ifdef ENG_BUILD_DEBUG
             if (ImGui::CollapsingHeader("Debug Vis")) {
                 ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
                 ImGui::SameLine();
                 ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
 
-            #ifdef ENG_BUILD_DEBUG
-                if (ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::SliderFloat("Z Near", &s_dbgDepthOutputRTZNear, CAMERA_ZNEAR, CAMERA_ZFAR, "%.2f");
-                    ImGui::SliderFloat("Z Far", &s_dbgDepthOutputRTZFar, CAMERA_ZNEAR, CAMERA_ZFAR, "%.2f");
-                    
-                    if (s_dbgDepthOutputRTZFar <= s_dbgDepthOutputRTZNear) {
-                        s_dbgDepthOutputRTZFar = s_dbgDepthOutputRTZNear + 0.1f;
-                    }
-
-                    ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT, 20));
-                    ImGui::SliderInt("Face", &s_dbgOutputRTFace, 0, (int32_t)M3D_CUBEMAP_FACE_COUNT - 1);
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx])) {
+                if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType])) {
                     for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
-                        const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTIdx]);
+                        const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType]);
                         
                         if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                            s_dbgOutputRTIdx = i;
+                            s_dbgOutputRTType = DBG_RT_VIEW_TYPE(i);
                         }
                         
                         if (isSelected) {
@@ -1653,8 +1640,90 @@ namespace DbgUI
                     }
                     ImGui::EndCombo();
                 }
-            #endif
+
+                bool needExtraParams = false;
+                bool needExtraZNearFar = false;
+                bool needExtraMip = false;
+                bool needExtraFace = false;
+
+                switch (s_dbgOutputRTType) {
+                    case DBG_RT_VIEW_TYPE_NONE:
+                        break;
+                    case DBG_RT_VIEW_TYPE_COMMON_DEPTH:
+                        needExtraParams = true;
+                        needExtraZNearFar = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_COMMON_HZB:
+                        needExtraParams = true;
+                        needExtraZNearFar = true;
+                        needExtraMip = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_NORMAL:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_ROUGHNESS:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_METALNESS:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_AO:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_EMISSIVE:
+                        break;
+                    case DBG_RT_VIEW_TYPE_IRRADIANCE_MAP:
+                        needExtraParams = true;
+                        needExtraFace = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_PREFILTERED_ENV_MAP:
+                        needExtraParams = true;
+                        needExtraMip = true;
+                        needExtraFace = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_BRDF_LUT:
+                        break;
+                    case DBG_RT_VIEW_TYPE_SKYBOX:
+                        needExtraParams = true;
+                        needExtraFace = true;
+                        break;
+                }
+
+                if (needExtraParams && ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (needExtraZNearFar) {
+                        ImGui::SliderFloat("Z Near", &s_dbgDepthOutputRTZNear, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
+                        ImGui::SliderFloat("Z Far", &s_dbgDepthOutputRTZFar, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
+                        
+                        if (s_dbgDepthOutputRTZFar <= s_dbgDepthOutputRTZNear) {
+                            s_dbgDepthOutputRTZFar = s_dbgDepthOutputRTZNear + 0.1f;
+                        }
+                    }
+
+                    if (needExtraMip) {
+                        ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT, 20));
+                    }
+
+                    if (needExtraFace) {
+                        static constexpr const char* FACE_NAMES[M3D_CUBEMAP_FACE_COUNT] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+
+                        if (ImGui::BeginCombo("Face", FACE_NAMES[s_dbgOutputRTFace])) {
+                            for (size_t i = 0; i < M3D_CUBEMAP_FACE_COUNT; ++i) {
+                                const bool isSelected = (FACE_NAMES[i] == FACE_NAMES[s_dbgOutputRTFace]);
+                                
+                                if (ImGui::Selectable(FACE_NAMES[i], isSelected)) {
+                                    s_dbgOutputRTFace = i;
+                                }
+                                
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    ImGui::TreePop();
+                }
             }
+        #endif
 
             // if (ImGui::Begin("Viewport")) {
             //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
@@ -5136,6 +5205,23 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
                     s_cpuInstData.emplace_back(inst);
                 }
+            } else if (!s_cameraLoaded && node.cameraIndex.has_value()) {
+                const gltf::Camera& camera = asset.cameras[node.cameraIndex.value()];
+
+                s_camera.SetTransform(transform);
+
+                if (std::holds_alternative<gltf::Camera::Perspective>(camera.camera)) {
+                    const gltf::Camera::Perspective& proj = std::get<gltf::Camera::Perspective>(camera.camera);
+
+                    s_camera.SetPerspProjection(proj.yfov, (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), proj.znear, 
+                        proj.zfar.has_value() ? proj.zfar.value() : CAMERA_ZFAR);
+                } else {
+                    const gltf::Camera::Orthographic& proj = std::get<gltf::Camera::Orthographic>(camera.camera);
+
+                    s_camera.SetOrthoProjection(-proj.xmag, proj.xmag, proj.ymag, -proj.ymag, proj.znear, proj.zfar);
+                }
+
+                s_cameraLoaded = true;
             }
         });
     }
@@ -6521,9 +6607,7 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 #ifdef ENG_DEBUG_DRAW_ENABLED
 static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
 {
-    const DBG_RT_VIEW_TYPE type = DBG_RT_VIEW_TYPE(s_dbgOutputRTIdx);
-
-    if (type == DBG_RT_VIEW_TYPE_NONE) {
+    if (s_dbgOutputRTType == DBG_RT_VIEW_TYPE_NONE) {
         return;
     }
 
@@ -6532,7 +6616,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
 
     vkn::Texture* pVisTex = nullptr;
 
-    switch (type) {
+    switch (s_dbgOutputRTType) {
         case DBG_RT_VIEW_TYPE_COMMON_DEPTH:
             pVisTex = &s_depthRT;
             break;
@@ -6602,7 +6686,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_DBG_RT_VIEW, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         DBG_RT_VIEW_PER_DRAW_DATA pushConsts = {};
-        pushConsts.TYPE = type;
+        pushConsts.TYPE = s_dbgOutputRTType;
         pushConsts.MIP = s_dbgOutputRTMip;
         pushConsts.FACE = s_dbgOutputRTFace;
         pushConsts.DEPTH_Z_NEAR = s_dbgDepthOutputRTZNear;
@@ -7052,7 +7136,14 @@ int main(int argc, char* argv[])
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+
+    if (!s_cameraLoaded) {
+        s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
+        s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
+        s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
+    }
 
     CreateVkInstance();    
 
@@ -7148,10 +7239,6 @@ int main(int argc, char* argv[])
     });
 
     s_cpuTexturesData.clear();
-
-    s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
-    s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
-    s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
 
     s_pWnd->SetVisible(true);
 
