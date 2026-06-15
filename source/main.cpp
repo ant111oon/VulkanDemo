@@ -5188,15 +5188,13 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
                     COMMON_INST inst = {};
 
-                    inst.MATR_WCS = glm::transpose(transform);
-
-                    const math::AABB aabb = GetInstAABB(inst.MESH_IDX, transform);
-                    inst.PackAABB_WCS(aabb);
-                    
                     inst.MESH_IDX = baseIdx + i;
-    
+
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     inst.MATERIAL_IDX = primitive.materialIndex.value();
+
+                    inst.MATR_WCS = glm::transpose(transform);
+                    inst.PackAABB_WCS(GetInstAABB(inst.MESH_IDX, transform));
 
                     s_cpuInstData.emplace_back(inst);
                 }
@@ -7159,9 +7157,9 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     if (!s_cameraLoaded) {
