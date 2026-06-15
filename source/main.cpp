@@ -104,9 +104,14 @@ struct COMMON_CB_DATA
 
     float3 CAM_WPOS;
     uint FLAGS;
-    
-    int  DBG_FORCED_GEOM_LOD;
-    uint DBG_FLAGS;
+};
+
+
+struct COMMON_DBG_CB_DATA
+{
+    int  FORCED_GEOM_LOD;
+    uint FLAGS_0;
+
     uint2 PADDING_0;
 };
 
@@ -226,18 +231,6 @@ struct COMMON_CMD_DISPATCH_INDIRECT
 };
 
 static_assert(sizeof(COMMON_CMD_DISPATCH_INDIRECT) == sizeof(VkDispatchIndirectCommand));
-
-
-enum class COMMON_DBG_FLAG_MASKS
-{
-    USE_REINHARD_TONE_MAPPING_MASK = 0x1,
-    USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK = 0x2,
-    USE_UNCHARTED_2_TONE_MAPPING_MASK = 0x4,
-    USE_ACES_TONE_MAPPING_MASK = 0x8,
-    USE_INDIRECT_LIGHTING_MASK = 0x10,
-    USE_GEOM_GPU_FRUSTUM_CULLING_MASK = 0x20,
-    USE_GEOM_GPU_HZB_CULLING_MASK = 0x40,
-};
 
 
 enum COMMON_SAMPLER_IDX : uint32_t
@@ -430,23 +423,22 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
 };
 
 
-static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
+enum class TonemapPreset
+{
+    ACES,
+    REINHARD,
+    PARTIAL_UNCHARTED_2,
+    UNCHARTED_2,
+    COUNT
+};
+
+
+static constexpr const char* DBG_TONEMAPPING_NAMES[(size_t)TonemapPreset::COUNT] = {
+    "ACES",
     "REINHARD",
     "PARTIAL UNCHARTED 2",
     "UNCHARTED 2",
-    "ACES",
 };
-
-
-static constexpr uint32_t TONEMAPPING_MASKS[] = {
-    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_REINHARD_TONE_MAPPING_MASK,
-    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_PARTIAL_UNCHARTED_2_TONE_MAPPING_MASK,
-    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_UNCHARTED_2_TONE_MAPPING_MASK,
-    (uint32_t)COMMON_DBG_FLAG_MASKS::USE_ACES_TONE_MAPPING_MASK,
-};
-
-
-static_assert(_countof(DBG_TONEMAPPING_NAMES) == _countof(TONEMAPPING_MASKS));
 
 
 static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
@@ -576,14 +568,15 @@ enum DescSetID : uint32_t
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 1;
 static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 3;
-static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 4;
-static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 6;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 7;
-static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 8;
-static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 9;
-static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 4;
+static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 7;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 9;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 11;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
@@ -1019,6 +1012,7 @@ static std::array<vkn::Buffer, COMMON_GEOM_STREAM_COUNT> s_geomStreamBuffers;
 static vkn::Buffer s_geomIndexBuffer;
 
 static vkn::Buffer s_commonConstBuffer;
+static vkn::Buffer s_commonDbgConstBuffer;
 
 static vkn::Buffer s_commonMeshLODBuffer;
 static vkn::Buffer s_commonMeshBuffer;
@@ -1154,7 +1148,7 @@ static bool s_skipRender = false;
     static size_t s_dbgDrawnAkillMeshCount = 0;
     static size_t s_dbgDrawnTranspMeshCount = 0;
 
-    static uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
+    static TonemapPreset s_tonemappingPreset = TonemapPreset::ACES;
 #else
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
@@ -1163,9 +1157,7 @@ static bool s_skipRender = false;
     static constexpr bool s_useIndirectLighting = true;
     static constexpr bool s_drawInstAABBs = false;
 
-    static constexpr uint32_t s_tonemappingPreset = _countof(TONEMAPPING_MASKS) - 1;
-
-    static_assert(s_tonemappingPreset < _countof(TONEMAPPING_MASKS));
+    static constexpr TonemapPreset s_tonemappingPreset = TonemapPreset::ACES;
 #endif
 
 
@@ -1604,12 +1596,12 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Tonemapping")) {
-                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
+                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset])) {
                     for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
-                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
+                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset]);
                         
                         if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                            s_tonemappingPreset = i;
+                            s_tonemappingPreset = TonemapPreset(i);
                         }
                         
                         if (isSelected) {
@@ -2722,6 +2714,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
         vkn::DescriptorInfo::Create(COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
@@ -4748,6 +4741,7 @@ static void WriteCommonDescriptorSet()
 #endif
 
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
@@ -5543,6 +5537,15 @@ static void CreateCommonConstBuffer()
 }
 
 
+static void CreateCommonDbgConstBuffer()
+{
+#ifndef ENG_BUILD_RELEASE
+    s_commonDbgConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_DBG_CB_DATA));
+    s_vkDevice.SetObjDebugName(s_commonDbgConstBuffer, "COMMON_DBG_CB");
+#endif
+}
+
+
 void UpdateGPUCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", eng::ProfileColor::Cyan4);
@@ -5591,19 +5594,39 @@ void UpdateGPUCommonConstBuffer()
 
     constBuff.Z_NEAR = s_camera.GetZNear();
     constBuff.Z_FAR = s_camera.GetZFar();
-
-    uint32_t dbgFlags = 0;
-    dbgFlags |= TONEMAPPING_MASKS[s_tonemappingPreset];
-    dbgFlags |= s_useIndirectLighting                       ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_INDIRECT_LIGHTING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshFrustumCulling ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_FRUSTUM_CULLING_MASK : 0;
-    dbgFlags |= s_useMeshCulling && s_useMeshHZBCulling     ? (uint32_t)COMMON_DBG_FLAG_MASKS::USE_GEOM_GPU_HZB_CULLING_MASK : 0;
-
-    constBuff.DBG_FORCED_GEOM_LOD = s_forcedGeomLOD;
-    constBuff.DBG_FLAGS = dbgFlags;
     
     constBuff.CAM_WPOS = glm::float4(s_camera.GetPosition(), 0.f);
 
     s_commonConstBuffer.Unmap();
+}
+
+
+void UpdateGPUDbgConstBuffer()
+{
+#ifndef ENG_BUILD_RELEASE
+    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Dbg_Const_Buffer", eng::ProfileColor::Cyan4);
+
+    COMMON_DBG_CB_DATA& constBuff = *reinterpret_cast<COMMON_DBG_CB_DATA*>(s_commonDbgConstBuffer.Map());
+
+    constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
+
+    uint32_t flags_0 = 0;
+
+    switch (s_tonemappingPreset) {
+        case TonemapPreset::ACES:                  flags_0 |= (1u << 0u); break;
+        case TonemapPreset::REINHARD:              flags_0 |= (1u << 1u); break;
+        case TonemapPreset::PARTIAL_UNCHARTED_2:   flags_0 |= (1u << 2u); break;
+        case TonemapPreset::UNCHARTED_2:           flags_0 |= (1u << 3u); break;
+    }
+
+    flags_0 |= s_useIndirectLighting                       ? (1u << 4u) : 0;
+    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 5u) : 0;
+    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 6u) : 0;
+
+    constBuff.FLAGS_0 = flags_0;
+
+    s_commonDbgConstBuffer.Unmap();
+#endif
 }
 
 
@@ -6900,6 +6923,7 @@ static void RenderScene()
     ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", eng::ProfileColor::DimGrey);
 
     UpdateGPUCommonConstBuffer();
+    UpdateGPUDbgConstBuffer();
 
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &s_nextImageIdx);
     
@@ -7137,8 +7161,8 @@ int main(int argc, char* argv[])
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     if (!s_cameraLoaded) {
         s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
@@ -7192,6 +7216,7 @@ int main(int argc, char* argv[])
 
     CreateCommonSamplers();
     CreateCommonConstBuffer();
+    CreateCommonDbgConstBuffer();
     CreateGeomCullingAndInstancingResources();
     CreateCommonDbgTextures();
     CreateDbgDrawResources();

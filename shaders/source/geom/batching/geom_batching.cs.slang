@@ -63,7 +63,7 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
         uint writeIdx;
         InterlockedAdd(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV[0], 1, writeIdx);
 
-        const uint lodID = clamp(COMMON_CB.DBG_FORCED_GEOM_LOD >= 0 ? COMMON_CB.DBG_FORCED_GEOM_LOD : 0, 0, COMMON_MESH_BUFFER[GI].LOD_COUNT - 1);
+        const uint lodID = clamp(COMMON_DBG_FORCED_GEOM_LOD >= 0 ? COMMON_DBG_FORCED_GEOM_LOD : 0, 0, COMMON_MESH_BUFFER[GI].LOD_COUNT - 1);
 
         const GEOM_BATCH batch = GEOM_BATCH(
             GI,
