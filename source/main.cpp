@@ -4741,7 +4741,10 @@ static void WriteCommonDescriptorSet()
 #endif
 
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
+
+#ifndef ENG_BUILD_RELEASE
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
+#endif
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
@@ -5564,7 +5567,7 @@ void UpdateGPUCommonConstBuffer()
 
     const math::Frustum& camFrustum = s_camera.GetFrustum();
 
-    for (size_t i = 0; i <  math::Frustum::PLANE_COUNT; ++i) {
+    for (size_t i = 0; i <  M3D_FRUSTUM_PLANE_COUNT; ++i) {
         const math::Plane& srcPlane = camFrustum.GetPlane(i);
         PLANE& dstPlane = constBuff.CAMERA_FRUSTUM.planes[i];
 
@@ -5573,7 +5576,7 @@ void UpdateGPUCommonConstBuffer()
     }
 
     if (s_cullingTestMode) {
-        for (size_t i = 0; i <  math::Frustum::PLANE_COUNT; ++i) {
+        for (size_t i = 0; i < M3D_FRUSTUM_PLANE_COUNT; ++i) {
             const math::Plane& srcPlane = s_fixedCamCullFrustum.GetPlane(i);
             PLANE& dstPlane = constBuff.CULLING_CAMERA_FRUSTUM.planes[i];
 
@@ -7157,10 +7160,10 @@ int main(int argc, char* argv[])
     ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     if (!s_cameraLoaded) {
         s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));

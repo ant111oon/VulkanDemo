@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "frustum.h"
+#include "transform.h"
 
 
 namespace math
@@ -14,11 +15,41 @@ namespace math
 
     Frustum::Frustum(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar)
     {
-        Recalculate(position, rightDir, upDir, fovY, aspectRatio, zNear, zFar);
+        Construct(position, rightDir, upDir, fovY, aspectRatio, zNear, zFar);
     }
 
 
-    void Frustum::Recalculate(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar)
+    Frustum::Frustum(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar)
+    {
+        Construct(position, rotation, fovY, aspectRatio, zNear, zFar);
+    }
+
+
+    Frustum::Frustum(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar)
+    {
+        Construct(transform, fovY, aspectRatio, zNear, zFar);
+    }
+
+
+    void Frustum::Construct(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar)
+    {
+        Construct(position, rotation * M3D_AXIS_X, rotation * M3D_AXIS_Y, fovY, aspectRatio, zNear, zFar);
+    }
+
+
+    void Frustum::Construct(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar)
+    {
+        glm::float3 position;
+        glm::quat rotation;
+        glm::float3 scale;
+
+        math::GetTRSComponents(transform, position, rotation, scale);
+
+        Construct(position, rotation, fovY, aspectRatio, zNear, zFar);
+    }
+
+
+    void Frustum::Construct(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar)
     {
         MATH_ASSERT(IsNormalized(rightDir));
         MATH_ASSERT(IsNormalized(upDir));
@@ -83,7 +114,7 @@ namespace math
 
     const Plane& Frustum::GetPlane(size_t index) const
     {
-        MATH_ASSERT(index < PLANE_COUNT);
+        MATH_ASSERT(index < PLANE_IDX_COUNT);
         return planes[index];
     }
 }

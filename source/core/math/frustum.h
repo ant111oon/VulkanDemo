@@ -2,6 +2,8 @@
 
 #include "aabb.h"
 
+#include <span>
+
 
 namespace math
 {
@@ -17,16 +19,25 @@ namespace math
     };
     
     
-    struct Frustum
+    class Frustum
     {
+    public:
         Frustum() = default;
         Frustum(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+        Frustum(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
+        Frustum(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
 
-        void Recalculate(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+        void Construct(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+        void Construct(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
+        void Construct(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
+
         bool IsIntersect(const AABB& aabb) const;
 
         const Plane& GetPlane(size_t index) const;
 
+        std::span<const Plane> GetPlanes() const { return planes; }
+
+    private:
         enum PlaneIdx : size_t
         {
             PLANE_IDX_LEFT,
@@ -35,9 +46,12 @@ namespace math
             PLANE_IDX_BOTTOM,
             PLANE_IDX_NEAR,
             PLANE_IDX_FAR,
-            PLANE_COUNT
+            PLANE_IDX_COUNT,
         };
 
-        std::array<Plane, PLANE_COUNT> planes;
+        static_assert(M3D_FRUSTUM_PLANE_COUNT == PLANE_IDX_COUNT);
+
+    private:
+        std::array<Plane, M3D_FRUSTUM_PLANE_COUNT> planes;
     };
 }
