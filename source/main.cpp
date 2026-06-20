@@ -1140,7 +1140,7 @@ static bool s_skipRender = false;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
     static bool s_useDepthPass = true;
-    static bool s_useIndirectLighting = true;
+    static bool s_useIndirectLighting = false;
     static bool s_drawInstAABBs = false;
 
     // Uses for debug purposes during CPU frustum culling
@@ -1154,7 +1154,7 @@ static bool s_skipRender = false;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
     static constexpr bool s_useDepthPass = true;
-    static constexpr bool s_useIndirectLighting = true;
+    static constexpr bool s_useIndirectLighting = false;
     static constexpr bool s_drawInstAABBs = false;
 
     static constexpr TonemapPreset s_tonemappingPreset = TonemapPreset::ACES;
@@ -5568,7 +5568,7 @@ void UpdateGPUCommonConstBuffer()
     const math::Frustum& camFrustum = s_camera.GetFrustum();
 
     for (size_t i = 0; i <  M3D_FRUSTUM_PLANE_COUNT; ++i) {
-        const math::Plane& srcPlane = camFrustum.GetPlane(i);
+        const math::Plane& srcPlane = camFrustum.GetPlane(math::FrustumPlaneIndex(i));
         PLANE& dstPlane = constBuff.CAMERA_FRUSTUM.planes[i];
 
         dstPlane.normal = srcPlane.normal;
@@ -5577,7 +5577,7 @@ void UpdateGPUCommonConstBuffer()
 
     if (s_cullingTestMode) {
         for (size_t i = 0; i < M3D_FRUSTUM_PLANE_COUNT; ++i) {
-            const math::Plane& srcPlane = s_fixedCamCullFrustum.GetPlane(i);
+            const math::Plane& srcPlane = s_fixedCamCullFrustum.GetPlane(math::FrustumPlaneIndex(i));
             PLANE& dstPlane = constBuff.CULLING_CAMERA_FRUSTUM.planes[i];
 
             dstPlane.normal = srcPlane.normal;
@@ -7170,6 +7170,8 @@ int main(int argc, char* argv[])
         s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
         s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
     }
+
+    s_camera.Update();
 
     CreateVkInstance();    
 

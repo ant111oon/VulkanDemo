@@ -36,7 +36,7 @@ constexpr inline float    M3D_2_PI    = 2.0f * M3D_PI;
 constexpr inline float    M3D_HALF_PI = 0.5f * M3D_PI;
 constexpr inline uint32_t M3D_CUBEMAP_FACE_COUNT = 6;
 constexpr inline uint32_t M3D_FRUSTUM_PLANE_COUNT = 6;
-constexpr inline uint32_t M3D_FRUSTUM_VERT_COUNT = 8;
+constexpr inline uint32_t M3D_FRUSTUM_CORNER_COUNT = 8;
 
 
 constexpr inline glm::float2 ZEROF2 = glm::float2(0.f);
