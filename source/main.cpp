@@ -704,7 +704,7 @@ static constexpr bool VSYNC_ENABLED = false;
 
 static constexpr float CAMERA_SPEED = 0.0075f;
 static constexpr float CAMERA_ZNEAR = 0.01f;
-static constexpr float CAMERA_ZFAR = 5'000.f;
+static constexpr float CAMERA_ZFAR = 1'000.f;
 
 
 class TextureLoadData
@@ -1384,7 +1384,7 @@ static void RenderDebugOBBFilled(const glm::float4x4& trs, const glm::float4& co
 
 
 template <typename Func>
-static void RenderDebugFrustumInternal(const Func& func, const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+static void RenderDebugFrustumInternal(const Func& func, const glm::float4x4& invViewProj, const glm::float4& color)
 {    
 #ifdef ENG_DEBUG_DRAW_ENABLED
     #ifdef ENG_GFX_API_VULKAN
@@ -1403,28 +1403,28 @@ static void RenderDebugFrustumInternal(const Func& func, const glm::float4x4& fr
         static constexpr float FAR_NDC_Z = 1.f;
     #endif
 
-    glm::float4 bln = frustumInvViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
+    glm::float4 bln = invViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
     bln /= bln.w;
     
-    glm::float4 brn = frustumInvViewProj * glm::float4(1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
+    glm::float4 brn = invViewProj * glm::float4(1.f, BOTTOM_NDC_Y, NEAR_NDC_Z, 1.f);
     brn /= brn.w;
 
-    glm::float4 urn = frustumInvViewProj * glm::float4(1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
+    glm::float4 urn = invViewProj * glm::float4(1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
     urn /= urn.w;
 
-    glm::float4 uln = frustumInvViewProj * glm::float4(-1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
+    glm::float4 uln = invViewProj * glm::float4(-1.f, TOP_NDC_Y, NEAR_NDC_Z, 1.f);
     uln /= uln.w;
 
-    glm::float4 blf = frustumInvViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
+    glm::float4 blf = invViewProj * glm::float4(-1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
     blf /= blf.w;
 
-    glm::float4 brf = frustumInvViewProj * glm::float4(1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
+    glm::float4 brf = invViewProj * glm::float4(1.f, BOTTOM_NDC_Y, FAR_NDC_Z, 1.f);
     brf /= brf.w;
 
-    glm::float4 urf = frustumInvViewProj * glm::float4(1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
+    glm::float4 urf = invViewProj * glm::float4(1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
     urf /= urf.w;
 
-    glm::float4 ulf = frustumInvViewProj * glm::float4(-1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
+    glm::float4 ulf = invViewProj * glm::float4(-1.f, TOP_NDC_Y, FAR_NDC_Z, 1.f);
     ulf /= ulf.w;
 
     func(bln, brn, urn, uln, color);
@@ -1437,15 +1437,15 @@ static void RenderDebugFrustumInternal(const Func& func, const glm::float4x4& fr
 }
 
 
-static void RenderDebugFrustumWired(const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+static void RenderDebugFrustumWired(const glm::float4x4& invViewProj, const glm::float4& color)
 {
-    RenderDebugFrustumInternal(RenderDebugQuadWire, frustumInvViewProj, color);
+    RenderDebugFrustumInternal(RenderDebugQuadWire, invViewProj, color);
 }
 
 
-static void RenderDebugFrustumFilled(const glm::float4x4& frustumInvViewProj, const glm::float4& color)
+static void RenderDebugFrustumFilled(const glm::float4x4& invViewProj, const glm::float4& color)
 {
-    RenderDebugFrustumInternal(RenderDebugQuadFilled, frustumInvViewProj, color);
+    RenderDebugFrustumInternal(RenderDebugQuadFilled, invViewProj, color);
 }
 
 

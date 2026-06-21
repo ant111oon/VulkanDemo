@@ -16,15 +16,6 @@
 #include "common/math/hzb_culling.slang"
 
 
-#ifndef ENV_RELEASE
-    #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED
-    #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED
-#else
-    #define DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED         true
-    #define DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED             true
-#endif
-
-
 enum GEOM_CULLING_PHASE
 {
     PHASE_1,
@@ -47,33 +38,22 @@ namespace utils
     }
 }
 
-
 bool GeomCullingVisibility<let PHASE : GEOM_CULLING_PHASE>(in AABB aabb)
 {
-    // Runtime debug flags
-    const bool isFrustumCullEnabled = DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED;
-    const bool isHZBCullEnabled     = DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED;
-
-    if (!isFrustumCullEnabled && !isHZBCullEnabled) {
-        return true;
-    }
-
-    if (isFrustumCullEnabled) {
+    if (COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED) {
         if (!Frustum_Visibility(COMMON_CULLING_CAMERA_FRUSTUM, aabb)) {
             return false;
         }
     }
 
     if (PHASE == GEOM_CULLING_PHASE::PHASE_2) {
-        if (!isHZBCullEnabled) {
-            return true;
-        }
+        if (COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED) {
+            SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+            sbox.Saturate();
 
-        SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
-        sbox.Saturate();
-
-        if (!HZB_Visibility(sbox)) {
-            return false;
+            if (!HZB_Visibility(sbox)) {
+                return false;
+            }
         }
     }
     

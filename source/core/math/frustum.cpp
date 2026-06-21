@@ -39,7 +39,7 @@ namespace math
 
     void Frustum::Construct(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar)
     {
-        Construct(position, rotation * M3D_AXIS_X, rotation * M3D_AXIS_Y, fovY, aspectRatio, zNear, zFar);
+        Construct(position, glm::normalize(rotation * M3D_AXIS_X), glm::normalize(rotation * M3D_AXIS_Y), fovY, aspectRatio, zNear, zFar);
     }
 
 

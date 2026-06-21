@@ -293,6 +293,6 @@ namespace eng
 
     void Camera::RecalcFrustum() noexcept
     {
-        m_frustum.Construct(m_position, GetXDir(), GetYDir(), m_fovY, m_aspectRatio, m_zNear, m_zFar);
+        m_frustum.Construct(m_position, m_rotation, m_fovY, m_aspectRatio, m_zNear, m_zFar);
     }
 }
