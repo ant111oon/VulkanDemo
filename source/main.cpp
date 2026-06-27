@@ -508,6 +508,7 @@ enum PassID : uint32_t
     PASS_ID_GEOM_CULLING_PHASE_2,
     PASS_ID_GEOM_BATCHING,
     PASS_ID_GEOM_DRAW_CMD_GEN,
+    PASS_ID_HZB_GEN,
     PASS_ID_DEPTH,
     PASS_ID_GBUFFER,
     PASS_ID_DEFERRED_LIGHTING,
@@ -517,12 +518,13 @@ enum PassID : uint32_t
     PASS_ID_IRRADIANCE_MAP_GEN,
     PASS_ID_BRDF_LUT_GEN,
     PASS_ID_PREFILT_ENV_MAP_GEN,
-    PASS_ID_HZB_GEN,
+
 #ifdef ENG_DEBUG_DRAW_ENABLED
     PASS_ID_DBG_DRAW_LINES,
     PASS_ID_DBG_DRAW_TRIANGLES,
     PASS_ID_DBG_RT_VIEW,
 #endif
+
     PASS_ID_COUNT,
 };
 
@@ -530,37 +532,50 @@ enum PassID : uint32_t
 enum DescSetID : uint32_t
 {
     DESC_SET_ID_COMMON,
+
     DESC_SET_ID_GEOM_CULLING_PHASE_1,
     DESC_SET_ID_GEOM_CULLING_PHASE_2,
+
     DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1,
     DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2,
     DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1,
     DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2,
+    
     DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1,
     DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2,
     DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1,
     DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2,
+    
     DESC_SET_ID_DEPTH_OPAQUE_PHASE_1,
     DESC_SET_ID_DEPTH_OPAQUE_PHASE_2,
     DESC_SET_ID_DEPTH_AKILL_PHASE_1,
     DESC_SET_ID_DEPTH_AKILL_PHASE_2,
+    
+    DESC_SET_ID_HZB_GEN,
+
     DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1,
     DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2,
     DESC_SET_ID_GBUFFER_AKILL_PHASE_1,
     DESC_SET_ID_GBUFFER_AKILL_PHASE_2,
+    
     DESC_SET_ID_DEFERRED_LIGHTING,
+    
     DESC_SET_ID_SKYBOX,
+    
     DESC_SET_ID_POST_PROCESSING,
+    
     DESC_SET_ID_BACKBUFFER,
+    
     DESC_SET_ID_IRRADIANCE_MAP_GEN,
     DESC_SET_ID_BRDF_LUT_GEN,
     DESC_SET_ID_PREFILT_ENV_MAP_GEN,
-    DESC_SET_ID_HZB_GEN,
+
 #ifdef ENG_DEBUG_DRAW_ENABLED
     DESC_SET_ID_DBG_DRAW_LINES,
     DESC_SET_ID_DBG_DRAW_TRIANGLES,
     DESC_SET_ID_DBG_RT_VIEW,
 #endif
+
     DESC_SET_ID_COUNT,
 };
 
@@ -1449,288 +1464,65 @@ static void RenderDebugFrustumFilled(const glm::float4x4& invViewProj, const glm
 }
 
 
-#ifdef ENG_DEBUG_UI_ENABLED
-namespace DbgUI
+static bool IsAKillMaterial(const COMMON_MATERIAL& material)
 {
-    static void FillData()
-    {
-        static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
-        static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
+    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
+}
 
-        if (ImGui::Begin("Debug")) {
-            if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-                const glm::float3 position = s_camera.GetPosition();
-                ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
 
-                ImGui::Text("Fly Camera Mode (F5):");
-                ImGui::SameLine(); 
-                ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
+static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
+{
+    return !IsAKillMaterial(material);
+}
 
-                ImGui::Text("Fixed Culling Camera (F6):");
-                if (ImGui::IsItemHovered()) {
-                    if (ImGui::BeginTooltip()) {
-                        ImGui::Text("Perform culling from fixed pos frustum view");
-                    } ImGui::EndTooltip();
-                }
-                ImGui::SameLine(); 
-                ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
-            }
 
-            if (ImGui::CollapsingHeader("Memory")) {
-                VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
-                vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+static constexpr VkIndexType GetVkIndexType()
+{
+    static_assert(std::is_same_v<IndexType, uint8_t> || std::is_same_v<IndexType, uint16_t> || std::is_same_v<IndexType, uint32_t>);
 
-                for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
-                    const VmaBudget& budget = budgets[i];
-                    
-                    if (budget.usage > 0) {
-                        const float usageMB = budget.usage / 1024.f / 1024.f;
-                        const float budgetMB = budget.budget / 1024.f / 1024.f;
-                        ImGui::Text("Heap %u: Usage: %.2f / %.2f MB (%.2f%%)", i, usageMB, budgetMB, usageMB / budgetMB * 100.f);
-                    }
-                }
-
-                ImGui::NewLine();
-                for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
-                    const float kb = s_geomStreamBuffers[i].GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Stream %s Size: %.3f %s", COMMON_GEOM_STREAM_DBG_NAMES[i], kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                {
-                    const float kb = s_geomIndexBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Stream Index Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                
-                ImGui::NewLine();
-
-                {
-                    const float kb = s_commonMeshLODBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                {
-                    const float kb = s_commonMeshBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Mesh Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                
-                ImGui::NewLine();
-
-                {
-                    const float kb = s_commonMaterialBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Material Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                
-                ImGui::NewLine();
-
-                {
-                    const float kb = s_commonInstBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
-                }
-                
-                ImGui::NewLine();
-
-                ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
-                ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
-            }
-            
-            if (ImGui::CollapsingHeader("Geom")) {
-                ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
-                
-                if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
-
-                    if (ImGui::IsItemHovered()) {
-                        if (ImGui::BeginTooltip()) {
-                            ImGui::Text("Forced LOD -1 means \'Do not force any LOD\'");
-                        } ImGui::EndTooltip();
-                    }
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNodeEx("Culling", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##GeomCulling", &s_useMeshCulling);
-                    ImGui::SameLine(); 
-                    ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-        
-                    if (s_useMeshCulling) {
-                        if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
-                                ImGui::SameLine(); 
-                                ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::TreePop();
-                            }
-                            
-                            if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
-                                ImGui::SameLine(); 
-                                ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::TreePop();
-                            }
-                        
-                            ImGui::TreePop();
-                        }
-                    }
-
-                    ImGui::TreePop();
-                }
-            }
-            
-            if (ImGui::CollapsingHeader("Passes")) {
-                if (ImGui::TreeNodeEx("Depth", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
-                    ImGui::SameLine();
-                    ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                    ImGui::TreePop();
-                }
-
-                if (ImGui::TreeNodeEx("Deferred Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
-                    ImGui::SameLine(); 
-                    ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
-
-                    ImGui::TreePop();
-                }
-            }
-
-            if (ImGui::CollapsingHeader("Tonemapping")) {
-                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset])) {
-                    for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
-                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset]);
-                        
-                        if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                            s_tonemappingPreset = TonemapPreset(i);
-                        }
-                        
-                        if (isSelected) {
-                            ImGui::SetItemDefaultFocus();
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-            }
-
-        #ifdef ENG_BUILD_DEBUG
-            if (ImGui::CollapsingHeader("Debug Vis")) {
-                ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
-                ImGui::SameLine();
-                ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
-
-                if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType])) {
-                    for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
-                        const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType]);
-                        
-                        if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                            s_dbgOutputRTType = DBG_RT_VIEW_TYPE(i);
-                        }
-                        
-                        if (isSelected) {
-                            ImGui::SetItemDefaultFocus();
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-
-                bool needExtraParams = false;
-                bool needExtraZNearFar = false;
-                bool needExtraMip = false;
-                bool needExtraFace = false;
-
-                switch (s_dbgOutputRTType) {
-                    case DBG_RT_VIEW_TYPE_NONE:
-                        break;
-                    case DBG_RT_VIEW_TYPE_COMMON_DEPTH:
-                        needExtraParams = true;
-                        needExtraZNearFar = true;
-                        break;
-                    case DBG_RT_VIEW_TYPE_COMMON_HZB:
-                        needExtraParams = true;
-                        needExtraZNearFar = true;
-                        needExtraMip = true;
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO:
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_NORMAL:
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_ROUGHNESS:
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_METALNESS:
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_AO:
-                        break;
-                    case DBG_RT_VIEW_TYPE_GBUFFER_EMISSIVE:
-                        break;
-                    case DBG_RT_VIEW_TYPE_IRRADIANCE_MAP:
-                        needExtraParams = true;
-                        needExtraFace = true;
-                        break;
-                    case DBG_RT_VIEW_TYPE_PREFILTERED_ENV_MAP:
-                        needExtraParams = true;
-                        needExtraMip = true;
-                        needExtraFace = true;
-                        break;
-                    case DBG_RT_VIEW_TYPE_BRDF_LUT:
-                        break;
-                    case DBG_RT_VIEW_TYPE_SKYBOX:
-                        needExtraParams = true;
-                        needExtraFace = true;
-                        needExtraMip = true;
-                        break;
-                }
-
-                if (needExtraParams && ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (needExtraZNearFar) {
-                        ImGui::SliderFloat("Z Near", &s_dbgDepthOutputRTZNear, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
-                        ImGui::SliderFloat("Z Far", &s_dbgDepthOutputRTZFar, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
-                        
-                        if (s_dbgDepthOutputRTZFar <= s_dbgDepthOutputRTZNear) {
-                            s_dbgDepthOutputRTZFar = s_dbgDepthOutputRTZNear + 0.1f;
-                        }
-                    }
-
-                    if (needExtraMip) {
-                        ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT, 20));
-                    }
-
-                    if (needExtraFace) {
-                        static constexpr const char* FACE_NAMES[M3D_CUBEMAP_FACE_COUNT] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
-
-                        if (ImGui::BeginCombo("Face", FACE_NAMES[s_dbgOutputRTFace])) {
-                            for (size_t i = 0; i < M3D_CUBEMAP_FACE_COUNT; ++i) {
-                                const bool isSelected = (FACE_NAMES[i] == FACE_NAMES[s_dbgOutputRTFace]);
-                                
-                                if (ImGui::Selectable(FACE_NAMES[i], isSelected)) {
-                                    s_dbgOutputRTFace = i;
-                                }
-                                
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                    }
-
-                    ImGui::TreePop();
-                }
-            }
-        #endif
-
-            // if (ImGui::Begin("Viewport")) {
-            //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
-                
-            //     ImVec2 size = ImGui::GetWindowSize();
-            //     size.x = std::min((float)s_colorRT16F.GetSizeX(), size.x);
-            //     size.x = std::min((float)s_colorRT16F.GetSizeY(), size.y);
-
-            //     ImGui::Image(ID, size);
-            // } ImGui::End();
-        } ImGui::End();
+    if constexpr (std::is_same_v<IndexType, uint8_t>) {
+        return VK_INDEX_TYPE_UINT8;
+    } else if constexpr (std::is_same_v<IndexType, uint16_t>) {
+        return VK_INDEX_TYPE_UINT16;
+    } else {
+        return VK_INDEX_TYPE_UINT32;
     }
 }
-#endif
+
+
+static void SetWireframeMode(vkn::CmdBuffer& cmdBuffer, bool isWireframed)
+{
+    cmdBuffer.CmdSetPolygonMode(isWireframed ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL);
+}
+
+
+template <typename Func, typename... Args>
+static void ImmediateSubmitQueue(vkn::Queue& queue, Func func, Args&&... args)
+{   
+    s_immediateSubmitFinishedFence.Reset();
+    s_pImmediateSubmitCmdBuffer->Reset();
+
+    s_pImmediateSubmitCmdBuffer->Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
+    s_pImmediateSubmitCmdBuffer->End();
+
+    queue.Submit(*s_pImmediateSubmitCmdBuffer, &s_immediateSubmitFinishedFence);
+
+    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
+}
+
+
+static void InitWindow()
+{
+    eng::WindowInitInfo wndInitInfo = {};
+    wndInitInfo.pTitle = APP_NAME;
+    wndInitInfo.width = 1280;
+    wndInitInfo.height = 720;
+    wndInitInfo.isVisible = false;
+
+    s_pWnd = std::make_unique<eng::Win32Window>(wndInitInfo);
+    ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
+}
 
 
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
@@ -1787,54 +1579,6 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 #endif
 
 
-static bool IsAKillMaterial(const COMMON_MATERIAL& material)
-{
-    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
-}
-
-
-static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
-{
-    return !IsAKillMaterial(material);
-}
-
-
-static constexpr VkIndexType GetVkIndexType()
-{
-    static_assert(std::is_same_v<IndexType, uint8_t> || std::is_same_v<IndexType, uint16_t> || std::is_same_v<IndexType, uint32_t>);
-
-    if constexpr (std::is_same_v<IndexType, uint8_t>) {
-        return VK_INDEX_TYPE_UINT8;
-    } else if constexpr (std::is_same_v<IndexType, uint16_t>) {
-        return VK_INDEX_TYPE_UINT16;
-    } else {
-        return VK_INDEX_TYPE_UINT32;
-    }
-}
-
-
-static void SetWireframeMode(vkn::CmdBuffer& cmdBuffer, bool isWireframed)
-{
-    cmdBuffer.CmdSetPolygonMode(isWireframed ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL);
-}
-
-
-template <typename Func, typename... Args>
-static void ImmediateSubmitQueue(vkn::Queue& queue, Func func, Args&&... args)
-{   
-    s_immediateSubmitFinishedFence.Reset();
-    s_pImmediateSubmitCmdBuffer->Reset();
-
-    s_pImmediateSubmitCmdBuffer->Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        func(*s_pImmediateSubmitCmdBuffer, std::forward<Args>(args)...);
-    s_pImmediateSubmitCmdBuffer->End();
-
-    queue.Submit(*s_pImmediateSubmitCmdBuffer, &s_immediateSubmitFinishedFence);
-
-    s_immediateSubmitFinishedFence.WaitFor(10'000'000'000);
-}
-
-
 static void CreateVkInstance()
 {
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
@@ -1883,6 +1627,17 @@ static void CreateVkInstance()
 }
 
 
+static void CreateVkSurface()
+{
+    vkn::SurfaceCreateInfo surfCreateInfo = {};
+    surfCreateInfo.pInstance = &s_vkInstance;
+    surfCreateInfo.pWndHandle = s_pWnd->GetNativeHandle();
+
+    s_vkSurface.Create(surfCreateInfo);
+    CORE_ASSERT(s_vkSurface.IsCreated());
+}
+
+
 static void CreateVkSwapchain()
 {
     vkn::SwapchainCreateInfo swapchainCreateInfo = {};
@@ -1905,6 +1660,40 @@ static void CreateVkSwapchain()
     s_vkSwapchain.Create(swapchainCreateInfo, succeded);
 
     CORE_ASSERT(succeded && s_vkSwapchain.IsCreated());
+}
+
+
+static void CreateVkMemoryAllocator()
+{
+    vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
+    vkAllocatorCreateInfo.pDevice = &s_vkDevice;
+    // RenderDoc doesn't work with buffer device address if you use VMA :(
+    vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    s_vkAllocator.Create(vkAllocatorCreateInfo);
+    CORE_ASSERT(s_vkAllocator.IsCreated());
+}
+
+
+static void CreateCommonCmdPool()
+{
+    vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
+    cmdPoolCreateInfo.pDevice = &s_vkDevice;
+    cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueue().GetFamilyIndex();
+    cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdPoolCreateInfo.size = 2;
+    
+    s_commonCmdPool.Create(cmdPoolCreateInfo);
+    s_vkDevice.SetObjDebugName(s_commonCmdPool, "COMMON_CMD_POOL");
+}
+
+
+static void CreateImmediateSubmitObjects()
+{
+    s_pImmediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    s_vkDevice.SetObjDebugName(*s_pImmediateSubmitCmdBuffer, "IMMEDIATE_CMD_BUFFER");
+
+    s_immediateSubmitFinishedFence.Create(&s_vkDevice);
 }
 
 
@@ -2468,6 +2257,23 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     });
 
     CORE_LOG_INFO("Skybox loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void CreateSyncObjects()
+{
+    const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
+
+    s_renderFinishedSemaphores.resize(swapchainImageCount);
+    for (size_t i = 0; i < swapchainImageCount; ++i) {
+        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
+        s_vkDevice.SetObjDebugName(s_renderFinishedSemaphores[i], "RND_FINISH_SEMAPHORE_%zu", i);
+    }
+    s_presentFinishedSemaphore.Create(&s_vkDevice);
+    s_vkDevice.SetObjDebugName(s_presentFinishedSemaphore, "PRESENT_FINISH_SEMAPHORE");
+
+    s_renderFinishedFence.Create(&s_vkDevice);
+    s_vkDevice.SetObjDebugName(s_renderFinishedFence, "RND_FINISH_FENCE");
 }
 
 
@@ -3103,32 +2909,44 @@ static void CreateDescriptorBuffer()
     std::array<vkn::DescriptorSetLayout*, DESC_SET_ID_COUNT> layouts = {};
     
     layouts[DESC_SET_ID_COMMON]                           = &s_descSetLayouts[PASS_ID_COMMON];
+
     layouts[DESC_SET_ID_GEOM_CULLING_PHASE_1]             = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1];
     layouts[DESC_SET_ID_GEOM_CULLING_PHASE_2]             = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2];
+    
     layouts[DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1]     = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
     layouts[DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2]     = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
     layouts[DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1]      = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
     layouts[DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2]      = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
+    
     layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
     layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
     layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
     layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
-    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_1]   = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_2]   = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_1]    = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_2]    = &s_descSetLayouts[PASS_ID_DEPTH];
+    
+    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_DEPTH];
+    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_DEPTH];
+    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_DEPTH];
+    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_DEPTH];
+    
+    layouts[DESC_SET_ID_HZB_GEN] = &s_descSetLayouts[PASS_ID_HZB_GEN];
+
     layouts[DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_GBUFFER];
     layouts[DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_GBUFFER];
     layouts[DESC_SET_ID_GBUFFER_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_GBUFFER];
     layouts[DESC_SET_ID_GBUFFER_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_GBUFFER];
+    
     layouts[DESC_SET_ID_DEFERRED_LIGHTING]      = &s_descSetLayouts[PASS_ID_DEFERRED_LIGHTING];
+    
     layouts[DESC_SET_ID_SKYBOX]                 = &s_descSetLayouts[PASS_ID_SKYBOX];
+    
     layouts[DESC_SET_ID_POST_PROCESSING]        = &s_descSetLayouts[PASS_ID_POST_PROCESSING];
+    
     layouts[DESC_SET_ID_BACKBUFFER]             = &s_descSetLayouts[PASS_ID_BACKBUFFER];
+    
     layouts[DESC_SET_ID_IRRADIANCE_MAP_GEN]   = &s_descSetLayouts[PASS_ID_IRRADIANCE_MAP_GEN];
     layouts[DESC_SET_ID_BRDF_LUT_GEN]         = &s_descSetLayouts[PASS_ID_BRDF_LUT_GEN];
     layouts[DESC_SET_ID_PREFILT_ENV_MAP_GEN]  = &s_descSetLayouts[PASS_ID_PREFILT_ENV_MAP_GEN];
-    layouts[DESC_SET_ID_HZB_GEN]              = &s_descSetLayouts[PASS_ID_HZB_GEN];
+    
 #ifdef ENG_DEBUG_DRAW_ENABLED
     layouts[DESC_SET_ID_DBG_DRAW_LINES]       = &s_descSetLayouts[PASS_ID_DBG_DRAW_LINES];
     layouts[DESC_SET_ID_DBG_DRAW_TRIANGLES]   = &s_descSetLayouts[PASS_ID_DBG_DRAW_TRIANGLES];
@@ -3146,24 +2964,35 @@ static void CreateDescriptorBuffer()
 static void CreateDescriptorSets()
 {
     CreateCommonDescriptorSetLayout();
-    CreateZPassDescriptorSetLayout();
+
     CreateGeomCullingPhase1DescriptorSetLayout();
     CreateGeomCullingPhase2DescriptorSetLayout();
     CreateGeomBatchingDescriptorSetLayout();
     CreateGeomDrawCmdGenDescriptorSetLayout();
+    
+    CreateZPassDescriptorSetLayout();
+    
+    CreateHZBGenDescriptorSetLayout();
+    
     CreateGBufferDescriptorSetLayout();
+    
     CreateDeferredLightingDescriptorSetLayout();
+    
     CreatePostProcessingDescriptorSetLayout();
+    
     CreateBackbufferPassDescriptorSetLayout();
+    
     CreateSkyboxDescriptorSetLayout();
+    
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
-    CreateHZBGenDescriptorSetLayout();
+    
     CreateDbgDrawLineDescriptorSetLayout();
     CreateDbgDrawTriangleDescriptorSetLayout();
     CreateDbgRTViewDescriptorSetLayout();
 
+    
     CreateDescriptorBuffer();
 }
 
@@ -3240,6 +3069,21 @@ static void CreateZPassPipelineLayout()
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
     s_vkDevice.SetObjDebugName(layout, "ZPASS_PIPELINE_LAYOUT");
+}
+
+
+static void CreateHZBGenPipelineLayout()
+{
+    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
+    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_HZB_GEN];
+
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
+
+    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_HZB_GEN];
+
+    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
+    s_vkDevice.SetObjDebugName(layout, "HZB_GEN_PIPELINE_LAYOUT");
 }
 
 
@@ -3350,21 +3194,6 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
 
     layout.Create(&s_vkDevice, layoutPtrs);
     s_vkDevice.SetObjDebugName(layout, "GRDF_LUT_GEN_PIPELINE_LAYOUT");
-}
-
-
-static void CreateHZBGenPipelineLayout()
-{
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_HZB_GEN];
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
-
-    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_HZB_GEN];
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "HZB_GEN_PIPELINE_LAYOUT");
 }
 
 
@@ -3552,6 +3381,28 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     pso = s_graphicsPSOBuilder.Build();
     
     s_vkDevice.SetObjDebugName(pso, "ZPASS_PSO");
+}
+
+
+static void CreateHZBGenPipeline(const fs::path& csPath)
+{
+    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
+        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    }
+    
+    vkn::Shader shader;
+    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
+    s_vkDevice.SetObjDebugName(shader, "HZB_GEN_COMPUTE_SHADER");
+
+    vkn::PSO& pso = s_PSOs[PASS_ID_HZB_GEN];
+
+    pso = s_computePSOBuilder.Reset()
+        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+        .SetShader(shader)
+        .SetLayout(s_PSOLayouts[PASS_ID_HZB_GEN])
+        .Build();
+
+    s_vkDevice.SetObjDebugName(pso, "HZB_GEN_PSO");
 }
     
 
@@ -3840,28 +3691,6 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
 }
 
 
-static void CreateHZBGenPipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "HZB_GEN_COMPUTE_SHADER");
-
-    vkn::PSO& pso = s_PSOs[PASS_ID_HZB_GEN];
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(s_PSOLayouts[PASS_ID_HZB_GEN])
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "HZB_GEN_PSO");
-}
-
-
 static void CreateDbgDrawLinePipeline(const fs::path& vsPath, const fs::path& psPath)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
@@ -4009,34 +3838,53 @@ static void CreatePipelines()
     CreateGeomCullingPhase2PipelineLayout();
     CreateGeomBatchingPipelineLayout();
     CreateGeomDrawCmdGenPipelineLayout();
+
     CreateZPassPipelineLayout();
+    
+    CreateHZBGenPipelineLayout();
+    
     CreateGBufferPipelineLayout();
+    
     CreateDeferredLightingPipelineLayout();
+    
     CreatePostProcessingPipelineLayout();
+    
     CreateBackbufferPassPipelineLayout();
+    
     CreateSkyboxPipelineLayout();
+    
     CreateIrradianceMapGenPipelineLayout();
     CreatePrefilteredEnvMapGenPipelineLayout();
     CreateBRDFIntegrationLUTGenPipelineLayout();
-    CreateHZBGenPipelineLayout();
+    
     CreateDbgDrawLinePipelineLayout();
     CreateDbgDrawTrianglePipelineLayout();
     CreateDbgRTViewPipelineLayout();
+
 
     CreateGeomCullingPhase1Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_1.cs.spv"));
     CreateGeomCullingPhase2Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_2.cs.spv"));
     CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_batching.cs.spv"));
     CreateGeomDrawCmdGenPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_draw_cmd_gen.cs.spv"));
+    
     CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
+    
+    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
+    
     CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
+    
     CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
+    
     CreatePostProcessingPipeline(RND_SHADER_SPIRV_FULL_PATH("post_processing.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("post_processing.ps.spv"));
+    
     CreateBackbufferPassPipeline(RND_SHADER_SPIRV_FULL_PATH("backbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("backbuffer.ps.spv"));
+    
     CreateSkyboxPipeline(RND_SHADER_SPIRV_FULL_PATH("skybox.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("skybox.ps.spv"));
+    
     CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("irradiance_map_gen.cs.spv"));
     CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("prefiltered_env_map_gen.cs.spv"));
     CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("brdf_integration_gen.cs.spv"));
-    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
+    
     CreateDbgDrawLinePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.ps.spv"));
     CreateDbgDrawTrianglePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.ps.spv"));
     CreateDbgRTViewPipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.ps.spv"));
@@ -4625,6 +4473,20 @@ static void WriteZPassDescriptorSet()
 }
 
 
+static void WriteHZBGenDescriptorSets()
+{
+    for (uint32_t i = 0; i < s_HZB.GetMipCount(); ++i) {
+        vkn::TextureView& mip = s_HZBMipViews[i];
+
+        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_GENERAL);
+    }
+
+    // First source mip must contain original depth buffer
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+
 static void WriteGBufferDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
 {
     CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
@@ -4714,20 +4576,6 @@ static void WriteBRDFIntegrationLUTGenDescriptorSet()
 }
 
 
-static void WriteHZBGenDescriptorSets()
-{
-    for (uint32_t i = 0; i < s_HZB.GetMipCount(); ++i) {
-        vkn::TextureView& mip = s_HZBMipViews[i];
-
-        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    // First source mip must contain original depth buffer
-    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_HZB_GEN, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
 static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
@@ -4803,19 +4651,29 @@ static void WriteDbgRTViewDescriptorSet()
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
-    WriteZPassDescriptorSet();
+
     WriteGeomCullingDescriptorSet();
     WriteGeomBatchingDescriptorSet();
     WriteGeomDrawCmdGenDescriptorSet();
+    
+    WriteZPassDescriptorSet();
+    
+    WriteHZBGenDescriptorSets();
+    
     WriteGBufferDescriptorSet();
+    
     WriteDeferredLightingDescriptorSet();
+    
     WritePostProcessingDescriptorSet();
+    
     WriteBackbufferPassDescriptorSet();
+    
     WriteSkyboxDescriptorSet();
+    
     WriteIrradianceMapGenDescriptorSet();
     WritePrefilteredEnvMapGenDescriptorSets();
     WriteBRDFIntegrationLUTGenDescriptorSet();
-    WriteHZBGenDescriptorSets();
+    
     WriteDbgDrawLineDescriptorSet();
     WriteDbgDrawTriangleDescriptorSet();
     WriteDbgRTViewDescriptorSet();
@@ -5526,6 +5384,14 @@ static void LoadScene(const fs::path& filepath)
     LoadSceneTexturesData(asset.get(), filepath.parent_path());
     LoadSceneMaterialData(asset.get());
     LoadSceneInstData(asset.get());
+
+    if (!s_cameraLoaded) {
+        s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
+        s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
+        s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
+    }
+
+    s_camera.Update();
 
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", filepath.filename().string().c_str(), timer.End().GetDuration<float, std::milli>());
 }
@@ -6830,6 +6696,288 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
 
 #ifdef ENG_DEBUG_UI_ENABLED
+namespace DbgUI
+{
+    static void FillData()
+    {
+        static constexpr ImVec4 IMGUI_RED_COLOR(1.f, 0.f, 0.f, 1.f);
+        static constexpr ImVec4 IMGUI_GREEN_COLOR(0.f, 1.f, 0.f, 1.f);
+
+        if (ImGui::Begin("Debug")) {
+            if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+                const glm::float3 position = s_camera.GetPosition();
+                ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
+
+                ImGui::Text("Fly Camera Mode (F5):");
+                ImGui::SameLine(); 
+                ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
+
+                ImGui::Text("Fixed Culling Camera (F6):");
+                if (ImGui::IsItemHovered()) {
+                    if (ImGui::BeginTooltip()) {
+                        ImGui::Text("Perform culling from fixed pos frustum view");
+                    } ImGui::EndTooltip();
+                }
+                ImGui::SameLine(); 
+                ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
+            }
+
+            if (ImGui::CollapsingHeader("Memory")) {
+                VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
+                vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+
+                for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+                    const VmaBudget& budget = budgets[i];
+                    
+                    if (budget.usage > 0) {
+                        const float usageMB = budget.usage / 1024.f / 1024.f;
+                        const float budgetMB = budget.budget / 1024.f / 1024.f;
+                        ImGui::Text("Heap %u: Usage: %.2f / %.2f MB (%.2f%%)", i, usageMB, budgetMB, usageMB / budgetMB * 100.f);
+                    }
+                }
+
+                ImGui::NewLine();
+                for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
+                    const float kb = s_geomStreamBuffers[i].GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Stream %s Size: %.3f %s", COMMON_GEOM_STREAM_DBG_NAMES[i], kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                {
+                    const float kb = s_geomIndexBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Stream Index Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                
+                ImGui::NewLine();
+
+                {
+                    const float kb = s_commonMeshLODBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                {
+                    const float kb = s_commonMeshBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Geom Mesh Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                
+                ImGui::NewLine();
+
+                {
+                    const float kb = s_commonMaterialBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Material Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                
+                ImGui::NewLine();
+
+                {
+                    const float kb = s_commonInstBuffer.GetMemorySize() / 1024.f;
+                    ImGui::TextDisabled("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                }
+                
+                ImGui::NewLine();
+
+                ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
+                ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
+            }
+            
+            if (ImGui::CollapsingHeader("Geom")) {
+                ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
+                
+                if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
+
+                    if (ImGui::IsItemHovered()) {
+                        if (ImGui::BeginTooltip()) {
+                            ImGui::Text("Forced LOD -1 means \'Do not force any LOD\'");
+                        } ImGui::EndTooltip();
+                    }
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Culling", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##GeomCulling", &s_useMeshCulling);
+                    ImGui::SameLine(); 
+                    ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+        
+                    if (s_useMeshCulling) {
+                        if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
+                                ImGui::SameLine(); 
+                                ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                                ImGui::TreePop();
+                            }
+                            
+                            if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
+                                ImGui::SameLine(); 
+                                ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+    
+                                ImGui::TreePop();
+                            }
+                        
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+            
+            if (ImGui::CollapsingHeader("Passes")) {
+                if (ImGui::TreeNodeEx("Depth", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
+                    ImGui::SameLine();
+                    ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNodeEx("Deferred Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
+                    ImGui::SameLine(); 
+                    ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
+
+                    ImGui::TreePop();
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Tonemapping")) {
+                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset])) {
+                    for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
+                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset]);
+                        
+                        if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
+                            s_tonemappingPreset = TonemapPreset(i);
+                        }
+                        
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+
+        #ifdef ENG_BUILD_DEBUG
+            if (ImGui::CollapsingHeader("Debug Vis")) {
+                ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
+                ImGui::SameLine();
+                ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
+
+                if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType])) {
+                    for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
+                        const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType]);
+                        
+                        if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
+                            s_dbgOutputRTType = DBG_RT_VIEW_TYPE(i);
+                        }
+                        
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                bool needExtraParams = false;
+                bool needExtraZNearFar = false;
+                bool needExtraMip = false;
+                bool needExtraFace = false;
+
+                switch (s_dbgOutputRTType) {
+                    case DBG_RT_VIEW_TYPE_NONE:
+                        break;
+                    case DBG_RT_VIEW_TYPE_COMMON_DEPTH:
+                        needExtraParams = true;
+                        needExtraZNearFar = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_COMMON_HZB:
+                        needExtraParams = true;
+                        needExtraZNearFar = true;
+                        needExtraMip = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_NORMAL:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_ROUGHNESS:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_METALNESS:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_AO:
+                        break;
+                    case DBG_RT_VIEW_TYPE_GBUFFER_EMISSIVE:
+                        break;
+                    case DBG_RT_VIEW_TYPE_IRRADIANCE_MAP:
+                        needExtraParams = true;
+                        needExtraFace = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_PREFILTERED_ENV_MAP:
+                        needExtraParams = true;
+                        needExtraMip = true;
+                        needExtraFace = true;
+                        break;
+                    case DBG_RT_VIEW_TYPE_BRDF_LUT:
+                        break;
+                    case DBG_RT_VIEW_TYPE_SKYBOX:
+                        needExtraParams = true;
+                        needExtraFace = true;
+                        needExtraMip = true;
+                        break;
+                }
+
+                if (needExtraParams && ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (needExtraZNearFar) {
+                        ImGui::SliderFloat("Z Near", &s_dbgDepthOutputRTZNear, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
+                        ImGui::SliderFloat("Z Far", &s_dbgDepthOutputRTZFar, s_camera.GetZNear(), s_camera.GetZFar(), "%.2f");
+                        
+                        if (s_dbgDepthOutputRTZFar <= s_dbgDepthOutputRTZNear) {
+                            s_dbgDepthOutputRTZFar = s_dbgDepthOutputRTZNear + 0.1f;
+                        }
+                    }
+
+                    if (needExtraMip) {
+                        ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT, 20));
+                    }
+
+                    if (needExtraFace) {
+                        static constexpr const char* FACE_NAMES[M3D_CUBEMAP_FACE_COUNT] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+
+                        if (ImGui::BeginCombo("Face", FACE_NAMES[s_dbgOutputRTFace])) {
+                            for (size_t i = 0; i < M3D_CUBEMAP_FACE_COUNT; ++i) {
+                                const bool isSelected = (FACE_NAMES[i] == FACE_NAMES[s_dbgOutputRTFace]);
+                                
+                                if (ImGui::Selectable(FACE_NAMES[i], isSelected)) {
+                                    s_dbgOutputRTFace = i;
+                                }
+                                
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    ImGui::TreePop();
+                }
+            }
+        #endif
+
+            // if (ImGui::Begin("Viewport")) {
+            //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
+                
+            //     ImVec2 size = ImGui::GetWindowSize();
+            //     size.x = std::min((float)s_colorRT16F.GetSizeX(), size.x);
+            //     size.x = std::min((float)s_colorRT16F.GetSizeY(), size.y);
+
+            //     ImGui::Image(ID, size);
+            // } ImGui::End();
+        } ImGui::End();
+    }
+}
+
+
 static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 {
     ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", eng::ProfileColor::Red);
@@ -7150,14 +7298,7 @@ void ProcessFrame()
 
 int main(int argc, char* argv[])
 {
-    eng::WindowInitInfo wndInitInfo = {};
-    wndInitInfo.pTitle = APP_NAME;
-    wndInitInfo.width = 1280;
-    wndInitInfo.height = 720;
-    wndInitInfo.isVisible = false;
-
-    s_pWnd = std::make_unique<eng::Win32Window>(wndInitInfo);
-    ENG_ASSERT(s_pWnd && s_pWnd->IsCreated());
+    InitWindow();
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
@@ -7165,23 +7306,8 @@ int main(int argc, char* argv[])
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
     LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
-    if (!s_cameraLoaded) {
-        s_camera.SetPosition(glm::float3(0.f, 0.f, 16.f));
-        s_camera.SetRotation(glm::quatLookAt(-M3D_AXIS_Z, M3D_AXIS_Y));
-        s_camera.SetPerspProjection(glm::radians(90.f), (float)s_pWnd->GetWidth() / s_pWnd->GetHeight(), CAMERA_ZNEAR, CAMERA_ZFAR);
-    }
-
-    s_camera.Update();
-
     CreateVkInstance();    
-
-    vkn::SurfaceCreateInfo surfCreateInfo = {};
-    surfCreateInfo.pInstance = &s_vkInstance;
-    surfCreateInfo.pWndHandle = s_pWnd->GetNativeHandle();
-
-    s_vkSurface.Create(surfCreateInfo);
-    CORE_ASSERT(s_vkSurface.IsCreated());
-
+    CreateVkSurface();    
     CreateVkPhysAndLogicalDevices();
 
 #ifdef ENG_PROFILING_ENABLED
@@ -7189,29 +7315,12 @@ int main(int argc, char* argv[])
     CORE_ASSERT(vkn::GetProfiler().IsCreated());
 #endif
 
-    vkn::AllocatorCreateInfo vkAllocatorCreateInfo = {}; 
-    vkAllocatorCreateInfo.pDevice = &s_vkDevice;
-    // RenderDoc doesn't work with buffer device address if you use VMA :(
-    vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-
-    s_vkAllocator.Create(vkAllocatorCreateInfo);
-    CORE_ASSERT(s_vkAllocator.IsCreated());
-
     CreateVkSwapchain();
+    CreateVkMemoryAllocator();
 
-    vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
-    cmdPoolCreateInfo.pDevice = &s_vkDevice;
-    cmdPoolCreateInfo.queueFamilyIndex = s_vkDevice.GetQueue().GetFamilyIndex();
-    cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmdPoolCreateInfo.size = 2;
-    
-    s_commonCmdPool.Create(cmdPoolCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonCmdPool, "COMMON_CMD_POOL");
-    
-    s_pImmediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_vkDevice.SetObjDebugName(*s_pImmediateSubmitCmdBuffer, "IMMEDIATE_CMD_BUFFER");
+    CreateCommonCmdPool();
 
-    s_immediateSubmitFinishedFence.Create(&s_vkDevice);
+    CreateImmediateSubmitObjects();
 
     CreateCommonStagingBuffer();
 
@@ -7238,18 +7347,7 @@ int main(int argc, char* argv[])
 
     s_dbgUI.Create(*s_pWnd, s_vkDevice, s_colorRT8U.GetFormat());
 
-    const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
-
-    s_renderFinishedSemaphores.resize(swapchainImageCount);
-    for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
-        s_vkDevice.SetObjDebugName(s_renderFinishedSemaphores[i], "RND_FINISH_SEMAPHORE_%zu", i);
-    }
-    s_presentFinishedSemaphore.Create(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_presentFinishedSemaphore, "PRESENT_FINISH_SEMAPHORE");
-
-    s_renderFinishedFence.Create(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_renderFinishedFence, "RND_FINISH_FENCE");
+    CreateSyncObjects();
     
     s_pRenderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     s_vkDevice.SetObjDebugName(*s_pRenderCmdBuffer, "RND_CMD_BUFFER");
