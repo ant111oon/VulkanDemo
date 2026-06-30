@@ -20,13 +20,14 @@ namespace eng
         void Destroy() noexcept;
 
         void SetPerspProjection(float fovY, float aspectRatio, float zNear, float zFar) noexcept;
-        void SetOrthoProjection(float left, float right, float top, float bottom, float zNear, float zFar) noexcept;
+        void SetOrthoProjection(float left, float right, float bottom, float top, float zNear, float zFar) noexcept;
 
         void SetFovY(float radians) noexcept;
         void SetAspectRatio(float aspect) noexcept;
         void SetAspectRatio(uint32_t width, uint32_t height) noexcept;
         void SetZNear(float zNear) noexcept;
         void SetZFar(float zFar) noexcept;
+        void SetZNearFar(float zNear, float zFar) noexcept;
 
         void SetOrthoLeft(float left) noexcept;
         void SetOrthoRight(float right) noexcept;
@@ -36,6 +37,7 @@ namespace eng
         void Move(const glm::float3& offset) noexcept;
         void MoveAlongDir(const glm::float3& dir, float distance) noexcept;
 
+        void SetLookAt(const glm::float3& target, const glm::float3& up = M3D_AXIS_Y) noexcept;
         void SetRotation(const glm::quat& rotation) noexcept;
         void SetPosition(const glm::float3& position) noexcept;
         void SetTransform(const glm::float4x4& transform) noexcept;

@@ -118,6 +118,17 @@ void SkyboxView(out float4 color, in uint2 pixCoord, in uint face, in uint mip)
 }
 
 
+void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
+{
+    const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
+    const uint index = clamp(cascade, 0, COMMON_CSM_CASCADE_COUNT - 1);
+
+    const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float3(uv, index), 0).r;
+
+    color = float4(FLOAT3(depth), 1.f);
+}
+
+
 struct DBG_RT_VIEW_PS_OUTPUT
 {
     [[vk::location(0)]] float4 color;
@@ -167,6 +178,9 @@ DBG_RT_VIEW_PS_OUTPUT main(DBG_RT_VIEW_VS_OUTPUT input, uint2 pixCoord : SV_Posi
             break;
         case DBG_RT_VIEW_TYPE::SKYBOX:
             SkyboxView(result.color, pixCoord, DBG_RT_VIEW_FACE, DBG_RT_VIEW_MIP);
+            break;
+        case DBG_RT_VIEW_TYPE::CSM_DEPTH:
+            CSMView(result.color, pixCoord, DBG_RT_CSM_CASCADE_IDX);
             break;
     }
 

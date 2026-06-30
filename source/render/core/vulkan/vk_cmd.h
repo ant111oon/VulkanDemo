@@ -311,6 +311,7 @@ namespace vkn
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
         DescriptorBuffer* m_pDescrBufferBindingCache;
         PSO* m_pPSOCache;
+        Buffer* m_pIndexBufferCache;
 
         ID m_ID = INVALID_ID;
 

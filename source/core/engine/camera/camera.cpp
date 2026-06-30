@@ -59,7 +59,7 @@ namespace eng
     }
 
 
-    void Camera::SetOrthoProjection(float left, float right, float top, float bottom, float zNear, float zFar) noexcept
+    void Camera::SetOrthoProjection(float left, float right, float bottom, float top, float zNear, float zFar) noexcept
     {
         m_flags.set(FLAG_IS_ORTHO_PROJ, true);
 
@@ -131,6 +131,13 @@ namespace eng
     }
 
 
+    void Camera::SetZNearFar(float zNear, float zFar) noexcept
+    {
+        SetZFar(zFar);
+        SetZNear(zNear);
+    }
+
+
     void Camera::SetOrthoLeft(float left) noexcept
     {
         if (!math::IsEqual(m_left, left)) {
@@ -192,6 +199,17 @@ namespace eng
             m_position += dir * distance;
             RequestRecalcViewMatrix();
         }
+    }
+
+
+    void Camera::SetLookAt(const glm::float3& target, const glm::float3& up) noexcept
+    {
+        CORE_ASSERT(!math::IsEqual(m_position, target));
+
+        const glm::float3 direction = glm::normalize(target - m_position);
+        CORE_ASSERT(!math::IsEqual(glm::abs(glm::dot(target, up)), 1.f));
+
+        SetRotation(glm::quatLookAt(direction, up));
     }
 
 
@@ -293,6 +311,10 @@ namespace eng
 
     void Camera::RecalcFrustum() noexcept
     {
-        m_frustum.Construct(m_position, m_rotation, m_fovY, m_aspectRatio, m_zNear, m_zFar);
+        if (IsOrthoProj()) {
+            m_frustum.Construct(m_position, m_rotation, m_left, m_right, m_bottom, m_top, m_zNear, m_zFar);
+        } else {
+            m_frustum.Construct(m_position, m_rotation, m_fovY, m_aspectRatio, m_zNear, m_zFar);
+        }
     }
 }

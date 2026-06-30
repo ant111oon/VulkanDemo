@@ -9,7 +9,7 @@ ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstan
 {
     ZPASS_VS_OUTPUT result = (ZPASS_VS_OUTPUT)0;
 
-    ZPASS_INPUT_DATA inputData = PrepareZPassVSInputData(vertID);
+    ZPASS_INPUT_DATA inputData = PrepareZPassVSInputData(vertID, ZPASS_IS_AKILL_PASS);
 
     const uint instID = ZPASS_INST_ID_QUEUE[instIndex];
     const COMMON_INST inst = COMMON_INST_BUFFER[instID];

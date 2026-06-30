@@ -1,6 +1,7 @@
 #ifndef GEOM_STRUCTS_H
 #define GEOM_STRUCTS_H
 
+
 enum GEOM_QUEUE : uint
 {
     OPAQUE,

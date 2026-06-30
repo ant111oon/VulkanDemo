@@ -196,8 +196,14 @@ namespace vkn
     }
 
 
-    BarrierList& BarrierList::AddTextureBarrier(Texture& texture, VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask,
-        VkImageAspectFlags aspectMask, uint32_t baseMip, uint32_t mipCount, uint32_t baseLayer, uint32_t layerCount
+    BarrierList& BarrierList::AddTextureBarrier(
+        Texture& texture, 
+        VkImageLayout dstLayout, 
+        VkPipelineStageFlags2 dstStageMask, 
+        VkAccessFlags2 dstAccessMask,
+        VkImageAspectFlags aspectMask, 
+        uint32_t baseMip, uint32_t mipCount, 
+        uint32_t baseLayer, uint32_t layerCount
     ) {
         VK_ASSERT_MSG(IsStarted(), "Attempt to add barrier in barrier list which wasn't started");
         VK_ASSERT(texture.IsCreated());
@@ -308,6 +314,7 @@ namespace vkn
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
         std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
         std::swap(m_pPSOCache, cmdBuffer.m_pPSOCache);
+        std::swap(m_pIndexBufferCache, cmdBuffer.m_pIndexBufferCache);
         std::swap(m_state, cmdBuffer.m_state);
 
         Base::operator=(std::move(cmdBuffer));
@@ -709,7 +716,13 @@ namespace vkn
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
+        if (m_pIndexBufferCache == &idxBuffer) {
+            return *this;
+        }
+
         vkCmdBindIndexBuffer(Get(), idxBuffer.Get(), offset, idxType);
+
+        m_pIndexBufferCache = &idxBuffer;
 
         return *this;
     }
@@ -1002,6 +1015,7 @@ namespace vkn
         m_bufImageCopyCache = {};
         m_pDescrBufferBindingCache = nullptr;
         m_pPSOCache = nullptr;
+        m_pIndexBufferCache = nullptr;
 
         m_ID = INVALID_ID;
 
@@ -1023,6 +1037,7 @@ namespace vkn
         m_bufImageCopyCache.clear();
         m_pDescrBufferBindingCache = nullptr;
         m_pPSOCache = nullptr;
+        m_pIndexBufferCache = nullptr;
 
         return *this;
     }

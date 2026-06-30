@@ -63,10 +63,12 @@ namespace math
         Frustum(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
         Frustum(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
         Frustum(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
-        
+        Frustum(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar);
+
         void Construct(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
         void Construct(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
         void Construct(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
+        void Construct(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar);
         
         bool IsIntersect(const AABB& aabb) const;
 
@@ -79,9 +81,7 @@ namespace math
     };
 
 
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& view, const glm::float4x4& proj);
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& viewProj);
-    FrustumCorners GetFrustumCornersWCS_Inv(const glm::float4x4& invViewProj);
-
-    glm::float3 GetFrustumCenterWCS(const FrustumCorners& corners);
+    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& view, const glm::float4x4& proj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
+    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& viewProj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
+    FrustumCorners GetFrustumCornersWCS_Inv(const glm::float4x4& invViewProj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
 }

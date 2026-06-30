@@ -6,6 +6,18 @@
 
 namespace math
 {
+    static glm::float3 GetFrustumCenterWCS(const FrustumCorners& corners)
+    {
+        glm::float3 center = ZEROF3;
+
+        for (const glm::float3& corner : corners) {
+            center += corner;
+        }
+
+        return center / static_cast<float>(corners.size());
+    }
+
+
     Plane::Plane(const glm::vec3& norm, float dist)
         : normal(norm), distance(dist)
     {
@@ -34,6 +46,12 @@ namespace math
     Frustum::Frustum(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar)
     {
         Construct(transform, fovY, aspectRatio, zNear, zFar);
+    }
+
+
+    Frustum::Frustum(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar)
+    {
+        Construct(position, rotation, left, right, bottom, top, zNear, zFar);
     }
 
 
@@ -98,6 +116,44 @@ namespace math
     }
 
 
+    void Frustum::Construct(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar)
+    {
+        MATH_ASSERT(zNear > 0.f);
+        MATH_ASSERT(zNear < zFar);
+        MATH_ASSERT(left < right);
+        MATH_ASSERT(bottom < top);
+
+        const glm::float3 rightDir    = glm::normalize(rotation * M3D_AXIS_X);
+        const glm::float3 upDir       = glm::normalize(rotation * M3D_AXIS_Y);
+        const glm::float3 backwardDir = glm::normalize(rotation * M3D_AXIS_Z);
+        const glm::float3 forwardDir  = -backwardDir;
+
+        Plane& leftPlane = planes[FR_PLANE_LEFT];
+        leftPlane.normal = rightDir;
+        leftPlane.distance = -glm::dot(leftPlane.normal, position + rightDir * left);
+
+        Plane& rightPlane = planes[FR_PLANE_RIGHT];
+        rightPlane.normal = -rightDir;
+        rightPlane.distance = -glm::dot(rightPlane.normal, position + rightDir * right);
+
+        Plane& bottomPlane = planes[FR_PLANE_BOTTOM];
+        bottomPlane.normal = upDir;
+        bottomPlane.distance = -glm::dot(bottomPlane.normal, position + upDir * bottom);
+
+        Plane& topPlane = planes[FR_PLANE_TOP];
+        topPlane.normal = -upDir;
+        topPlane.distance = -glm::dot(topPlane.normal, position + upDir * top);
+
+        Plane& nearPlane = planes[FR_PLANE_NEAR];
+        nearPlane.normal = forwardDir;
+        nearPlane.distance = -glm::dot(nearPlane.normal, position + forwardDir * zNear);
+
+        Plane& farPlane = planes[FR_PLANE_FAR];
+        farPlane.normal = backwardDir;
+        farPlane.distance = -glm::dot(farPlane.normal, position + forwardDir * zFar);
+    }
+
+
     bool Frustum::IsIntersect(const AABB& aabb) const
     {
         for (size_t i = 0; i < 6; ++i) {
@@ -125,21 +181,21 @@ namespace math
     }
 
 
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& view, const glm::float4x4& proj)
+    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& view, const glm::float4x4& proj, std::optional<std::reference_wrapper<glm::float3>> center)
     {
-        return GetFrustumCornersWCS(proj * view);
+        return GetFrustumCornersWCS(proj * view, center);
     }
 
 
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& viewProj)
+    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& viewProj, std::optional<std::reference_wrapper<glm::float3>> center)
     {
         const glm::float4x4 invViewProj = glm::inverse(viewProj);
 
-        return GetFrustumCornersWCS_Inv(invViewProj);
+        return GetFrustumCornersWCS_Inv(invViewProj, center);
     }
 
 
-    FrustumCorners GetFrustumCornersWCS_Inv(const glm::float4x4& invViewProj)
+    FrustumCorners GetFrustumCornersWCS_Inv(const glm::float4x4& invViewProj, std::optional<std::reference_wrapper<glm::float3>> center)
     {
     #ifdef ENG_GFX_API_VULKAN
         const float bottomY = 1.f;
@@ -172,18 +228,10 @@ namespace math
             corner = glm::float3(temp / temp.w);
         }
 
-        return corners;
-    }
-
-
-    glm::float3 GetFrustumCenterWCS(const FrustumCorners& corners)
-    {
-        glm::float3 center = ZEROF3;
-
-        for (const glm::float3& corner : corners) {
-            center += corner;
+        if (center.has_value()) {
+            center.value().get() = GetFrustumCenterWCS(corners);
         }
 
-        return center / static_cast<float>(corners.size());
+        return corners;
     }
 }

@@ -1,22 +1,22 @@
-#ifndef ZPASS_VS_IN_H
-#define ZPASS_VS_IN_H
+#ifndef CSM_VS_IN_H
+#define CSM_VS_IN_H
 
 #include "registers/common_registers.slang"
-#include "registers/zpass_registers.slang"
+#include "registers/csm_registers.slang"
 
 #include "common/geom_stream_incl.slang"
 
 
-struct ZPASS_INPUT_DATA
+struct CSM_INPUT_DATA
 {
     float3 position;
     float2 uv;
 };
 
 
-ZPASS_INPUT_DATA PrepareZPassVSInputData(uint vertID, bool fetchUV = true)
+CSM_INPUT_DATA PrepareCSMPassVSInputData(uint vertID, bool fetchUV = true)
 {
-    ZPASS_INPUT_DATA data = (ZPASS_INPUT_DATA)0;
+    CSM_INPUT_DATA data = (CSM_INPUT_DATA)0;
 
     data.position = GeomStreamLoadPosition(vertID);
 
