@@ -2,6 +2,7 @@
 #define DEFERRED_LIGHTING_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
+#include "common/common_structs.slang"
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D DEFERRED_LIGHTING_GBUFFER_0;
@@ -14,5 +15,7 @@
 [vk::binding(5, DESC_SET_PER_DRAW)] TextureCube DEFERRED_LIGHTING_IRRADIANCE_MAP;
 [vk::binding(6, DESC_SET_PER_DRAW)] TextureCube DEFERRED_LIGHTING_PREFILTERED_ENV_MAP;
 [vk::binding(7, DESC_SET_PER_DRAW)] Texture2D DEFERRED_LIGHTING_BRDF_LUT;
+
+[vk::binding(8, DESC_SET_PER_DRAW)] Texture2DArray DEFERRED_LIGHTING_CSM;
 
 #endif

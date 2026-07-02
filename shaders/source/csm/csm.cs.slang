@@ -42,7 +42,7 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
         const uint queueMask = CSMGeomCullingGetQueueMask(inst);
 
         for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT;) {
-            isVisibleInCascadeMask |= Frustum_Visibility(CSM_CASCADE_DATA(cascade).VIEW_FRUSTUM, inst.AABB_WCS) ? (1u << cascade) : 0u;
+            isVisibleInCascadeMask |= Frustum_Visibility(COMMON_CSM_VIEW_FRUSTUM(cascade), inst.AABB_WCS) ? (1u << cascade) : 0u;
 
             if (IS_BIT_SET(isVisibleInCascadeMask, cascade)) {
                 uint mask = queueMask;

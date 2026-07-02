@@ -24,7 +24,7 @@ CSM_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstance
 
     result.flatData.instID = instID;
 
-    result.hpos = mul(CSM_CASCADE_DATA(CSM_CASCADE_IDX).VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
+    result.hpos = mul(COMMON_CSM_VIEW_PROJ_MATRIX(CSM_CASCADE_IDX), float4(wpos, 1.f)); 
 
     return result; 
 }

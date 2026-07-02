@@ -174,6 +174,41 @@ LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in floa
 }
 
 
+uint GetCSMCascadeIndex(in float viewZ)
+{
+    for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+        if (viewZ < COMMON_CSM_CASCADE_DISTANCE(cascade)) {
+            return cascade;
+        }
+    }
+
+    return COMMON_CSM_CASCADE_COUNT;
+}
+
+
+float CalcShadow(in float3 wpos)
+{
+    const float3 vpos = (mul(COMMON_CB.VIEW_MATRIX, float4(wpos, 1.f))).xyz;
+
+    const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
+
+    if (csmCascade >= COMMON_CSM_CASCADE_COUNT) {
+        return 1.f;
+    }
+
+    const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(csmCascade), float4(wpos, 1.f));
+    const float2 uv = NDCToUV(ndc.xy);
+
+    const float cascadeDepth = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float3(uv, csmCascade), 0).r;
+
+#ifdef ENV_REVERSED_Z
+    return ndc.z < cascadeDepth ? 0.f : 1.f;
+#else
+    return ndc.z > cascadeDepth ? 0.f : 1.f;
+#endif
+}
+
+
 float3 ComputeLighting(in int2 pixelCoord)
 {
     const int3 texCoord = int3(pixelCoord, 0);
@@ -212,7 +247,9 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     result.Lo += gbuffer.emissive;
 
-    return result.Lo;
+    const float shadow = CalcShadow(wpos);
+
+    return result.Lo * shadow;
 }
 
 
