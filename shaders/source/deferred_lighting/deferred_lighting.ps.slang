@@ -8,6 +8,14 @@
 #include "pass/deferred_lighting/vsout.slang"
 
 
+static const float3 DBG_CSM_CASCADE_COLORS[] = {
+    float3(1.f, 0.f, 0.f),
+    float3(0.f, 1.f, 0.f),
+    float3(0.f, 0.f, 1.f),
+    float3(0.004f, 0.004f, 0.004f),
+};
+
+
 struct GBUFFER
 {
     float3 albedo;
@@ -186,10 +194,8 @@ uint GetCSMCascadeIndex(in float viewZ)
 }
 
 
-float CalcCSMShadow(in float3 wpos)
+float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
-    const float3 vpos = (mul(COMMON_CB.VIEW_MATRIX, float4(wpos, 1.f))).xyz;
-
     const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
 
     if (csmCascade >= COMMON_CSM_CASCADE_COUNT) {
@@ -219,12 +225,13 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
     const float3 wpos = WPosFromDepth(uv, depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
+    const float3 vpos = (mul(COMMON_CB.VIEW_MATRIX, float4(wpos, 1.f))).xyz;
 
     const float3 V = normalize(COMMON_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
     LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color, F0);
-    sunLightResult.Lo *= CalcCSMShadow(wpos);
+    sunLightResult.Lo *= CalcCSMShadow(wpos, vpos, gbuffer.normal);
 
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
     result += sunLightResult;
@@ -240,14 +247,16 @@ float3 ComputeLighting(in int2 pixelCoord)
         result += ptRes;
     }
 
-#ifndef ENV_RELEASE
-    if (COMMON_DBG_USE_INDIRECT_LIGHTING)
-#endif
-    {
+    if (COMMON_DBG_USE_INDIRECT_LIGHTING) {
         result += ProcessIndirectLighting(gbuffer, V, F0);
     }
 
     result.Lo += gbuffer.emissive;
+
+    if (COMMON_DBG_RT_VIEW_TYPE == DBG_RT_VIEW_TYPE::CSM_CASCADE) {
+        const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
+        result.Lo *= DBG_CSM_CASCADE_COLORS[csmCascade] * 100.f;
+    }
 
     return result.Lo;
 }

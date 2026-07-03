@@ -7,7 +7,6 @@
 
 struct DBG_RT_VIEW_PER_DRAW_DATA
 {
-    DBG_RT_VIEW_TYPE TYPE;
     uint MIP;
     uint FACE;
     uint CSM_CASCADE_IDX;
@@ -39,5 +38,7 @@ struct DBG_RT_VIEW_PER_DRAW_DATA
 [vk::binding(9, DESC_SET_PER_DRAW)] TextureCube DBG_RT_VIEW_SKYBOX;
 
 [vk::binding(10, DESC_SET_PER_DRAW)] Texture2DArray DBG_RT_VIEW_CSM;
+
+[vk::binding(11, DESC_SET_PER_DRAW)] Texture2D DBG_RT_VIEW_COLOR_16F;
 
 #endif

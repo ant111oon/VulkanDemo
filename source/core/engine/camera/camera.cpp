@@ -107,8 +107,6 @@ namespace eng
 
     void Camera::SetZNear(float zNear) noexcept
     {
-        CORE_ASSERT_MSG(zNear > 0.f, "zNear must be positive");
-
         if (!math::IsEqual(m_zNear, zNear)) {
             CORE_ASSERT_MSG(abs(m_zFar - zNear) > M3D_EPS, "Can't set Z Near equal to Z Far");
         
@@ -120,8 +118,6 @@ namespace eng
 
     void Camera::SetZFar(float zFar) noexcept
     {
-        CORE_ASSERT_MSG(zFar > 0.f, "zFar must be positive");
-
         if (!math::IsEqual(m_zFar, zFar)) {
             CORE_ASSERT_MSG(abs(zFar - m_zNear) > M3D_EPS, "Can't set Z Far equal to Z Near");
         

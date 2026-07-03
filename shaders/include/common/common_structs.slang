@@ -30,6 +30,7 @@ enum DBG_RT_VIEW_TYPE
     BRDF_LUT,
     SKYBOX,
     CSM_DEPTH,
+    CSM_CASCADE,
 
     COUNT,
 };
@@ -183,7 +184,9 @@ struct COMMON_DBG_CB_DATA
     int  FORCED_GEOM_LOD;
     uint FLAGS_0;
 
-    private uint2 PADDING_0;
+    DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
+
+    private uint PADDING_0;
 };
 
 enum COMMON_SAMPLER_IDX

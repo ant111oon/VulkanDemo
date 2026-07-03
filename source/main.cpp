@@ -86,46 +86,6 @@ struct FRUSTUM
 static const uint COMMON_CSM_CASCADE_COUNT = 3;
 
 
-struct COMMON_CB_DATA
-{
-    FRUSTUM  CSM_VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4   CSM_CASCADE_DISTANCES;
-
-    FRUSTUM CAMERA_FRUSTUM;
-
-    float4x4 VIEW_MATRIX;
-    float4x4 PROJ_MATRIX;
-    float4x4 VIEW_PROJ_MATRIX;
-
-    float4x4 INV_VIEW_MATRIX;
-    float4x4 INV_PROJ_MATRIX;
-    float4x4 INV_VIEW_PROJ_MATRIX;
-
-    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
-    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
-
-    uint2 SCREEN_SIZE;
-    float Z_NEAR;
-    float Z_FAR;
-
-    float3 CAM_WPOS;
-    uint FLAGS;
-};
-
-static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
-
-
-struct COMMON_DBG_CB_DATA
-{
-    int  FORCED_GEOM_LOD;
-    uint FLAGS_0;
-
-    uint2 PADDING_0;
-};
-
-
 enum class COMMON_MATERIAL_FLAGS : glm::uint
 {
     DOUBLE_SIDED = 0x1,
@@ -311,6 +271,7 @@ enum DBG_RT_VIEW_TYPE : uint32_t
     DBG_RT_VIEW_TYPE_BRDF_LUT,
     DBG_RT_VIEW_TYPE_SKYBOX,
     DBG_RT_VIEW_TYPE_CSM_DEPTH,
+    DBG_RT_VIEW_TYPE_CSM_CASCADE,
 
     DBG_RT_VIEW_TYPE_COUNT
 };
@@ -326,6 +287,48 @@ enum COMMON_DBG_TEX_IDX : uint32_t
     COMMON_DBG_TEX_IDX_GREY,
     COMMON_DBG_TEX_IDX_CHECKERBOARD,
     COMMON_DBG_TEX_IDX_COUNT
+};
+
+
+struct COMMON_CB_DATA
+{
+    FRUSTUM  CSM_VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
+    float4x4 CSM_VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    float4   CSM_CASCADE_DISTANCES;
+
+    FRUSTUM CAMERA_FRUSTUM;
+
+    float4x4 VIEW_MATRIX;
+    float4x4 PROJ_MATRIX;
+    float4x4 VIEW_PROJ_MATRIX;
+
+    float4x4 INV_VIEW_MATRIX;
+    float4x4 INV_PROJ_MATRIX;
+    float4x4 INV_VIEW_PROJ_MATRIX;
+
+    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
+
+    uint2 SCREEN_SIZE;
+    float Z_NEAR;
+    float Z_FAR;
+
+    float3 CAM_WPOS;
+    uint FLAGS;
+};
+
+static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
+
+
+struct COMMON_DBG_CB_DATA
+{
+    int  FORCED_GEOM_LOD;
+    uint FLAGS_0;
+
+    DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
+
+    uint PADDING_0;
 };
 
 
@@ -421,7 +424,6 @@ struct PREFILTERED_ENV_MAP_PER_DRAW_DATA
 
 struct DBG_RT_VIEW_PER_DRAW_DATA
 {
-    DBG_RT_VIEW_TYPE TYPE;
     uint MIP;
     uint FACE;
     uint CSM_CASCADE_IDX;
@@ -445,6 +447,7 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "BRDF_LUT",
     "SKYBOX",
     "CSM_DEPTH",
+    "CSM_CASCADE",
 };
 
 static_assert(DBG_RT_VIEW_TYPE_COUNT == _countof(DBG_RT_OUTPUT_NAMES));
@@ -821,6 +824,7 @@ static constexpr size_t DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
 static constexpr size_t DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT = 8;
 static constexpr size_t DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT = 9;
 static constexpr size_t DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT = 10;
+static constexpr size_t DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT = 11;
 
 
 static constexpr uint32_t CSM_CASCADE_RT_SIZE = 2048;
@@ -889,9 +893,9 @@ static constexpr float CAMERA_ZNEAR = 0.01f;
 static constexpr float CAMERA_ZFAR = 1'000.f;
 
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(1.5f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z);
-static constexpr float SUN_DISTANCE = 50.f;
+static constexpr float SUN_DISTANCE = 100.f;
 
-static constexpr std::array CSM_CASCADE_DISTANCES = { 20.f, 80.f, 200.f };
+static constexpr std::array CSM_CASCADE_DISTANCES = { 40.f, 120.f, 250.f };
 
 static constexpr std::array CSM_CASCADE_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
@@ -3166,6 +3170,7 @@ static void CreateDbgRTViewDescriptorSetLayout()
         vkn::DescriptorInfo::Create(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3775,7 +3780,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
         .SetLayout(s_PSOLayouts[PASS_ID_CSM_RENDER])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
-        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
+        .SetRasterizerCullMode(VK_CULL_MODE_FRONT_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
     #ifdef ENG_REVERSED_Z
@@ -5297,6 +5302,7 @@ static void WriteDbgRTViewDescriptorSet()
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_DBG_RT_VIEW, DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 #endif
 }
 
@@ -6147,6 +6153,7 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 6u) : 0;
 
     constBuff.FLAGS_0 = flags_0;
+    constBuff.RT_VIEW_TYPE = s_dbgOutputRTType;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -6193,7 +6200,9 @@ static void UpdateCSMDataCPU()
         const glm::float3 frCenter = cascadeFrustum.GetCenter();
         std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
 
-        const glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * SUN_DISTANCE;
+        const float frRadius = glm::distance(frCorners[math::Frustum::POINT_NEAR_LEFT_BOTTOM], frCorners[math::Frustum::POINT_FAR_RIGHT_TOP]) * 0.5f;
+
+        const glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
         const glm::quat lightRotation = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
 
         const glm::float4x4 lightView = glm::lookAt(lightPos, frCenter, M3D_AXIS_Y);
@@ -6220,7 +6229,7 @@ static void UpdateCSMDataCPU()
 
         csmCamera.SetPosition(lightPos);
         csmCamera.SetRotation(lightRotation);
-        csmCamera.SetOrthoProjection(minX, maxX, minY, maxY, 0.01f, 500.f);
+        csmCamera.SetOrthoProjection(minX, maxX, minY, maxY, -SUN_DISTANCE, 3.f * frRadius);
 
         csmCamera.Update();
     }
@@ -7629,6 +7638,9 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         case DBG_RT_VIEW_TYPE_CSM_DEPTH:
             pVisTex = &s_csmRT;
             break;
+        case DBG_RT_VIEW_TYPE_CSM_CASCADE:
+            pVisTex = &s_gbufferRTs[0];
+            break;
     }
 
     VkImageAspectFlagBits aspect;
@@ -7670,7 +7682,6 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_DBG_RT_VIEW, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         DBG_RT_VIEW_PER_DRAW_DATA pushConsts = {};
-        pushConsts.TYPE = s_dbgOutputRTType;
         pushConsts.MIP = s_dbgOutputRTMip;
         pushConsts.FACE = s_dbgOutputRTFace;
         pushConsts.CSM_CASCADE_IDX = s_dbgOutputRTCascadeIndex;

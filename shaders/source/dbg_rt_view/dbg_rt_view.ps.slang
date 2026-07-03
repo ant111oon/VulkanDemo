@@ -4,6 +4,7 @@
 #include "common/system/sys_constants.slang"
 
 #include "common/math/common.slang"
+#include "common/tonemapping.slang"
 
 #include "pass/dbg_rt_view/vsout.slang"
 
@@ -129,6 +130,14 @@ void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
 }
 
 
+void CSMCascadeView(out float4 color, in uint2 pixCoord)
+{
+    const float3 albedo = LOAD_TEX(DBG_RT_VIEW_COLOR_16F, int3(pixCoord, 0)).rgb;
+
+    color = float4(ACES_Tonemap(albedo), 1.f);
+}
+
+
 struct DBG_RT_VIEW_PS_OUTPUT
 {
     [[vk::location(0)]] float4 color;
@@ -140,7 +149,7 @@ DBG_RT_VIEW_PS_OUTPUT main(DBG_RT_VIEW_VS_OUTPUT input, uint2 pixCoord : SV_Posi
 {
     DBG_RT_VIEW_PS_OUTPUT result = (DBG_RT_VIEW_PS_OUTPUT)0;
 
-    switch (DBG_RT_VIEW_DYN.TYPE) {
+    switch (COMMON_DBG_RT_VIEW_TYPE) {
         case DBG_RT_VIEW_TYPE::NONE:
             break;
         case DBG_RT_VIEW_TYPE::COMMON_DEPTH:
@@ -181,6 +190,9 @@ DBG_RT_VIEW_PS_OUTPUT main(DBG_RT_VIEW_VS_OUTPUT input, uint2 pixCoord : SV_Posi
             break;
         case DBG_RT_VIEW_TYPE::CSM_DEPTH:
             CSMView(result.color, pixCoord, DBG_RT_CSM_CASCADE_IDX);
+            break;
+        case DBG_RT_VIEW_TYPE::CSM_CASCADE:
+            CSMCascadeView(result.color, pixCoord);
             break;
     }
 
