@@ -12,6 +12,8 @@ namespace math
         Plane() = default;
         Plane(const glm::float3& norm, float dist);
 
+        void Construct(const glm::float3& A, const glm::float3& B, const glm::float3& C);
+
         float DistanceTo(const glm::float3& pt) const;
 
         constexpr operator glm::float4() const { return glm::float4(normal, distance); }
@@ -20,68 +22,72 @@ namespace math
         float distance = 0.f;
     };
 
-
-    enum FrustumCornerIndex
-    {
-        FR_CORNER_LEFT_BOTTOM_NEAR,
-        FR_CORNER_RIGHT_BOTTOM_NEAR,
-        FR_CORNER_RIGHT_TOP_NEAR,
-        FR_CORNER_LEFT_TOP_NEAR,
-
-        FR_CORNER_LEFT_BOTTOM_FAR,
-        FR_CORNER_RIGHT_BOTTOM_FAR,
-        FR_CORNER_RIGHT_TOP_FAR,
-        FR_CORNER_LEFT_TOP_FAR,
-
-        FR_CORNER_COUNT
-    };
-
-    static_assert(FR_CORNER_COUNT == M3D_FRUSTUM_CORNER_COUNT);
-
-    enum FrustumPlaneIndex
-    {
-        FR_PLANE_LEFT,
-        FR_PLANE_TOP,
-        FR_PLANE_RIGHT,
-        FR_PLANE_BOTTOM,
-        FR_PLANE_NEAR,
-        FR_PLANE_FAR,
-        FR_PLANE_COUNT,
-    };
-
-    static_assert(FR_PLANE_COUNT == M3D_FRUSTUM_PLANE_COUNT);
-
-
-    using FrustumCorners = std::array<glm::float3, FR_CORNER_COUNT>;
-
     
     class Frustum
     {
     public:
+        enum PointID
+        {
+            POINT_NEAR_LEFT_BOTTOM,
+            POINT_NEAR_RIGHT_BOTTOM,
+            POINT_NEAR_RIGHT_TOP,
+            POINT_NEAR_LEFT_TOP,
+
+            POINT_FAR_LEFT_BOTTOM,
+            POINT_FAR_RIGHT_BOTTOM,
+            POINT_FAR_RIGHT_TOP,
+            POINT_FAR_LEFT_TOP,
+
+            POINT_COUNT
+        };
+
+        static_assert(POINT_COUNT == M3D_FRUSTUM_CORNER_COUNT);
+
+        enum PlaneID
+        {
+            PLANE_LEFT,
+            PLANE_TOP,
+            PLANE_RIGHT,
+            PLANE_BOTTOM,
+            PLANE_NEAR,
+            PLANE_FAR,
+
+            PLANE_COUNT
+        };
+
+        static_assert(PLANE_COUNT == M3D_FRUSTUM_PLANE_COUNT);  
+        
+    public:
         Frustum() = default;
 
-        Frustum(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
+        Frustum(const glm::float3& position, const glm::quat& rotation, const glm::float4x4& proj);
+        Frustum(const glm::float4x4& view, const glm::float4x4& proj);
+        Frustum(const glm::float4x4& viewProj);
+        
         Frustum(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
-        Frustum(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
         Frustum(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar);
+        
+        void Construct(const glm::float3& position, const glm::quat& rotation, const glm::float4x4& proj);
+        void Construct(const glm::float4x4& view, const glm::float4x4& proj);
+        void Construct(const glm::float4x4& viewProj);
 
-        void Construct(const glm::float3& position, const glm::float3& rightDir, const glm::float3& upDir, float fovY, float aspectRatio, float zNear, float zFar);
         void Construct(const glm::float3& position, const glm::quat& rotation, float fovY, float aspectRatio, float zNear, float zFar);
-        void Construct(const glm::float4x4& transform, float fovY, float aspectRatio, float zNear, float zFar);
         void Construct(const glm::float3& position, const glm::quat& rotation, float left, float right, float bottom, float top, float zNear, float zFar);
         
         bool IsIntersect(const AABB& aabb) const;
 
-        const Plane& GetPlane(FrustumPlaneIndex index) const;
+        const Plane& GetPlane(uint32_t index) const;
+        const glm::float3& GetPoint(uint32_t index) const;
 
-        std::span<const Plane> GetPlanes() const { return planes; }
+        const glm::float3& GetCenter() const { return m_center; }
+
+        std::span<const Plane> GetPlanes() const { return m_planes; }
+        std::span<const glm::float3> GetPoints() const { return m_points; }
 
     private:
-        std::array<Plane, M3D_FRUSTUM_PLANE_COUNT> planes;
+        std::array<Plane, PLANE_COUNT> m_planes;
+        std::array<glm::float3, POINT_COUNT> m_points;
+
+        glm::float3 m_center;
     };
-
-
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& view, const glm::float4x4& proj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
-    FrustumCorners GetFrustumCornersWCS(const glm::float4x4& viewProj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
-    FrustumCorners GetFrustumCornersWCS_Inv(const glm::float4x4& invViewProj, std::optional<std::reference_wrapper<glm::float3>> center = std::nullopt);
 }

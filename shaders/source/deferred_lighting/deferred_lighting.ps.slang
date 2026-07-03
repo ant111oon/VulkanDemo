@@ -186,7 +186,7 @@ uint GetCSMCascadeIndex(in float viewZ)
 }
 
 
-float CalcShadow(in float3 wpos)
+float CalcCSMShadow(in float3 wpos)
 {
     const float3 vpos = (mul(COMMON_CB.VIEW_MATRIX, float4(wpos, 1.f))).xyz;
 
@@ -223,9 +223,11 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float3 V = normalize(COMMON_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
-    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+    LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color, F0);
+    sunLightResult.Lo *= CalcCSMShadow(wpos);
 
-    result += ProcessLight(gbuffer, V, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color, F0);
+    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+    result += sunLightResult;
 
     for (uint i = 0; i < G_POINT_LIGHTS_COUNT; ++i) {
         const float3 surfToLight = wpos - G_POINT_LIGHTS[i].wpos;
@@ -247,9 +249,7 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     result.Lo += gbuffer.emissive;
 
-    const float shadow = CalcShadow(wpos);
-
-    return result.Lo * shadow;
+    return result.Lo;
 }
 
 

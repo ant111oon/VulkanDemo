@@ -891,7 +891,7 @@ static constexpr float CAMERA_ZFAR = 1'000.f;
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(1.5f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z);
 static constexpr float SUN_DISTANCE = 50.f;
 
-static constexpr std::array CSM_CASCADE_DISTANCES = { 20.f, 70.f, 150.f };
+static constexpr std::array CSM_CASCADE_DISTANCES = { 20.f, 80.f, 200.f };
 
 static constexpr std::array CSM_CASCADE_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
@@ -1710,7 +1710,7 @@ static FRUSTUM CopyCPUFrustumToGPU(const math::Frustum& cpuFrustum)
     FRUSTUM gpuFrustum = {};
 
     for (size_t i = 0; i <  M3D_FRUSTUM_PLANE_COUNT; ++i) {
-        const math::Plane& srcPlane = cpuFrustum.GetPlane(math::FrustumPlaneIndex(i));
+        const math::Plane& srcPlane = cpuFrustum.GetPlane(i);
         
         gpuFrustum.planes[i].normal = srcPlane.normal;
         gpuFrustum.planes[i].distance = srcPlane.distance;
@@ -6188,8 +6188,10 @@ static void UpdateCSMDataCPU()
         cascadeCamera.SetZNearFar(zNear, zFar);
         cascadeCamera.Update();
 
-        glm::float3 frCenter;
-        math::FrustumCorners frCorners = math::GetFrustumCornersWCS_Inv(cascadeCamera.GetInvViewProjMatrix(), frCenter);
+        const math::Frustum& cascadeFrustum = cascadeCamera.GetFrustum();
+
+        const glm::float3 frCenter = cascadeFrustum.GetCenter();
+        std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
 
         const glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * SUN_DISTANCE;
         const glm::quat lightRotation = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
