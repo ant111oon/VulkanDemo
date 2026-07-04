@@ -6188,6 +6188,16 @@ static void UpdateCSMDataCPU()
 
     eng::Camera cascadeCamera = s_mainCamera;
 
+    auto GetCascadeSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
+        float radius = 0.f;
+
+        for (const glm::float3& point : points) {
+            radius = glm::max(radius, glm::distance(point, center));
+        }
+
+        return radius;
+    };
+
     for (uint32_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
         const float zNear = i == 0 ? 0.01f : CSM_CASCADE_DISTANCES[i - 1];
         const float zFar = CSM_CASCADE_DISTANCES[i];
@@ -6197,40 +6207,33 @@ static void UpdateCSMDataCPU()
 
         const math::Frustum& cascadeFrustum = cascadeCamera.GetFrustum();
 
-        const glm::float3 frCenter = cascadeFrustum.GetCenter();
         std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
+        
+        glm::float3 frCenter = cascadeFrustum.GetCenter();
+        const float frRadius = GetCascadeSphereVolumeRadius(frCorners, frCenter) * 0.5f;
 
-        const float frRadius = glm::distance(frCorners[math::Frustum::POINT_NEAR_LEFT_BOTTOM], frCorners[math::Frustum::POINT_FAR_RIGHT_TOP]) * 0.5f;
-
-        const glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
+        glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
+        const glm::float4x4 lightView = glm::lookAt(lightPos, frCenter, M3D_AXIS_Y);
+        const glm::float4x4 invLightView = glm::inverse(lightView);
+        
         const glm::quat lightRotation = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
 
-        const glm::float4x4 lightView = glm::lookAt(lightPos, frCenter, M3D_AXIS_Y);
+        const float orthoSize = 2.f * frRadius;
+        const float texelSize = orthoSize / CSM_CASCADE_RT_SIZE;
 
-        float minX = std::numeric_limits<float>::max();
-        float maxX = std::numeric_limits<float>::lowest();
-        float minY = std::numeric_limits<float>::max();
-        float maxY = std::numeric_limits<float>::lowest();
-        float minZ = std::numeric_limits<float>::max();
-        float maxZ = std::numeric_limits<float>::lowest();
+        glm::float3 frCenterLS = lightView * glm::float4(frCenter, 1.f);
+        frCenterLS.x = glm::round(frCenterLS.x / texelSize) * texelSize;
+        frCenterLS.y = glm::round(frCenterLS.y / texelSize) * texelSize;
 
-        for (const glm::float3& v : frCorners) {
-            const glm::float4 trf = lightView * glm::float4(v, 1.f);
-
-            minX = glm::min(minX, trf.x);
-            maxX = glm::max(maxX, trf.x);
-            minY = glm::min(minY, trf.y);
-            maxY = glm::max(maxY, trf.y);
-            minZ = glm::min(minZ, trf.z);
-            maxZ = glm::max(maxZ, trf.z);
-        }
+        frCenter = invLightView * glm::float4(frCenterLS, 1.f);
+        lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
 
         eng::Camera& csmCamera = s_csmCameras[i];
 
         csmCamera.SetPosition(lightPos);
         csmCamera.SetRotation(lightRotation);
-        csmCamera.SetOrthoProjection(minX, maxX, minY, maxY, -SUN_DISTANCE, 3.f * frRadius);
-
+        csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -SUN_DISTANCE, 3.f * frRadius);
+    
         csmCamera.Update();
     }
 }
