@@ -316,6 +316,9 @@ struct COMMON_CB_DATA
 
     float3 CAM_WPOS;
     uint FLAGS;
+
+    float3 SUN_LIGHT_DIRECTION;
+    uint SUN_LIGHT_COLOR;
 };
 
 static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
@@ -892,10 +895,10 @@ static constexpr float CAMERA_SPEED = 0.01f;
 static constexpr float CAMERA_ZNEAR = 0.01f;
 static constexpr float CAMERA_ZFAR = 1'000.f;
 
-static const glm::float3 SUN_LIGHT_DIR = glm::normalize(1.5f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z);
+static const glm::float3 SUN_LIGHT_DIR = glm::normalize(M3D_AXIS_X - 6.5f * M3D_AXIS_Y + M3D_AXIS_Z);
 static constexpr float SUN_DISTANCE = 100.f;
 
-static constexpr std::array CSM_CASCADE_DISTANCES = { 40.f, 120.f, 250.f };
+static constexpr std::array CSM_CASCADE_DISTANCES = { 20.f, 55.f, 120.f };
 
 static constexpr std::array CSM_CASCADE_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
@@ -1367,6 +1370,7 @@ static bool s_skipRender = false;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
+    static bool s_isCSMEnabled = true;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = false;
     static bool s_drawInstAABBs = false;
@@ -1381,6 +1385,7 @@ static bool s_skipRender = false;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
+    static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = false;
     static constexpr bool s_drawInstAABBs = false;
@@ -6126,6 +6131,9 @@ void UpdateGPUCommonConstBuffer()
     
     constBuff.CAM_WPOS = glm::float4(s_mainCamera.GetPosition(), 0.f);
 
+    constBuff.SUN_LIGHT_DIRECTION = SUN_LIGHT_DIR;
+    constBuff.SUN_LIGHT_COLOR = glm::packUnorm4x8(ONEF4);
+
     s_commonConstBuffer.Unmap();
 }
 
@@ -6151,6 +6159,7 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= s_useIndirectLighting                       ? (1u << 4u) : 0;
     flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 5u) : 0;
     flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 6u) : 0;
+    flags_0 |= s_isCSMEnabled                              ? (1u << 7u) : 0;
 
     constBuff.FLAGS_0 = flags_0;
     constBuff.RT_VIEW_TYPE = s_dbgOutputRTType;
@@ -7277,6 +7286,10 @@ static void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 static void CSMPass(vkn::CmdBuffer& cmdBuffer)
 {
+    if (!s_isCSMEnabled) {
+        return;
+    }
+
     static constexpr const char* passLabelName = "CSM_Pass";
 
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
@@ -7936,6 +7949,10 @@ namespace DbgUI
 
                     ImGui::TreePop();
                 }
+            }
+
+            if (ImGui::CollapsingHeader("Shadows")) {
+                ImGui::Checkbox("CSM", &s_isCSMEnabled);
             }
             
             if (ImGui::CollapsingHeader("Passes")) {

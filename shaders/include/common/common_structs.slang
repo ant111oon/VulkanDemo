@@ -175,7 +175,10 @@ struct COMMON_CB_DATA
     float Z_FAR;
 
     float3 CAM_WPOS;
-    uint FLAGS;    
+    uint FLAGS;
+
+    float3 SUN_LIGHT_DIRECTION;
+    uint SUN_LIGHT_COLOR;
 };
 
 

@@ -35,13 +35,6 @@ struct POINT_LIGHT
 };
 
 
-struct DIRECTIONAL_LIGHT
-{
-    float3 color;
-    float3 direction;
-};
-
-
 struct LIGHTING_RESULT
 {
     float3 Lo;
@@ -73,9 +66,6 @@ static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
     // { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f), 3.f },
     // { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f), 3.f },
 };
-
-
-static DIRECTIONAL_LIGHT G_DIRECTIONAL_LIGHT = { 2.f * ONEF3, normalize(1.5f * M3D_AXIS_X - M3D_AXIS_Y - M3D_AXIS_Z) };
 
 
 float CalcLightAttenuation(in float distToLight, in float lightRadius)
@@ -196,6 +186,10 @@ uint GetCSMCascadeIndex(in float viewZ)
 
 float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
+    if (!COMMON_DBG_IS_CSM_ENABLED) {
+        return 1.f;
+    }
+
     const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
 
     if (csmCascade >= COMMON_CSM_CASCADE_COUNT) {
@@ -230,7 +224,7 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float3 V = normalize(COMMON_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
-    LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, G_DIRECTIONAL_LIGHT.direction, G_DIRECTIONAL_LIGHT.color, F0);
+    LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_LIGHT_DIRECTION, COMMON_SUN_LIGHT_COLOR.rgb, F0);
     sunLightResult.Lo *= CalcCSMShadow(wpos, vpos, gbuffer.normal);
 
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
