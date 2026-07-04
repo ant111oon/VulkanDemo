@@ -3785,7 +3785,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
         .SetLayout(s_PSOLayouts[PASS_ID_CSM_RENDER])
         .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
         .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
-        .SetRasterizerCullMode(VK_CULL_MODE_FRONT_BIT)
+        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
         .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
         .SetRasterizerLineWidth(1.f)
     #ifdef ENG_REVERSED_Z
@@ -6195,8 +6195,6 @@ static void UpdateCSMDataCPU()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_CSM_Data_CPU", eng::ProfileColor::Cyan4);
 
-    eng::Camera cascadeCamera = s_mainCamera;
-
     auto GetCascadeSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
         float radius = 0.f;
 
@@ -6207,6 +6205,11 @@ static void UpdateCSMDataCPU()
         return radius;
     };
 
+    eng::Camera cascadeCamera = s_mainCamera;
+
+    static const glm::float3x3 lightRot = glm::float3x3(glm::lookAt(ZEROF3, SUN_LIGHT_DIR, M3D_AXIS_Y));
+    static const glm::float3x3 invLightRot = glm::inverse(lightRot);
+
     for (uint32_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
         const float zNear = i == 0 ? 0.01f : CSM_CASCADE_DISTANCES[i - 1];
         const float zFar = CSM_CASCADE_DISTANCES[i];
@@ -6215,31 +6218,29 @@ static void UpdateCSMDataCPU()
         cascadeCamera.Update();
 
         const math::Frustum& cascadeFrustum = cascadeCamera.GetFrustum();
-
         std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
-        
-        glm::float3 frCenter = cascadeFrustum.GetCenter();
+        const glm::float3 frCenter = cascadeFrustum.GetCenter();
+
         const float frRadius = GetCascadeSphereVolumeRadius(frCorners, frCenter);
 
         glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
-        const glm::quat lightView = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
-        const glm::quat invLightView = glm::inverse(lightView);
 
         const float orthoSize = 2.f * frRadius;
         const float texelSize = orthoSize / CSM_CASCADE_RT_SIZE;
 
-        glm::float3 frCenterLS = lightView * glm::float4(lightPos - frCenter, 1.f);
+        glm::float3 frCenterLS = lightRot * frCenter;
         frCenterLS.x = glm::round(frCenterLS.x / texelSize) * texelSize;
         frCenterLS.y = glm::round(frCenterLS.y / texelSize) * texelSize;
 
-        frCenter = invLightView * glm::float4(frCenterLS, 1.f);
-        lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
+        const glm::float3 snappedCenter = invLightRot * frCenterLS;
+
+        lightPos = snappedCenter - SUN_LIGHT_DIR * frRadius;
 
         eng::Camera& csmCamera = s_csmCameras[i];
 
         csmCamera.SetPosition(lightPos);
-        csmCamera.SetRotation(lightView);
-        csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -SUN_DISTANCE, 3.f * frRadius);
+        csmCamera.SetRotation(glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y));
+        csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -3.f * frRadius, 3.f * frRadius);
     
         csmCamera.Update();
     }

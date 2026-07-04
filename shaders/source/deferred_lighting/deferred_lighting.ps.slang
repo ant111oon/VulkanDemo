@@ -165,8 +165,7 @@ LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in floa
 
     const float3 ambient = (kD * diffuse + specular) * gbuffer.ao;
 
-    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
-    result.Lo = ambient;
+    const LIGHTING_RESULT result = LIGHTING_RESULT(ambient);
 
     return result;
 }
@@ -201,10 +200,14 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 
     const float cascadeDepth = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float3(uv, csmCascade), 0).r;
 
+    float bias = 1e-4f;
+    bias *= tan(acos(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION)));
+    bias = clamp(bias, 0.f, 0.01f);
+
 #ifdef ENV_REVERSED_Z
-    return ndc.z < cascadeDepth ? 0.f : 1.f;
+    return ndc.z + bias < cascadeDepth ? 0.f : 1.f;
 #else
-    return ndc.z > cascadeDepth ? 0.f : 1.f;
+    return ndc.z - bias > cascadeDepth ? 0.f : 1.f;
 #endif
 }
 
@@ -249,7 +252,7 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     if (COMMON_DBG_RT_VIEW_TYPE == DBG_RT_VIEW_TYPE::CSM_CASCADE) {
         const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
-        result.Lo *= DBG_CSM_CASCADE_COLORS[csmCascade] * 100.f;
+        result.Lo = max(result.Lo, FLOAT3(0.001f)) * DBG_CSM_CASCADE_COLORS[csmCascade] * 100.f;
     }
 
     return result.Lo;
