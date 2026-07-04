@@ -6210,18 +6210,16 @@ static void UpdateCSMDataCPU()
         std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
         
         glm::float3 frCenter = cascadeFrustum.GetCenter();
-        const float frRadius = GetCascadeSphereVolumeRadius(frCorners, frCenter) * 0.5f;
+        const float frRadius = GetCascadeSphereVolumeRadius(frCorners, frCenter);
 
         glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
-        const glm::float4x4 lightView = glm::lookAt(lightPos, frCenter, M3D_AXIS_Y);
-        const glm::float4x4 invLightView = glm::inverse(lightView);
-        
-        const glm::quat lightRotation = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
+        const glm::quat lightView = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
+        const glm::quat invLightView = glm::inverse(lightView);
 
         const float orthoSize = 2.f * frRadius;
         const float texelSize = orthoSize / CSM_CASCADE_RT_SIZE;
 
-        glm::float3 frCenterLS = lightView * glm::float4(frCenter, 1.f);
+        glm::float3 frCenterLS = lightView * glm::float4(lightPos - frCenter, 1.f);
         frCenterLS.x = glm::round(frCenterLS.x / texelSize) * texelSize;
         frCenterLS.y = glm::round(frCenterLS.y / texelSize) * texelSize;
 
@@ -6231,7 +6229,7 @@ static void UpdateCSMDataCPU()
         eng::Camera& csmCamera = s_csmCameras[i];
 
         csmCamera.SetPosition(lightPos);
-        csmCamera.SetRotation(lightRotation);
+        csmCamera.SetRotation(lightView);
         csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -SUN_DISTANCE, 3.f * frRadius);
     
         csmCamera.Update();
