@@ -245,6 +245,18 @@ enum COMMON_SAMPLER_IDX : uint32_t
 };
 
 
+enum COMMON_SM_SAMPLER_IDX : uint32_t
+{
+    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS,
+    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
+
+    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER,
+    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL,
+
+    SM_SAMPLER_IDX_COUNT
+};
+
+
 enum COMMON_GEOM_STREAM
 {
     COMMON_GEOM_STREAM_POSITION,
@@ -534,6 +546,17 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 static_assert(SAMPLER_IDX_COUNT == _countof(COMMON_SAMPLERS_DBG_NAMES));
 
 
+static constexpr const char* COMMON_SM_SAMPLERS_DBG_NAMES[] = {
+    "LINEAR_CLAMP_TO_BORDER_LESS",
+    "LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL",
+
+    "LINEAR_CLAMP_TO_BORDER_GREATER",
+    "LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL",
+};
+
+static_assert(SM_SAMPLER_IDX_COUNT == _countof(COMMON_SM_SAMPLERS_DBG_NAMES));
+
+
 enum PassID : uint32_t
 {
     PASS_ID_COMMON,
@@ -745,17 +768,18 @@ static_assert(DESC_SET_ID_COUNT == _countof(DESC_SET_DBG_NAME));
 
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 2;
-static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 3;
-static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 4;
-static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 5;
-static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 6;
-static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 7;
-static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 8;
-static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 9;
-static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 10;
-static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 11;
+static constexpr size_t COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT = 1;
+static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 2;
+static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 3;
+static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 4;
+static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 5;
+static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 6;
+static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 7;
+static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 8;
+static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 9;
+static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
@@ -1266,6 +1290,7 @@ static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
 
 static std::vector<vkn::Sampler> s_commonSamplers;
+static std::vector<vkn::Sampler> s_commonSMSamplers;
 
 static std::array<std::vector<uint32_t>, COMMON_GEOM_STREAM_COUNT> s_cpuGeomStreamBuffers;
 static std::vector<IndexType> s_cpuGeomIndexBuffer;
@@ -2757,6 +2782,7 @@ static void CreateCommonDescriptorSetLayout()
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SM_SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
@@ -4878,6 +4904,45 @@ static void CreateCommonSamplers()
 }
 
 
+static void CreateCommonSMSamplers()
+{
+    s_commonSMSamplers.resize(SM_SAMPLER_IDX_COUNT);
+
+    std::vector<vkn::SamplerCreateInfo> samplerCreateInfo(SM_SAMPLER_IDX_COUNT);
+
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].pDevice = &s_vkDevice;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].magFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareEnable = VK_TRUE;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareOp = VK_COMPARE_OP_LESS;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipLodBias = 0.f;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minLod = 0.f;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].maxLod = VK_LOD_CLAMP_NONE;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].anisotropyEnable = VK_FALSE;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].unnormalizedCoordinates = VK_FALSE;
+
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL].compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].compareOp = VK_COMPARE_OP_GREATER;
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER];
+    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL].compareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+
+    for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
+        s_commonSMSamplers[i].Create(samplerCreateInfo[i]);
+        s_vkDevice.SetObjDebugName(s_commonSMSamplers[i], COMMON_SM_SAMPLERS_DBG_NAMES[i]);
+    }
+}
+
+
 static void WriteGeomCullingDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
 {
     CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
@@ -5242,6 +5307,10 @@ static void WriteCommonDescriptorSet()
 {
     for (size_t i = 0; i < s_commonSamplers.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
+    }
+
+    for (size_t i = 0; i < s_commonSMSamplers.size(); ++i) {
+        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSMSamplers[i]);
     }
 
 #ifndef ENG_BUILD_RELEASE
@@ -6207,6 +6276,7 @@ static void UpdateCSMDataCPU()
 
     eng::Camera cascadeCamera = s_mainCamera;
 
+    static const glm::quat lightRotQuat = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
     static const glm::float3x3 lightRot = glm::float3x3(glm::lookAt(ZEROF3, SUN_LIGHT_DIR, M3D_AXIS_Y));
     static const glm::float3x3 invLightRot = glm::inverse(lightRot);
 
@@ -6239,7 +6309,7 @@ static void UpdateCSMDataCPU()
         eng::Camera& csmCamera = s_csmCameras[i];
 
         csmCamera.SetPosition(lightPos);
-        csmCamera.SetRotation(glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y));
+        csmCamera.SetRotation(lightRotQuat);
         csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -3.f * frRadius, 3.f * frRadius);
     
         csmCamera.Update();
@@ -8468,6 +8538,7 @@ int main(int argc, char* argv[])
     CreateDynamicRenderTargets();
 
     CreateCommonSamplers();
+    CreateCommonSMSamplers();
     CreateCommonConstBuffer();
     CreateCommonDbgConstBuffer();
     CreateGeomCullingAndInstancingResources();

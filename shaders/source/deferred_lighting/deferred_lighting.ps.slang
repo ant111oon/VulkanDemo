@@ -183,6 +183,23 @@ uint GetCSMCascadeIndex(in float viewZ)
 }
 
 
+float CalsSMBias(in float3 wnorm)
+{
+    const float NdotL = saturate(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION));
+
+    // tan(acos(x)) == sqrt(1 - x * x) / x
+    const float tanTheta = sqrt(max(1.f - NdotL * NdotL, 0.f)) * rcp(max(NdotL, M3D_EPS));
+
+    static const float constantBias = 0.00005f;
+    static const float slopeBias = 0.0002f;
+
+    float bias = constantBias + slopeBias * tanTheta;
+    bias = clamp(bias, 0.0001f, 0.01f);
+
+    return bias;
+}
+
+
 float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
     if (!COMMON_DBG_IS_CSM_ENABLED) {
@@ -198,17 +215,19 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
     const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(csmCascade), float4(wpos, 1.f));
     const float2 uv = NDCToUV(ndc.xy);
 
-    const float cascadeDepth = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float3(uv, csmCascade), 0).r;
-
-    float bias = 1e-4f;
-    bias *= tan(acos(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION)));
-    bias = clamp(bias, 0.f, 0.01f);
+    const float bias = CalsSMBias(wnorm);
 
 #ifdef ENV_REVERSED_Z
-    return ndc.z + bias < cascadeDepth ? 0.f : 1.f;
+    const SamplerComparisonState smp = GET_COMMON_SM_SAMPLER(COMMON_SM_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
+    const float cmpValue = ndc.z + bias;
 #else
-    return ndc.z - bias > cascadeDepth ? 0.f : 1.f;
+    const SamplerComparisonState smp = GET_COMMON_SM_SAMPLER(COMMON_SM_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
+    const float cmpValue = ndc.z - bias;
 #endif
+
+    const float shadow = SAMPLE_TEX_CMP_LEVEL(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, 0);
+
+    return shadow;
 }
 
 
