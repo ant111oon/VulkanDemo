@@ -8,9 +8,6 @@
 
 float3 Tonemap(in float3 color)
 {
-#if defined(ENV_RELEASE)
-    return ACES_Tonemap(color);
-#else
     if (COMMON_DBG_USE_ACES_TONEMAPPING) {
         return ACES_Tonemap(color);
     } else if (COMMON_DBG_USE_REINHARD_TONEMAPPING) {
@@ -22,7 +19,6 @@ float3 Tonemap(in float3 color)
     } else {
         return float3(1.f, 0.f, 0.f); // Invalid tonemapping flag
     }
-#endif
 }
 
 

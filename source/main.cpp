@@ -7,7 +7,7 @@
 #endif
 
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     #define ENG_DEBUG_DRAW_ENABLED
 #endif
 
@@ -245,15 +245,15 @@ enum COMMON_SAMPLER_IDX : uint32_t
 };
 
 
-enum COMMON_SM_SAMPLER_IDX : uint32_t
+enum COMMON_CMP_SAMPLER_IDX : uint32_t
 {
-    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS,
-    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
+    CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS,
+    CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
 
-    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER,
-    SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL,
+    CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER,
+    CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL,
 
-    SM_SAMPLER_IDX_COUNT
+    CMP_SAMPLER_IDX_COUNT
 };
 
 
@@ -546,7 +546,7 @@ static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
 static_assert(SAMPLER_IDX_COUNT == _countof(COMMON_SAMPLERS_DBG_NAMES));
 
 
-static constexpr const char* COMMON_SM_SAMPLERS_DBG_NAMES[] = {
+static constexpr const char* COMMON_CMP_SAMPLERS_DBG_NAMES[] = {
     "LINEAR_CLAMP_TO_BORDER_LESS",
     "LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL",
 
@@ -554,7 +554,7 @@ static constexpr const char* COMMON_SM_SAMPLERS_DBG_NAMES[] = {
     "LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL",
 };
 
-static_assert(SM_SAMPLER_IDX_COUNT == _countof(COMMON_SM_SAMPLERS_DBG_NAMES));
+static_assert(CMP_SAMPLER_IDX_COUNT == _countof(COMMON_CMP_SAMPLERS_DBG_NAMES));
 
 
 enum PassID : uint32_t
@@ -768,7 +768,7 @@ static_assert(DESC_SET_ID_COUNT == _countof(DESC_SET_DBG_NAME));
 
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT = 1;
+static constexpr size_t COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT = 1;
 static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 2;
 static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 4;
@@ -1290,7 +1290,7 @@ static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
 
 static std::vector<vkn::Sampler> s_commonSamplers;
-static std::vector<vkn::Sampler> s_commonSMSamplers;
+static std::vector<vkn::Sampler> s_commonCmpSamplers;
 
 static std::array<std::vector<uint32_t>, COMMON_GEOM_STREAM_COUNT> s_cpuGeomStreamBuffers;
 static std::vector<IndexType> s_cpuGeomIndexBuffer;
@@ -2782,7 +2782,7 @@ static void CreateCommonDescriptorSetLayout()
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SM_SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, CMP_SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
@@ -3728,7 +3728,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT, 
             VK_DYNAMIC_STATE_SCISSOR,
-        #ifndef ENG_BUILD_RELEASE
+        #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT
         #endif
         })        
@@ -3824,7 +3824,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT, 
             VK_DYNAMIC_STATE_SCISSOR,
-        #ifndef ENG_BUILD_RELEASE
+        #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT
         #endif
         })        
@@ -3872,11 +3872,10 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
+
         #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, 
             VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
-        #endif
-        #ifndef ENG_BUILD_RELEASE
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
         #endif
         });
@@ -4329,7 +4328,7 @@ static void CreatePipelines()
 
 static void CreateCommonDbgTextures()
 {
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -4386,7 +4385,7 @@ static void CreateCommonDbgTextures()
 
 static void UploadGPUDbgTextures()
 {
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     auto UploadDbgTexture = [](vkn::CmdBuffer& cmdBuffer, size_t texIdx) -> void
     {
         vkn::Texture& texture = s_commonDbgTextures[texIdx];
@@ -4906,39 +4905,39 @@ static void CreateCommonSamplers()
 
 static void CreateCommonSMSamplers()
 {
-    s_commonSMSamplers.resize(SM_SAMPLER_IDX_COUNT);
+    s_commonCmpSamplers.resize(CMP_SAMPLER_IDX_COUNT);
 
-    std::vector<vkn::SamplerCreateInfo> samplerCreateInfo(SM_SAMPLER_IDX_COUNT);
+    std::vector<vkn::SamplerCreateInfo> samplerCreateInfo(CMP_SAMPLER_IDX_COUNT);
 
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].pDevice = &s_vkDevice;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].magFilter = VK_FILTER_LINEAR;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minFilter = VK_FILTER_LINEAR;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareEnable = VK_TRUE;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareOp = VK_COMPARE_OP_LESS;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipLodBias = 0.f;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minLod = 0.f;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].maxLod = VK_LOD_CLAMP_NONE;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].anisotropyEnable = VK_FALSE;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].unnormalizedCoordinates = VK_FALSE;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].pDevice = &s_vkDevice;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].magFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minFilter = VK_FILTER_LINEAR;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareEnable = VK_TRUE;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].compareOp = VK_COMPARE_OP_LESS;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].mipLodBias = 0.f;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].minLod = 0.f;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].maxLod = VK_LOD_CLAMP_NONE;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].anisotropyEnable = VK_FALSE;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS].unnormalizedCoordinates = VK_FALSE;
 
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL].compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL] = samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL].compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].compareOp = VK_COMPARE_OP_GREATER;
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER] = samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS];
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].compareOp = VK_COMPARE_OP_GREATER;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER].borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
 
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL] = samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER];
-    samplerCreateInfo[SM_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL].compareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL] = samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER];
+    samplerCreateInfo[CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL].compareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
 
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
-        s_commonSMSamplers[i].Create(samplerCreateInfo[i]);
-        s_vkDevice.SetObjDebugName(s_commonSMSamplers[i], COMMON_SM_SAMPLERS_DBG_NAMES[i]);
+        s_commonCmpSamplers[i].Create(samplerCreateInfo[i]);
+        s_vkDevice.SetObjDebugName(s_commonCmpSamplers[i], COMMON_CMP_SAMPLERS_DBG_NAMES[i]);
     }
 }
 
@@ -5309,21 +5308,19 @@ static void WriteCommonDescriptorSet()
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSamplers[i]);
     }
 
-    for (size_t i = 0; i < s_commonSMSamplers.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_SM_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonSMSamplers[i]);
+    for (size_t i = 0; i < s_commonCmpSamplers.size(); ++i) {
+        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT, i, s_commonCmpSamplers[i]);
     }
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
+
+    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
 #endif
 
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
-
-#ifndef ENG_BUILD_RELEASE
-    s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
-#endif
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
         s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, i, s_geomStreamBuffers[i]);
@@ -6144,7 +6141,7 @@ static void CreateCommonConstBuffer()
 
 static void CreateCommonDbgConstBuffer()
 {
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     s_commonDbgConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_DBG_CB_DATA));
     s_vkDevice.SetObjDebugName(s_commonDbgConstBuffer, "COMMON_DBG_CB");
 #endif
@@ -6209,7 +6206,7 @@ void UpdateGPUCommonConstBuffer()
 
 void UpdateGPUDbgConstBuffer()
 {
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Dbg_Const_Buffer", eng::ProfileColor::Cyan4);
 
     COMMON_DBG_CB_DATA& constBuff = *reinterpret_cast<COMMON_DBG_CB_DATA*>(s_commonDbgConstBuffer.Map());
@@ -6874,7 +6871,7 @@ void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
@@ -6893,7 +6890,7 @@ void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
         RenderPass_Depth(cmdBuffer, 0, GEOM_QUEUE_AKILL);
     }
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
 #endif
 }
@@ -6910,7 +6907,7 @@ void ThisFrameGeometryDepthPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
@@ -6929,7 +6926,7 @@ void ThisFrameGeometryDepthPass(vkn::CmdBuffer& cmdBuffer)
         RenderPass_Depth(cmdBuffer, 1, GEOM_QUEUE_AKILL);
     }
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
 #endif
 }
@@ -7341,7 +7338,7 @@ static void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey50);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey50);
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
@@ -7349,7 +7346,7 @@ static void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
     CSMRenderPassCascadeN(cmdBuffer, 1);
     CSMRenderPassCascadeN(cmdBuffer, 2);
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
 #endif
 }
@@ -7493,7 +7490,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", eng::ProfileColor::ForestGreen);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", eng::ProfileColor::ForestGreen);
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
@@ -7532,7 +7529,7 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     }
 
 
-#ifndef ENG_BUILD_RELEASE
+#ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
 #endif
 }
@@ -7976,6 +7973,7 @@ namespace DbgUI
                 ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
             }
             
+        #ifdef ENG_BUILD_DEBUG            
             if (ImGui::CollapsingHeader("Geom")) {
                 ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
                 
@@ -8061,7 +8059,6 @@ namespace DbgUI
                 }
             }
 
-        #ifdef ENG_BUILD_DEBUG
             if (ImGui::CollapsingHeader("Debug Vis")) {
                 ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
                 ImGui::SameLine();

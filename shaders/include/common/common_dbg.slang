@@ -4,7 +4,7 @@
 #include "common/math/common.slang"
 
 
-#ifndef ENV_RELEASE
+#ifdef ENV_DEBUG
     #define DBG_BIT_VALUE(BIT_MASK, BIT, RELEASE_VALUE) IS_BIT_SET(BIT_MASK, BIT)
     #define DBG_VALUE(VALUE, RELEASE_VALUE) (VALUE)
 #else

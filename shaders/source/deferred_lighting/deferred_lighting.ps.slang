@@ -190,8 +190,8 @@ float CalsSMBias(in float3 wnorm)
     // tan(acos(x)) == sqrt(1 - x * x) / x
     const float tanTheta = sqrt(max(1.f - NdotL * NdotL, 0.f)) * rcp(max(NdotL, M3D_EPS));
 
-    static const float constantBias = 0.00005f;
-    static const float slopeBias = 0.0002f;
+    static const float constantBias = 0.0001f;
+    static const float slopeBias = 0.0005f;
 
     float bias = constantBias + slopeBias * tanTheta;
     bias = clamp(bias, 0.0001f, 0.01f);
@@ -218,14 +218,20 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
     const float bias = CalsSMBias(wnorm);
 
 #ifdef ENV_REVERSED_Z
-    const SamplerComparisonState smp = GET_COMMON_SM_SAMPLER(COMMON_SM_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
+    const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
     const float cmpValue = ndc.z + bias;
 #else
-    const SamplerComparisonState smp = GET_COMMON_SM_SAMPLER(COMMON_SM_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
+    const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
     const float cmpValue = ndc.z - bias;
 #endif
+    
+    float shadow = SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue);
+    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2( 0,  1));
+    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2( 1,  0));
+    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2( 0, -1));
+    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2(-1,  0));
 
-    const float shadow = SAMPLE_TEX_CMP_LEVEL(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, 0);
+    shadow *= 0.2f;
 
     return shadow;
 }
