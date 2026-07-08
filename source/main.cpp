@@ -289,16 +289,27 @@ enum DBG_RT_VIEW_TYPE : uint32_t
 };
 
 
-enum COMMON_DBG_TEX_IDX : uint32_t
+enum DBG_TONEMAP_PRESET : uint32_t
 {
-    COMMON_DBG_TEX_IDX_RED,
-    COMMON_DBG_TEX_IDX_GREEN,
-    COMMON_DBG_TEX_IDX_BLUE,
-    COMMON_DBG_TEX_IDX_BLACK,
-    COMMON_DBG_TEX_IDX_WHITE,
-    COMMON_DBG_TEX_IDX_GREY,
-    COMMON_DBG_TEX_IDX_CHECKERBOARD,
-    COMMON_DBG_TEX_IDX_COUNT
+    DBG_TONEMAP_PRESET_ACES,
+    DBG_TONEMAP_PRESET_REINHARD,
+    DBG_TONEMAP_PRESET_PARTIAL_UNCHARTED_2,
+    DBG_TONEMAP_PRESET_UNCHARTED_2,
+
+    DBG_TONEMAP_PRESET_COUNT
+};
+
+
+enum DBG_TEX_IDX : uint32_t
+{
+    DBG_TEX_IDX_RED,
+    DBG_TEX_IDX_GREEN,
+    DBG_TEX_IDX_BLUE,
+    DBG_TEX_IDX_BLACK,
+    DBG_TEX_IDX_WHITE,
+    DBG_TEX_IDX_GREY,
+    DBG_TEX_IDX_CHECKERBOARD,
+    DBG_TEX_IDX_COUNT
 };
 
 
@@ -342,8 +353,7 @@ struct COMMON_DBG_CB_DATA
     uint FLAGS_0;
 
     DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
-
-    uint PADDING_0;
+    DBG_TONEMAP_PRESET TONEMAP_PRESET;
 };
 
 
@@ -468,22 +478,14 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
 static_assert(DBG_RT_VIEW_TYPE_COUNT == _countof(DBG_RT_OUTPUT_NAMES));
 
 
-enum class TonemapPreset
-{
-    ACES,
-    REINHARD,
-    PARTIAL_UNCHARTED_2,
-    UNCHARTED_2,
-    COUNT
-};
-
-
-static constexpr const char* DBG_TONEMAPPING_NAMES[(size_t)TonemapPreset::COUNT] = {
+static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
     "ACES",
     "REINHARD",
     "PARTIAL UNCHARTED 2",
     "UNCHARTED 2",
 };
+
+static_assert(DBG_TONEMAP_PRESET_COUNT == _countof(DBG_TONEMAPPING_NAMES));
 
 
 static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
@@ -1315,8 +1317,8 @@ static vkn::Buffer s_dbgLineVertexDataGPU;
 static vkn::Buffer s_dbgTriangleVertexDataGPU;
 
 
-static std::array<vkn::Texture, COMMON_DBG_TEX_IDX_COUNT>     s_commonDbgTextures;
-static std::array<vkn::TextureView, COMMON_DBG_TEX_IDX_COUNT> s_commonDbgTextureViews;
+static std::array<vkn::Texture, DBG_TEX_IDX_COUNT>     s_commonDbgTextures;
+static std::array<vkn::TextureView, DBG_TEX_IDX_COUNT> s_commonDbgTextureViews;
 
 static vkn::Texture     s_skyboxTexture;
 static vkn::TextureView s_skyboxTextureView;
@@ -1405,7 +1407,7 @@ static bool s_skipRender = false;
     static size_t s_dbgDrawnAkillMeshCount = 0;
     static size_t s_dbgDrawnTranspMeshCount = 0;
 
-    static TonemapPreset s_tonemappingPreset = TonemapPreset::ACES;
+    static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 #else
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
@@ -1415,7 +1417,7 @@ static bool s_skipRender = false;
     static constexpr bool s_useIndirectLighting = false;
     static constexpr bool s_drawInstAABBs = false;
 
-    static constexpr TonemapPreset s_tonemappingPreset = TonemapPreset::ACES;
+    static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 #endif
 
 
@@ -2783,7 +2785,7 @@ static void CreateCommonDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, CMP_SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
@@ -4333,7 +4335,7 @@ static void CreateCommonDbgTextures()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    std::array<vkn::TextureCreateInfo, COMMON_DBG_TEX_IDX_COUNT> texCreateInfos = {};
+    std::array<vkn::TextureCreateInfo, DBG_TEX_IDX_COUNT> texCreateInfos = {};
 
     for (vkn::TextureCreateInfo& createInfo : texCreateInfos) {
         createInfo.pDevice = &s_vkDevice;
@@ -4349,9 +4351,9 @@ static void CreateCommonDbgTextures()
         createInfo.pAllocInfo = &allocInfo;
     }
 
-    texCreateInfos[COMMON_DBG_TEX_IDX_CHECKERBOARD].extent = { 128u, 128u, 1u };
+    texCreateInfos[DBG_TEX_IDX_CHECKERBOARD].extent = { 128u, 128u, 1u };
 
-    static constexpr std::array<const char*, COMMON_DBG_TEX_IDX_COUNT> texNames = {
+    static constexpr std::array<const char*, DBG_TEX_IDX_COUNT> texNames = {
         "COMMON_DBG_TEX_RED",
         "COMMON_DBG_TEX_GREEN",
         "COMMON_DBG_TEX_BLUE",
@@ -4481,7 +4483,7 @@ static void UploadGPUDbgTextures()
     });
 
 
-    vkn::Texture& checkerboardTex = s_commonDbgTextures[COMMON_DBG_TEX_IDX_CHECKERBOARD];
+    vkn::Texture& checkerboardTex = s_commonDbgTextures[DBG_TEX_IDX_CHECKERBOARD];
 
     uint32_t* pCheckerboardImageData = (uint32_t*)s_commonStagingBuffer.Map();
 
@@ -6211,24 +6213,17 @@ void UpdateGPUDbgConstBuffer()
 
     COMMON_DBG_CB_DATA& constBuff = *reinterpret_cast<COMMON_DBG_CB_DATA*>(s_commonDbgConstBuffer.Map());
 
-    constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
-
     uint32_t flags_0 = 0;
-
-    switch (s_tonemappingPreset) {
-        case TonemapPreset::ACES:                  flags_0 |= (1u << 0u); break;
-        case TonemapPreset::REINHARD:              flags_0 |= (1u << 1u); break;
-        case TonemapPreset::PARTIAL_UNCHARTED_2:   flags_0 |= (1u << 2u); break;
-        case TonemapPreset::UNCHARTED_2:           flags_0 |= (1u << 3u); break;
-    }
 
     flags_0 |= s_useIndirectLighting                       ? (1u << 4u) : 0;
     flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 5u) : 0;
     flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 6u) : 0;
     flags_0 |= s_isCSMEnabled                              ? (1u << 7u) : 0;
 
+    constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
     constBuff.RT_VIEW_TYPE = s_dbgOutputRTType;
+    constBuff.TONEMAP_PRESET = s_tonemappingPreset;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -8048,7 +8043,7 @@ namespace DbgUI
                         const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset]);
                         
                         if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                            s_tonemappingPreset = TonemapPreset(i);
+                            s_tonemappingPreset = DBG_TONEMAP_PRESET(i);
                         }
                         
                         if (isSelected) {
