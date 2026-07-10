@@ -203,6 +203,19 @@ struct COMMON_CMD_DISPATCH_INDIRECT
 static_assert(sizeof(COMMON_CMD_DISPATCH_INDIRECT) == sizeof(VkDispatchIndirectCommand));
 
 
+enum DBG_TEX_IDX : uint32_t
+{
+    DBG_TEX_IDX_RED,
+    DBG_TEX_IDX_GREEN,
+    DBG_TEX_IDX_BLUE,
+    DBG_TEX_IDX_BLACK,
+    DBG_TEX_IDX_WHITE,
+    DBG_TEX_IDX_GREY,
+    DBG_TEX_IDX_CHECKERBOARD,
+    DBG_TEX_IDX_COUNT
+};
+
+
 enum COMMON_SAMPLER_IDX : uint32_t
 {
     SAMPLER_IDX_NEAREST_REPEAT,
@@ -283,7 +296,6 @@ enum DBG_RT_VIEW_TYPE : uint32_t
     DBG_RT_VIEW_TYPE_BRDF_LUT,
     DBG_RT_VIEW_TYPE_SKYBOX,
     DBG_RT_VIEW_TYPE_CSM_DEPTH,
-    DBG_RT_VIEW_TYPE_CSM_CASCADE,
 
     DBG_RT_VIEW_TYPE_COUNT
 };
@@ -297,19 +309,6 @@ enum DBG_TONEMAP_PRESET : uint32_t
     DBG_TONEMAP_PRESET_UNCHARTED_2,
 
     DBG_TONEMAP_PRESET_COUNT
-};
-
-
-enum DBG_TEX_IDX : uint32_t
-{
-    DBG_TEX_IDX_RED,
-    DBG_TEX_IDX_GREEN,
-    DBG_TEX_IDX_BLUE,
-    DBG_TEX_IDX_BLACK,
-    DBG_TEX_IDX_WHITE,
-    DBG_TEX_IDX_GREY,
-    DBG_TEX_IDX_CHECKERBOARD,
-    DBG_TEX_IDX_COUNT
 };
 
 
@@ -472,7 +471,6 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "BRDF_LUT",
     "SKYBOX",
     "CSM_DEPTH",
-    "CSM_CASCADE",
 };
 
 static_assert(DBG_RT_VIEW_TYPE_COUNT == _countof(DBG_RT_OUTPUT_NAMES));
@@ -502,7 +500,6 @@ static constexpr const char* GEOM_QUEUE_DBG_NAMES[] = {
     "OPAQUE",
     "AKILL",
 };
-
 
 static_assert(GEOM_QUEUE_COUNT == _countof(GEOM_QUEUE_DBG_NAMES));
 
@@ -1397,10 +1394,11 @@ static bool s_skipRender = false;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
-    static bool s_isCSMEnabled = true;
     static bool s_useDepthPass = true;
     static bool s_useIndirectLighting = false;
     static bool s_drawInstAABBs = false;
+    static bool s_isCSMEnabled = true;
+    static bool s_isCSMVisualizationEnabled = false;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -1412,10 +1410,11 @@ static bool s_skipRender = false;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
-    static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_useDepthPass = true;
     static constexpr bool s_useIndirectLighting = false;
     static constexpr bool s_drawInstAABBs = false;
+    static constexpr bool s_isCSMEnabled = true;
+    static constexpr bool s_isCSMVisualizationEnabled = false;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 #endif
@@ -4627,25 +4626,6 @@ static void CreateCSMGeomCullingAndInstancingResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    vkn::TextureCreateInfo rtCreateInfo = {};
-    rtCreateInfo.pDevice = &s_vkDevice;
-    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
-    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.extent = VkExtent3D{ CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE, 1u };
-    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    rtCreateInfo.flags = 0;
-    rtCreateInfo.mipLevels = 1;
-    rtCreateInfo.arrayLayers = COMMON_CSM_CASCADE_COUNT;
-    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    rtCreateInfo.pAllocInfo = &allocInfo;
-
-    s_csmRT.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(s_csmRT, "CSM_DEPTH_RT");
-
-    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-
     for (size_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
             // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
@@ -4721,7 +4701,28 @@ static void CreateCSMGeomCullingAndInstancingResources()
             );
             s_vkDevice.SetObjDebugName(s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], "%s_CSM_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
         }
+    }
 
+    vkn::TextureCreateInfo rtCreateInfo = {};
+    rtCreateInfo.pDevice = &s_vkDevice;
+    rtCreateInfo.type = VK_IMAGE_TYPE_2D;
+    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    rtCreateInfo.extent = VkExtent3D{ CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE, 1u };
+    rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    rtCreateInfo.flags = 0;
+    rtCreateInfo.mipLevels = 1;
+    rtCreateInfo.arrayLayers = COMMON_CSM_CASCADE_COUNT;
+    rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    rtCreateInfo.pAllocInfo = &allocInfo;
+
+    s_csmRT.Create(rtCreateInfo);
+    s_vkDevice.SetObjDebugName(s_csmRT, "CSM_DEPTH_RT");
+
+    VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+
+    for (size_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         VkImageSubresourceRange subresourceRange = {};
         subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         subresourceRange.baseMipLevel = 0;
@@ -6215,10 +6216,11 @@ void UpdateGPUDbgConstBuffer()
 
     uint32_t flags_0 = 0;
 
-    flags_0 |= s_useIndirectLighting                       ? (1u << 4u) : 0;
-    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 5u) : 0;
-    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 6u) : 0;
-    flags_0 |= s_isCSMEnabled                              ? (1u << 7u) : 0;
+    flags_0 |= s_useIndirectLighting                       ? (1u << 0u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 1u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 2u) : 0u;
+    flags_0 |= s_isCSMEnabled                              ? (1u << 3u) : 0u;
+    flags_0 |= s_isCSMVisualizationEnabled                 ? (1u << 4u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -7715,9 +7717,6 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         case DBG_RT_VIEW_TYPE_CSM_DEPTH:
             pVisTex = &s_csmRT;
             break;
-        case DBG_RT_VIEW_TYPE_CSM_CASCADE:
-            pVisTex = &s_gbufferRTs[0];
-            break;
     }
 
     VkImageAspectFlagBits aspect;
@@ -8016,7 +8015,15 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Shadows")) {
-                ImGui::Checkbox("CSM", &s_isCSMEnabled);
+                if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
+                    ImGui::SameLine();
+                    ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                    ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+
+                    ImGui::TreePop();
+                }                
             }
             
             if (ImGui::CollapsingHeader("Passes")) {

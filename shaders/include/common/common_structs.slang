@@ -14,6 +14,20 @@ static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 static const uint COMMON_CSM_CASCADE_COUNT = 3;
 
 
+enum DBG_TEX_IDX
+{
+    RED,
+    GREEN,
+    BLUE,
+    BLACK,
+    WHITE,
+    GREY,
+    CHECKERBOARD,
+
+    COUNT
+};
+
+
 enum DBG_RT_VIEW_TYPE
 {
     NONE,
@@ -30,7 +44,6 @@ enum DBG_RT_VIEW_TYPE
     BRDF_LUT,
     SKYBOX,
     CSM_DEPTH,
-    CSM_CASCADE,
 
     COUNT,
 };
@@ -42,20 +55,6 @@ enum DBG_TONEMAP_PRESET
     REINHARD,
     PARTIAL_UNCHARTED_2,
     UNCHARTED_2,
-
-    COUNT
-};
-
-
-enum DBG_TEX_IDX
-{
-    RED,
-    GREEN,
-    BLUE,
-    BLACK,
-    WHITE,
-    GREY,
-    CHECKERBOARD,
 
     COUNT
 };

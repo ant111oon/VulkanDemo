@@ -183,7 +183,7 @@ uint GetCSMCascadeIndex(in float viewZ)
 }
 
 
-float CalsSMBias(in float3 wnorm)
+float CalsCSMBias(in float3 wnorm)
 {
     const float NdotL = saturate(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION));
 
@@ -215,7 +215,7 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
     const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(csmCascade), float4(wpos, 1.f));
     const float2 uv = NDCToUV(ndc.xy);
 
-    const float bias = CalsSMBias(wnorm);
+    const float bias = CalsCSMBias(wnorm);
 
 #ifdef ENV_REVERSED_Z
     const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
@@ -224,7 +224,7 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
     const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
     const float cmpValue = ndc.z - bias;
 #endif
-    
+
     float shadow = SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue);
     shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2( 0,  1));
     shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, csmCascade), cmpValue, int2( 1,  0));
@@ -275,7 +275,7 @@ float3 ComputeLighting(in int2 pixelCoord)
 
     result.Lo += gbuffer.emissive;
 
-    if (COMMON_DBG_RT_VIEW_TYPE == DBG_RT_VIEW_TYPE::CSM_CASCADE) {
+    if (COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
         const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
         result.Lo = max(result.Lo, FLOAT3(0.001f)) * DBG_CSM_CASCADE_COLORS[csmCascade] * 100.f;
     }
