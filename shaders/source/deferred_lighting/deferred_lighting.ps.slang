@@ -47,25 +47,25 @@ void operator+=(inout LIGHTING_RESULT a, in LIGHTING_RESULT b)
 }
 
 
-static const uint G_POINT_LIGHTS_COUNT = 4;
+// static const uint G_POINT_LIGHTS_COUNT = 4;
 
-static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
-{
-    { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f), 3.f },
-    { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f), 3.f },
-    { 8.f * float3(0.f, 0.f, 1.f), float3( 2.f,-2.f, -2.f), 3.f },
-    { 8.f * float3(1.f, 0.f, 1.f), float3(-2.f,-2.f, -2.f), 3.f },
+// static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
+// {
+//     { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f), 3.f },
+//     { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f), 3.f },
+//     { 8.f * float3(0.f, 0.f, 1.f), float3( 2.f,-2.f, -2.f), 3.f },
+//     { 8.f * float3(1.f, 0.f, 1.f), float3(-2.f,-2.f, -2.f), 3.f },
 
-    // { 2.f * ONEF3, float3(-2.f, 2.f, 1.5f), 3.f },
-    // { 2.f * ONEF3, float3( 2.f, 2.f, 1.5f), 3.f },
-    // { 2.f * ONEF3, float3( 2.f,-2.f, 1.5f), 3.f },
-    // { 2.f * ONEF3, float3(-2.f,-2.f, 1.5f), 3.f },
+//     // { 2.f * ONEF3, float3(-2.f, 2.f, 1.5f), 3.f },
+//     // { 2.f * ONEF3, float3( 2.f, 2.f, 1.5f), 3.f },
+//     // { 2.f * ONEF3, float3( 2.f,-2.f, 1.5f), 3.f },
+//     // { 2.f * ONEF3, float3(-2.f,-2.f, 1.5f), 3.f },
 
-    // { 2.f * ONEF3, float3(-2.f, 2.f, -4.5f), 3.f },
-    // { 2.f * ONEF3, float3( 2.f, 2.f, -4.5f), 3.f },
-    // { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f), 3.f },
-    // { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f), 3.f },
-};
+//     // { 2.f * ONEF3, float3(-2.f, 2.f, -4.5f), 3.f },
+//     // { 2.f * ONEF3, float3( 2.f, 2.f, -4.5f), 3.f },
+//     // { 2.f * ONEF3, float3( 2.f,-2.f, -4.5f), 3.f },
+//     // { 2.f * ONEF3, float3(-2.f,-2.f, -4.5f), 3.f },
+// };
 
 
 float CalcLightAttenuation(in float distToLight, in float lightRadius)
@@ -150,7 +150,7 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 }
 
 
-LIGHTING_RESULT ProcessIndirectLighting(in GBUFFER gbuffer, in float3 V, in float3 F0)
+LIGHTING_RESULT ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
 {
     const float NdotV = saturate(dot(gbuffer.normal, V));
 
@@ -200,16 +200,16 @@ float CalsCSMBias(in float3 wnorm)
 }
 
 
-float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
+float3 CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
     if (!COMMON_DBG_IS_CSM_ENABLED) {
-        return 1.f;
+        return ONEF3;
     }
 
     const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
 
     if (csmCascade >= COMMON_CSM_CASCADE_COUNT) {
-        return 1.f;
+        return ONEF3;
     }
 
     const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(csmCascade), float4(wpos, 1.f));
@@ -233,7 +233,13 @@ float CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 
     shadow *= 0.2f;
 
-    return shadow;
+    const float3 shadowF3 = FLOAT3(shadow);
+
+    if (COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
+        return shadowF3 * DBG_CSM_CASCADE_COLORS[csmCascade];
+    }
+
+    return shadowF3;
 }
 
 
@@ -258,27 +264,22 @@ float3 ComputeLighting(in int2 pixelCoord)
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
     result += sunLightResult;
 
-    for (uint i = 0; i < G_POINT_LIGHTS_COUNT; ++i) {
-        const float3 surfToLight = wpos - G_POINT_LIGHTS[i].wpos;
-        const float dist         = length(surfToLight);
-        const float3 lightDir    = surfToLight / max(dist, M3D_EPS);
+    // for (uint i = 0; i < G_POINT_LIGHTS_COUNT; ++i) {
+    //     const float3 surfToLight = wpos - G_POINT_LIGHTS[i].wpos;
+    //     const float dist         = length(surfToLight);
+    //     const float3 lightDir    = surfToLight / max(dist, M3D_EPS);
 
-        LIGHTING_RESULT ptRes = ProcessLight(gbuffer, V, lightDir, G_POINT_LIGHTS[i].color, F0);
-        ptRes.Lo *= CalcLightAttenuation(dist, G_POINT_LIGHTS[i].radius);
+    //     LIGHTING_RESULT ptRes = ProcessLight(gbuffer, V, lightDir, G_POINT_LIGHTS[i].color, F0);
+    //     ptRes.Lo *= CalcLightAttenuation(dist, G_POINT_LIGHTS[i].radius);
 
-        result += ptRes;
-    }
+    //     result += ptRes;
+    // }
 
-    if (COMMON_DBG_USE_INDIRECT_LIGHTING) {
-        result += ProcessIndirectLighting(gbuffer, V, F0);
+    if (COMMON_DBG_USE_IBL) {
+        result += ProcessIBL(gbuffer, V, F0);
     }
 
     result.Lo += gbuffer.emissive;
-
-    if (COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
-        const uint csmCascade = GetCSMCascadeIndex(abs(vpos.z));
-        result.Lo = max(result.Lo, FLOAT3(0.001f)) * DBG_CSM_CASCADE_COLORS[csmCascade] * 100.f;
-    }
 
     return result.Lo;
 }

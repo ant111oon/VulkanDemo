@@ -914,7 +914,6 @@ static constexpr const char* APP_NAME = "Vulkan Demo";
 
 static constexpr bool VSYNC_ENABLED = false;
 
-static constexpr float CAMERA_SPEED = 0.01f;
 static constexpr float CAMERA_ZNEAR = 0.01f;
 static constexpr float CAMERA_ZFAR = 1'000.f;
 
@@ -1390,28 +1389,28 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
+static float s_mainCameraSpeed = 0.02f;
+
 #ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
-    static bool s_useDepthPass = true;
-    static bool s_useIndirectLighting = false;
+    static bool s_useIBL = false;
     static bool s_drawInstAABBs = false;
     static bool s_isCSMEnabled = true;
     static bool s_isCSMVisualizationEnabled = false;
+
+    static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
     static size_t s_dbgDrawnAkillMeshCount = 0;
     static size_t s_dbgDrawnTranspMeshCount = 0;
-
-    static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 #else
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
-    static constexpr bool s_useDepthPass = true;
-    static constexpr bool s_useIndirectLighting = false;
+    static constexpr bool s_useIBL = false;
     static constexpr bool s_drawInstAABBs = false;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
@@ -3875,8 +3874,6 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
             VK_DYNAMIC_STATE_SCISSOR,
 
         #ifdef ENG_BUILD_DEBUG
-            VK_DYNAMIC_STATE_DEPTH_COMPARE_OP, 
-            VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
         #endif
         });
@@ -6216,11 +6213,11 @@ void UpdateGPUDbgConstBuffer()
 
     uint32_t flags_0 = 0;
 
-    flags_0 |= s_useIndirectLighting                       ? (1u << 0u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling ? (1u << 1u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling     ? (1u << 2u) : 0u;
-    flags_0 |= s_isCSMEnabled                              ? (1u << 3u) : 0u;
-    flags_0 |= s_isCSMVisualizationEnabled                 ? (1u << 4u) : 0u;
+    flags_0 |= s_useIBL                                      ? (1u << 0u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling   ? (1u << 1u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling       ? (1u << 2u) : 0u;
+    flags_0 |= s_isCSMEnabled                                ? (1u << 3u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled ? (1u << 4u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -6859,10 +6856,6 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queu
 
 void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    if (!s_useDepthPass) {
-        return;
-    }
-
     static constexpr const char* passLabelName = "Prev_Frame_Occluders_Depth_Pass";
 
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
@@ -6895,10 +6888,6 @@ void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
 
 void ThisFrameGeometryDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    if (!s_useDepthPass) {
-        return;
-    }
-
     static constexpr const char* passLabelName = "This_Frame_Geom_Depth_Pass";
 
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
@@ -7390,13 +7379,8 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    if (s_useDepthPass) {
-        barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-    } else {
-        barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
-    }
+    barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffers[phase][queue];
     vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffers[phase][queue];
@@ -7414,22 +7398,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
     
     renderInfo.depthAttachment.view = &s_depthRTView;
     renderInfo.depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-#ifdef ENG_BUILD_DEBUG
-    if (s_useDepthPass) {
-        renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    } else {
-        renderInfo.depthAttachment.loadOp = isAKillPass ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
-
-        #ifdef ENG_REVERSED_Z
-            renderInfo.depthAttachment.clearValue.depthStencil.depth = 0.f;
-        #else
-            renderInfo.depthAttachment.clearValue.depthStencil.depth = 1.f;
-        #endif
-    }
-#else
-    renderInfo.depthAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
-#endif
+    renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
     std::array<vkn::RenderAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
 
@@ -7457,20 +7426,6 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = (uint32_t)setID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
-
-    #ifdef ENG_BUILD_DEBUG
-        if (s_useDepthPass) {
-            cmdBuffer.CmdSetDepthCompareOp(VK_COMPARE_OP_EQUAL);
-        } else {
-            #ifdef ENG_REVERSED_Z
-                cmdBuffer.CmdSetDepthCompareOp(VK_COMPARE_OP_GREATER_OR_EQUAL);
-            #else
-                cmdBuffer.CmdSetDepthCompareOp(VK_COMPARE_OP_LESS_OR_EQUAL);
-            #endif
-        }
-
-        cmdBuffer.CmdSetDepthWriteEnable(s_useDepthPass ? VK_FALSE : VK_TRUE);
-    #endif
 
         GBUFFER_PER_DRAW_DATA pushConsts = {};
         pushConsts.IS_AKILL_PASS = isAKillPass;
@@ -7886,9 +7841,6 @@ namespace DbgUI
 
         if (ImGui::Begin("Debug")) {
             if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-                const glm::float3 position = s_mainCamera.GetPosition();
-                ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
-
                 ImGui::Text("Fly Camera Mode (F5):");
                 ImGui::SameLine(); 
                 ImGui::TextColored(s_flyCameraMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_flyCameraMode ? "ON" : "OFF");
@@ -7910,6 +7862,13 @@ namespace DbgUI
                 }
                 ImGui::SameLine(); 
                 ImGui::TextColored(s_csmTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_csmTestMode ? "ON" : "OFF");
+
+                ImGui::NewLine();
+
+                const glm::float3 position = s_mainCamera.GetPosition();
+                ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
+
+                ImGui::DragFloat("Speed", &s_mainCameraSpeed, 0.001f, 0.f, 2.f);
             }
 
             if (ImGui::CollapsingHeader("Memory")) {
@@ -8013,32 +7972,26 @@ namespace DbgUI
                     ImGui::TreePop();
                 }
             }
-
-            if (ImGui::CollapsingHeader("Shadows")) {
-                if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
-                    ImGui::SameLine();
-                    ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                    ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
-
-                    ImGui::TreePop();
-                }                
-            }
             
-            if (ImGui::CollapsingHeader("Passes")) {
-                if (ImGui::TreeNodeEx("Depth", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##DepthPassEnabled", &s_useDepthPass);
-                    ImGui::SameLine();
-                    ImGui::TextColored(s_useDepthPass ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+            if (ImGui::CollapsingHeader("Lighting")) {
+                if (ImGui::TreeNodeEx("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
+                        ImGui::SameLine();
+                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
+                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+
+                        ImGui::TreePop();
+                    }
+                    
                     ImGui::TreePop();
                 }
 
-                if (ImGui::TreeNodeEx("Deferred Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Checkbox("##UseIndirectLighting", &s_useIndirectLighting);
+                if (ImGui::TreeNodeEx("Image Based Lighting")) {
+                    ImGui::Checkbox("##UseIBL", &s_useIBL);
                     ImGui::SameLine(); 
-                    ImGui::TextColored(s_useIndirectLighting ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Use Indirect Lighting");
+                    ImGui::TextColored(s_useIBL ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
                     ImGui::TreePop();
                 }
@@ -8345,7 +8298,7 @@ static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& even
         const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
 
         if (keyEvent.IsPressed()) {
-            const float finalSpeed = CAMERA_SPEED * s_frameTime;
+            const float finalSpeed = s_mainCameraSpeed * s_frameTime;
 
             if (keyEvent.key == eng::WndKey::KEY_W) { 
                 s_mainCameraVel.z = -finalSpeed;
