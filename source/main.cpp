@@ -314,11 +314,6 @@ enum DBG_TONEMAP_PRESET : uint32_t
 
 struct COMMON_CB_DATA
 {
-    FRUSTUM  CSM_VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4   CSM_CASCADE_DISTANCES;
-
     FRUSTUM CAMERA_FRUSTUM;
 
     float4x4 VIEW_MATRIX;
@@ -329,7 +324,7 @@ struct COMMON_CB_DATA
     float4x4 INV_PROJ_MATRIX;
     float4x4 INV_VIEW_PROJ_MATRIX;
 
-    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    FRUSTUM  CULLING_CAMERA_FRUSTUM;   // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
     float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
 
     uint2 SCREEN_SIZE;
@@ -337,10 +332,18 @@ struct COMMON_CB_DATA
     float Z_FAR;
 
     float3 CAM_WPOS;
-    uint FLAGS;
+    uint   FLAGS;
 
     float3 SUN_LIGHT_DIRECTION;
     uint SUN_LIGHT_COLOR;
+
+    FRUSTUM  CSM_VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
+    float4x4 CSM_VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    float4   CSM_CASCADE_DISTANCES;
+
+    uint3 PADDING_0;
+    float CSM_CASCADE_BLEND_THRESHOLD;
 };
 
 static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
@@ -1389,6 +1392,7 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
+static float s_csmCascadeBlendThreshold = 1.5f;
 static float s_mainCameraSpeed = 0.02f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
@@ -1399,6 +1403,7 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_drawInstAABBs = false;
     static bool s_isCSMEnabled = true;
     static bool s_isCSMVisualizationEnabled = false;
+    static bool s_isCSMCascadeBlendEnabled = true;
 
     static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 
@@ -1414,6 +1419,7 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_drawInstAABBs = false;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
+    static constexpr bool s_isCSMCascadeBlendEnabled = true;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
 #endif
@@ -6154,15 +6160,6 @@ void UpdateGPUCommonConstBuffer()
 
     COMMON_CB_DATA& constBuff = *reinterpret_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map());
 
-    for (size_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
-        const eng::Camera& cam = s_csmCameras[i];
-
-        constBuff.CSM_VIEW_FRUSTUMS[i]      = CopyCPUFrustumToGPU(cam.GetFrustum());
-        constBuff.CSM_VIEW_MATRICES[i]      = cam.GetViewMatrix();
-        constBuff.CSM_VIEW_PROJ_MATRICES[i] = cam.GetViewProjMatrix();
-        constBuff.CSM_CASCADE_DISTANCES[i]  = CSM_CASCADE_DISTANCES[i];
-    }
-
     const glm::float4x4& viewMatrix = s_mainCamera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_mainCamera.GetProjMatrix();
     const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
@@ -6200,6 +6197,17 @@ void UpdateGPUCommonConstBuffer()
     constBuff.SUN_LIGHT_DIRECTION = SUN_LIGHT_DIR;
     constBuff.SUN_LIGHT_COLOR = glm::packUnorm4x8(ONEF4);
 
+    for (size_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
+        const eng::Camera& cam = s_csmCameras[i];
+
+        constBuff.CSM_VIEW_FRUSTUMS[i]      = CopyCPUFrustumToGPU(cam.GetFrustum());
+        constBuff.CSM_VIEW_MATRICES[i]      = cam.GetViewMatrix();
+        constBuff.CSM_VIEW_PROJ_MATRICES[i] = cam.GetViewProjMatrix();
+        constBuff.CSM_CASCADE_DISTANCES[i]  = CSM_CASCADE_DISTANCES[i];
+    }
+
+    constBuff.CSM_CASCADE_BLEND_THRESHOLD = s_csmCascadeBlendThreshold;
+
     s_commonConstBuffer.Unmap();
 }
 
@@ -6218,6 +6226,7 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= s_useMeshCulling && s_useMeshHZBCulling       ? (1u << 2u) : 0u;
     flags_0 |= s_isCSMEnabled                                ? (1u << 3u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled ? (1u << 4u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled  ? (1u << 5u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -7982,6 +7991,18 @@ namespace DbgUI
 
                         ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
 
+                        if (ImGui::TreeNodeEx("Cascade Blend", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##CSMCascadeBlendEnabled", &s_isCSMCascadeBlendEnabled);
+                            ImGui::SameLine();
+                            ImGui::TextColored(s_isCSMCascadeBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                            
+                            if (s_isCSMCascadeBlendEnabled) {
+                                ImGui::DragFloat("Blend Threshold", &s_csmCascadeBlendThreshold, 0.01f, 0.01f, 5.f, "%.2f");                                
+                            }
+
+                            ImGui::TreePop();
+                        }
+
                         ImGui::TreePop();
                     }
                     
@@ -7998,9 +8019,9 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Tonemapping")) {
-                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset])) {
+                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
                     for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
-                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[(size_t)s_tonemappingPreset]);
+                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
                         
                         if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
                             s_tonemappingPreset = DBG_TONEMAP_PRESET(i);

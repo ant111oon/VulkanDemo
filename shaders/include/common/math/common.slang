@@ -95,6 +95,14 @@ float Max(in float4 val)
 }
 
 
+void Swap<T>(inout T left, inout T right)
+{
+    const T tmp = left;
+    left = right;
+    right = tmp;
+}
+
+
 void CalcTangBitang(in float3 norm, out float3 tang, out float3 bitang)
 {
     const float3 up = abs(norm.z) < 0.999f ? M3D_AXIS_Z : M3D_AXIS_X;
