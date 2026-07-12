@@ -312,6 +312,16 @@ enum DBG_TONEMAP_PRESET : uint32_t
 };
 
 
+enum DBG_CSM_PCF_PRESET : uint32_t
+{
+    DBG_CSM_PCF_PRESET_NONE,
+    DBG_CSM_PCF_PRESET_2X2,
+    DBG_CSM_PCF_PRESET_3X3,
+
+    DBG_CSM_PCF_PRESET_COUNT
+};
+
+
 struct COMMON_CB_DATA
 {
     FRUSTUM CAMERA_FRUSTUM;
@@ -356,6 +366,9 @@ struct COMMON_DBG_CB_DATA
 
     DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
     DBG_TONEMAP_PRESET TONEMAP_PRESET;
+
+    uint3 PADDING_0;
+    DBG_CSM_PCF_PRESET CSM_PCF_PRESET;
 };
 
 
@@ -487,6 +500,15 @@ static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
 };
 
 static_assert(DBG_TONEMAP_PRESET_COUNT == _countof(DBG_TONEMAPPING_NAMES));
+
+
+static constexpr const char* DBG_CSM_PCF_NAMES[] = {
+    "NONE",
+    "2X2",
+    "3X3",
+};
+
+static_assert(DBG_CSM_PCF_PRESET_COUNT == _countof(DBG_CSM_PCF_NAMES));
 
 
 static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
@@ -1406,6 +1428,7 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_isCSMCascadeBlendEnabled = true;
 
     static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
+    static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_3X3;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -1422,6 +1445,7 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMCascadeBlendEnabled = true;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
+    static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_3X3;
 #endif
 
 
@@ -6232,6 +6256,7 @@ void UpdateGPUDbgConstBuffer()
     constBuff.FLAGS_0 = flags_0;
     constBuff.RT_VIEW_TYPE = s_dbgOutputRTType;
     constBuff.TONEMAP_PRESET = s_tonemappingPreset;
+    constBuff.CSM_PCF_PRESET = s_csmPCFPreset;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -7878,6 +7903,7 @@ namespace DbgUI
                 ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
 
                 ImGui::DragFloat("Speed", &s_mainCameraSpeed, 0.001f, 0.f, 2.f);
+                ImGui::NewLine();
             }
 
             if (ImGui::CollapsingHeader("Memory")) {
@@ -7985,13 +8011,7 @@ namespace DbgUI
             if (ImGui::CollapsingHeader("Lighting")) {
                 if (ImGui::TreeNodeEx("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
-                        ImGui::SameLine();
-                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
-
-                        if (ImGui::TreeNodeEx("Cascade Blend", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::TreeNodeEx("Cascade Blend")) {
                             ImGui::Checkbox("##CSMCascadeBlendEnabled", &s_isCSMCascadeBlendEnabled);
                             ImGui::SameLine();
                             ImGui::TextColored(s_isCSMCascadeBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
@@ -8008,6 +8028,31 @@ namespace DbgUI
 
                             ImGui::TreePop();
                         }
+
+                        if (ImGui::TreeNodeEx("Filtering")) {
+                            if (ImGui::BeginCombo("PCF Filter", DBG_CSM_PCF_NAMES[s_csmPCFPreset])) {
+                                for (size_t i = 0; i < _countof(DBG_CSM_PCF_NAMES); ++i) {
+                                    const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFPreset]);
+                                    
+                                    if (ImGui::Selectable(DBG_CSM_PCF_NAMES[i], isSelected)) {
+                                        s_csmPCFPreset = DBG_CSM_PCF_PRESET(i);
+                                    }
+                                    
+                                    if (isSelected) {
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+
+                            ImGui::TreePop();
+                        }
+
+                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
+                        ImGui::SameLine();
+                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
 
                         ImGui::TreePop();
                     }

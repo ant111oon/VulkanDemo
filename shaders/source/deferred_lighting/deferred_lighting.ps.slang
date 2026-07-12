@@ -171,7 +171,7 @@ LIGHTING_RESULT ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
 }
 
 
-uint GetCSMCascadeIndex(in float viewZ)
+uint GetCsmCascadeIndex(in float viewZ)
 {
     for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         if (viewZ < COMMON_CSM_CASCADE_DISTANCE(cascade)) {
@@ -198,7 +198,7 @@ struct CSM_CASCADE_BLEND_DATA
 };
 
 
-CSM_CASCADE_BLEND_DATA GetCSMCascadeBlendData(in float viewZ, in uint currCascadeIndex)
+CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascadeIndex)
 {
     const float2 bounds = COMMON_CSM_CASCADE_BOUNDS(currCascadeIndex);
     const float cascadeSize = bounds[1] - bounds[0];
@@ -238,7 +238,7 @@ CSM_CASCADE_BLEND_DATA GetCSMCascadeBlendData(in float viewZ, in uint currCascad
 }
 
 
-float CalsCSMBias(in float3 wnorm)
+float CalsCsmBias(in float3 wnorm)
 {
     const float NdotL = saturate(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION));
 
@@ -255,7 +255,55 @@ float CalsCSMBias(in float3 wnorm)
 }
 
 
-float3 CalcCSMShadowCascade(in uint cascade, in float3 wpos, in float bias)
+float CalcCsmPCF(in float viewZ, in float bias, in float3 texCoord)
+{
+#ifdef ENV_REVERSED_Z
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
+    const float cmpValue = viewZ + bias;
+#else
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
+    const float cmpValue = viewZ - bias;
+#endif
+
+    const SamplerState smp = GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER);
+
+    float shadow = 0.f;
+
+    switch (COMMON_DBG_CSM_PCF_PRESET) {
+        case DBG_CSM_PCF_PRESET::NONE:
+            shadow += SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, texCoord, 0).r;
+        
+        #ifdef ENV_REVERSED_Z
+            shadow = shadow < cmpValue ? 1.f : 0.f;
+        #else
+            shadow = shadow > cmpValue ? 1.f : 0.f;
+        #endif
+            break;
+
+        case DBG_CSM_PCF_PRESET::PCF_2X2:
+            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, cmpValue);
+            break;
+
+        case DBG_CSM_PCF_PRESET::PCF_3X3:
+            for (int y = -1; y <= 1; ++y) {
+                for (int x = -1; x <= 1; ++x) {
+                    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, cmpValue, int2(x, y));
+                }
+            }
+            
+            shadow *= (1.f / 9.f);
+            break;
+
+        default:
+            shadow = 1.f;
+            break;
+    }
+
+    return shadow;
+}
+
+
+float3 CalcCsmShadowCascade(in uint cascade, in float3 wpos, in float bias)
 {
     if (cascade >= COMMON_CSM_CASCADE_COUNT) {
         return ONEF3;
@@ -264,63 +312,57 @@ float3 CalcCSMShadowCascade(in uint cascade, in float3 wpos, in float bias)
     const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(cascade), float4(wpos, 1.f));
     const float2 uv = NDCToUV(ndc.xy);
 
-#ifdef ENV_REVERSED_Z
-    const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
-    const float cmpValue = ndc.z + bias;
-#else
-    const SamplerComparisonState smp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
-    const float cmpValue = ndc.z - bias;
-#endif
-
-    float shadow = SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, smp, float3(uv, cascade), cmpValue);
-    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, cascade), cmpValue, int2(0, 1));
-    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, cascade), cmpValue, int2(1, 0));
-    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, cascade), cmpValue, int2(0, -1));
-    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, smp, float3(uv, cascade), cmpValue, int2(-1, 0));
-
-    shadow *= 0.2f;
+    const float shadow = CalcCsmPCF(ndc.z, bias, float3(uv, cascade));
 
     return FLOAT3(shadow);
 }
 
 
-float3 CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
+float3 GetCsmCascadeColor(in uint currCascadeIdx, in CSM_CASCADE_BLEND_DATA blendData)
+{
+    if (!COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
+        return ONEF3;
+    }
+
+    float3 cascadeColor = DBG_CSM_CASCADE_COLORS[currCascadeIdx];
+
+    if (blendData.NeedBlend()) {
+        cascadeColor = lerp(cascadeColor, DBG_CSM_CASCADE_COLORS[blendData.closestCascade], blendData.blendCoef);
+    }
+
+    return cascadeColor;
+}
+
+
+float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
     if (!COMMON_DBG_IS_CSM_ENABLED) {
         return ONEF3;
     }
 
     const float vDist = abs(vpos.z);
-    const uint cascadeIdx = GetCSMCascadeIndex(vDist);
+    const uint cascadeIdx = GetCsmCascadeIndex(vDist);
 
     if (cascadeIdx >= COMMON_CSM_CASCADE_COUNT) {
         return ONEF3;
     }
 
-    const float bias = CalsCSMBias(wnorm);
-    float3 shadow = CalcCSMShadowCascade(cascadeIdx, wpos, bias);
+    const float bias = CalsCsmBias(wnorm);
+    float3 shadow = CalcCsmShadowCascade(cascadeIdx, wpos, bias);
 
     CSM_CASCADE_BLEND_DATA blendData;
 
     if (COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED) {
-        blendData = GetCSMCascadeBlendData(vDist, cascadeIdx);
+        blendData = GetCsmCascadeBlendData(vDist, cascadeIdx);
 
         if (blendData.NeedBlend()) {
-            const float3 nearCascadeShadow = CalcCSMShadowCascade(blendData.closestCascade, wpos, bias);
+            const float3 nearCascadeShadow = CalcCsmShadowCascade(blendData.closestCascade, wpos, bias);
 
             shadow = lerp(shadow, nearCascadeShadow, blendData.blendCoef);
         }
     }
 
-    float3 cascadeColor = ONEF3;
-
-    if (COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
-        cascadeColor = DBG_CSM_CASCADE_COLORS[cascadeIdx];
-
-        if (blendData.NeedBlend()) {
-            cascadeColor = lerp(cascadeColor, DBG_CSM_CASCADE_COLORS[blendData.closestCascade], blendData.blendCoef);
-        }
-    }
+    const float3 cascadeColor = GetCsmCascadeColor(cascadeIdx, blendData);
 
     return shadow * cascadeColor;
 }
@@ -342,7 +384,7 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
     LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_LIGHT_DIRECTION, COMMON_SUN_LIGHT_COLOR.rgb, F0);
-    sunLightResult.Lo *= CalcCSMShadow(wpos, vpos, gbuffer.normal);
+    sunLightResult.Lo *= CalcCsmShadow(wpos, vpos, gbuffer.normal);
 
     LIGHTING_RESULT result = (LIGHTING_RESULT)0;
     result += sunLightResult;
