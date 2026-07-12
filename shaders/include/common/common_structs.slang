@@ -15,20 +15,6 @@ static const uint COMMON_CSM_CASCADE_COUNT = 3;
 static const uint COMMON_CSM_CASCADE_BOUNDS_COUNT = COMMON_CSM_CASCADE_COUNT + 1;
 
 
-enum DBG_TEX_IDX
-{
-    RED,
-    GREEN,
-    BLUE,
-    BLACK,
-    WHITE,
-    GREY,
-    CHECKERBOARD,
-
-    COUNT
-};
-
-
 enum DBG_RT_VIEW_TYPE
 {
     NONE,

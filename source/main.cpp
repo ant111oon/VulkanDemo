@@ -16,6 +16,7 @@
 #include "core/utils/timer.h"
 
 #include "core/math/transform.h"
+#include "core/math/random.h"
 
 #include "render/core/vulkan/vk_instance.h"
 #include "render/core/vulkan/vk_surface.h"
@@ -201,19 +202,6 @@ struct COMMON_CMD_DISPATCH_INDIRECT
 };
 
 static_assert(sizeof(COMMON_CMD_DISPATCH_INDIRECT) == sizeof(VkDispatchIndirectCommand));
-
-
-enum DBG_TEX_IDX : uint32_t
-{
-    DBG_TEX_IDX_RED,
-    DBG_TEX_IDX_GREEN,
-    DBG_TEX_IDX_BLUE,
-    DBG_TEX_IDX_BLACK,
-    DBG_TEX_IDX_WHITE,
-    DBG_TEX_IDX_GREY,
-    DBG_TEX_IDX_CHECKERBOARD,
-    DBG_TEX_IDX_COUNT
-};
 
 
 enum COMMON_SAMPLER_IDX : uint32_t
@@ -793,7 +781,7 @@ static_assert(DESC_SET_ID_COUNT == _countof(DESC_SET_DBG_NAME));
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT = 1;
-static constexpr size_t COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT = 2;
+// 2 - free
 static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 5;
@@ -1337,9 +1325,6 @@ static vkn::Buffer s_dbgTriangleDataGPU;
 static vkn::Buffer s_dbgLineVertexDataGPU;
 static vkn::Buffer s_dbgTriangleVertexDataGPU;
 
-
-static std::array<vkn::Texture, DBG_TEX_IDX_COUNT>     s_commonDbgTextures;
-static std::array<vkn::TextureView, DBG_TEX_IDX_COUNT> s_commonDbgTextureViews;
 
 static vkn::Texture     s_skyboxTexture;
 static vkn::TextureView s_skyboxTextureView;
@@ -2813,7 +2798,6 @@ static void CreateCommonDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, CMP_SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
-        vkn::DescriptorInfo::Create(COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, DBG_TEX_IDX_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
@@ -4354,196 +4338,6 @@ static void CreatePipelines()
 }
 
 
-static void CreateCommonDbgTextures()
-{
-#ifdef ENG_BUILD_DEBUG
-    vkn::AllocationInfo allocInfo = {};
-    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    std::array<vkn::TextureCreateInfo, DBG_TEX_IDX_COUNT> texCreateInfos = {};
-
-    for (vkn::TextureCreateInfo& createInfo : texCreateInfos) {
-        createInfo.pDevice = &s_vkDevice;
-        createInfo.type = VK_IMAGE_TYPE_2D;
-        createInfo.extent = { 1U, 1U, 1U };
-        createInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        createInfo.mipLevels = 1;
-        createInfo.arrayLayers = 1;
-        createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        createInfo.pAllocInfo = &allocInfo;
-    }
-
-    texCreateInfos[DBG_TEX_IDX_CHECKERBOARD].extent = { 128u, 128u, 1u };
-
-    static constexpr std::array<const char*, DBG_TEX_IDX_COUNT> texNames = {
-        "COMMON_DBG_TEX_RED",
-        "COMMON_DBG_TEX_GREEN",
-        "COMMON_DBG_TEX_BLUE",
-        "COMMON_DBG_TEX_BLACK",
-        "COMMON_DBG_TEX_WHITE",
-        "COMMON_DBG_TEX_GREY",
-        "COMMON_DBG_TEX_CHECKERBOARD",
-    };
-
-    for (size_t i = 0; i < s_commonDbgTextures.size(); ++i) {
-        s_commonDbgTextures[i].Create(texCreateInfos[i]);
-        s_vkDevice.SetObjDebugName(s_commonDbgTextures[i], texNames[i]);
-    }
-
-    VkComponentMapping texMapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-            
-    VkImageSubresourceRange texSubresourceRange = {};
-    texSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    texSubresourceRange.baseMipLevel = 0;
-    texSubresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    texSubresourceRange.baseArrayLayer = 0;
-    texSubresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-    for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
-        s_commonDbgTextureViews[i].Create(s_commonDbgTextures[i], texMapping, texSubresourceRange);
-        s_vkDevice.SetObjDebugName(s_commonDbgTextureViews[i], texNames[i]);
-    }
-#endif
-}
-
-
-static void UploadGPUDbgTextures()
-{
-#ifdef ENG_BUILD_DEBUG
-    auto UploadDbgTexture = [](vkn::CmdBuffer& cmdBuffer, size_t texIdx) -> void
-    {
-        vkn::Texture& texture = s_commonDbgTextures[texIdx];
-
-        cmdBuffer
-            .BeginBarrierList()
-                .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-            .Push();
-
-        vkn::BufferToTextureCopyInfo copyInfo = {};
-        copyInfo.texSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copyInfo.texSubresource.mipLevel = 0;
-        copyInfo.texSubresource.baseArrayLayer = 0;
-        copyInfo.texSubresource.layerCount = 1;
-        copyInfo.texExtent = texture.GetSize();
-
-        cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, texture, copyInfo);
-    
-        cmdBuffer
-            .BeginBarrierList()
-                .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-            .Push();
-    };
-
-    uint8_t* pRedImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pRedImageData[0] = 255;
-    pRedImageData[1] = 0;
-    pRedImageData[2] = 0;
-    pRedImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    size_t writeTexIdx = 0;
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-    uint8_t* pGreenImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pGreenImageData[0] = 0;
-    pGreenImageData[1] = 255;
-    pGreenImageData[2] = 0;
-    pGreenImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-    uint8_t* pBlueImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pBlueImageData[0] = 0;
-    pBlueImageData[1] = 0;
-    pBlueImageData[2] = 255;
-    pBlueImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-    uint8_t* pBlackImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pBlackImageData[0] = 0;
-    pBlackImageData[1] = 0;
-    pBlackImageData[2] = 0;
-    pBlackImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-    uint8_t* pWhiteImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pWhiteImageData[0] = 255;
-    pWhiteImageData[1] = 255;
-    pWhiteImageData[2] = 255;
-    pWhiteImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-    uint8_t* pGreyImageData = (uint8_t*)s_commonStagingBuffer.Map();
-    pGreyImageData[0] = 128;
-    pGreyImageData[1] = 128;
-    pGreyImageData[2] = 128;
-    pGreyImageData[3] = 255;
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-
-
-    vkn::Texture& checkerboardTex = s_commonDbgTextures[DBG_TEX_IDX_CHECKERBOARD];
-
-    uint32_t* pCheckerboardImageData = (uint32_t*)s_commonStagingBuffer.Map();
-
-    const uint32_t whiteColorU32 = glm::packUnorm4x8(glm::float4(1.f));
-    const uint32_t blackColorU32 = glm::packUnorm4x8(glm::float4(0.f, 0.f, 0.f, 1.f));
-
-    for (uint32_t y = 0; y < checkerboardTex.GetSizeY(); ++y) {
-        for (uint32_t x = 0; x < checkerboardTex.GetSizeX(); ++x) {
-            const uint32_t idx = y * checkerboardTex.GetSizeX() + x;
-
-            if (x < checkerboardTex.GetSizeX() / 2) {
-                if (y < checkerboardTex.GetSizeY() / 2) {
-                    pCheckerboardImageData[idx] = whiteColorU32;
-                } else {
-                    pCheckerboardImageData[idx] = blackColorU32;
-                }
-            } else {
-                if (y < checkerboardTex.GetSizeY() / 2) {
-                    pCheckerboardImageData[idx] = blackColorU32;
-                } else {
-                    pCheckerboardImageData[idx] = whiteColorU32;
-                }
-            }
-        }
-    }
-    s_commonStagingBuffer.Unmap();
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
-        UploadDbgTexture(cmdBuffer, writeTexIdx++);
-    });
-#endif
-}
-
-
 static void CreateGeomCullingAndInstancingResources()
 {
     vkn::AllocationInfo allocInfo = {};
@@ -4647,7 +4441,7 @@ static void CreateGeomCullingAndInstancingResources()
 }
 
 
-static void CreateCSMGeomCullingAndInstancingResources()
+static void CreateCSMResources()
 {
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -4733,7 +4527,7 @@ static void CreateCSMGeomCullingAndInstancingResources()
     vkn::TextureCreateInfo rtCreateInfo = {};
     rtCreateInfo.pDevice = &s_vkDevice;
     rtCreateInfo.type = VK_IMAGE_TYPE_2D;
-    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
+    rtCreateInfo.format = VK_FORMAT_D16_UNORM;
     rtCreateInfo.extent = VkExtent3D{ CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE, 1u };
     rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     rtCreateInfo.flags = 0;
@@ -5343,10 +5137,6 @@ static void WriteCommonDescriptorSet()
     }
 
 #ifdef ENG_BUILD_DEBUG
-    for (size_t i = 0; i < s_commonDbgTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_TEXTURES_DESCRIPTOR_SLOT, i, s_commonDbgTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    }
-
     s_descriptorBuffer.WriteDescriptor(DESC_SET_ID_COMMON, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
 #endif
 
@@ -6104,7 +5894,6 @@ static void UploadGPUResources()
     UploadGPUInstData();
     UploadGPUTextureData();
     UploadGPUMaterialData();
-    UploadGPUDbgTextures();
 }
 
 
@@ -8566,8 +8355,7 @@ int main(int argc, char* argv[])
     CreateCommonConstBuffer();
     CreateCommonDbgConstBuffer();
     CreateGeomCullingAndInstancingResources();
-    CreateCSMGeomCullingAndInstancingResources();
-    CreateCommonDbgTextures();
+    CreateCSMResources();
     CreateDbgDrawResources();
     CreateDescriptorSets();
     CreatePipelines();

@@ -13,7 +13,7 @@
 [vk::binding(0, DESC_SET_PER_FRAME)] SamplerState           COMMON_SAMPLERS[COMMON_SAMPLER_IDX::COUNT];
 [vk::binding(1, DESC_SET_PER_FRAME)] SamplerComparisonState COMMON_CMP_SAMPLERS[COMMON_CMP_SAMPLER_IDX::COUNT];
 
-[vk::binding(2, DESC_SET_PER_FRAME)] Texture2D COMMON_DBG_TEXTURES[DBG_TEX_IDX::COUNT];
+// 2 - free
 
 [vk::binding(3, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_CB_DATA>     COMMON_CB;
 [vk::binding(4, DESC_SET_PER_FRAME)] ConstantBuffer<COMMON_DBG_CB_DATA> COMMON_DBG_CB;
