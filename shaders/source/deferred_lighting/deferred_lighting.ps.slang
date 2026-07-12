@@ -201,29 +201,36 @@ struct CSM_CASCADE_BLEND_DATA
 CSM_CASCADE_BLEND_DATA GetCSMCascadeBlendData(in float viewZ, in uint currCascadeIndex)
 {
     const float2 bounds = COMMON_CSM_CASCADE_BOUNDS(currCascadeIndex);
-    const float distToLeftBound = abs(viewZ - bounds[0]);
-    const float distToRightBound = abs(viewZ - bounds[1]);
+    const float cascadeSize = bounds[1] - bounds[0];
 
-    const uint closestBound = distToLeftBound < distToRightBound ? 0 : 1;
+    const uint closestBoundIdx = abs(viewZ - bounds[0]) < abs(viewZ - bounds[1]) ? 0 : 1;
 
-    const float bound = bounds[closestBound];
-    const float threshold = COMMON_CSM_CASCADE_BLEND_THRESHOLD;
+    const float bound = bounds[closestBoundIdx];
+    const float thresholdCoef = abs(bound - viewZ) / cascadeSize;
 
-    const uint rawBoundIdx = currCascadeIndex + closestBound;
+    const uint rawBoundIdx = currCascadeIndex + closestBoundIdx;
 
     bool needBlend = rawBoundIdx > 0 && rawBoundIdx < COMMON_CSM_CASCADE_BOUNDS_COUNT - 1;
-    needBlend = needBlend && (abs(bound - viewZ) < threshold);
+    needBlend = needBlend && (thresholdCoef <= COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF);
 
     if (!needBlend) {
         return CSM_CASCADE_BLEND_DATA();
     }
 
+    const uint closestCascadeIdx = currCascadeIndex + (closestBoundIdx == 0 ? -1 : 1);
+
+    const float2 closestCascadeBounds = COMMON_CSM_CASCADE_BOUNDS(closestCascadeIdx);
+    const float closestCascadeSize = closestCascadeBounds[1] - closestCascadeBounds[0];
+
+    const float leftThresholdDist = (closestBoundIdx == 0 ? closestCascadeSize : cascadeSize) * COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF;
+    const float rightThresholdDist = (closestBoundIdx == 0 ? cascadeSize : closestCascadeSize) * COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF;
+
     CSM_CASCADE_BLEND_DATA result;
 
-    result.closestCascade = currCascadeIndex + (closestBound == 0 ? -1 : 1);
-    result.blendCoef = smoothstep(bound - threshold, bound + threshold, viewZ);
+    result.closestCascade = closestCascadeIdx;
+    result.blendCoef = smoothstep(bound - leftThresholdDist, bound + rightThresholdDist, viewZ);
 
-    if (closestBound == 0) {
+    if (closestBoundIdx == 0) {
         result.blendCoef = 1.f - result.blendCoef;
     }
 
@@ -305,17 +312,17 @@ float3 CalcCSMShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
         }
     }
 
+    float3 cascadeColor = ONEF3;
+
     if (COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
-        float3 cascadeColor = DBG_CSM_CASCADE_COLORS[cascadeIdx];
+        cascadeColor = DBG_CSM_CASCADE_COLORS[cascadeIdx];
 
         if (blendData.NeedBlend()) {
             cascadeColor = lerp(cascadeColor, DBG_CSM_CASCADE_COLORS[blendData.closestCascade], blendData.blendCoef);
         }
-
-        return shadow * cascadeColor;
     }
 
-    return shadow;
+    return shadow * cascadeColor;
 }
 
 

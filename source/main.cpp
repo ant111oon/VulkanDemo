@@ -343,7 +343,7 @@ struct COMMON_CB_DATA
     float4   CSM_CASCADE_DISTANCES;
 
     uint3 PADDING_0;
-    float CSM_CASCADE_BLEND_THRESHOLD;
+    float CSM_CASCADE_BLEND_THRESHOLD_COEF;
 };
 
 static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
@@ -1392,7 +1392,7 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
-static float s_csmCascadeBlendThreshold = 1.5f;
+static float s_csmCascadeBlendThresholdCoef = 5.f;
 static float s_mainCameraSpeed = 0.02f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
@@ -6206,7 +6206,7 @@ void UpdateGPUCommonConstBuffer()
         constBuff.CSM_CASCADE_DISTANCES[i]  = CSM_CASCADE_DISTANCES[i];
     }
 
-    constBuff.CSM_CASCADE_BLEND_THRESHOLD = s_csmCascadeBlendThreshold;
+    constBuff.CSM_CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
 
     s_commonConstBuffer.Unmap();
 }
@@ -7997,7 +7997,13 @@ namespace DbgUI
                             ImGui::TextColored(s_isCSMCascadeBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                             
                             if (s_isCSMCascadeBlendEnabled) {
-                                ImGui::DragFloat("Blend Threshold", &s_csmCascadeBlendThreshold, 0.01f, 0.01f, 5.f, "%.2f");                                
+                                ImGui::DragFloat("Blend Threshold Coef", &s_csmCascadeBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Percentage size of cascade blending area");
+                                    } ImGui::EndTooltip();
+                                }
                             }
 
                             ImGui::TreePop();
