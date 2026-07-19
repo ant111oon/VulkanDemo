@@ -305,6 +305,7 @@ enum DBG_CSM_PCF_PRESET : uint32_t
     DBG_CSM_PCF_PRESET_NONE,
     DBG_CSM_PCF_PRESET_2X2,
     DBG_CSM_PCF_PRESET_3X3,
+    DBG_CSM_PCF_PRESET_POISSON_DISK,
 
     DBG_CSM_PCF_PRESET_COUNT
 };
@@ -340,8 +341,10 @@ struct COMMON_CB_DATA
     float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
     float4   CSM_CASCADE_DISTANCES;
 
-    uint3 PADDING_0;
     float CSM_CASCADE_BLEND_THRESHOLD_COEF;
+    uint  CSM_POISSON_DISK_SAMPLE_COUNT;
+    float CSM_POISSON_DISK_RADIUS;
+    uint  PADDING;
 };
 
 static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
@@ -494,6 +497,7 @@ static constexpr const char* DBG_CSM_PCF_NAMES[] = {
     "NONE",
     "2X2",
     "3X3",
+    "POISSON DISK",
 };
 
 static_assert(DBG_CSM_PCF_PRESET_COUNT == _countof(DBG_CSM_PCF_NAMES));
@@ -1399,8 +1403,10 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
-static float s_csmCascadeBlendThresholdCoef = 5.f;
-static float s_mainCameraSpeed = 0.02f;
+static float   s_csmCascadeBlendThresholdCoef = 5.f;
+static int32_t s_csmPoissonDiskSampleCount = 32;
+static float   s_csmPoissonDiskRadius = 1.5f;
+static float   s_mainCameraSpeed = 0.02f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshCulling = true;
@@ -1411,9 +1417,10 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_isCSMEnabled = true;
     static bool s_isCSMVisualizationEnabled = false;
     static bool s_isCSMCascadeBlendEnabled = true;
+    static bool s_isCSMPoissonRandomOffsetEnabled = false;
 
     static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_3X3;
+    static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -1428,9 +1435,10 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
     static constexpr bool s_isCSMCascadeBlendEnabled = true;
+    static constexpr bool s_isCSMPoissonRandomOffsetEnabled = false;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_3X3;
+    static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
 #endif
 
 
@@ -6020,6 +6028,8 @@ void UpdateGPUCommonConstBuffer()
     }
 
     constBuff.CSM_CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
+    constBuff.CSM_POISSON_DISK_SAMPLE_COUNT = s_csmPoissonDiskSampleCount;
+    constBuff.CSM_POISSON_DISK_RADIUS = s_csmPoissonDiskRadius;
 
     s_commonConstBuffer.Unmap();
 }
@@ -6034,12 +6044,13 @@ void UpdateGPUDbgConstBuffer()
 
     uint32_t flags_0 = 0;
 
-    flags_0 |= s_useIBL                                      ? (1u << 0u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling   ? (1u << 1u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling       ? (1u << 2u) : 0u;
-    flags_0 |= s_isCSMEnabled                                ? (1u << 3u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled ? (1u << 4u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled  ? (1u << 5u) : 0u;
+    flags_0 |= s_useIBL                                            ? (1u << 0u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling         ? (1u << 1u) : 0u;
+    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling             ? (1u << 2u) : 0u;
+    flags_0 |= s_isCSMEnabled                                      ? (1u << 3u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled       ? (1u << 4u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled        ? (1u << 5u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMPoissonRandomOffsetEnabled ? (1u << 6u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -7712,42 +7723,42 @@ namespace DbgUI
                 ImGui::NewLine();
                 for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
                     const float kb = s_geomStreamBuffers[i].GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Stream %s Size: %.3f %s", COMMON_GEOM_STREAM_DBG_NAMES[i], kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Geom Stream %s Size: %.3f %s", COMMON_GEOM_STREAM_DBG_NAMES[i], kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 {
                     const float kb = s_geomIndexBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Stream Index Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Geom Stream Index Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 
                 ImGui::NewLine();
 
                 {
                     const float kb = s_commonMeshLODBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Mesh LOD Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Geom Mesh LOD Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 {
                     const float kb = s_commonMeshBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Geom Mesh Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Geom Mesh Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 
                 ImGui::NewLine();
 
                 {
                     const float kb = s_commonMaterialBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Material Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Material Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 
                 ImGui::NewLine();
 
                 {
                     const float kb = s_commonInstBuffer.GetMemorySize() / 1024.f;
-                    ImGui::TextDisabled("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
+                    ImGui::BulletText("Inst Data Size: %.3f %s", kb > 1024.f ? kb / 1024.f : kb, kb > 1024.f ? "MB": "KB");
                 }
                 
                 ImGui::NewLine();
 
-                ImGui::TextDisabled("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
-                ImGui::TextDisabled("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
+                ImGui::BulletText("Debug Lines Data Size: %.3f KB", (s_dbgLineDataGPU.GetMemorySize() + s_dbgLineVertexDataGPU.GetMemorySize()) / 1024.f);
+                ImGui::BulletText("Debug Triangles Data Size: %.3f KB", (s_dbgTriangleDataGPU.GetMemorySize() + s_dbgTriangleVertexDataGPU.GetMemorySize()) / 1024.f);
             }
             
         #ifdef ENG_BUILD_DEBUG            
@@ -7832,6 +7843,18 @@ namespace DbgUI
                                     }
                                 }
                                 ImGui::EndCombo();
+                            }
+
+                            if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_POISSON_DISK) {
+                                if (ImGui::TreeNodeEx("Poisson Disk Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+                                    ImGui::SliderInt("Samples Count", &s_csmPoissonDiskSampleCount, 1, 64);
+                                    ImGui::DragFloat("Radius", &s_csmPoissonDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
+
+                                    ImGui::Checkbox("Random Offsets", &s_isCSMPoissonRandomOffsetEnabled);
+
+                                    ImGui::TreePop();
+                                }                                
                             }
 
                             ImGui::TreePop();

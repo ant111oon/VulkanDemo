@@ -4,9 +4,15 @@
 #include "common/system/sys_constants.slang"
 
 #include "common/brdf.slang"
+#include "common/PCF_kernels.slang"
 
 #include "pass/deferred_lighting/vsout.slang"
 
+
+static const float CSM_MIN_BIAS = 0.0001f;
+static const float CSM_MAX_BIAS = 0.01f;
+static const float CSM_CONSTANT_BIAS = 0.0001f;
+static const float CSM_SLOPE_BIAS = 0.0005f;
 
 static const float3 DBG_CSM_CASCADE_COLORS[] = {
     float3(1.f, 0.f, 0.f),
@@ -33,18 +39,6 @@ struct POINT_LIGHT
     float3 wpos;
     float radius;
 };
-
-
-struct LIGHTING_RESULT
-{
-    float3 Lo;
-};
-
-
-void operator+=(inout LIGHTING_RESULT a, in LIGHTING_RESULT b)
-{
-    a.Lo += b.Lo;
-}
 
 
 // static const uint G_POINT_LIGHTS_COUNT = 4;
@@ -97,7 +91,7 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 }
 
 
-LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir, in float3 lightColor, in float3 F0)
+float3 ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir, in float3 lightColor, in float3 F0)
 {
     const float3 L = -lightDir;
     const float3 H = normalize(V + L);
@@ -121,9 +115,7 @@ LIGHTING_RESULT ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir
     const float3 kD = CalcDiffuseCoef(F, gbuffer.metalness);
     const float3 diffuse = kD * (gbuffer.albedo / M3D_PI);
 
-    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
-
-    result.Lo = (diffuse + specular) * radiance;
+    const float3 result = (diffuse + specular) * radiance;
 
     return result;
 }
@@ -150,7 +142,7 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 }
 
 
-LIGHTING_RESULT ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
+float3 ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
 {
     const float NdotV = saturate(dot(gbuffer.normal, V));
 
@@ -165,9 +157,7 @@ LIGHTING_RESULT ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
 
     const float3 ambient = (kD * diffuse + specular) * gbuffer.ao;
 
-    const LIGHTING_RESULT result = LIGHTING_RESULT(ambient);
-
-    return result;
+    return ambient;
 }
 
 
@@ -238,24 +228,91 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
 }
 
 
-float CalsCsmBias(in float3 wnorm)
+float CalcCsmUnfilteredVisibility(in SamplerState smp, in float3 texCoord, in float cmpValue)
 {
-    const float NdotL = saturate(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION));
+    float shadow = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, texCoord, 0).r;
 
-    // tan(acos(x)) == sqrt(1 - x * x) / x
-    const float tanTheta = sqrt(max(1.f - NdotL * NdotL, 0.f)) * rcp(max(NdotL, M3D_EPS));
+#ifdef ENV_REVERSED_Z
+    shadow = shadow < cmpValue ? 1.f : 0.f;
+#else
+    shadow = shadow > cmpValue ? 1.f : 0.f;
+#endif
 
-    static const float constantBias = 0.0001f;
-    static const float slopeBias = 0.0005f;
-
-    float bias = constantBias + slopeBias * tanTheta;
-    bias = clamp(bias, 0.0001f, 0.01f);
-
-    return bias;
+    return shadow;
 }
 
 
-float CalcCsmPCF(in float viewZ, in float bias, in float3 texCoord)
+uint HashUint(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+uint HashUint3(uint3 v)
+{
+    uint h = HashUint(v.x);
+    h = HashUint(h ^ v.y);
+    h = HashUint(h ^ v.z);
+    return h;
+}
+
+float HashUint3ToFloat(uint3 v)
+{
+    return float(HashUint3(v)) * rcp(4294967296.0f);
+}
+
+
+float2x2 GetCsmPoissonRandRotMatr(in float3 wpos)
+{
+    float2x2 matr = float2x2(
+        1.f, 0.f,
+        0.f, 1.f
+    );
+
+    if (COMMON_DBG_IS_CSM_POISSON_RANDOM_OFFSETS_ENABLED) {
+        const float theta = HashUint3ToFloat(asuint(wpos)) * M3D_2_PI;
+
+        matr = float2x2(float2(cos(theta), -sin(theta)),
+                        float2(sin(theta),  cos(theta)));
+    }
+
+    return matr;
+}
+
+
+float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
+{
+    uint width;
+    uint height;
+    uint layers;
+    DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
+
+    const float2 radiusTexel = ONEF2 / float2(width, height) * COMMON_CSM_POISSON_DISK_RADIUS;
+    const float2x2 randRotMatr = GetCsmPoissonRandRotMatr(wpos);
+
+    float shadow = 0.f;
+
+    for (uint i = 0; i < COMMON_CSM_POISSON_DISK_SAMPLE_COUNT; ++i) {
+        float2 offset = POISSON_DISK_SAMPLES[i];
+
+        if (COMMON_DBG_IS_CSM_POISSON_RANDOM_OFFSETS_ENABLED) {
+            offset = mul(offset, randRotMatr);
+        }
+
+        offset *= radiusTexel;
+
+        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, sampler, float3(texCoord.xy + offset, texCoord.z), cmpValue);
+    }
+
+    return shadow / COMMON_CSM_POISSON_DISK_SAMPLE_COUNT;
+}
+
+
+float CalcCsmPCF(in float3 wpos, in float viewZ, in float bias, in float3 texCoord)
 {
 #ifdef ENV_REVERSED_Z
     const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
@@ -270,14 +327,8 @@ float CalcCsmPCF(in float viewZ, in float bias, in float3 texCoord)
     float shadow = 0.f;
 
     switch (COMMON_DBG_CSM_PCF_PRESET) {
-        case DBG_CSM_PCF_PRESET::NONE:
-            shadow += SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, texCoord, 0).r;
-        
-        #ifdef ENV_REVERSED_Z
-            shadow = shadow < cmpValue ? 1.f : 0.f;
-        #else
-            shadow = shadow > cmpValue ? 1.f : 0.f;
-        #endif
+        case DBG_CSM_PCF_PRESET::PCF_NONE:
+            shadow = CalcCsmUnfilteredVisibility(smp, texCoord, cmpValue);
             break;
 
         case DBG_CSM_PCF_PRESET::PCF_2X2:
@@ -292,6 +343,10 @@ float CalcCsmPCF(in float viewZ, in float bias, in float3 texCoord)
             }
             
             shadow *= (1.f / 9.f);
+            break;
+
+        case DBG_CSM_PCF_PRESET::PCF_POISSON_DISK:
+            shadow = CalcCsmPoissonPCF(cmpSmp, cmpValue, texCoord, wpos);
             break;
 
         default:
@@ -312,7 +367,7 @@ float3 CalcCsmShadowCascade(in uint cascade, in float3 wpos, in float bias)
     const float4 ndc = mul(COMMON_CSM_VIEW_PROJ_MATRIX(cascade), float4(wpos, 1.f));
     const float2 uv = NDCToUV(ndc.xy);
 
-    const float shadow = CalcCsmPCF(ndc.z, bias, float3(uv, cascade));
+    const float shadow = CalcCsmPCF(wpos, ndc.z, bias, float3(uv, cascade));
 
     return FLOAT3(shadow);
 }
@@ -334,6 +389,21 @@ float3 GetCsmCascadeColor(in uint currCascadeIdx, in CSM_CASCADE_BLEND_DATA blen
 }
 
 
+float CalcCsmBias(in float3 wnorm)
+{
+    const float NdotL = saturate(dot(wnorm, -COMMON_SUN_LIGHT_DIRECTION));
+
+    // tan(acos(x)) = sqrt(1 - x²) / x
+    const float sinTheta = sqrt(max(1.f - NdotL * NdotL, 0.f));
+
+    const float tanTheta = sinTheta / max(NdotL, M3D_EPS);
+
+    const float bias = CSM_CONSTANT_BIAS + CSM_SLOPE_BIAS * tanTheta;
+
+    return clamp(bias, CSM_MIN_BIAS, CSM_MAX_BIAS);
+}
+
+
 float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
     if (!COMMON_DBG_IS_CSM_ENABLED) {
@@ -347,7 +417,7 @@ float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
         return ONEF3;
     }
 
-    const float bias = CalsCsmBias(wnorm);
+    const float bias = CalcCsmBias(wnorm);
     float3 shadow = CalcCsmShadowCascade(cascadeIdx, wpos, bias);
 
     CSM_CASCADE_BLEND_DATA blendData;
@@ -383,10 +453,10 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float3 V = normalize(COMMON_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
-    LIGHTING_RESULT sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_LIGHT_DIRECTION, COMMON_SUN_LIGHT_COLOR.rgb, F0);
-    sunLightResult.Lo *= CalcCsmShadow(wpos, vpos, gbuffer.normal);
+    float3 sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_LIGHT_DIRECTION, COMMON_SUN_LIGHT_COLOR.rgb, F0);
+    sunLightResult *= CalcCsmShadow(wpos, vpos, gbuffer.normal);
 
-    LIGHTING_RESULT result = (LIGHTING_RESULT)0;
+    float3 result = ZEROF3;
     result += sunLightResult;
 
     // for (uint i = 0; i < G_POINT_LIGHTS_COUNT; ++i) {
@@ -404,9 +474,9 @@ float3 ComputeLighting(in int2 pixelCoord)
         result += ProcessIBL(gbuffer, V, F0);
     }
 
-    result.Lo += gbuffer.emissive;
+    result += gbuffer.emissive;
 
-    return result.Lo;
+    return result;
 }
 
 
