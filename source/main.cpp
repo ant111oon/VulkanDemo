@@ -306,6 +306,7 @@ enum DBG_CSM_PCF_PRESET : uint32_t
     DBG_CSM_PCF_PRESET_2X2,
     DBG_CSM_PCF_PRESET_3X3,
     DBG_CSM_PCF_PRESET_POISSON_DISK,
+    DBG_CSM_PCF_PRESET_VOGEL_DISK,
 
     DBG_CSM_PCF_PRESET_COUNT
 };
@@ -342,8 +343,8 @@ struct COMMON_CB_DATA
     float4   CSM_CASCADE_DISTANCES;
 
     float CSM_CASCADE_BLEND_THRESHOLD_COEF;
-    uint  CSM_POISSON_DISK_SAMPLE_COUNT;
-    float CSM_POISSON_DISK_RADIUS;
+    uint  CSM_FILTER_DISK_SAMPLE_COUNT;
+    float CSM_FILTER_DISK_RADIUS;
     uint  PADDING;
 };
 
@@ -498,6 +499,7 @@ static constexpr const char* DBG_CSM_PCF_NAMES[] = {
     "2X2",
     "3X3",
     "POISSON DISK",
+    "VOGEL DISK",
 };
 
 static_assert(DBG_CSM_PCF_PRESET_COUNT == _countof(DBG_CSM_PCF_NAMES));
@@ -1404,8 +1406,8 @@ static bool s_geomWireframeMode = false;
 static bool s_skipRender = false;
 
 static float   s_csmCascadeBlendThresholdCoef = 5.f;
-static int32_t s_csmPoissonDiskSampleCount = 32;
-static float   s_csmPoissonDiskRadius = 1.5f;
+static int32_t s_csmFilterDiskSampleCount = 32;
+static float   s_csmFilterDiskRadius = 1.5f;
 static float   s_mainCameraSpeed = 0.02f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
@@ -6028,8 +6030,8 @@ void UpdateGPUCommonConstBuffer()
     }
 
     constBuff.CSM_CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
-    constBuff.CSM_POISSON_DISK_SAMPLE_COUNT = s_csmPoissonDiskSampleCount;
-    constBuff.CSM_POISSON_DISK_RADIUS = s_csmPoissonDiskRadius;
+    constBuff.CSM_FILTER_DISK_SAMPLE_COUNT = s_csmFilterDiskSampleCount;
+    constBuff.CSM_FILTER_DISK_RADIUS = s_csmFilterDiskRadius;
 
     s_commonConstBuffer.Unmap();
 }
@@ -7847,14 +7849,20 @@ namespace DbgUI
 
                             if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_POISSON_DISK) {
                                 if (ImGui::TreeNodeEx("Poisson Disk Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-
-                                    ImGui::SliderInt("Samples Count", &s_csmPoissonDiskSampleCount, 1, 64);
-                                    ImGui::DragFloat("Radius", &s_csmPoissonDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
+                                    ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 64);
+                                    ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
 
                                     ImGui::Checkbox("Random Offsets", &s_isCSMPoissonRandomOffsetEnabled);
 
                                     ImGui::TreePop();
-                                }                                
+                                }
+                            } else if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_VOGEL_DISK) {
+                                if (ImGui::TreeNodeEx("Vogel Disk Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                    ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 128);
+                                    ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
+
+                                    ImGui::TreePop();
+                                }
                             }
 
                             ImGui::TreePop();

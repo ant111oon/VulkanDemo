@@ -291,12 +291,12 @@ float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in
     uint layers;
     DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
 
-    const float2 radiusTexel = ONEF2 / float2(width, height) * COMMON_CSM_POISSON_DISK_RADIUS;
+    const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
     const float2x2 randRotMatr = GetCsmPoissonRandRotMatr(wpos);
 
     float shadow = 0.f;
 
-    for (uint i = 0; i < COMMON_CSM_POISSON_DISK_SAMPLE_COUNT; ++i) {
+    for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
         float2 offset = POISSON_DISK_SAMPLES[i];
 
         if (COMMON_DBG_IS_CSM_POISSON_RANDOM_OFFSETS_ENABLED) {
@@ -308,7 +308,42 @@ float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in
         shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, sampler, float3(texCoord.xy + offset, texCoord.z), cmpValue);
     }
 
-    return shadow / COMMON_CSM_POISSON_DISK_SAMPLE_COUNT;
+    return shadow / COMMON_CSM_FILTER_DISK_SAMPLE_COUNT;
+}
+
+
+float2 VogelDiskSample(in int i, in int n)
+{
+    static const float GOLDEN_ANGLE = 2.39996323f;
+
+    const float r = sqrt((float(i) + 0.5f) / float(n));
+    const float theta = float(i) * GOLDEN_ANGLE;
+
+    float sinTheta, cosTheta;
+    sincos(theta, sinTheta, cosTheta);
+
+    return r * float2(cosTheta, sinTheta);
+}
+
+
+float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord)
+{
+    uint width;
+    uint height;
+    uint layers;
+    DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
+
+    const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
+
+    float shadow = 0.f;
+
+    for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
+        float2 offset = radiusTexel * VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT);
+
+        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, sampler, float3(texCoord.xy + offset, texCoord.z), cmpValue);
+    }
+
+    return shadow / COMMON_CSM_FILTER_DISK_SAMPLE_COUNT;
 }
 
 
@@ -347,6 +382,10 @@ float CalcCsmPCF(in float3 wpos, in float viewZ, in float bias, in float3 texCoo
 
         case DBG_CSM_PCF_PRESET::PCF_POISSON_DISK:
             shadow = CalcCsmPoissonPCF(cmpSmp, cmpValue, texCoord, wpos);
+            break;
+
+        case DBG_CSM_PCF_PRESET::PCF_VOGEL_DISK:
+            shadow = CalcCsmVogelPCF(cmpSmp, cmpValue, texCoord);
             break;
 
         default:
