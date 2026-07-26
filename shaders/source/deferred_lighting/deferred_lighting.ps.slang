@@ -146,6 +146,10 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 
 float3 ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
 {
+    if (!COMMON_DBG_USE_IBL) {
+        return gbuffer.albedo * gbuffer.ao * 0.025f;
+    }
+
     const float NdotV = saturate(dot(gbuffer.normal, V));
 
     const float3 kS = F_SchlickRoughness(NdotV, F0, gbuffer.roughness);
@@ -265,7 +269,7 @@ float2x2 GetCsmRandRotMatr(in float3 wpos)
 }
 
 
-float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
+float CalcCsmDiskPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, IFunc<float2, uint> GetOffset)
 {
     uint width;
     uint height;
@@ -278,7 +282,7 @@ float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in
     float shadow = 0.f;
 
     for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
-        float2 offset = POISSON_DISK_SAMPLES[i];
+        float2 offset = GetOffset(i);
 
         if (COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED) {
             offset = mul(offset, randRotMatr);
@@ -290,6 +294,12 @@ float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in
     }
 
     return shadow / COMMON_CSM_FILTER_DISK_SAMPLE_COUNT;
+}
+
+
+float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
+{
+    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, (uint i) => { return POISSON_DISK_SAMPLES[i]; });
 }
 
 
@@ -309,29 +319,7 @@ float2 VogelDiskSample(in int i, in int n)
 
 float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
 {
-    uint width;
-    uint height;
-    uint layers;
-    DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
-
-    const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
-    const float2x2 randRotMatr = GetCsmRandRotMatr(wpos);
-
-    float shadow = 0.f;
-
-    for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
-        float2 offset = VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT);
-
-        if (COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED) {
-            offset = mul(offset, randRotMatr);
-        }
-
-        offset *= radiusTexel;
-
-        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, sampler, float3(texCoord.xy + offset, texCoord.z), cmpValue);
-    }
-
-    return shadow / COMMON_CSM_FILTER_DISK_SAMPLE_COUNT;
+    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, (uint i) => { return VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT); });
 }
 
 
@@ -497,9 +485,7 @@ float3 ComputeLighting(in int2 pixelCoord)
     //     result += ptRes;
     // }
 
-    if (COMMON_DBG_USE_IBL) {
-        result += ProcessIBL(gbuffer, V, F0);
-    }
+    result += ProcessIBL(gbuffer, V, F0);
 
     result += gbuffer.emissive;
 
