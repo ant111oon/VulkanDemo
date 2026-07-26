@@ -6,6 +6,8 @@
 #include "common/brdf.slang"
 #include "common/PCF_kernels.slang"
 
+#include "common/math/hash.slang"
+
 #include "pass/deferred_lighting/vsout.slang"
 
 
@@ -242,42 +244,21 @@ float CalcCsmUnfilteredVisibility(in SamplerState smp, in float3 texCoord, in fl
 }
 
 
-uint HashUint(uint x)
-{
-    x ^= x >> 16;
-    x *= 0x7feb352du;
-    x ^= x >> 15;
-    x *= 0x846ca68bu;
-    x ^= x >> 16;
-    return x;
-}
-
-uint HashUint3(uint3 v)
-{
-    uint h = HashUint(v.x);
-    h = HashUint(h ^ v.y);
-    h = HashUint(h ^ v.z);
-    return h;
-}
-
-float HashUint3ToFloat(uint3 v)
-{
-    return float(HashUint3(v)) * rcp(4294967296.0f);
-}
-
-
-float2x2 GetCsmPoissonRandRotMatr(in float3 wpos)
+float2x2 GetCsmRandRotMatr(in float3 wpos)
 {
     float2x2 matr = float2x2(
         1.f, 0.f,
         0.f, 1.f
     );
 
-    if (COMMON_DBG_IS_CSM_POISSON_RANDOM_OFFSETS_ENABLED) {
-        const float theta = HashUint3ToFloat(asuint(wpos)) * M3D_2_PI;
+    if (COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED) {
+        const float theta = Hash(asuint(wpos)) / float(M3D_UINT32_MAX) * M3D_2_PI;
 
-        matr = float2x2(float2(cos(theta), -sin(theta)),
-                        float2(sin(theta),  cos(theta)));
+        float sinTheta, cosTheta;
+        sincos(theta, sinTheta, cosTheta);
+
+        matr = float2x2(float2(cosTheta, -sinTheta),
+                        float2(sinTheta,  cosTheta));
     }
 
     return matr;
@@ -292,14 +273,14 @@ float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in
     DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
 
     const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
-    const float2x2 randRotMatr = GetCsmPoissonRandRotMatr(wpos);
+    const float2x2 randRotMatr = GetCsmRandRotMatr(wpos);
 
     float shadow = 0.f;
 
     for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
         float2 offset = POISSON_DISK_SAMPLES[i];
 
-        if (COMMON_DBG_IS_CSM_POISSON_RANDOM_OFFSETS_ENABLED) {
+        if (COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED) {
             offset = mul(offset, randRotMatr);
         }
 
@@ -326,7 +307,7 @@ float2 VogelDiskSample(in int i, in int n)
 }
 
 
-float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord)
+float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
 {
     uint width;
     uint height;
@@ -334,11 +315,18 @@ float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in f
     DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
 
     const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
+    const float2x2 randRotMatr = GetCsmRandRotMatr(wpos);
 
     float shadow = 0.f;
 
     for (uint i = 0; i < COMMON_CSM_FILTER_DISK_SAMPLE_COUNT; ++i) {
-        float2 offset = radiusTexel * VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT);
+        float2 offset = VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT);
+
+        if (COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED) {
+            offset = mul(offset, randRotMatr);
+        }
+
+        offset *= radiusTexel;
 
         shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, sampler, float3(texCoord.xy + offset, texCoord.z), cmpValue);
     }
@@ -385,7 +373,7 @@ float CalcCsmPCF(in float3 wpos, in float viewZ, in float bias, in float3 texCoo
             break;
 
         case DBG_CSM_PCF_PRESET::PCF_VOGEL_DISK:
-            shadow = CalcCsmVogelPCF(cmpSmp, cmpValue, texCoord);
+            shadow = CalcCsmVogelPCF(cmpSmp, cmpValue, texCoord, wpos);
             break;
 
         default:

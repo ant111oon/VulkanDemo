@@ -1419,7 +1419,7 @@ static float   s_mainCameraSpeed = 0.02f;
     static bool s_isCSMEnabled = true;
     static bool s_isCSMVisualizationEnabled = false;
     static bool s_isCSMCascadeBlendEnabled = true;
-    static bool s_isCSMPoissonRandomOffsetEnabled = false;
+    static bool s_isCSMFilterRandomOffsetEnabled = false;
 
     static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -1437,7 +1437,7 @@ static float   s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
     static constexpr bool s_isCSMCascadeBlendEnabled = true;
-    static constexpr bool s_isCSMPoissonRandomOffsetEnabled = false;
+    static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -6052,7 +6052,7 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= s_isCSMEnabled                                      ? (1u << 3u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled       ? (1u << 4u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled        ? (1u << 5u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMPoissonRandomOffsetEnabled ? (1u << 6u) : 0u;
+    flags_0 |= s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled  ? (1u << 6u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -7847,19 +7847,23 @@ namespace DbgUI
                                 ImGui::EndCombo();
                             }
 
-                            if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_POISSON_DISK) {
-                                if (ImGui::TreeNodeEx("Poisson Disk Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            const char* pPCFDiskParamsLabel = nullptr;
+
+                            switch (s_csmPCFPreset) {
+                                case DBG_CSM_PCF_PRESET_POISSON_DISK:
+                                    pPCFDiskParamsLabel = "Poisson Disk Params";
+                                    break;
+                                case DBG_CSM_PCF_PRESET_VOGEL_DISK:
+                                    pPCFDiskParamsLabel = "Vogel Disk Params";
+                                    break;
+                            }
+
+                            if (pPCFDiskParamsLabel) {
+                                if (ImGui::TreeNodeEx(pPCFDiskParamsLabel, ImGuiTreeNodeFlags_DefaultOpen)) {
                                     ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 64);
                                     ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
 
-                                    ImGui::Checkbox("Random Offsets", &s_isCSMPoissonRandomOffsetEnabled);
-
-                                    ImGui::TreePop();
-                                }
-                            } else if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_VOGEL_DISK) {
-                                if (ImGui::TreeNodeEx("Vogel Disk Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                    ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 128);
-                                    ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
+                                    ImGui::Checkbox("Random Offsets", &s_isCSMFilterRandomOffsetEnabled);
 
                                     ImGui::TreePop();
                                 }
