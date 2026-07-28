@@ -234,7 +234,7 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
 }
 
 
-float CalcCsmUnfilteredVisibility(in SamplerState smp, in float3 texCoord, in float cmpValue)
+float CalcCsmUnfilteredPCF(in SamplerState smp, in float3 texCoord, in float cmpValue)
 {
     float shadow = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, texCoord, 0).r;
 
@@ -245,6 +245,34 @@ float CalcCsmUnfilteredVisibility(in SamplerState smp, in float3 texCoord, in fl
 #endif
 
     return shadow;
+}
+
+
+float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in float cmpValue, in uint halfGridSize)
+{
+    [branch]
+    if (halfGridSize == 0) {
+        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, cmpValue);
+    }
+
+    const float2 texelSize = COMMON_CSM_INV_SIZE;
+
+    const int radius = halfGridSize;
+
+    const int sampleCount = (radius * 2 + 1) * (radius * 2 + 1);
+    const float invSampleCount = rcp((float)sampleCount);
+
+    float shadow = 0.f;
+
+    for (int y = -radius; y <= radius; ++y) {
+        for (int x = -radius; x <= radius; ++x) {
+            const float3 uv = float3(texCoord.xy + float2(x, y) * texelSize, texCoord.z);
+            
+            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, uv, cmpValue);
+        }
+    }
+
+    return shadow * invSampleCount;
 }
 
 
@@ -271,12 +299,7 @@ float2x2 GetCsmRandRotMatr(in float3 wpos)
 
 float CalcCsmDiskPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, IFunc<float2, uint> GetOffset)
 {
-    uint width;
-    uint height;
-    uint layers;
-    DEFERRED_LIGHTING_CSM.GetDimensions(width, height, layers);
-
-    const float2 radiusTexel = rcp(float2(width, height)) * COMMON_CSM_FILTER_DISK_RADIUS;
+    const float2 radiusTexel = COMMON_CSM_INV_SIZE * COMMON_CSM_FILTER_DISK_RADIUS;
     const float2x2 randRotMatr = GetCsmRandRotMatr(wpos);
 
     float shadow = 0.f;
@@ -339,21 +362,19 @@ float CalcCsmPCF(in float3 wpos, in float viewZ, in float bias, in float3 texCoo
 
     switch (COMMON_DBG_CSM_PCF_PRESET) {
         case DBG_CSM_PCF_PRESET::PCF_NONE:
-            shadow = CalcCsmUnfilteredVisibility(smp, texCoord, cmpValue);
+            shadow = CalcCsmUnfilteredPCF(smp, texCoord, cmpValue);
             break;
 
-        case DBG_CSM_PCF_PRESET::PCF_2X2:
-            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, cmpValue);
+        case DBG_CSM_PCF_PRESET::PCF_GRID_1X1:
+            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 0u);
             break;
 
-        case DBG_CSM_PCF_PRESET::PCF_3X3:
-            for (int y = -1; y <= 1; ++y) {
-                for (int x = -1; x <= 1; ++x) {
-                    shadow += SAMPLE_TEX_CMP_ZERO_OFFSET(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, cmpValue, int2(x, y));
-                }
-            }
-            
-            shadow *= (1.f / 9.f);
+        case DBG_CSM_PCF_PRESET::PCF_GRID_3X3:
+            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 1u);
+            break;
+
+        case DBG_CSM_PCF_PRESET::PCF_GRID_5X5:
+            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 2u);
             break;
 
         case DBG_CSM_PCF_PRESET::PCF_POISSON_DISK:
