@@ -303,9 +303,7 @@ enum DBG_TONEMAP_PRESET : uint32_t
 enum DBG_CSM_PCF_PRESET : uint32_t
 {
     DBG_CSM_PCF_PRESET_NONE,
-    DBG_CSM_PCF_PRESET_GRID_1X1,
-    DBG_CSM_PCF_PRESET_GRID_3X3,
-    DBG_CSM_PCF_PRESET_GRID_5X5,
+    DBG_CSM_PCF_PRESET_GRID,
     DBG_CSM_PCF_PRESET_POISSON_DISK,
     DBG_CSM_PCF_PRESET_VOGEL_DISK,
 
@@ -346,7 +344,10 @@ struct COMMON_CB_DATA
     float CSM_CASCADE_BLEND_THRESHOLD_COEF;
     uint  CSM_FILTER_DISK_SAMPLE_COUNT;
     float CSM_FILTER_DISK_RADIUS;
-    uint  CSM_SIZE;
+    uint  CSM_FILTER_GRID_HALF_SIZE;
+
+    uint2 CSM_SIZE;
+    uint2 PADDING;
 };
 
 static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
@@ -497,9 +498,7 @@ static_assert(DBG_TONEMAP_PRESET_COUNT == _countof(DBG_TONEMAPPING_NAMES));
 
 static constexpr const char* DBG_CSM_PCF_NAMES[] = {
     "NONE",
-    "GRID 1X1",
-    "GRID 3X3",
-    "GRID 5X5",
+    "GRID",
     "POISSON DISK",
     "VOGEL DISK",
 };
@@ -1409,6 +1408,7 @@ static bool s_skipRender = false;
 
 static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
+static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
 static float   s_mainCameraSpeed = 0.02f;
 
@@ -6034,7 +6034,9 @@ void UpdateGPUCommonConstBuffer()
     constBuff.CSM_CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
     constBuff.CSM_FILTER_DISK_SAMPLE_COUNT = s_csmFilterDiskSampleCount;
     constBuff.CSM_FILTER_DISK_RADIUS = s_csmFilterDiskRadius;
-    constBuff.CSM_SIZE = CSM_CASCADE_RT_SIZE;
+    constBuff.CSM_FILTER_GRID_HALF_SIZE = s_csmFilterGridHalfSize;
+
+    constBuff.CSM_SIZE = glm::uvec2(CSM_CASCADE_RT_SIZE);
 
     s_commonConstBuffer.Unmap();
 }
@@ -7867,6 +7869,12 @@ namespace DbgUI
                                     ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
 
                                     ImGui::Checkbox("Random Offsets", &s_isCSMFilterRandomOffsetEnabled);
+
+                                    ImGui::TreePop();
+                                }
+                            } else if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_GRID) {
+                                if (ImGui::TreeNodeEx("Grid Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                    ImGui::SliderInt("Half Size", &s_csmFilterGridHalfSize, 0, 15);
 
                                     ImGui::TreePop();
                                 }

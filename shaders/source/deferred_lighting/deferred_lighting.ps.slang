@@ -234,9 +234,9 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
 }
 
 
-float CalcCsmUnfilteredPCF(in SamplerState smp, in float3 texCoord, in float cmpValue)
+float CalcCsmUnfilteredPCF(in float3 texCoord, in float cmpValue)
 {
-    float shadow = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, texCoord, 0).r;
+    float shadow = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
 
 #ifdef ENV_REVERSED_Z
     shadow = shadow < cmpValue ? 1.f : 0.f;
@@ -297,9 +297,9 @@ float2x2 GetCsmRandRotMatr(in float3 wpos)
 }
 
 
-float CalcCsmDiskPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, IFunc<float2, uint> GetOffset)
+float CalcCsmDiskPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, float radius, IFunc<float2, uint> GetOffset)
 {
-    const float2 radiusTexel = COMMON_CSM_INV_SIZE * COMMON_CSM_FILTER_DISK_RADIUS;
+    const float2 radiusTexel = COMMON_CSM_INV_SIZE * radius;
     const float2x2 randRotMatr = GetCsmRandRotMatr(wpos);
 
     float shadow = 0.f;
@@ -320,9 +320,11 @@ float CalcCsmDiskPCF(in SamplerComparisonState sampler, in float cmpValue, in fl
 }
 
 
-float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
+float CalcCsmPoissonPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, float radius)
 {
-    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, (uint i) => { return POISSON_DISK_SAMPLES[i]; });
+    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, radius, (uint i) => {
+        return POISSON_DISK_SAMPLES[i];
+    });
 }
 
 
@@ -340,9 +342,11 @@ float2 VogelDiskSample(in int i, in int n)
 }
 
 
-float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos)
+float CalcCsmVogelPCF(in SamplerComparisonState sampler, in float cmpValue, in float3 texCoord, in float3 wpos, float radius)
 {
-    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, (uint i) => { return VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT); });
+    return CalcCsmDiskPCF(sampler, cmpValue, texCoord, wpos, radius, (uint i) => { 
+        return VogelDiskSample(i, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT);
+    });
 }
 
 
@@ -356,33 +360,23 @@ float CalcCsmPCF(in float3 wpos, in float viewZ, in float bias, in float3 texCoo
     const float cmpValue = viewZ - bias;
 #endif
 
-    const SamplerState smp = GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER);
-
     float shadow = 0.f;
 
     switch (COMMON_DBG_CSM_PCF_PRESET) {
         case DBG_CSM_PCF_PRESET::PCF_NONE:
-            shadow = CalcCsmUnfilteredPCF(smp, texCoord, cmpValue);
+            shadow = CalcCsmUnfilteredPCF(texCoord, cmpValue);
             break;
 
-        case DBG_CSM_PCF_PRESET::PCF_GRID_1X1:
-            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 0u);
-            break;
-
-        case DBG_CSM_PCF_PRESET::PCF_GRID_3X3:
-            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 1u);
-            break;
-
-        case DBG_CSM_PCF_PRESET::PCF_GRID_5X5:
-            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, 2u);
+        case DBG_CSM_PCF_PRESET::PCF_GRID:
+            shadow += CalcCsmGridPCF(cmpSmp, texCoord, cmpValue, COMMON_CSM_FILTER_GRID_HALF_SIZE);
             break;
 
         case DBG_CSM_PCF_PRESET::PCF_POISSON_DISK:
-            shadow = CalcCsmPoissonPCF(cmpSmp, cmpValue, texCoord, wpos);
+            shadow = CalcCsmPoissonPCF(cmpSmp, cmpValue, texCoord, wpos, COMMON_CSM_FILTER_DISK_RADIUS);
             break;
 
         case DBG_CSM_PCF_PRESET::PCF_VOGEL_DISK:
-            shadow = CalcCsmVogelPCF(cmpSmp, cmpValue, texCoord, wpos);
+            shadow = CalcCsmVogelPCF(cmpSmp, cmpValue, texCoord, wpos, COMMON_CSM_FILTER_DISK_RADIUS);
             break;
 
         default:
