@@ -141,6 +141,18 @@ float LinearizeDepth01(in float depth, in float near, in float far)
 }
 
 
+float OrthoDepthToViewDepth(in float depth, in float near, in float far)
+{
+    float depth01 = saturate(depth);
+
+#ifdef ENV_REVERSED_Z
+    depth01 = 1.f - depth01;
+#endif
+
+    return lerp(near, far, depth01);
+}
+
+
 float3 UVFaceToDir(in float2 uv01, in uint face)
 {
     float2 uv = UVToNDC(uv01);

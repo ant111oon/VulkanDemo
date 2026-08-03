@@ -311,6 +311,43 @@ enum DBG_CSM_PCF_PRESET : uint32_t
 };
 
 
+struct COMMON_CSM_PCSS_DATA
+{
+    float LIGHT_ANGULAR_SLOPE;
+    float MAX_SEARCH_RADIUS_TEXELS;
+    float MAX_FILTER_RADIUS_TEXELS;
+    float MIN_FILTER_RADIUS_TEXELS;
+
+    float SEARCH_RADIUS_SCALE;
+    float FILTER_RADIUS_SCALE;
+    uint  SEARCH_SAMPLES_COUNT;
+    uint  FILTER_SAMPLES_COUNT;
+};
+
+
+struct COMMON_CSM_DATA
+{
+    FRUSTUM VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
+    float4x4 VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    float4x4 VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    
+    float4 CASCADE_DISTANCES;
+    float4 CASCADE_Z_NEAR;
+    float4 CASCADE_Z_FAR;
+    float4 CASCADE_WORLD_UNITS_PER_TEXEL;
+
+    float CASCADE_BLEND_THRESHOLD_COEF;
+    uint  FILTER_DISK_SAMPLE_COUNT;
+    float FILTER_DISK_RADIUS;
+    uint  FILTER_GRID_HALF_SIZE;
+
+    uint2 TEX_SIZE;
+    uint2 PADDING;
+
+    COMMON_CSM_PCSS_DATA PCSS_DATA;
+};
+
+
 struct COMMON_CB_DATA
 {
     FRUSTUM CAMERA_FRUSTUM;
@@ -336,21 +373,10 @@ struct COMMON_CB_DATA
     float3 SUN_LIGHT_DIRECTION;
     uint SUN_LIGHT_COLOR;
 
-    FRUSTUM  CSM_VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4x4 CSM_VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4   CSM_CASCADE_DISTANCES;
-
-    float CSM_CASCADE_BLEND_THRESHOLD_COEF;
-    uint  CSM_FILTER_DISK_SAMPLE_COUNT;
-    float CSM_FILTER_DISK_RADIUS;
-    uint  CSM_FILTER_GRID_HALF_SIZE;
-
-    uint2 CSM_SIZE;
-    uint2 PADDING;
+    COMMON_CSM_DATA CSM_DATA;
 };
 
-static_assert(sizeof(COMMON_CB_DATA::CSM_CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
+static_assert(sizeof(COMMON_CSM_DATA::CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
 
 
 struct COMMON_DBG_CB_DATA
@@ -940,7 +966,7 @@ static constexpr float CAMERA_ZFAR = 1'000.f;
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(M3D_AXIS_X - 6.5f * M3D_AXIS_Y + M3D_AXIS_Z);
 static constexpr float SUN_DISTANCE = 100.f;
 
-static constexpr std::array CSM_CASCADE_DISTANCES = { 20.f, 55.f, 120.f };
+static constexpr std::array CSM_CASCADE_DISTANCES = { 15.f, 55.f, 200.f };
 
 static constexpr std::array CSM_CASCADE_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
@@ -1376,6 +1402,7 @@ static glm::float3 s_mainCameraVel = ZEROF3;
 static bool s_mainCameraLoaded = false;
 
 static std::array<eng::Camera, COMMON_CSM_CASCADE_COUNT> s_csmCameras;
+static std::array<float, COMMON_CSM_CASCADE_COUNT> s_csmCascadeWorldUnitsPerTexel;
 
 static glm::float4x4 s_fixedCamCullViewProjMatr;
 static glm::float4x4 s_fixedCamCullInvViewProjMatr;
@@ -1410,7 +1437,31 @@ static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
-static float   s_mainCameraSpeed = 0.02f;
+
+struct CsmPcssSettings
+{
+    // Physical/artistic light size.
+    // Real Sun angular radius ≈ 0.265 degrees.
+    float lightAngularRadiusDegrees = 0.265f;
+
+    // Safety and performance limits, in shadow-map texels.
+    float maxSearchRadiusTexels = 16.0f;
+    float maxFilterRadiusTexels = 16.0f;
+
+    // Below this radius, use one comparison sample instead of full PCF.
+    float minFilterRadiusTexels = 0.5f;
+
+    // Optional artistic multipliers.
+    float searchRadiusScale = 1.0f;
+    float filterRadiusScale = 1.0f;
+
+    int32_t searchSamplesCount = 32u;
+    int32_t filterSamplesCount = 64u;
+
+    bool randomRotationEnabled = true;
+} s_csmPcssSettings;
+
+static float s_mainCameraSpeed = 0.02f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshCulling = true;
@@ -1422,6 +1473,7 @@ static float   s_mainCameraSpeed = 0.02f;
     static bool s_isCSMVisualizationEnabled = false;
     static bool s_isCSMCascadeBlendEnabled = true;
     static bool s_isCSMFilterRandomOffsetEnabled = false;
+    static bool s_isCSMPCSSEnabled = true;
 
     static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -1440,6 +1492,7 @@ static float   s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMVisualizationEnabled = false;
     static constexpr bool s_isCSMCascadeBlendEnabled = true;
     static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
+    static constexpr bool s_isCSMPCSSEnabled = true;
 
     static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -6025,18 +6078,31 @@ void UpdateGPUCommonConstBuffer()
     for (size_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
         const eng::Camera& cam = s_csmCameras[i];
 
-        constBuff.CSM_VIEW_FRUSTUMS[i]      = CopyCPUFrustumToGPU(cam.GetFrustum());
-        constBuff.CSM_VIEW_MATRICES[i]      = cam.GetViewMatrix();
-        constBuff.CSM_VIEW_PROJ_MATRICES[i] = cam.GetViewProjMatrix();
-        constBuff.CSM_CASCADE_DISTANCES[i]  = CSM_CASCADE_DISTANCES[i];
+        constBuff.CSM_DATA.VIEW_FRUSTUMS[i] = CopyCPUFrustumToGPU(cam.GetFrustum());
+        constBuff.CSM_DATA.VIEW_MATRICES[i] = cam.GetViewMatrix();
+        constBuff.CSM_DATA.VIEW_PROJ_MATRICES[i] = cam.GetViewProjMatrix();
+        constBuff.CSM_DATA.CASCADE_DISTANCES[i] = CSM_CASCADE_DISTANCES[i];
+        constBuff.CSM_DATA.CASCADE_Z_NEAR[i] = cam.GetZNear();
+        constBuff.CSM_DATA.CASCADE_Z_FAR[i] = cam.GetZFar();
+        constBuff.CSM_DATA.CASCADE_WORLD_UNITS_PER_TEXEL[i] = s_csmCascadeWorldUnitsPerTexel[i];
     }
 
-    constBuff.CSM_CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
-    constBuff.CSM_FILTER_DISK_SAMPLE_COUNT = s_csmFilterDiskSampleCount;
-    constBuff.CSM_FILTER_DISK_RADIUS = s_csmFilterDiskRadius;
-    constBuff.CSM_FILTER_GRID_HALF_SIZE = s_csmFilterGridHalfSize;
+    constBuff.CSM_DATA.CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
+    constBuff.CSM_DATA.FILTER_DISK_SAMPLE_COUNT = s_csmFilterDiskSampleCount;
+    constBuff.CSM_DATA.FILTER_DISK_RADIUS = s_csmFilterDiskRadius;
+    constBuff.CSM_DATA.FILTER_GRID_HALF_SIZE = s_csmFilterGridHalfSize;
 
-    constBuff.CSM_SIZE = glm::uvec2(CSM_CASCADE_RT_SIZE);
+    constBuff.CSM_DATA.TEX_SIZE = glm::uvec2(CSM_CASCADE_RT_SIZE);
+
+    constBuff.CSM_DATA.PCSS_DATA.LIGHT_ANGULAR_SLOPE = glm::tan(glm::radians(s_csmPcssSettings.lightAngularRadiusDegrees));
+    constBuff.CSM_DATA.PCSS_DATA.MAX_SEARCH_RADIUS_TEXELS = s_csmPcssSettings.maxSearchRadiusTexels;
+    constBuff.CSM_DATA.PCSS_DATA.MAX_FILTER_RADIUS_TEXELS = s_csmPcssSettings.maxFilterRadiusTexels;
+    constBuff.CSM_DATA.PCSS_DATA.MIN_FILTER_RADIUS_TEXELS = s_csmPcssSettings.minFilterRadiusTexels;
+
+    constBuff.CSM_DATA.PCSS_DATA.SEARCH_RADIUS_SCALE  = s_csmPcssSettings.searchRadiusScale;
+    constBuff.CSM_DATA.PCSS_DATA.FILTER_RADIUS_SCALE  = s_csmPcssSettings.filterRadiusScale;
+    constBuff.CSM_DATA.PCSS_DATA.SEARCH_SAMPLES_COUNT = s_csmPcssSettings.searchSamplesCount;
+    constBuff.CSM_DATA.PCSS_DATA.FILTER_SAMPLES_COUNT = s_csmPcssSettings.filterSamplesCount;
 
     s_commonConstBuffer.Unmap();
 }
@@ -6051,6 +6117,8 @@ void UpdateGPUDbgConstBuffer()
 
     uint32_t flags_0 = 0;
 
+    const bool csmPcssEnabled = s_isCSMEnabled && s_isCSMPCSSEnabled;
+
     flags_0 |= s_useIBL                                            ? (1u << 0u) : 0u;
     flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling         ? (1u << 1u) : 0u;
     flags_0 |= s_useMeshCulling && s_useMeshHZBCulling             ? (1u << 2u) : 0u;
@@ -6058,6 +6126,8 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled       ? (1u << 4u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled        ? (1u << 5u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled  ? (1u << 6u) : 0u;
+    flags_0 |= csmPcssEnabled                                      ? (1u << 7u) : 0u;
+    flags_0 |= csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled ? (1u << 8u) : 0u;
 
     constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
     constBuff.FLAGS_0 = flags_0;
@@ -6137,6 +6207,8 @@ static void UpdateCSMDataCPU()
         const glm::float3 snappedCenter = invLightRot * frCenterLS;
 
         lightPos = snappedCenter - SUN_LIGHT_DIR * frRadius;
+
+        s_csmCascadeWorldUnitsPerTexel[i] = texelSize;
 
         eng::Camera& csmCamera = s_csmCameras[i];
 
@@ -7818,6 +7890,95 @@ namespace DbgUI
             if (ImGui::CollapsingHeader("Lighting")) {
                 if (ImGui::TreeNodeEx("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
+                        ImGui::SameLine();
+                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+
+                        if (ImGui::TreeNodeEx("PCSS")) {
+                            ImGui::Checkbox("##CSMPCSSEnabled", &s_isCSMPCSSEnabled);
+                            ImGui::SameLine();
+                            ImGui::TextColored(s_isCSMPCSSEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                            
+                            if (s_isCSMPCSSEnabled) {
+                                ImGui::DragFloat("Angular Radius", &s_csmPcssSettings.lightAngularRadiusDegrees, 0.001f, 0.001f, 180.f, "%.3f degrees");
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Angular Radius");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadiusTexels, 0.1f, 0.1f, 64.f, "%.1f");
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Max Search Radius Texels in texels");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::DragFloat("Max Filter Radius", &s_csmPcssSettings.maxFilterRadiusTexels, 0.1f, 0.1f, 128.f, "%.1f");
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Max Filter Radius in texels");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::DragFloat("Min Filter Radius", &s_csmPcssSettings.minFilterRadiusTexels, 0.01f, 0.01f, 128.f, "%.2f");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Min Filter Radius in texels");
+                                        ImGui::BulletText("Use one comparison sample instead of full PCF if less");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::DragFloat("Search Radius Scale", &s_csmPcssSettings.searchRadiusScale, 0.01f, 0.01f, 32.f, "%.2f");
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Search Radius Scale");
+                                    } ImGui::EndTooltip();
+                                }
+                                
+                                ImGui::DragFloat("Filter Radius Scale", &s_csmPcssSettings.filterRadiusScale, 0.01f, 0.01f, 32.f, "%.2f");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Filter Radius Scale");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64);
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Search Samples Count");
+                                    } ImGui::EndTooltip();
+                                }
+                                
+                                ImGui::SliderInt("Filter Samples Count", &s_csmPcssSettings.filterSamplesCount, 1, 128);
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Filter Samples Count");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::Checkbox("Random Rotation", &s_csmPcssSettings.randomRotationEnabled);
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Random Rotation");
+                                    } ImGui::EndTooltip();
+                                }
+                            }
+
+                            ImGui::TreePop();
+                        }
+
                         if (ImGui::TreeNodeEx("Cascade Blend")) {
                             ImGui::Checkbox("##CSMCascadeBlendEnabled", &s_isCSMCascadeBlendEnabled);
                             ImGui::SameLine();
@@ -7882,12 +8043,6 @@ namespace DbgUI
 
                             ImGui::TreePop();
                         }
-
-                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
-                        ImGui::SameLine();
-                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-
-                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
 
                         ImGui::TreePop();
                     }
