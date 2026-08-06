@@ -4,6 +4,8 @@
 #include "common/math/geom_primitives.slang"
 
 
+static const uint COMMON_MAX_GEOM_LOD_COUNT = 6;
+
 static const uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static const float COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 

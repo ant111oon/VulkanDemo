@@ -924,6 +924,8 @@ static constexpr size_t CUBEMAP_FACE_COUNT = 6;
 
 static constexpr size_t STAGING_BUFFER_SIZE  = 256 * 1024 * 1024; // 256 MB
 
+static constexpr glm::uint COMMON_MAX_GEOM_LOD_COUNT = 6;
+
 static constexpr glm::uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static constexpr float      COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
@@ -945,7 +947,6 @@ static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
 
 static constexpr float LOD_SIMPLIFICATION_COEF = 0.50f; // Means that the next LOD should has on 50% less indices than current
 static constexpr float LOD_SIMPLIFICATION_ERROR = 0.005f;
-static constexpr size_t MAX_GEOM_LOD_COUNT = 8;
 
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -1453,7 +1454,7 @@ struct CsmPcssSettings
 
     // Optional artistic multipliers.
     float searchRadiusScale = 1.0f;
-    float filterRadiusScale = 1.0f;
+    float filterRadiusScale = 2.0f;
 
     int32_t searchSamplesCount = 32u;
     int32_t filterSamplesCount = 64u;
@@ -5395,7 +5396,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
         std::vector<IndexType> currLodIndices = indices;
         std::vector<IndexType> nextLodIndices(currLodIndices.size());
 
-        for (size_t i = 0; i < MAX_GEOM_LOD_COUNT; ++i) {
+        for (size_t i = 0; i < COMMON_MAX_GEOM_LOD_COUNT; ++i) {
             COMMON_MESH_LOD lod = {};
             lod.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
             lod.INDEX_COUNT = currLodIndices.size();
@@ -6178,9 +6179,9 @@ static void UpdateCSMDataCPU()
 
     eng::Camera cascadeCamera = s_mainCamera;
 
-    static const glm::quat lightRotQuat = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
-    static const glm::float3x3 lightRot = glm::float3x3(glm::lookAt(ZEROF3, SUN_LIGHT_DIR, M3D_AXIS_Y));
-    static const glm::float3x3 invLightRot = glm::inverse(lightRot);
+    const glm::quat lightRotQuat = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
+    const glm::float3x3 lightRot = glm::float3x3(glm::lookAt(ZEROF3, SUN_LIGHT_DIR, M3D_AXIS_Y));
+    const glm::float3x3 invLightRot = glm::inverse(lightRot);
 
     for (uint32_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
         const float zNear = i == 0 ? 0.01f : CSM_CASCADE_DISTANCES[i - 1];
@@ -6208,8 +6209,6 @@ static void UpdateCSMDataCPU()
 
         lightPos = snappedCenter - SUN_LIGHT_DIR * frRadius;
 
-        s_csmCascadeWorldUnitsPerTexel[i] = texelSize;
-
         eng::Camera& csmCamera = s_csmCameras[i];
 
         csmCamera.SetPosition(lightPos);
@@ -6217,6 +6216,8 @@ static void UpdateCSMDataCPU()
         csmCamera.SetOrthoProjection(-frRadius, frRadius, -frRadius, frRadius, -3.f * frRadius, 3.f * frRadius);
     
         csmCamera.Update();
+
+        s_csmCascadeWorldUnitsPerTexel[i] = texelSize;
     }
 }
 
@@ -7845,7 +7846,7 @@ namespace DbgUI
                 ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
                 
                 if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, MAX_GEOM_LOD_COUNT);
+                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, COMMON_MAX_GEOM_LOD_COUNT);
 
                     if (ImGui::IsItemHovered()) {
                         if (ImGui::BeginTooltip()) {
@@ -7997,7 +7998,7 @@ namespace DbgUI
                             ImGui::TreePop();
                         }
 
-                        if (ImGui::TreeNodeEx("Filtering")) {
+                        if (!s_isCSMPCSSEnabled && ImGui::TreeNodeEx("Filtering")) {
                             if (ImGui::BeginCombo("PCF Filter", DBG_CSM_PCF_NAMES[s_csmPCFPreset])) {
                                 for (size_t i = 0; i < _countof(DBG_CSM_PCF_NAMES); ++i) {
                                     const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFPreset]);
