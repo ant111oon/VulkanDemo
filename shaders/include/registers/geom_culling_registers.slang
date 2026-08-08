@@ -20,6 +20,4 @@ struct GEOM_CULLING_PER_DRAW_DATA
 
 [vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_FLAGS_UAV;
 
-[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GEOM_QUEUE_COUNT];
-
 #endif

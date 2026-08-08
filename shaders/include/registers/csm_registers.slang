@@ -25,8 +25,7 @@ struct CSM_PER_DRAW_DATA
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> CSM_VIS_INST_ID_QUEUES_UAV[CSM_BUFFER_COUNT];
 [vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> CSM_VIS_INST_ID_QUEUE_SIZES_UAV[CSM_BUFFER_COUNT];
-[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> CSM_BATCH_DISPATCH_CMDS_UAV[CSM_BUFFER_COUNT];
 
-[vk::binding(3, DESC_SET_PER_DRAW)] StructuredBuffer<uint> CSM_INST_ID_QUEUE[CSM_BUFFER_COUNT];
+[vk::binding(2, DESC_SET_PER_DRAW)] StructuredBuffer<uint> CSM_INST_ID_QUEUE[CSM_BUFFER_COUNT];
 
 #endif

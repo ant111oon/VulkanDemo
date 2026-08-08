@@ -171,14 +171,6 @@ void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint Gid, in uint GI,
             }
         }
     }
-
-    if (Gid == 0 && GI < GEOM_QUEUE_COUNT) {
-        const uint groupSizeX = (uint)ceil(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GI][0] / (float)GEOM_BATCH_CS_GROUP_SIZE);
-
-        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][0] = groupSizeX;
-        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][1] = groupSizeX > 0 ? 1 : 0;
-        GEOM_CULL_BATCH_DISPATCH_CMDS_UAV[GI][2] = groupSizeX > 0 ? 1 : 0;
-    }
 }
 
 

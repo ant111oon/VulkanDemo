@@ -82,12 +82,4 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
             }
         }
     }
-
-    if (Gid == 0 && GI < CSM_BUFFER_COUNT) {
-        const uint groupSizeX = (uint)ceil(CSM_VIS_INST_ID_QUEUE_SIZES_UAV[GI][0] / (float)GEOM_BATCH_CS_GROUP_SIZE);
-
-        CSM_BATCH_DISPATCH_CMDS_UAV[GI][0] = groupSizeX;
-        CSM_BATCH_DISPATCH_CMDS_UAV[GI][1] = groupSizeX > 0 ? 1 : 0;
-        CSM_BATCH_DISPATCH_CMDS_UAV[GI][2] = groupSizeX > 0 ? 1 : 0;
-    }
 }

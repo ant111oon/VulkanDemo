@@ -74,14 +74,4 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
 
         GEOM_BATCH_BATCH_QUEUE_UAV[writeIdx] = batch;
     }
-
-    GroupMemoryBarrierWithGroupSync();
-
-    if (DTid == 0) {
-        const uint groupSizeX = (uint)ceil(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV[0] / (float)GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE);
-
-        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[0] = groupSizeX;
-        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[1] = groupSizeX > 0 ? 1 : 0;
-        GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV[2] = groupSizeX > 0 ? 1 : 0;
-    }
 }

@@ -22,6 +22,4 @@ struct GEOM_BATCH_PER_DRAW_DATA
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV;
 [vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV;
 
-[vk::binding(6, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_DRAW_CMD_GEN_DISPATCH_CMD_UAV;
-
 #endif
