@@ -312,6 +312,7 @@ namespace vkn
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
+        std::swap(m_texSubresCache, cmdBuffer.m_texSubresCache);
         std::swap(m_pDescrBufferBindingCache, cmdBuffer.m_pDescrBufferBindingCache);
         std::swap(m_pPSOCache, cmdBuffer.m_pPSOCache);
         std::swap(m_pIndexBufferCache, cmdBuffer.m_pIndexBufferCache);
@@ -597,6 +598,90 @@ namespace vkn
         vkCmdFillBuffer(Get(), buffer.Get(), offset, size, value);
 
         return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdClearTexture(Texture& texture, const TextureClearInfo& clear, std::span<const TextureClearRange> ranges)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        VK_ASSERT(!ranges.empty());
+
+        m_texSubresCache.resize(ranges.size());
+
+        const bool isColorTex = texture.IsColor();
+        const bool isDepth = texture.IsDepth();
+        const bool isStencil = texture.IsStencil();
+        const bool isDepthStencil = texture.IsDepthStencil();
+
+        VkImageAspectFlags aspectMask = {};
+        if (isColorTex) {
+            aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        } else if (isDepth) {
+            aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        } else if (isStencil) {
+            aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+        } else if (isDepthStencil) {
+            aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        } else {
+            VK_ASSERT_FAIL("Invalid texture %s aspect", texture.GetDebugName().data());
+        }
+
+        for (size_t i = 0; i < ranges.size(); ++i) {
+            m_texSubresCache[i].aspectMask = aspectMask;
+            m_texSubresCache[i].baseMipLevel = ranges[i].baseMipLevel;
+            m_texSubresCache[i].levelCount = ranges[i].levelCount;
+            m_texSubresCache[i].baseArrayLayer = ranges[i].baseArrayLayer;
+            m_texSubresCache[i].layerCount = ranges[i].layerCount;
+        }
+
+        TextureAccessTracker& tracker = texture.GetAccessTracker();
+
+        const VkImageLayout layout = tracker.GetState(ranges[0].baseArrayLayer, ranges[0].baseMipLevel).layout;
+
+        if (isColorTex) {
+            VkClearColorValue clearValue = {};
+            clearValue.float32[0] = clear.r;
+            clearValue.float32[1] = clear.g;
+            clearValue.float32[2] = clear.b;
+            clearValue.float32[3] = clear.a;
+
+        #ifdef ENG_ASSERT_ENABLED
+            for (const TextureClearRange& range : ranges) {
+                VK_ASSERT(
+                    tracker.CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount, VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR) ||
+                    tracker.CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) ||
+                    tracker.CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount, VK_IMAGE_LAYOUT_GENERAL)
+                );
+            }
+        #endif
+
+            vkCmdClearColorImage(Get(), texture.Get(), layout, &clearValue, m_texSubresCache.size(), m_texSubresCache.data());
+        } else {
+            VkClearDepthStencilValue clearValue = {};
+            clearValue.depth = clear.depth;
+            clearValue.stencil = clear.stencil;
+
+            #ifdef ENG_ASSERT_ENABLED
+            for (const TextureClearRange& range : ranges) {
+                VK_ASSERT(
+                    tracker.CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) ||
+                    tracker.CheckLayoutConsistency(range.baseArrayLayer, range.layerCount, range.baseMipLevel, range.levelCount, VK_IMAGE_LAYOUT_GENERAL)
+                );
+            }
+        #endif
+
+            vkCmdClearDepthStencilImage(Get(), texture.Get(), layout, &clearValue, m_texSubresCache.size(), m_texSubresCache.data());
+        }
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdClearTexture(Texture& texture, const TextureClearInfo& clear, const TextureClearRange& range)
+    {
+        std::span<const TextureClearRange> ranges(&range, 1);
+        return CmdClearTexture(texture, clear, ranges);
     }
 
 
@@ -1013,6 +1098,7 @@ namespace vkn
 
         m_blitCache = {};
         m_bufImageCopyCache = {};
+        m_texSubresCache = {};
         m_pDescrBufferBindingCache = nullptr;
         m_pPSOCache = nullptr;
         m_pIndexBufferCache = nullptr;
@@ -1035,6 +1121,7 @@ namespace vkn
     {
         m_blitCache.clear();
         m_bufImageCopyCache.clear();
+        m_texSubresCache.clear();
         m_pDescrBufferBindingCache = nullptr;
         m_pPSOCache = nullptr;
         m_pIndexBufferCache = nullptr;

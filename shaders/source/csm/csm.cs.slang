@@ -1,12 +1,10 @@
 #include "registers/common_registers.slang"
 #include "registers/csm_registers.slang"
 
-#include "common/geom_structs.slang"
-
-#define FRUSTUM_CULLING_VIEW_PROJ_MATR SM_CASCADE_VIEW_PROJ_MATRIX
-#include "common/math/frustum_culling.slang"
-
 #include "common/csm_incl.slang"
+
+#include "common/common_geom.slang"
+#include "common/math/frustum_culling.slang"
 
 
 groupshared uint GROUP_VIS_ID_QUEUE_SIZES[CSM_BUFFER_COUNT];
@@ -71,7 +69,7 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
 
     for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         if (IS_BIT_SET(isVisibleInCascadeMask, cascade)) {
-            for (uint queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+            for (uint queue = 0; queue < GEOM_QUEUE::COUNT; ++queue) {
                 const uint queueIndex = CSMGetBufferIndex(cascade, (GEOM_QUEUE)queue);
 
                 if (queueLocalOffsets[queueIndex] != ~0u) {

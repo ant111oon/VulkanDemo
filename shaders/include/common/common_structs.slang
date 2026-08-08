@@ -254,6 +254,7 @@ struct COMMON_CSM_DATA
 struct COMMON_CB_DATA
 {
     FRUSTUM CAMERA_FRUSTUM;
+    FRUSTUM CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
 
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
@@ -263,7 +264,7 @@ struct COMMON_CB_DATA
     float4x4 INV_PROJ_MATRIX;
     float4x4 INV_VIEW_PROJ_MATRIX;
 
-    FRUSTUM CULLING_CAMERA_FRUSTUM;    // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    float4x4 CULLING_VIEW_PROJ_MATRIX_PREV;
     float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
 
     uint2 SCREEN_SIZE;

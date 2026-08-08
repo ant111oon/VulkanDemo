@@ -2,7 +2,7 @@
 #define GEOM_DRAW_CMD_GEN_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
 
 struct GEOM_DRAW_CMD_GEN_PER_DRAW_DATA

@@ -114,7 +114,7 @@ namespace vkn
         }
     }
 
-    
+
     bool TextureAccessTracker::CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const
     {
     #ifdef ENG_BUILD_DEBUG
@@ -130,6 +130,21 @@ namespace vkn
                 }
             }
         }
+    #endif
+
+        return true;
+    }
+
+
+    bool TextureAccessTracker::CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount, VkImageLayout layout) const
+    {
+    #ifdef ENG_BUILD_DEBUG
+        const uint32_t lastLayerIdx = baseLayer + layerCount - 1;
+        const uint32_t lastMipIdx = baseMip + mipCount - 1;
+
+        const VkImageLayout baseLayout = GetState(baseLayer, baseMip).layout;
+
+        return baseLayout == layout && CheckLayoutConsistency(baseLayer, layerCount, baseMip, mipCount);
     #endif
 
         return true;

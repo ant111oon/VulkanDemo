@@ -6,7 +6,7 @@
 
 uint CSMGetBufferIndex(in uint cascade, in GEOM_QUEUE queue)
 {
-    return clamp(cascade, 0, COMMON_CSM_CASCADE_COUNT - 1) * GEOM_QUEUE_COUNT + queue;
+    return clamp(cascade, 0, COMMON_CSM_CASCADE_COUNT - 1) * GEOM_QUEUE::COUNT + queue;
 }
 
 
@@ -17,9 +17,9 @@ uint CSMGeomCullingGetQueueMask(in COMMON_INST inst)
     const COMMON_MATERIAL material = COMMON_MATERIALS[inst.MATERIAL_IDX];
 
     if (material.IsOpaque()) {
-        mask |= (1u << GEOM_QUEUE_OPAQUE);
+        mask |= (1u << (uint)GEOM_QUEUE::OPAQUE);
     } else if (material.IsAlphaKill()) {
-        mask |= (1u << GEOM_QUEUE_AKILL);
+        mask |= (1u << (uint)GEOM_QUEUE::AKILL);
     }
 
     return mask;

@@ -2,12 +2,12 @@
 #define CSM_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
 #include "common/math/geom_primitives.slang"
 
 
-static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE_COUNT;
+static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE::COUNT;
 
 
 struct CSM_PER_DRAW_DATA

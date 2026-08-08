@@ -1,5 +1,5 @@
-#ifndef GEOM_STRUCTS_H
-#define GEOM_STRUCTS_H
+#ifndef COMMON_GEOM_H
+#define COMMON_GEOM_H
 
 
 enum GEOM_QUEUE : uint
@@ -8,10 +8,6 @@ enum GEOM_QUEUE : uint
     AKILL,
     COUNT
 };
-
-#define GEOM_QUEUE_OPAQUE (uint)GEOM_QUEUE::OPAQUE
-#define GEOM_QUEUE_AKILL  (uint)GEOM_QUEUE::AKILL
-#define GEOM_QUEUE_COUNT  (uint)GEOM_QUEUE::COUNT
 
 
 struct GEOM_BATCH

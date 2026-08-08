@@ -149,6 +149,23 @@ namespace vkn
     };
 
 
+    struct TextureClearInfo
+    {
+        float    r, g, b, a;
+        float    depth;
+        uint32_t stencil;
+    };
+
+
+    struct TextureClearRange
+    {
+        uint32_t baseMipLevel;
+        uint32_t levelCount;
+        uint32_t baseArrayLayer;
+        uint32_t layerCount;
+    };
+
+
     struct DescriptorBufferSetBindingInfo
     {
         uint32_t elemIndex; // index of set inside bound descriptor buffer
@@ -233,6 +250,9 @@ namespace vkn
         
         CmdBuffer& CmdFillBuffer(Buffer& buffer, uint32_t value, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
 
+        CmdBuffer& CmdClearTexture(Texture& texture, const TextureClearInfo& clear, std::span<const TextureClearRange> ranges);
+        CmdBuffer& CmdClearTexture(Texture& texture, const TextureClearInfo& clear, const TextureClearRange& range);
+
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, std::span<const VkBufferCopy> regions);
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, const VkBufferCopy& region);
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Buffer& dstBuffer, VkDeviceSize size, VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0);
@@ -309,6 +329,7 @@ namespace vkn
 
         std::vector<VkImageBlit2> m_blitCache;
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
+        std::vector<VkImageSubresourceRange> m_texSubresCache;
         DescriptorBuffer* m_pDescrBufferBindingCache;
         PSO* m_pPSOCache;
         Buffer* m_pIndexBufferCache;

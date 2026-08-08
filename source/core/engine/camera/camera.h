@@ -22,6 +22,7 @@ namespace eng
         void SetPerspProjection(float fovY, float aspectRatio, float zNear, float zFar) noexcept;
         void SetOrthoProjection(float left, float right, float bottom, float top, float zNear, float zFar) noexcept;
 
+        // This functions switch camera to perspective projection
         void SetFovY(float radians) noexcept;
         void SetAspectRatio(float aspect) noexcept;
         void SetAspectRatio(uint32_t width, uint32_t height) noexcept;
@@ -29,6 +30,7 @@ namespace eng
         void SetZFar(float zFar) noexcept;
         void SetZNearFar(float zNear, float zFar) noexcept;
 
+        // This functions switch camera to ortho projection
         void SetOrthoLeft(float left) noexcept;
         void SetOrthoRight(float right) noexcept;
         void SetOrthoTop(float top) noexcept;
@@ -37,76 +39,85 @@ namespace eng
         void Move(const glm::float3& offset) noexcept;
         void MoveAlongDir(const glm::float3& dir, float distance) noexcept;
 
-        void SetLookAt(const glm::float3& target, const glm::float3& up = M3D_AXIS_Y) noexcept;
+        void SetLookAt(const glm::float3& target, const glm::float3& up) noexcept;
         void SetRotation(const glm::quat& rotation) noexcept;
         void SetPosition(const glm::float3& position) noexcept;
         void SetTransform(const glm::float4x4& transform) noexcept;
 
-        float GetFovY() const noexcept  { return m_fovY; }
-        float GetAspectRatio() const noexcept { return m_aspectRatio; }
-        float GetZNear() const noexcept { return m_zNear; }
-        float GetZFar() const noexcept { return m_zFar; }
+        float GetFovY() const noexcept  { return m_currState.fovY; }
+        float GetAspectRatio() const noexcept { return m_currState.aspectRatio; }
+        float GetZNear() const noexcept { return m_currState.zNear; }
+        float GetZFar() const noexcept { return m_currState.zFar; }
 
-        float GetOrthoLeft() const noexcept { return m_left; }
-        float GetOrthoRight() const noexcept { return m_right; }
-        float GetOrthoTop() const noexcept { return m_top; }
-        float GetOrthoBottom() const noexcept { return m_bottom; }
+        float GetFovYPrev() const noexcept  { return m_prevState.fovY; }
+        float GetAspectRatioPrev() const noexcept { return m_prevState.aspectRatio; }
+        float GetZNearPrev() const noexcept { return m_prevState.zNear; }
+        float GetZFarPrev() const noexcept { return m_prevState.zFar; }
 
-        glm::float3 GetXDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_X); }
-        glm::float3 GetYDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_Y); }
-        glm::float3 GetZDir() const noexcept { return glm::normalize(m_rotation * M3D_AXIS_Z); }
+        float GetOrthoLeft() const noexcept { return m_currState.left; }
+        float GetOrthoRight() const noexcept { return m_currState.right; }
+        float GetOrthoTop() const noexcept { return m_currState.top; }
+        float GetOrthoBottom() const noexcept { return m_currState.bottom; }
+
+        float GetOrthoLeftPrev() const noexcept { return m_prevState.left; }
+        float GetOrthoRightPrev() const noexcept { return m_prevState.right; }
+        float GetOrthoTopPrev() const noexcept { return m_prevState.top; }
+        float GetOrthoBottomPrev() const noexcept { return m_prevState.bottom; }
+
+        glm::float3 GetXDir() const noexcept { return glm::normalize(m_currState.rotation * M3D_AXIS_X); }
+        glm::float3 GetYDir() const noexcept { return glm::normalize(m_currState.rotation * M3D_AXIS_Y); }
+        glm::float3 GetZDir() const noexcept { return glm::normalize(m_currState.rotation * M3D_AXIS_Z); }
+
+        glm::float3 GetXDirPrev() const noexcept { return glm::normalize(m_prevState.rotation * M3D_AXIS_X); }
+        glm::float3 GetYDirPrev() const noexcept { return glm::normalize(m_prevState.rotation * M3D_AXIS_Y); }
+        glm::float3 GetZDirPrev() const noexcept { return glm::normalize(m_prevState.rotation * M3D_AXIS_Z); }
 
         glm::float3 GetForwardDir() const noexcept { return -GetZDir(); }
+        glm::float3 GetForwardDirPrev() const noexcept { return -GetZDirPrev(); }
 
-        glm::float3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_rotation); }
+        glm::float3 GetPitchYawRollRadians() const noexcept { return glm::eulerAngles(m_currState.rotation); }
         glm::float3 GetPitchYawRollDegrees() const noexcept { return glm::degrees(GetPitchYawRollRadians()); }
         
-        const glm::quat& GetRotation() const noexcept { return m_rotation; }
-        const glm::float3& GetPosition() const noexcept { return m_position; }
+        glm::float3 GetPitchYawRollRadiansPrev() const noexcept { return glm::eulerAngles(m_prevState.rotation); }
+        glm::float3 GetPitchYawRollDegreesPrev() const noexcept { return glm::degrees(GetPitchYawRollRadiansPrev()); }
 
-        const glm::float4x4& GetViewMatrix() const noexcept { return m_matView; }
-        const glm::float4x4& GetProjMatrix() const noexcept { return m_matProj; }
-        const glm::float4x4& GetViewProjMatrix() const noexcept { return m_matViewProj; }
+        const glm::quat& GetRotation() const noexcept { return m_currState.rotation; }
+        const glm::quat& GetRotationPrev() const noexcept { return m_prevState.rotation; }
 
-        const glm::float4x4& GetInvViewMatrix() const noexcept { return m_invMatView; }
-        const glm::float4x4& GetInvProjMatrix() const noexcept { return m_invMatProj; }
-        const glm::float4x4& GetInvViewProjMatrix() const noexcept { return m_invMatViewProj; }
+        const glm::float3& GetPosition() const noexcept { return m_currState.position; }
+        const glm::float3& GetPositionPrev() const noexcept { return m_prevState.position; }
 
-        const math::Frustum& GetFrustum() const noexcept { return m_frustum; }
+        const glm::float4x4& GetViewMatrix() const noexcept { return m_currState.matView; }
+        const glm::float4x4& GetProjMatrix() const noexcept { return m_currState.matProj; }
+        const glm::float4x4& GetViewProjMatrix() const noexcept { return m_currState.matViewProj; }
+
+        const glm::float4x4& GetViewMatrixPrev() const noexcept { return m_prevState.matView; }
+        const glm::float4x4& GetProjMatrixPrev() const noexcept { return m_prevState.matProj; }
+        const glm::float4x4& GetViewProjMatrixPrev() const noexcept { return m_prevState.matViewProj; }
+
+        const glm::float4x4& GetInvViewMatrix() const noexcept { return m_currState.invMatView; }
+        const glm::float4x4& GetInvProjMatrix() const noexcept { return m_currState.invMatProj; }
+        const glm::float4x4& GetInvViewProjMatrix() const noexcept { return m_currState.invMatViewProj; }
+
+        const glm::float4x4& GetInvViewMatrixPrev() const noexcept { return m_prevState.invMatView; }
+        const glm::float4x4& GetInvProjMatrixPrev() const noexcept { return m_prevState.invMatProj; }
+        const glm::float4x4& GetInvViewProjMatrixPrev() const noexcept { return m_prevState.invMatViewProj; }
+
+        const math::Frustum& GetFrustum() const noexcept { return m_currState.frustum; }
+        const math::Frustum& GetFrustumPrev() const noexcept { return m_prevState.frustum; }
 
         bool IsPerspProj() const noexcept { return !IsOrthoProj(); }
-        bool IsOrthoProj() const noexcept { return m_flags.test(CameraFlagBits::FLAG_IS_ORTHO_PROJ); }
+        bool IsOrthoProj() const noexcept { return GetFlags().test(FLAG_IS_ORTHO_PROJ); }
 
-        bool IsProjMatrixRecalcRequested() const noexcept { return m_flags.test(CameraFlagBits::FLAG_NEED_RECALC_PROJ_MAT); }
-        bool IsViewMatrixRecalcRequested() const noexcept { return m_flags.test(CameraFlagBits::FLAG_NEED_RECALC_VIEW_MAT); }
+        bool IsPerspProjPrev() const noexcept { return !IsOrthoProjPrev(); }
+        bool IsOrthoProjPrev() const noexcept { return GetFlagsPrev().test(FLAG_IS_ORTHO_PROJ); }
+
+        bool IsProjMatrixRecalcRequested() const noexcept { return GetFlags().test(FLAG_NEED_RECALC_PROJ_MAT); }
+        bool IsViewMatrixRecalcRequested() const noexcept { return GetFlags().test(FLAG_NEED_RECALC_VIEW_MAT); }
         
         bool IsNeedRecalcViewProjMatrix() const noexcept { return IsViewMatrixRecalcRequested() || IsProjMatrixRecalcRequested(); }
 
         void Update() noexcept;
-
-    private:
-        void RequestRecalcProjMatrix() noexcept
-        { 
-            m_flags.set(CameraFlagBits::FLAG_NEED_RECALC_PROJ_MAT);
-            RequestRecalcFrustum();
-        }
-
-        void RequestRecalcViewMatrix() noexcept
-        {
-            m_flags.set(CameraFlagBits::FLAG_NEED_RECALC_VIEW_MAT);
-            RequestRecalcFrustum();
-        }
-
-        void RequestRecalcFrustum() noexcept { m_flags.set(CameraFlagBits::FLAG_NEED_RECALC_FRUSTUM); }
-
-        void ClearProjRecalcRequest() noexcept { m_flags.reset(CameraFlagBits::FLAG_NEED_RECALC_PROJ_MAT); }
-        void ClearViewMatrixRecalcRequest() noexcept { m_flags.reset(CameraFlagBits::FLAG_NEED_RECALC_VIEW_MAT); }
-        void ClearFrustumRecalcRequest() noexcept { m_flags.reset(CameraFlagBits::FLAG_NEED_RECALC_FRUSTUM); }
-
-        void RecalcProjMatrix() noexcept;
-        void RecalcViewMatrix() noexcept;
-        void RecalcViewProjMatrix() noexcept;
-        void RecalcFrustum() noexcept;
 
     private:
         enum CameraFlagBits
@@ -121,33 +132,73 @@ namespace eng
 
         using CameraFlags = std::bitset<16>;
         static_assert(CameraFlagBits::FLAG_COUNT < CameraFlags().size());
+    
+    private:
+        CameraFlags& GetFlags() { return m_currState.flags; } 
+        const CameraFlags& GetFlags() const { return m_currState.flags; } 
 
-        math::Frustum m_frustum;
+        CameraFlags& GetFlagsPrev() { return m_prevState.flags; } 
+        const CameraFlags& GetFlagsPrev() const { return m_prevState.flags; } 
 
-        glm::float4x4 m_matViewProj = M3D_MAT4X4_IDENTITY;
-        glm::float4x4 m_matProj     = M3D_MAT4X4_IDENTITY;
-        glm::float4x4 m_matView     = M3D_MAT4X4_IDENTITY;
+        void RequestRecalcProjMatrix() noexcept
+        {
+            GetFlags().set(FLAG_NEED_RECALC_PROJ_MAT);
+            RequestRecalcFrustum();
+        }
 
-        glm::float4x4 m_invMatViewProj = M3D_MAT4X4_IDENTITY;
-        glm::float4x4 m_invMatProj     = M3D_MAT4X4_IDENTITY;
-        glm::float4x4 m_invMatView     = M3D_MAT4X4_IDENTITY;
+        void RequestRecalcViewMatrix() noexcept
+        {
+            GetFlags().set(FLAG_NEED_RECALC_VIEW_MAT);
+            RequestRecalcFrustum();
+        }
 
-        glm::quat m_rotation = M3D_QUAT_IDENTITY;
-        glm::float3 m_position = ZEROF3;
+        void RequestRecalcFrustum() noexcept { GetFlags().set(FLAG_NEED_RECALC_FRUSTUM); }
 
-        // perspective
-        float m_fovY = 0.f;
-        float m_aspectRatio = 0.f;
+        void ClearProjRecalcRequest() noexcept { GetFlags().reset(FLAG_NEED_RECALC_PROJ_MAT); }
+        void ClearViewMatrixRecalcRequest() noexcept { GetFlags().reset(FLAG_NEED_RECALC_VIEW_MAT); }
+        void ClearFrustumRecalcRequest() noexcept { GetFlags().reset(FLAG_NEED_RECALC_FRUSTUM); }
 
-        // ortho
-        float m_left = 0.f;
-        float m_right = 0.f;
-        float m_top = 0.f;
-        float m_bottom = 0.f;
+        void RecalcProjMatrix() noexcept;
+        void RecalcViewMatrix() noexcept;
+        void RecalcViewProjMatrix() noexcept;
+        void RecalcFrustum() noexcept;
 
-        float m_zNear = 0.f;
-        float m_zFar = 0.f;
+        void SwitchToPerspProjection() noexcept;
+        void SwitchToOrthoProjection() noexcept;
 
-        CameraFlags m_flags = {};
+    private:
+        struct State
+        {
+            math::Frustum frustum;
+            
+            glm::float4x4 matViewProj = M3D_MAT4X4_IDENTITY;
+            glm::float4x4 matProj     = M3D_MAT4X4_IDENTITY;
+            glm::float4x4 matView     = M3D_MAT4X4_IDENTITY;
+
+            glm::float4x4 invMatViewProj = M3D_MAT4X4_IDENTITY;
+            glm::float4x4 invMatProj     = M3D_MAT4X4_IDENTITY;
+            glm::float4x4 invMatView     = M3D_MAT4X4_IDENTITY;
+
+            glm::quat rotation   = M3D_QUAT_IDENTITY;
+            glm::float3 position = ZEROF3;
+
+            // perspective
+            float fovY = 0.f;
+            float aspectRatio = 0.f;
+
+            // ortho
+            float left = 0.f;
+            float right = 0.f;
+            float top = 0.f;
+            float bottom = 0.f;
+
+            float zNear = 0.f;
+            float zFar = 0.f;
+
+            CameraFlags flags = {};
+        };
+
+        State m_prevState;
+        State m_currState;
     };
 }
