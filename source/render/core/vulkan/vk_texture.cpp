@@ -363,6 +363,57 @@ namespace vkn
     }
 
 
+    bool Texture::CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount, VkImageLayout layout) const
+    {
+        const bool isConsistent = m_accessTracker.CheckLayoutConsistency(baseLayer, layerCount, baseMip, mipCount, layout);
+
+        VK_ASSERT_MSG(isConsistent,
+            "Texture %s subresource range (baseLayer: %u, layerCount: %u, baseMip: %u, mipCount: %u, layout: %s) has inconsistent layout", 
+            GetDebugName().data(), baseLayer, layerCount, baseMip, mipCount, string_VkImageLayout(layout)
+        );
+
+        return isConsistent;
+    }
+
+
+    bool Texture::IsColor() const
+    {
+        return !IsDepth() && !IsStencil() && !IsDepthStencil();
+    }
+
+
+    bool Texture::IsDepth() const
+    {
+        switch (GetFormat()) {
+            case VK_FORMAT_D16_UNORM:
+            case VK_FORMAT_X8_D24_UNORM_PACK32:
+            case VK_FORMAT_D32_SFLOAT:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+
+    bool Texture::IsStencil() const
+    {
+        return GetFormat() == VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+
+
+    bool Texture::IsDepthStencil() const
+    {
+        switch (GetFormat()) {
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+
     Device& Texture::GetDevice() const
     {
         VK_ASSERT(IsCreated());

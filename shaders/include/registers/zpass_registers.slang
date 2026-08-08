@@ -2,7 +2,7 @@
 #define ZPASS_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
 
 struct ZPASS_PER_DRAW_DATA

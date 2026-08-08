@@ -351,6 +351,7 @@ struct COMMON_CSM_DATA
 struct COMMON_CB_DATA
 {
     FRUSTUM CAMERA_FRUSTUM;
+    FRUSTUM CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
 
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
@@ -360,7 +361,7 @@ struct COMMON_CB_DATA
     float4x4 INV_PROJ_MATRIX;
     float4x4 INV_VIEW_PROJ_MATRIX;
 
-    FRUSTUM  CULLING_CAMERA_FRUSTUM;   // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    float4x4 CULLING_VIEW_PROJ_MATRIX_PREV;
     float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
 
     uint2 SCREEN_SIZE;
@@ -606,8 +607,7 @@ enum PassID : uint32_t
 {
     PASS_ID_COMMON,
 
-    PASS_ID_GEOM_CULLING_PHASE_1,
-    PASS_ID_GEOM_CULLING_PHASE_2,
+    PASS_ID_GEOM_CULLING,
     PASS_ID_GEOM_BATCHING,
     PASS_ID_GEOM_DRAW_CMD_GEN,
     
@@ -647,8 +647,7 @@ enum PassID : uint32_t
 static constexpr const char* PASS_DBG_NAME[] = {
     "PASS_ID_COMMON",
 
-    "PASS_ID_GEOM_CULLING_PHASE_1",
-    "PASS_ID_GEOM_CULLING_PHASE_2",
+    "PASS_ID_GEOM_CULLING",
     "PASS_ID_GEOM_BATCHING",
     "PASS_ID_GEOM_DRAW_CMD_GEN",
     
@@ -689,21 +688,14 @@ enum DescSetID : uint32_t
 {
     DESC_SET_ID_COMMON,
 
-    DESC_SET_ID_GEOM_CULLING_PHASE_1,
-    DESC_SET_ID_GEOM_CULLING_PHASE_2,
-    DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1,
-    DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2,
-    DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1,
-    DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2,   
-    DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1,
-    DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2,
-    DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1,
-    DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2,
+    DESC_SET_ID_GEOM_CULLING,
+    DESC_SET_ID_GEOM_BATCHING_OPAQUE,
+    DESC_SET_ID_GEOM_BATCHING_AKILL,   
+    DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE,
+    DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL,
     
-    DESC_SET_ID_DEPTH_OPAQUE_PHASE_1,
-    DESC_SET_ID_DEPTH_OPAQUE_PHASE_2,
-    DESC_SET_ID_DEPTH_AKILL_PHASE_1,
-    DESC_SET_ID_DEPTH_AKILL_PHASE_2,
+    DESC_SET_ID_DEPTH_OPAQUE,
+    DESC_SET_ID_DEPTH_AKILL,
     
     DESC_SET_ID_HZB_GEN,
 
@@ -722,10 +714,8 @@ enum DescSetID : uint32_t
     DESC_SET_ID_CSM_GEOM_DRAW_CMD_GEN_AKILL_CASCADE_2,
     DESC_SET_ID_CSM_RENDER,
 
-    DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1,
-    DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2,
-    DESC_SET_ID_GBUFFER_AKILL_PHASE_1,
-    DESC_SET_ID_GBUFFER_AKILL_PHASE_2,
+    DESC_SET_ID_GBUFFER_OPAQUE,
+    DESC_SET_ID_GBUFFER_AKILL,
     
     DESC_SET_ID_DEFERRED_LIGHTING,
     
@@ -752,21 +742,14 @@ enum DescSetID : uint32_t
 static constexpr const char* DESC_SET_DBG_NAME[] = {
     "DESC_SET_ID_COMMON",
 
-    "DESC_SET_ID_GEOM_CULLING_PHASE_1",
-    "DESC_SET_ID_GEOM_CULLING_PHASE_2",
-    "DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1",
-    "DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2",
-    "DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1",
-    "DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2",   
-    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1",
-    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2",
-    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1",
-    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2",
+    "DESC_SET_ID_GEOM_CULLING",
+    "DESC_SET_ID_GEOM_BATCHING_OPAQUE",
+    "DESC_SET_ID_GEOM_BATCHING_AKILL", 
+    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE",
+    "DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL",
     
-    "DESC_SET_ID_DEPTH_OPAQUE_PHASE_1",
-    "DESC_SET_ID_DEPTH_OPAQUE_PHASE_2",
-    "DESC_SET_ID_DEPTH_AKILL_PHASE_1",
-    "DESC_SET_ID_DEPTH_AKILL_PHASE_2",
+    "DESC_SET_ID_DEPTH_OPAQUE",
+    "DESC_SET_ID_DEPTH_AKILL",
     
     "DESC_SET_ID_HZB_GEN",
 
@@ -785,10 +768,8 @@ static constexpr const char* DESC_SET_DBG_NAME[] = {
     "DESC_SET_ID_CSM_GEOM_DRAW_CMD_GEN_AKILL_CASCADE_2",
     "DESC_SET_ID_CSM_RENDER",
 
-    "DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1",
-    "DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2",
-    "DESC_SET_ID_GBUFFER_AKILL_PHASE_1",
-    "DESC_SET_ID_GBUFFER_AKILL_PHASE_2",
+    "DESC_SET_ID_GBUFFER_OPAQUE",
+    "DESC_SET_ID_GBUFFER_AKILL",
     
     "DESC_SET_ID_DEFERRED_LIGHTING",
     
@@ -828,7 +809,6 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT = 2;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -897,8 +877,6 @@ static constexpr size_t DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT = 11;
 
 
 static constexpr uint32_t CSM_CASCADE_RT_SIZE = 2048;
-
-static constexpr uint32_t GEOM_CULLING_PHASES_COUNT = 2;
 
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
@@ -1288,21 +1266,17 @@ static vkn::Buffer s_commonMeshBuffer;
 static vkn::Buffer s_commonMaterialBuffer;
 static vkn::Buffer s_commonInstBuffer;
 
-static vkn::Buffer s_geomInstVisFlagsBuffer;
 
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_visGeomIDQueueBuffers;
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_visGeomIDQueueSizeBuffers;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueBuffer;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
 
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomBatchQueueBuffers;
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomBatchQueueSizeBuffers;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueBuffer;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueSizeBuffer;
 
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueBuffers;
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_sortedVisGeomIDQueueSizeBuffers;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_sortedVisGeomIDQueueBuffer;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_sortedVisGeomIDQueueSizeBuffer;
 
-// We have two phase occlusion culling so basically we build two sets of draw commands and two sets of
-// appropriate visible instance IDs (one for HZB generation and one for remaining visible instances). 
-// We weant to render GBUFFER with one pass so we need to merge draw commands and IDs buffers into one
-static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, GEOM_CULLING_PHASES_COUNT> s_geomDrawCmdQueueBuffers;
+static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomDrawCmdQueueBuffer;
 
 
 // CSM Data
@@ -1389,6 +1363,8 @@ static std::vector<uint8_t> s_shaderCodeBuffer;
 
 static eng::DbgUI s_dbgUI;
 
+static glm::float4x4 s_mainCamViewProjMatrPrev;
+
 static eng::Camera s_mainCamera;
 static glm::float3 s_mainCameraVel = ZEROF3;
 static bool s_mainCameraLoaded = false;
@@ -1397,6 +1373,7 @@ static std::array<eng::Camera, COMMON_CSM_CASCADE_COUNT> s_csmCameras;
 static std::array<float, COMMON_CSM_CASCADE_COUNT> s_csmCascadeWorldUnitsPerTexel;
 
 static glm::float4x4 s_fixedCamCullViewProjMatr;
+static glm::float4x4 s_fixedCamCullViewProjMatrPrev;
 static glm::float4x4 s_fixedCamCullInvViewProjMatr;
 static math::Frustum s_fixedCamCullFrustum;
 
@@ -2323,7 +2300,11 @@ static void CreateDepthRT()
     subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    rtCreateInfo.usage = 
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | 
+        VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     s_depthRT.Create(rtCreateInfo);
     s_vkDevice.SetObjDebugName(s_depthRT, "COMMON_DEPTH_RT");
@@ -2345,6 +2326,30 @@ static void CreateDepthRT()
 
     s_depthRTColorView.Create(depthColorViewCreateInfo);
     s_vkDevice.SetObjDebugName(s_depthRTColorView, "COMMON_DEPTH_RT_COLOR_VIEW");
+
+    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
+        cmdBuffer
+            .BeginBarrierList()
+                .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+            .Push();
+
+        vkn::TextureClearInfo clear = {};
+
+    #ifdef ENG_REVERSED_Z
+        clear.depth = 0.f;
+    #else
+        clear.depth = 1.f;
+    #endif
+
+        vkn::TextureClearRange range = {};
+        range.baseMipLevel = 0;
+        range.levelCount = 1;
+        range.baseArrayLayer = 0;
+        range.layerCount = 1;
+
+        cmdBuffer.CmdClearTexture(s_depthRT, clear, range);
+    });
 }
 
 
@@ -2371,7 +2376,11 @@ static void CreateHZB()
     rtCreateInfo.pAllocInfo = &rtAllocInfo;
 
     rtCreateInfo.format = VK_FORMAT_R32_SFLOAT;
-    rtCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    rtCreateInfo.usage = 
+        VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_STORAGE_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     rtCreateInfo.mipLevels = mipsCount;
 
     s_HZB.Create(rtCreateInfo);
@@ -2874,7 +2883,7 @@ static void CreateCommonDescriptorSetLayout()
 }
 
 
-static void CreateGeomCullingPhase1DescriptorSetLayout()
+static void CreateGeomCullingDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
@@ -2885,34 +2894,12 @@ static void CreateGeomCullingPhase1DescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
 
-    s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1], "PREV_FRAME_OCCLUDERS_CULLING_DESCRIPTOR_SET_LAYOUT");
-}
-
-
-static void CreateGeomCullingPhase2DescriptorSetLayout()
-{
-    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
-
-    createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-
-    std::array descriptors = {
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-    };
-
-    createInfo.descriptorInfos = descriptors;
-
-    s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2].Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2], "THIS_FRAME_GEOMETRY_CULLING_DESCRIPTOR_SET_LAYOUT");
+    s_descSetLayouts[PASS_ID_GEOM_CULLING].Create(createInfo);
+    s_vkDevice.SetObjDebugName(s_descSetLayouts[PASS_ID_GEOM_CULLING], "GEOM_CULLING_DESCRIPTOR_SET_LAYOUT");
 }
 
 
@@ -3285,23 +3272,16 @@ static void CreateDescriptorBuffer()
     
     layouts[DESC_SET_ID_COMMON] = &s_descSetLayouts[PASS_ID_COMMON];
 
-    layouts[DESC_SET_ID_GEOM_CULLING_PHASE_1] = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1];
-    layouts[DESC_SET_ID_GEOM_CULLING_PHASE_2] = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2];
+    layouts[DESC_SET_ID_GEOM_CULLING] = &s_descSetLayouts[PASS_ID_GEOM_CULLING];
     
-    layouts[DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
-    layouts[DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
-    layouts[DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
-    layouts[DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
+    layouts[DESC_SET_ID_GEOM_BATCHING_OPAQUE] = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
+    layouts[DESC_SET_ID_GEOM_BATCHING_AKILL]  = &s_descSetLayouts[PASS_ID_GEOM_BATCHING];
     
-    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
-    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
-    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
-    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
+    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE] = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
+    layouts[DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN];
     
-    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_DEPTH];
-    layouts[DESC_SET_ID_DEPTH_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_DEPTH];
+    layouts[DESC_SET_ID_DEPTH_OPAQUE] = &s_descSetLayouts[PASS_ID_DEPTH];
+    layouts[DESC_SET_ID_DEPTH_AKILL]  = &s_descSetLayouts[PASS_ID_DEPTH];
     
     layouts[DESC_SET_ID_HZB_GEN] = &s_descSetLayouts[PASS_ID_HZB_GEN];
 
@@ -3320,10 +3300,8 @@ static void CreateDescriptorBuffer()
     layouts[DESC_SET_ID_CSM_GEOM_DRAW_CMD_GEN_AKILL_CASCADE_2]  = &s_descSetLayouts[PASS_ID_GEOM_DRAW_CMD_GEN],
     layouts[DESC_SET_ID_CSM_RENDER] = &s_descSetLayouts[PASS_ID_CSM_RENDER],
 
-    layouts[DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1] = &s_descSetLayouts[PASS_ID_GBUFFER];
-    layouts[DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2] = &s_descSetLayouts[PASS_ID_GBUFFER];
-    layouts[DESC_SET_ID_GBUFFER_AKILL_PHASE_1]  = &s_descSetLayouts[PASS_ID_GBUFFER];
-    layouts[DESC_SET_ID_GBUFFER_AKILL_PHASE_2]  = &s_descSetLayouts[PASS_ID_GBUFFER];
+    layouts[DESC_SET_ID_GBUFFER_OPAQUE] = &s_descSetLayouts[PASS_ID_GBUFFER];
+    layouts[DESC_SET_ID_GBUFFER_AKILL]  = &s_descSetLayouts[PASS_ID_GBUFFER];
     
     layouts[DESC_SET_ID_DEFERRED_LIGHTING] = &s_descSetLayouts[PASS_ID_DEFERRED_LIGHTING];
     
@@ -3355,8 +3333,7 @@ static void CreateDescriptorSets()
 {
     CreateCommonDescriptorSetLayout();
 
-    CreateGeomCullingPhase1DescriptorSetLayout();
-    CreateGeomCullingPhase2DescriptorSetLayout();
+    CreateGeomCullingDescriptorSetLayout();
     CreateGeomBatchingDescriptorSetLayout();
     CreateGeomDrawCmdGenDescriptorSetLayout();
     
@@ -3390,33 +3367,18 @@ static void CreateDescriptorSets()
 }
 
 
-static void CreateGeomCullingPhase1PipelineLayout()
+static void CreateGeomCullingPipelineLayout()
 {
     VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_1];
+    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_GEOM_CULLING];
 
-    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_1];
+    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GEOM_CULLING];
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "PREV_FRAME_OCCLUDERS_CULLING_PIPELINE_LAYOUT");
-}
-
-
-static void CreateGeomCullingPhase2PipelineLayout()
-{
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
-
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
-    layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_GEOM_CULLING_PHASE_2];
-
-    vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_2];
-    
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "THIS_FRAME_GEOMETRY_CULLING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_PIPELINE_LAYOUT");
 }
 
 
@@ -3667,7 +3629,7 @@ static void CreateDbgRTViewPipelineLayout()
 }
 
 
-static void CreateGeomCullingPhase1Pipeline(const fs::path& csPath)
+static void CreateGeomCullingPipeline(const fs::path& csPath)
 {
     if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
@@ -3675,39 +3637,17 @@ static void CreateGeomCullingPhase1Pipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "PREV_FRAME_OCCLUDERS_CULLING_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_COMPUTE_SHADER");
 
-    vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_CULLING_PHASE_1];
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_1])
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "PREV_FRAME_OCCLUDERS_CULLING_PSO");
-}
-
-
-static void CreateGeomCullingPhase2Pipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "THIS_FRAME_GEOMETRY_CULLING_COMPUTE_SHADER");
-
-    vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_CULLING_PHASE_2];
+    vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_CULLING];
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetShader(shader)
-        .SetLayout(s_PSOLayouts[PASS_ID_GEOM_CULLING_PHASE_2])
+        .SetLayout(s_PSOLayouts[PASS_ID_GEOM_CULLING])
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "THIS_FRAME_GEOMETRY_CULLING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_PSO");
 }
 
 
@@ -4328,8 +4268,7 @@ static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPa
 
 static void CreatePipelines()
 {
-    CreateGeomCullingPhase1PipelineLayout();
-    CreateGeomCullingPhase2PipelineLayout();
+    CreateGeomCullingPipelineLayout();
     CreateGeomBatchingPipelineLayout();
     CreateGeomDrawCmdGenPipelineLayout();
 
@@ -4359,8 +4298,7 @@ static void CreatePipelines()
     CreateDbgRTViewPipelineLayout();
 
 
-    CreateGeomCullingPhase1Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_1.cs.spv"));
-    CreateGeomCullingPhase2Pipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling_phase_2.cs.spv"));
+    CreateGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling.cs.spv"));
     CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_batching.cs.spv"));
     CreateGeomDrawCmdGenPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_draw_cmd_gen.cs.spv"));
     
@@ -4397,84 +4335,64 @@ static void CreateGeomCullingAndInstancingResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    for (size_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
-            s_visGeomIDQueueBuffers[phase][queue].Create(
-                &s_vkDevice, 
-                s_cpuInstData.size() * sizeof(glm::uint), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_visGeomIDQueueBuffers[phase][queue], "%s_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
-            
-            s_geomBatchQueueBuffers[phase][queue].Create(
-                &s_vkDevice, 
-                s_cpuInstData.size() * sizeof(GEOM_BATCH), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_geomBatchQueueBuffers[phase][queue], "%s_BATCH_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
+    for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
+        s_visGeomIDQueueBuffer[queue].Create(
+            &s_vkDevice, 
+            s_cpuInstData.size() * sizeof(glm::uint), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_visGeomIDQueueBuffer[queue], "%s_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        
+        s_geomBatchQueueBuffer[queue].Create(
+            &s_vkDevice, 
+            s_cpuInstData.size() * sizeof(GEOM_BATCH), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_geomBatchQueueBuffer[queue], "%s_BATCH_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-            s_sortedVisGeomIDQueueBuffers[phase][queue].Create(
-                &s_vkDevice, 
-                s_cpuInstData.size() * sizeof(glm::uint), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffers[phase][queue], "%s_SORTED_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
+        s_sortedVisGeomIDQueueBuffer[queue].Create(
+            &s_vkDevice, 
+            s_cpuInstData.size() * sizeof(glm::uint), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffer[queue], "%s_SORTED_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-            s_geomDrawCmdQueueBuffers[phase][queue].Create(
-                &s_vkDevice,
-                s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT),
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_geomDrawCmdQueueBuffers[phase][queue], "%s_DRAW_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
-            
-            s_visGeomIDQueueSizeBuffers[phase][queue].Create(
-                &s_vkDevice,
-                sizeof(glm::uint), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_visGeomIDQueueSizeBuffers[phase][queue], "%s_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
+        s_geomDrawCmdQueueBuffer[queue].Create(
+            &s_vkDevice,
+            s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT),
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_geomDrawCmdQueueBuffer[queue], "%s_DRAW_CMD_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        
+        s_visGeomIDQueueSizeBuffer[queue].Create(
+            &s_vkDevice,
+            sizeof(glm::uint), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_visGeomIDQueueSizeBuffer[queue], "%s_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-            s_geomBatchQueueSizeBuffers[phase][queue].Create(
-                &s_vkDevice,
-                sizeof(glm::uint), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_geomBatchQueueSizeBuffers[phase][queue], "%s_BATCH_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
+        s_geomBatchQueueSizeBuffer[queue].Create(
+            &s_vkDevice,
+            sizeof(glm::uint), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_geomBatchQueueSizeBuffer[queue], "%s_BATCH_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-            s_sortedVisGeomIDQueueSizeBuffers[phase][queue].Create(
-                &s_vkDevice,
-                sizeof(glm::uint), 
-                VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-                allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], "%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], phase);
-        }
+        s_sortedVisGeomIDQueueSizeBuffer[queue].Create(
+            &s_vkDevice,
+            sizeof(glm::uint), 
+            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
+            allocInfo
+        );
+        s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueSizeBuffer[queue], "%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
     }
-
-    s_geomInstVisFlagsBuffer.Create(
-        &s_vkDevice,
-        (uint32_t)glm::ceil(s_cpuInstData.size() / 32.f) * sizeof(glm::uint), 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-        allocInfo
-    );
-    s_vkDevice.SetObjDebugName(s_geomInstVisFlagsBuffer, "GEOM_INST_VIS_FLAGS_BUFFER");
-
-
-    ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
-        cmdBuffer
-            .BeginBarrierList()
-                .AddBufferBarrier(s_geomInstVisFlagsBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-            .Push();
-
-        cmdBuffer.CmdFillBuffer(s_geomInstVisFlagsBuffer, 0);
-    });
 }
 
 
@@ -4787,130 +4705,115 @@ static void CreateCommonSMSamplers()
 }
 
 
-static void WriteGeomCullingDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
+static void WriteGeomCullingDescriptorSet(GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
-    const DescSetID setID = phase == 0 ? DESC_SET_ID_GEOM_CULLING_PHASE_1 : DESC_SET_ID_GEOM_CULLING_PHASE_2;
+    const DescSetID setID = DESC_SET_ID_GEOM_CULLING;
 
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, 
-        queue, s_visGeomIDQueueBuffers[phase][queue]);
+        queue, s_visGeomIDQueueBuffer[queue]);
 
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, 
-        queue, s_visGeomIDQueueSizeBuffers[phase][queue]);
-        
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_FLAGS_UAV_DESCRIPTOR_SLOT, 
-        0, s_geomInstVisFlagsBuffer);
+        queue, s_visGeomIDQueueSizeBuffer[queue]);
 }
 
 
 static void WriteGeomCullingDescriptorSet()
 {
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteGeomCullingDescriptorSet(phase, (GEOM_QUEUE)queue);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        WriteGeomCullingDescriptorSet((GEOM_QUEUE)queue);
     }
 }
 
 
-static void WriteGeomBatchingDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
+static void WriteGeomBatchingDescriptorSet(GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1 : DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_GEOM_BATCHING_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1 : DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2;
+            setID = DESC_SET_ID_GEOM_BATCHING_AKILL;
             break;
     }
 
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueBuffers[phase][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueSizeBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueSizeBuffer[queue]);
     
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffers[phase][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]);
 
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffers[phase][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueSizeBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueSizeBuffer[queue]);
 }
 
 
 static void WriteGeomBatchingDescriptorSet()
 {
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteGeomBatchingDescriptorSet(phase, (GEOM_QUEUE)queue);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        WriteGeomBatchingDescriptorSet((GEOM_QUEUE)queue);
     }
 }
 
 
-static void WriteGeomDrawCmdGenDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
+static void WriteGeomDrawCmdGenDescriptorSet(GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1 : DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1 : DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2;
+            setID = DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL;
             break;
     }
 
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffers[phase][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]);
 
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdQueueBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdQueueBuffer[queue]);
 }
 
 
 static void WriteGeomDrawCmdGenDescriptorSet()
 {
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteGeomDrawCmdGenDescriptorSet(phase, (GEOM_QUEUE)queue);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        WriteGeomDrawCmdGenDescriptorSet((GEOM_QUEUE)queue);
     }
 }
 
 
-static void WriteZPassDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
+static void WriteZPassDescriptorSet(GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_OPAQUE_PHASE_1 : DESC_SET_ID_DEPTH_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_AKILL_PHASE_1 : DESC_SET_ID_DEPTH_AKILL_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_AKILL;
             break;
     }
 
-    s_descriptorBuffer.WriteDescriptor(setID, ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
 }
 
 
 static void WriteZPassDescriptorSet()
 {
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteZPassDescriptorSet(phase, (GEOM_QUEUE)queue);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        WriteZPassDescriptorSet((GEOM_QUEUE)queue);
     }
 }
 
@@ -5047,32 +4950,29 @@ static void WriteCSMRenderDescriptorSet()
 }
 
 
-static void WriteGBufferDescriptorSet(uint32_t phase, GEOM_QUEUE queue)
+static void WriteGBufferDescriptorSet(GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_GBUFFER_OPAQUE_PHASE_1 : DESC_SET_ID_GBUFFER_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_GBUFFER_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_GBUFFER_AKILL_PHASE_1 : DESC_SET_ID_GBUFFER_AKILL_PHASE_2;
+            setID = DESC_SET_ID_GBUFFER_AKILL;
             break;
     }   
 
-    s_descriptorBuffer.WriteDescriptor(setID, GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffers[phase][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
 }
 
 
 static void WriteGBufferDescriptorSet()
 {
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteGBufferDescriptorSet(phase, (GEOM_QUEUE)queue);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        WriteGBufferDescriptorSet((GEOM_QUEUE)queue);
     }
 }
 
@@ -5958,6 +5858,9 @@ static void LoadScene(const fs::path& filepath)
 
     s_mainCamera.Update();
 
+    s_mainCamViewProjMatrPrev = s_mainCamera.GetViewProjMatrix();
+    s_fixedCamCullViewProjMatrPrev = s_mainCamViewProjMatrPrev;
+
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", filepath.filename().string().c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
@@ -6005,9 +5908,11 @@ void UpdateGPUCommonConstBuffer()
     if (s_cullingTestMode) {
         constBuff.CULLING_CAMERA_FRUSTUM = CopyCPUFrustumToGPU(s_fixedCamCullFrustum);
         constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCamCullViewProjMatr;
+        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_fixedCamCullViewProjMatrPrev;
     } else {
         constBuff.CULLING_CAMERA_FRUSTUM = frustumGPU;
         constBuff.CULLING_VIEW_PROJ_MATRIX = viewProjMatrix;
+        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_mainCamViewProjMatrPrev;
     }
     
     constBuff.SCREEN_SIZE.x = static_cast<float>(s_pWnd->GetWidth());
@@ -6098,6 +6003,11 @@ static void ResizeVkSwapchain(eng::Window& window)
 static void UpdateMainCamera()
 {
     const float moveDist = glm::length(s_mainCameraVel);
+
+    if (!s_cullingTestMode) {
+        s_mainCamViewProjMatrPrev = s_mainCamera.GetViewProjMatrix();
+        s_fixedCamCullViewProjMatrPrev = s_mainCamViewProjMatrPrev;
+    }
 
     if (!math::IsZero(moveDist)) {
         const glm::float3 moveDir = glm::normalize(s_mainCamera.GetRotation() * (s_mainCameraVel / moveDist));
@@ -6297,7 +6207,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
         const uint32_t sizeX = COMMON_PREFILTERED_ENV_MAP_SIZE.x >> mip;
         const uint32_t sizeY = COMMON_PREFILTERED_ENV_MAP_SIZE.y >> mip;
 
-        cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6U);
+        cmdBuffer.CmdDispatch((uint32_t)ceil(sizeX / 32.f), (uint32_t)ceil(sizeY / 32.f), 6u);
     }
 
     cmdBuffer
@@ -6346,48 +6256,41 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
-    for (uint32_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-            barriers.AddBufferBarrier(s_geomBatchQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-            barriers.AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        barriers.AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        barriers.AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
 
     barriers.Push();
 
-    for (size_t phase = 0; phase < GEOM_CULLING_PHASES_COUNT; ++phase) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            cmdBuffer.CmdFillBuffer(s_visGeomIDQueueSizeBuffers[phase][queue], 0, 0, sizeof(glm::uint));
-            cmdBuffer.CmdFillBuffer(s_geomBatchQueueSizeBuffers[phase][queue], 0, 0, sizeof(glm::uint));
-            cmdBuffer.CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], 0, 0, sizeof(glm::uint));
-        }
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        cmdBuffer.CmdFillBuffer(s_visGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
+        cmdBuffer.CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
+        cmdBuffer.CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
     }
 }
 
 
-static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase)
+static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
+    static constexpr char* markerName = "Prev_Frame_Geom_Vis_ID_Buffer_Pass";
 
-    const PassID pass = phase == 0 ? PASS_ID_GEOM_CULLING_PHASE_1 : PASS_ID_GEOM_CULLING_PHASE_2;
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
+
+    const PassID pass = PASS_ID_GEOM_CULLING;
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        barriers.AddBufferBarrier(s_visGeomIDQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-        barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+        barriers.AddBufferBarrier(s_visGeomIDQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+        barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
-    if (phase == 0) {
-        barriers.AddBufferBarrier(s_geomInstVisFlagsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
-    } else {
-        barriers
-            .AddBufferBarrier(s_geomInstVisFlagsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT)
-            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    }
+    barriers
+        .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     barriers.Push();
 
@@ -6395,7 +6298,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase)
 
     cmdBuffer.CmdBindPSO(pso);
     
-    const DescSetID passDescID = phase == 0 ? DESC_SET_ID_GEOM_CULLING_PHASE_1 : DESC_SET_ID_GEOM_CULLING_PHASE_2;
+    const DescSetID passDescID = DESC_SET_ID_GEOM_CULLING;
 
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passDescID, .shaderSetIdx = DESC_SET_PER_DRAW });
@@ -6409,52 +6312,29 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase)
 }
 
 
-static void PrevFrameGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 {
-    static constexpr char* markerName = "Prev_Frame_Geom_Vis_ID_Buffer_Pass";
-
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
-
-    GeomCullingPass(cmdBuffer, 0);
-}
-
-
-static void ThisFrameGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
-{
-    static constexpr char* markerName = "This_Frame_Geom_Vis_ID_Buffer_Pass";
-
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
-
-    GeomCullingPass(cmdBuffer, 1);
-}
-
-
-static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queue)
-{
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_1 : DESC_SET_ID_GEOM_BATCHING_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_GEOM_BATCHING_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_1 : DESC_SET_ID_GEOM_BATCHING_AKILL_PHASE_2;
+            setID = DESC_SET_ID_GEOM_BATCHING_AKILL;
             break;
     }
 
     cmdBuffer
         .BeginBarrierList()
-            .AddBufferBarrier(s_visGeomIDQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
-            .AddBufferBarrier(s_visGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
-            .AddBufferBarrier(s_geomBatchQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-            .AddBufferBarrier(s_geomBatchQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-            .AddBufferBarrier(s_sortedVisGeomIDQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
-            .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_visGeomIDQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+            .AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+            .AddBufferBarrier(s_geomBatchQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_sortedVisGeomIDQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
         .Push();
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_BATCHING];
@@ -6471,77 +6351,51 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUE
 }
 
 
-static void PrevFrameVisOccludersBatchingPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
 {
     {
-        static constexpr char* markerName = "Prev_Frame_Vis_Occluders_Batching_Pass";
+        static constexpr char* markerName = "Geom_Batching_Pass";
 
         ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, markerName);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::LightSteelBlue1);
 
         {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Prev_Frame_Vis_Occluders_Batching_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Prev_Frame_Vis_Occluders_Batching_Pass_Opaque", eng::ProfileColor::LightSteelBlue1);
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Geom_Batching_Pass_Opaque");
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Batching_Pass_Opaque", eng::ProfileColor::LightSteelBlue1);
     
-            GeomBatchingPass(cmdBuffer, 0, GEOM_QUEUE_OPAQUE);
+            GeomBatchingPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
         }
     
         {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Prev_Frame_Vis_Occluders_Batching_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Prev_Frame_Vis_Occluders_Batching_Pass_AKill", eng::ProfileColor::LightSteelBlue1);
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Geom_Batching_Pass_AKill");
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Batching_Pass_AKill", eng::ProfileColor::LightSteelBlue1);
     
-            GeomBatchingPass(cmdBuffer, 0, GEOM_QUEUE_AKILL);
+            GeomBatchingPass(cmdBuffer, GEOM_QUEUE_AKILL);
         }
     }
 }
 
 
-static void ThisFrameVisGeometryBatchingPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 {
-    {
-        static constexpr char* markerName = "This_Frame_Vis_Geometry_Batching_Pass";
-
-        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, markerName);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::LightSteelBlue1);
-
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "This_Frame_Vis_Geometry_Batching_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "This_Frame_Vis_Geometry_Batching_Pass_Opaque", eng::ProfileColor::LightSteelBlue1);
-    
-            GeomBatchingPass(cmdBuffer, 1, GEOM_QUEUE_OPAQUE);
-        }
-    
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "This_Frame_Vis_Geometry_Batching_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "This_Frame_Vis_Geometry_Batching_Pass_AKill", eng::ProfileColor::LightSteelBlue1);
-    
-            GeomBatchingPass(cmdBuffer, 1, GEOM_QUEUE_AKILL);
-        }
-    }
-}
-
-
-static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queue)
-{
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_1 : DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_GEOM_DRAW_CMD_GEN_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_1 : DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL_PHASE_2;
+            setID = DESC_SET_ID_GEOM_DRAW_CMD_GEN_AKILL;
             break;
     }
 
     cmdBuffer
         .BeginBarrierList()
-            .AddBufferBarrier(s_geomBatchQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
-            .AddBufferBarrier(s_geomBatchQueueSizeBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
-            .AddBufferBarrier(s_geomDrawCmdQueueBuffers[phase][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(s_geomBatchQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+            .AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+            .AddBufferBarrier(s_geomDrawCmdQueueBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
         .Push();
 
     vkn::PSO& pso = s_PSOs[PASS_ID_GEOM_DRAW_CMD_GEN];
@@ -6558,102 +6412,65 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
 }
 
 
-static void PrevFrameOccludersDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 {
     {
-        static constexpr char* markerName = "Prev_Frame_Occluders_Draw_Cmd_Gen_Pass";
+        static constexpr char* markerName = "Geom_Draw_Cmd_Gen_Pass";
 
         ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, markerName);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::ForestGreen);
 
         {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Prev_Frame_Occluders_Draw_Cmd_Gen_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Prev_Frame_Occluders_Draw_Cmd_Gen_Pass_Opaque", eng::ProfileColor::ForestGreen);
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Geom_Draw_Cmd_Gen_Pass_Opaque");
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Draw_Cmd_Gen_Pass_Opaque", eng::ProfileColor::ForestGreen);
     
-            GeomDrawCmdGenPass(cmdBuffer, 0, GEOM_QUEUE_OPAQUE);
+            GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
         }
     
         {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Prev_Frame_Occluders_Draw_Cmd_Gen_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Prev_Frame_Occluders_Draw_Cmd_Gen_Pass_AKill", eng::ProfileColor::ForestGreen);
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Geom_Draw_Cmd_Gen_Pass_AKill");
+            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Draw_Cmd_Gen_Pass_AKill", eng::ProfileColor::ForestGreen);
     
-            GeomDrawCmdGenPass(cmdBuffer, 0, GEOM_QUEUE_AKILL);
+            GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_AKILL);
         }
     }
 }
 
 
-static void ThisFrameGeometryDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    {
-        static constexpr char* markerName = "This_Frame_Geometry_Draw_Cmd_Gen_Pass";
-
-        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, markerName);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::ForestGreen);
-
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "This_Frame_Geometry_Draw_Cmd_Gen_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "This_Frame_Geometry_Draw_Cmd_Gen_Pass_Opaque", eng::ProfileColor::ForestGreen);
-    
-            GeomDrawCmdGenPass(cmdBuffer, 1, GEOM_QUEUE_OPAQUE);
-        }
-    
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "This_Frame_Geometry_Draw_Cmd_Gen_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "This_Frame_Geometry_Draw_Cmd_Gen_Pass_AKill", eng::ProfileColor::ForestGreen);
-    
-            GeomDrawCmdGenPass(cmdBuffer, 1, GEOM_QUEUE_AKILL);
-        }
-    }
-}
-
-
-static void PrevFrameOccludersCullingPass(vkn::CmdBuffer& cmdBuffer)
-{
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DodgerBlue1, "Prev_Frame_Occluders_Culling_Pass");
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Prev_Frame_Occluders_Culling_Pass", eng::ProfileColor::DodgerBlue1);
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DodgerBlue1, "Geom_Culling_Pass");
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass", eng::ProfileColor::DodgerBlue1);
 
     GeomCullingClearCounters(cmdBuffer);
 
-    PrevFrameGeomVisIDBufferPass(cmdBuffer);
-    PrevFrameVisOccludersBatchingPass(cmdBuffer);
-    PrevFrameOccludersDrawCmdGenPass(cmdBuffer);
+    GeomVisIDBufferPass(cmdBuffer);
+    GeomBatchingPass(cmdBuffer);
+    GeomDrawCmdGenPass(cmdBuffer);
 }
 
 
-static void ThisFrameGeometryCullingPass(vkn::CmdBuffer& cmdBuffer)
+void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 {
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DodgerBlue1, "This_Frame_Geometry_Culling_Pass");
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "This_Frame_Geometry_Culling_Pass", eng::ProfileColor::DodgerBlue1);
-
-    ThisFrameGeomVisIDBufferPass(cmdBuffer);
-    ThisFrameVisGeometryBatchingPass(cmdBuffer);
-    ThisFrameGeometryDrawCmdGenPass(cmdBuffer);
-}
-
-
-void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queue)
-{
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_OPAQUE_PHASE_1 : DESC_SET_ID_DEPTH_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_AKILL_PHASE_1 : DESC_SET_ID_DEPTH_AKILL_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_AKILL;
             break;
     }
     
     const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
-    const bool needClearDepth = setID == DESC_SET_ID_DEPTH_OPAQUE_PHASE_1;
+    const bool needClearDepth = setID == DESC_SET_ID_DEPTH_OPAQUE;
 
-    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffers[phase][queue];
-    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffers[phase][queue];
-    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffers[phase][queue];
+    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
+    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
+    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
 
     cmdBuffer
         .BeginBarrierList()
@@ -6706,9 +6523,9 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queu
 }
 
 
-void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
+void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passLabelName = "Prev_Frame_Occluders_Depth_Pass";
+    static constexpr const char* passLabelName = "Geom_Depth_Pass";
 
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
@@ -6718,50 +6535,18 @@ void PrevFrameOccludersDepthPass(vkn::CmdBuffer& cmdBuffer)
 #endif
 
     {
-        static constexpr const char* localPassLabelName = "Prev_Frame_Occluders_Depth_Pass_Opaque";
-
-        ENG_PROFILE_SCOPED_MARKER_C("localPassLabelName", eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, 0, GEOM_QUEUE_OPAQUE);
-    }
-    {
-        static constexpr const char* localPassLabelName = "Prev_Frame_Occluders_Depth_Pass_AKill";
+        static constexpr const char* localPassLabelName = "Geom_Depth_Pass_Opaque";
 
         ENG_PROFILE_SCOPED_MARKER_C(localPassLabelName, eng::ProfileColor::Grey51);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, 0, GEOM_QUEUE_AKILL);
+        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_OPAQUE);
     }
-
-#ifdef ENG_BUILD_DEBUG
-    SetWireframeMode(cmdBuffer, false);
-#endif
-}
-
-
-void ThisFrameGeometryDepthPass(vkn::CmdBuffer& cmdBuffer)
-{
-    static constexpr const char* passLabelName = "This_Frame_Geom_Depth_Pass";
-
-    ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
-
-#ifdef ENG_BUILD_DEBUG
-    SetWireframeMode(cmdBuffer, s_geomWireframeMode);
-#endif
-
     {
-        static constexpr const char* localPassLabelName = "This_Frame_Geom_Depth_Pass_Opaque";
+        static constexpr const char* localPassLabelName = "Geom_Depth_Pass_AKill";
 
         ENG_PROFILE_SCOPED_MARKER_C(localPassLabelName, eng::ProfileColor::Grey51);
         ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, 1, GEOM_QUEUE_OPAQUE);
-    }
-    {
-        static constexpr const char* localPassLabelName = "This_Frame_Geom_Depth_Pass_AKill";
-
-        ENG_PROFILE_SCOPED_MARKER_C(localPassLabelName, eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, 1, GEOM_QUEUE_AKILL);
+        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -6788,10 +6573,19 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
-            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+            .AddTextureBarrier(
+                s_depthRT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddTextureBarrier(
+                s_HZB,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0, 1)
         .Push();
 
     glm::uvec2 srcMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
@@ -6851,13 +6645,7 @@ void DepthPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::Grey80, markerName);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::Grey80);
 
-    PrevFrameOccludersCullingPass(cmdBuffer);
-    PrevFrameOccludersDepthPass(cmdBuffer);
-
-    HZBGeneratePass(cmdBuffer);
-
-    ThisFrameGeometryCullingPass(cmdBuffer);
-    ThisFrameGeometryDepthPass(cmdBuffer);
+    GeomDepthPass(cmdBuffer);
 }
 
 
@@ -7195,24 +6983,22 @@ static void CSMPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
 
-    CSMGeometryCullingPass(cmdBuffer);
     CSMRenderPass(cmdBuffer);
 }
 
 
-static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_QUEUE queue)
+static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 {
-    CORE_ASSERT(phase < GEOM_CULLING_PHASES_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DescSetID setID;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_OPAQUE_PHASE_1 : DESC_SET_ID_DEPTH_OPAQUE_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_OPAQUE;
             break;
         case GEOM_QUEUE_AKILL:
-            setID = phase == 0 ? DESC_SET_ID_DEPTH_AKILL_PHASE_1 : DESC_SET_ID_DEPTH_AKILL_PHASE_2;
+            setID = DESC_SET_ID_DEPTH_AKILL;
             break;
     }
 
@@ -7228,9 +7014,9 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
     barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffers[phase][queue];
-    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffers[phase][queue];
-    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffers[phase][queue];
+    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
+    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
+    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
 
     barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
     barrierList.AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
@@ -7248,7 +7034,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, uint32_t phase, GEOM_Q
 
     std::array<vkn::RenderAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
 
-    const bool needClearColorAttachments = phase == 0 && queue == GEOM_QUEUE_OPAQUE;
+    const bool needClearColorAttachments = queue == GEOM_QUEUE_OPAQUE;
 
     for (size_t i = 0; i < colorAttachments.size(); ++i) {
         vkn::RenderAttachmentInfo& attachment = colorAttachments[i];
@@ -7293,37 +7079,15 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 #endif
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Prev_Frame_Occluders_Pass", eng::ProfileColor::ForestGreen);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Prev_Frame_Occluders_Pass", eng::ProfileColor::ForestGreen);
-
-        {
-            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Prev_Frame_Occluders_Pass_Opaque", eng::ProfileColor::ForestGreen);
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Prev_Frame_Occluders_Pass_Opaque", eng::ProfileColor::ForestGreen);
-            RenderPass_GBuffer(cmdBuffer, 0, GEOM_QUEUE_OPAQUE);
-        }
-
-        {
-            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Prev_Frame_Occluders_Pass_AKill", eng::ProfileColor::ForestGreen);
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Prev_Frame_Occluders_Pass_AKill", eng::ProfileColor::ForestGreen);
-            RenderPass_GBuffer(cmdBuffer, 0, GEOM_QUEUE_AKILL);
-        }
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
+        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_OPAQUE);
     }
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_This_Frame_Geometry_Pass", eng::ProfileColor::ForestGreen);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_This_Frame_Geometry_Pass", eng::ProfileColor::ForestGreen);
-
-        {
-            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_This_Frame_Geometry_Pass_Opaque", eng::ProfileColor::ForestGreen);
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_This_Frame_Geometry_Pass_Opaque", eng::ProfileColor::ForestGreen);
-            RenderPass_GBuffer(cmdBuffer, 1, GEOM_QUEUE_OPAQUE);
-        }
-        
-        {
-            ENG_PROFILE_SCOPED_MARKER_C("GBuffer_This_Frame_Geometry_Pass_AKill", eng::ProfileColor::ForestGreen);
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_This_Frame_Geometry_Pass_AKill", eng::ProfileColor::ForestGreen);
-            RenderPass_GBuffer(cmdBuffer, 1, GEOM_QUEUE_AKILL);
-        }
+        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_AKill", eng::ProfileColor::ForestGreen);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", eng::ProfileColor::ForestGreen);
+        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 
 
@@ -8248,9 +8012,15 @@ static void RenderScene()
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
+        HZBGeneratePass(cmdBuffer);
+        GeomCullingPass(cmdBuffer);
+
         DepthPass(cmdBuffer);
 
-        CSMPass(cmdBuffer);
+        if (s_isCSMEnabled) {
+            CSMGeometryCullingPass(cmdBuffer);
+            CSMPass(cmdBuffer);
+        }
 
         GBufferRenderPass(cmdBuffer);
         DeferredLightingPass(cmdBuffer);

@@ -43,7 +43,7 @@ namespace eng
     }
 
 
-    void LogInternal(FILE* pStream, LogLevel level, std::string_view file, uint32_t line, std::string_view system, std::string_view fmt, ...) noexcept
+    void LogInternal(FILE* pStream, LogLevel level, std::string_view file, std::string_view function, uint32_t line, std::string_view system, std::string_view fmt, ...) noexcept
     {
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
@@ -84,7 +84,7 @@ namespace eng
         #endif
         va_end(args);
 
-        fprintf_s(pStream, " (%s:%u)\n", file.data(), line);
+        fprintf_s(pStream, " (File: %s; Function: %s; Line: %u)\n", file.data(), function.data(), line);
     }
 }
 #else

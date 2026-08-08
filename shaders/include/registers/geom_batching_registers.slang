@@ -2,7 +2,7 @@
 #define GEOM_BATCHING_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
 
 struct GEOM_BATCH_PER_DRAW_DATA

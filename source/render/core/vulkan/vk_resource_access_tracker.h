@@ -57,6 +57,7 @@ namespace vkn
             VkImageLayout dstLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask);
 
         bool CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const;
+        bool CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount, VkImageLayout layout) const;
 
         const State& GetState(uint32_t layer, uint32_t mip) const;
 

@@ -122,6 +122,13 @@ namespace vkn
 
         // Check if mips from baseMip to baseMip + mipCount - 1 in layers from baseLayer to baseLayer + layerCount - 1 have same layout
         bool CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const;
+        // Check if mips from baseMip to baseMip + mipCount - 1 in layers from baseLayer to baseLayer + layerCount - 1 have same layout - "layout"
+        bool CheckLayoutConsistency(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount, VkImageLayout layout) const;
+
+        bool IsColor() const;
+        bool IsDepth() const;
+        bool IsStencil() const;
+        bool IsDepthStencil() const;
 
         Device& GetDevice() const;
 

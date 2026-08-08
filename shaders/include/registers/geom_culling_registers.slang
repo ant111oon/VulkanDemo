@@ -2,7 +2,7 @@
 #define GEOM_CULLING_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
 
 struct GEOM_CULLING_PER_DRAW_DATA
@@ -17,7 +17,5 @@ struct GEOM_CULLING_PER_DRAW_DATA
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];
 [vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
-
-[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_FLAGS_UAV;
 
 #endif

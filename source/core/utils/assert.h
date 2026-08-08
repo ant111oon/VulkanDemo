@@ -3,6 +3,7 @@
 #include "log.h" 
 
 #include <cstdint>
+#include <string_view>
 
 
 #ifdef ENG_BUILD_DEBUG
@@ -12,15 +13,15 @@
 
 #ifdef ENG_ASSERT_ENABLED
     template <typename... Args>
-    inline void AssertImpl(const char* file, uint32_t line, const char* system, const char* fmt, Args&&... args) noexcept
+    inline void AssertImpl(std::string_view file, std::string_view function, uint32_t line, std::string_view system, std::string_view fmt, Args&&... args) noexcept
     {
-        Log(stderr, eng::LogLevel::ERROR, file, line, system, fmt, std::forward<Args>(args)...);
+        Log(stderr, eng::LogLevel::ERROR, file, function, line, system, fmt, std::forward<Args>(args)...);
         ENG_DEBUG_BREAK();
     }
 
-    #define ENG_ASSERT_MSG(COND, SYSTEM, FMT, ...)                      \
-        if (!(COND)) {                                                  \
-            AssertImpl(__FILE__, __LINE__, SYSTEM, FMT, __VA_ARGS__);   \
+    #define ENG_ASSERT_MSG(COND, SYSTEM, FMT, ...)                                  \
+        if (!(COND)) {                                                              \
+            AssertImpl(__FILE__, __FUNCTION__, __LINE__, SYSTEM, FMT, __VA_ARGS__); \
         }
 
     #define ENG_ASSERT_SYSTEM(COND, SYSTEM) ENG_ASSERT_MSG(COND, SYSTEM, #COND)

@@ -5,40 +5,21 @@
 #include "registers/common_registers.slang"
 #include "registers/geom_culling_registers.slang"
 
-#define FRUSTUM_CULLING_VIEW_PROJ_MATR COMMON_CB.CULLING_VIEW_PROJ_MATRIX
 #include "common/math/frustum_culling.slang"
 
 #define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE)
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
-#define HZB_CULLING_VIEW_PROJ_MATR  FRUSTUM_CULLING_VIEW_PROJ_MATR
+#define HZB_CULLING_VIEW_PROJ_MATR  COMMON_CULLING_VIEW_PROJ_MATRIX_PREV
 #define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #include "common/math/hzb_culling.slang"
-
-
-enum GEOM_CULLING_PHASE
-{
-    PHASE_1,
-    PHASE_2
-}
 
 
 groupshared uint GROUP_VIS_ID_QUEUE_SIZES[GEOM_QUEUE_COUNT];
 groupshared uint GROUP_VIS_ID_QUEUE_OFFSETS[GEOM_QUEUE_COUNT];
 
 
-namespace utils
-{
-    void GeomCullingGetInstVisBitBatchAndLocalID(in uint instID, out uint batchID, out uint localID)
-    {
-        static const uint VIS_FLAGS_BATCH_SIZE_BITS = sizeof(uint) * 8;
-
-        batchID = instID / (VIS_FLAGS_BATCH_SIZE_BITS);
-        localID = instID % (VIS_FLAGS_BATCH_SIZE_BITS);
-    }
-}
-
-bool GeomCullingVisibility<let PHASE : GEOM_CULLING_PHASE>(in AABB aabb)
+bool GeomCullingVisibility(in AABB aabb)
 {
     if (COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED) {
         if (!Frustum_Visibility(COMMON_CULLING_CAMERA_FRUSTUM, aabb)) {
@@ -46,44 +27,13 @@ bool GeomCullingVisibility<let PHASE : GEOM_CULLING_PHASE>(in AABB aabb)
         }
     }
 
-    if (PHASE == GEOM_CULLING_PHASE::PHASE_2) {
-        if (COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED) {
-            SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
-            sbox.Saturate();
-
-            if (!HZB_Visibility(sbox)) {
-                return false;
-            }
+    if (COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED) {
+        if (!HZB_Visibility(aabb)) {
+            return false;
         }
     }
     
     return true; 
-}
-
-
-bool GeomCullingTestInstVisFlag(in uint instID)
-{
-    uint batchID, localID;
-    utils::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
-
-    const uint mask = 1u << localID;
-
-    return IS_FLAG_SET(GEOM_CULL_VIS_FLAGS_UAV[batchID], mask);
-}
-
-
-void GeomCullingWriteVisFlag(in uint instID, bool isVisible)
-{
-    uint batchID, localID;
-    utils::GeomCullingGetInstVisBitBatchAndLocalID(instID, batchID, localID);
-
-    const uint mask = 1u << localID;
-
-    if (isVisible) {
-        InterlockedOr(GEOM_CULL_VIS_FLAGS_UAV[batchID], mask);
-    } else {
-        InterlockedAnd(GEOM_CULL_VIS_FLAGS_UAV[batchID], ~mask);
-    }
 }
 
 
@@ -102,10 +52,9 @@ uint GeomCullingGetQueueMask(in COMMON_INST inst)
     return mask;
 }
 
-
-void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint Gid, in uint GI, in uint DTid)
+void ExecuteGeomCulling(in uint Gid, in uint GI, in uint DTid)
 {
-    if (GI < GEOM_QUEUE_COUNT) {
+    if (GI < GEOM_QUEUE::COUNT) {
         GROUP_VIS_ID_QUEUE_SIZES[GI] = 0;
         GROUP_VIS_ID_QUEUE_OFFSETS[GI] = 0;
     }
@@ -115,55 +64,43 @@ void ExecuteGeomCulling<let PHASE : GEOM_CULLING_PHASE>(in uint Gid, in uint GI,
     const uint instID = DTid;
 
     const bool isValidInstID = instID < COMMON_INST_COUNT;
-    const bool wasVisibleInPrevFrame = isValidInstID && GeomCullingTestInstVisFlag(instID);
 
-    uint queueLocalOffsets[GEOM_QUEUE_COUNT];
+    uint queueLocalOffsets[GEOM_QUEUE::COUNT];
 
-    [unroll]
-    for (uint i = 0; i < GEOM_QUEUE_COUNT; ++i) {
-        queueLocalOffsets[i] = ~0u;
+    COMMON_INST inst;
+    bool isVisible = false;
+
+    if (isValidInstID) {
+        inst = COMMON_INST_BUFFER[instID];
+        isVisible = GeomCullingVisibility(inst.AABB_WCS);
     }
 
-    bool shouldEnqueue = false;
-
-    if ((PHASE == GEOM_CULLING_PHASE::PHASE_1 && wasVisibleInPrevFrame) ||
-        (PHASE == GEOM_CULLING_PHASE::PHASE_2 && isValidInstID)
-    ) {
-        const COMMON_INST inst = COMMON_INST_BUFFER[instID];
-        const bool isVisible = GeomCullingVisibility<PHASE>(inst.AABB_WCS);
-
-        if (PHASE == GEOM_CULLING_PHASE::PHASE_1) {
-            shouldEnqueue = isVisible;
-        } else if (PHASE == GEOM_CULLING_PHASE::PHASE_2) {
-            // Only object that is visible in the current frame
-            // and was not drawn after the first pass should be added to queue in the second pass
-            shouldEnqueue = isVisible && !wasVisibleInPrevFrame;
-
-            GeomCullingWriteVisFlag(instID, isVisible);
+    if (isVisible) {
+        [unroll]
+        for (uint i = 0; i < GEOM_QUEUE::COUNT; ++i) {
+            queueLocalOffsets[i] = ~0u;
         }
 
-        if (shouldEnqueue) {
-            uint queueMask = GeomCullingGetQueueMask(inst);
+        uint queueMask = GeomCullingGetQueueMask(inst);
 
-            while (queueMask != 0) {
-                const uint bit = firstbitlow(queueMask);
-                InterlockedAdd(GROUP_VIS_ID_QUEUE_SIZES[bit], 1u, queueLocalOffsets[bit]);
+        while (queueMask != 0) {
+            const uint bit = firstbitlow(queueMask);
+            InterlockedAdd(GROUP_VIS_ID_QUEUE_SIZES[bit], 1u, queueLocalOffsets[bit]);
 
-                queueMask &= (queueMask - 1u);
-            }
+            queueMask &= (queueMask - 1u);
         }
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (GI < GEOM_QUEUE_COUNT && GROUP_VIS_ID_QUEUE_SIZES[GI] > 0) {
+    if (GI < GEOM_QUEUE::COUNT && GROUP_VIS_ID_QUEUE_SIZES[GI] > 0) {
         InterlockedAdd(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GI][0], GROUP_VIS_ID_QUEUE_SIZES[GI], GROUP_VIS_ID_QUEUE_OFFSETS[GI]);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (shouldEnqueue) {
-        for (uint queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+    if (isVisible) {
+        for (uint queue = 0; queue < GEOM_QUEUE::COUNT; ++queue) {
             if (queueLocalOffsets[queue] != ~0u) {
                 const uint index = GROUP_VIS_ID_QUEUE_OFFSETS[queue] + queueLocalOffsets[queue];
 

@@ -69,7 +69,8 @@ bool HZB_Visibility(in SBOX sbox)
 
 bool HZB_Visibility(in AABB aabb)
 {
-    const SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+    SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+    sbox.Saturate();
 
     return HZB_Visibility(sbox);
 }

@@ -1,9 +1,8 @@
 #include "registers/common_registers.slang"
 #include "registers/csm_registers.slang"
 
-#include "common/geom_structs.slang"
+#include "common/common_geom.slang"
 
-#define FRUSTUM_CULLING_VIEW_PROJ_MATR SM_CASCADE_VIEW_PROJ_MATRIX
 #include "common/math/frustum_culling.slang"
 
 #include "common/csm_incl.slang"
