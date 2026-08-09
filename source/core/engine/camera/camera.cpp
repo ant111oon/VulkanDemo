@@ -22,33 +22,14 @@ namespace eng
 
     void Camera::Destroy() noexcept
     {
-        m_matViewProj = M3D_MAT4X4_IDENTITY;
-        m_matProj     = M3D_MAT4X4_IDENTITY;
-        m_matView     = M3D_MAT4X4_IDENTITY;
-
-        m_invMatViewProj = M3D_MAT4X4_IDENTITY;
-        m_invMatProj     = M3D_MAT4X4_IDENTITY;
-        m_invMatView     = M3D_MAT4X4_IDENTITY;
-        
-        m_rotation = M3D_QUAT_IDENTITY;
-        m_position = ZEROF3;
-        
-        m_fovY = 0.f;
-        m_aspectRatio = 0.f;
-        
-        m_left = 0.f;
-        m_right = 0.f;
-        m_top = 0.f;
-        m_bottom = 0.f;
-        
-        m_zNear = 0.f;
-        m_zFar = 0.f;
+        m_currState = {};
+        m_prevState = {};
     }
 
 
     void Camera::SetPerspProjection(float fovY, float aspectRatio, float zNear, float zFar) noexcept
     {
-        m_flags.set(FLAG_IS_ORTHO_PROJ, false);
+        m_currState.flags.set(FLAG_IS_ORTHO_PROJ, false);
 
         SetFovY(fovY);
         SetAspectRatio(aspectRatio);
@@ -61,7 +42,7 @@ namespace eng
 
     void Camera::SetOrthoProjection(float left, float right, float bottom, float top, float zNear, float zFar) noexcept
     {
-        m_flags.set(FLAG_IS_ORTHO_PROJ, true);
+        m_currState.flags.set(FLAG_IS_ORTHO_PROJ, true);
 
         SetOrthoLeft(left);
         SetOrthoRight(right);
@@ -76,10 +57,10 @@ namespace eng
 
     void Camera::SetFovY(float radians) noexcept
     {
-        if (!math::IsEqual(m_fovY, radians)) {
+        if (!math::IsEqual(m_currState.fovY, radians)) {
             CORE_ASSERT(IsFovValid(radians));
 
-            m_fovY = radians;
+            m_currState.fovY = radians;
             RequestRecalcProjMatrix();
         }
     }
@@ -87,10 +68,10 @@ namespace eng
 
     void Camera::SetAspectRatio(float aspect) noexcept
     {
-        if (!math::IsEqual(m_aspectRatio, aspect)) {
+        if (!math::IsEqual(m_currState.aspectRatio, aspect)) {
             CORE_ASSERT_MSG(aspect > M3D_EPS, "Aspect can't be less or equal to zero");
 
-            m_aspectRatio = aspect;
+            m_currState.aspectRatio = aspect;
             RequestRecalcProjMatrix();
         }
     }
@@ -107,10 +88,10 @@ namespace eng
 
     void Camera::SetZNear(float zNear) noexcept
     {
-        if (!math::IsEqual(m_zNear, zNear)) {
-            CORE_ASSERT_MSG(abs(m_zFar - zNear) > M3D_EPS, "Can't set Z Near equal to Z Far");
+        if (!math::IsEqual(m_currState.zNear, zNear)) {
+            CORE_ASSERT_MSG(abs(m_currState.zFar - zNear) > M3D_EPS, "Can't set Z Near equal to Z Far");
         
-            m_zNear = zNear;
+            m_currState.zNear = zNear;
             RequestRecalcProjMatrix();
         }
     }
@@ -118,10 +99,10 @@ namespace eng
 
     void Camera::SetZFar(float zFar) noexcept
     {
-        if (!math::IsEqual(m_zFar, zFar)) {
-            CORE_ASSERT_MSG(abs(zFar - m_zNear) > M3D_EPS, "Can't set Z Far equal to Z Near");
+        if (!math::IsEqual(m_currState.zFar, zFar)) {
+            CORE_ASSERT_MSG(abs(zFar - m_currState.zNear) > M3D_EPS, "Can't set Z Far equal to Z Near");
         
-            m_zFar = zFar;
+            m_currState.zFar = zFar;
             RequestRecalcProjMatrix();
         }
     }
@@ -136,10 +117,10 @@ namespace eng
 
     void Camera::SetOrthoLeft(float left) noexcept
     {
-        if (!math::IsEqual(m_left, left)) {
-            CORE_ASSERT_MSG(abs(m_right - left) > M3D_EPS, "Can't set left equal to right");
+        if (!math::IsEqual(m_currState.left, left)) {
+            CORE_ASSERT_MSG(abs(m_currState.right - left) > M3D_EPS, "Can't set left equal to right");
         
-            m_left = left;
+            m_currState.left = left;
             RequestRecalcProjMatrix();
         }
     }
@@ -147,10 +128,10 @@ namespace eng
 
     void Camera::SetOrthoRight(float right) noexcept
     {
-        if (!math::IsEqual(m_right, right)) {
-            CORE_ASSERT_MSG(abs(right - m_left) > M3D_EPS, "Can't set right equal to left");
+        if (!math::IsEqual(m_currState.right, right)) {
+            CORE_ASSERT_MSG(abs(right - m_currState.left) > M3D_EPS, "Can't set right equal to left");
         
-            m_right = right;
+            m_currState.right = right;
             RequestRecalcProjMatrix();
         }
     }
@@ -158,10 +139,10 @@ namespace eng
 
     void Camera::SetOrthoTop(float top) noexcept
     {
-        if (!math::IsEqual(m_top, top)) {
-            CORE_ASSERT_MSG(abs(top - m_bottom) > M3D_EPS, "Can't set top equal to bottom");
+        if (!math::IsEqual(m_currState.top, top)) {
+            CORE_ASSERT_MSG(abs(top - m_currState.bottom) > M3D_EPS, "Can't set top equal to bottom");
         
-            m_top = top;
+            m_currState.top = top;
             RequestRecalcProjMatrix();
         }
     }
@@ -169,10 +150,10 @@ namespace eng
 
     void Camera::SetOrthoBottom(float bottom) noexcept
     {
-        if (!math::IsEqual(m_bottom, bottom)) {
-            CORE_ASSERT_MSG(abs(m_top - bottom) > M3D_EPS, "Can't set bottom equal to top");
+        if (!math::IsEqual(m_currState.bottom, bottom)) {
+            CORE_ASSERT_MSG(abs(m_currState.top - bottom) > M3D_EPS, "Can't set bottom equal to top");
         
-            m_bottom = bottom;
+            m_currState.bottom = bottom;
             RequestRecalcProjMatrix();
         }
     }
@@ -181,7 +162,7 @@ namespace eng
     void Camera::Move(const glm::float3& offset) noexcept
     {
         if (!math::IsZero(offset)) {
-            m_position += offset;
+            m_currState.position += offset;
             RequestRecalcViewMatrix();
         }
     }
@@ -192,7 +173,7 @@ namespace eng
         if (!math::IsZero(distance)) {
             CORE_ASSERT_MSG(math::IsNormalized(dir), "Direction must be a normalized vector");
         
-            m_position += dir * distance;
+            m_currState.position += dir * distance;
             RequestRecalcViewMatrix();
         }
     }
@@ -200,9 +181,9 @@ namespace eng
 
     void Camera::SetLookAt(const glm::float3& target, const glm::float3& up) noexcept
     {
-        CORE_ASSERT(!math::IsEqual(m_position, target));
+        CORE_ASSERT(!math::IsEqual(m_currState.position, target));
 
-        const glm::float3 direction = glm::normalize(target - m_position);
+        const glm::float3 direction = glm::normalize(target - m_currState.position);
         CORE_ASSERT(!math::IsEqual(glm::abs(glm::dot(target, up)), 1.f));
 
         SetRotation(glm::quatLookAt(direction, up));
@@ -213,8 +194,8 @@ namespace eng
     {
         CORE_ASSERT_MSG(math::IsNormalized(rotation), "Rotation quaternion must be normalized");
 
-        if (!math::IsEqual(m_rotation, rotation)) {
-            m_rotation = rotation;
+        if (!math::IsEqual(m_currState.rotation, rotation)) {
+            m_currState.rotation = rotation;
             RequestRecalcViewMatrix();
         }
     }
@@ -222,8 +203,8 @@ namespace eng
 
     void Camera::SetPosition(const glm::float3& position) noexcept
     {
-        if (!math::IsEqual(m_position, position)) {
-            m_position = position;
+        if (!math::IsEqual(m_currState.position, position)) {
+            m_currState.position = position;
             RequestRecalcViewMatrix();
         }
     }
@@ -233,6 +214,12 @@ namespace eng
     {
         SetPosition(math::GetTranslation(transform));
         SetRotation(math::GetRotation(transform));
+    }
+
+
+    void Camera::PushPrevState() noexcept
+    {
+        m_prevState = m_currState;
     }
 
 
@@ -264,43 +251,43 @@ namespace eng
     void Camera::RecalcProjMatrix() noexcept
     {
     #if defined(ENG_REVERSED_Z)
-        const float zNear = m_zFar;
-        const float zFar = m_zNear;
+        const float zNear = m_currState.zFar;
+        const float zFar = m_currState.zNear;
     #else
-        const float zNear = m_zNear;
-        const float zFar = m_zFar;
+        const float zNear = m_currState.zNear;
+        const float zFar = m_currState.zFar;
     #endif
 
         if (IsPerspProj()) {
-            m_matProj = glm::perspective(m_fovY, m_aspectRatio, zNear, zFar);
+            m_currState.matProj = glm::perspective(m_currState.fovY, m_currState.aspectRatio, zNear, zFar);
         } else if (IsOrthoProj()) {
-            m_matProj = glm::ortho(m_left, m_right, m_bottom, m_top, zNear, zFar);
+            m_currState.matProj = glm::ortho(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top, zNear, zFar);
         }
 
         #ifdef ENG_GFX_API_VULKAN
-            m_matProj[1][1] *= -1.f;
+            m_currState.matProj[1][1] *= -1.f;
         #endif
 
-        m_invMatProj = glm::inverse(m_matProj);
+        m_currState.invMatProj = glm::inverse(m_currState.matProj);
     }
 
 
     void Camera::RecalcViewMatrix() noexcept
     {
-        m_matView = glm::lookAt(m_position, m_position + GetForwardDir(), GetYDir());
-        m_invMatView = glm::inverse(m_matView);
+        m_currState.matView = glm::lookAt(m_currState.position, m_currState.position + GetForwardDir(), GetYDir());
+        m_currState.invMatView = glm::inverse(m_currState.matView);
     }
 
 
     void Camera::RecalcViewProjMatrix() noexcept
     {
-        m_matViewProj = m_matProj * m_matView;
-        m_invMatViewProj = glm::inverse(m_matViewProj);
+        m_currState.matViewProj = m_currState.matProj * m_currState.matView;
+        m_currState.invMatViewProj = glm::inverse(m_currState.matViewProj);
     }
 
 
     void Camera::RecalcFrustum() noexcept
     {
-        m_frustum.Construct(m_matViewProj);
+        m_currState.frustum.Construct(m_currState.matViewProj);
     }
 }

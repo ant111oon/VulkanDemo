@@ -1363,8 +1363,6 @@ static std::vector<uint8_t> s_shaderCodeBuffer;
 
 static eng::DbgUI s_dbgUI;
 
-static glm::float4x4 s_mainCamViewProjMatrPrev;
-
 static eng::Camera s_mainCamera;
 static glm::float3 s_mainCameraVel = ZEROF3;
 static bool s_mainCameraLoaded = false;
@@ -1372,10 +1370,7 @@ static bool s_mainCameraLoaded = false;
 static std::array<eng::Camera, COMMON_CSM_CASCADE_COUNT> s_csmCameras;
 static std::array<float, COMMON_CSM_CASCADE_COUNT> s_csmCascadeWorldUnitsPerTexel;
 
-static glm::float4x4 s_fixedCamCullViewProjMatr;
-static glm::float4x4 s_fixedCamCullViewProjMatrPrev;
-static glm::float4x4 s_fixedCamCullInvViewProjMatr;
-static math::Frustum s_fixedCamCullFrustum;
+static eng::Camera s_fixedCullCamera;
 
 static std::array<glm::float4x4, COMMON_CSM_CASCADE_COUNT> s_fixedCamCsmInvViewProjMatr;
 
@@ -5858,9 +5853,6 @@ static void LoadScene(const fs::path& filepath)
 
     s_mainCamera.Update();
 
-    s_mainCamViewProjMatrPrev = s_mainCamera.GetViewProjMatrix();
-    s_fixedCamCullViewProjMatrPrev = s_mainCamViewProjMatrPrev;
-
     CORE_LOG_INFO("\"%s\" loading finished: %f ms", filepath.filename().string().c_str(), timer.End().GetDuration<float, std::milli>());
 }
 
@@ -5890,6 +5882,7 @@ void UpdateGPUCommonConstBuffer()
     const glm::float4x4& viewMatrix = s_mainCamera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_mainCamera.GetProjMatrix();
     const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
+    const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
 
     constBuff.VIEW_MATRIX = viewMatrix;
     constBuff.PROJ_MATRIX = projMatrix;
@@ -5906,13 +5899,13 @@ void UpdateGPUCommonConstBuffer()
     constBuff.CAMERA_FRUSTUM = frustumGPU;
 
     if (s_cullingTestMode) {
-        constBuff.CULLING_CAMERA_FRUSTUM = CopyCPUFrustumToGPU(s_fixedCamCullFrustum);
-        constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCamCullViewProjMatr;
-        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_fixedCamCullViewProjMatrPrev;
+        constBuff.CULLING_CAMERA_FRUSTUM = CopyCPUFrustumToGPU(s_fixedCullCamera.GetFrustum());
+        constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCullCamera.GetViewProjMatrix();
+        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_fixedCullCamera.GetViewProjMatrixPrev();
     } else {
         constBuff.CULLING_CAMERA_FRUSTUM = frustumGPU;
         constBuff.CULLING_VIEW_PROJ_MATRIX = viewProjMatrix;
-        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_mainCamViewProjMatrPrev;
+        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = viewProjMatrixPrev;
     }
     
     constBuff.SCREEN_SIZE.x = static_cast<float>(s_pWnd->GetWidth());
@@ -6003,11 +5996,6 @@ static void ResizeVkSwapchain(eng::Window& window)
 static void UpdateMainCamera()
 {
     const float moveDist = glm::length(s_mainCameraVel);
-
-    if (!s_cullingTestMode) {
-        s_mainCamViewProjMatrPrev = s_mainCamera.GetViewProjMatrix();
-        s_fixedCamCullViewProjMatrPrev = s_mainCamViewProjMatrPrev;
-    }
 
     if (!math::IsZero(moveDist)) {
         const glm::float3 moveDir = glm::normalize(s_mainCamera.GetRotation() * (s_mainCameraVel / moveDist));
@@ -6114,8 +6102,8 @@ static void UpdateScene()
     }
 
     if (s_cullingTestMode) {
-        RenderDebugFrustumFilled(s_fixedCamCullInvViewProjMatr, glm::float4(0.5f, 0.5f, 0.5f, 0.35f));
-        RenderDebugFrustumWired(s_fixedCamCullInvViewProjMatr, glm::float4(1.f));
+        RenderDebugFrustumFilled(s_fixedCullCamera.GetInvViewProjMatrix(), glm::float4(0.5f, 0.5f, 0.5f, 0.35f));
+        RenderDebugFrustumWired(s_fixedCullCamera.GetInvViewProjMatrix(), glm::float4(1.f));
     }
 
     if (s_csmTestMode) {
@@ -8166,9 +8154,7 @@ void AppProcessWndEvent(const eng::WndEvent& event)
             s_cullingTestMode = !s_cullingTestMode;
 
             if (s_cullingTestMode) {
-                s_fixedCamCullViewProjMatr = s_mainCamera.GetViewProjMatrix();
-                s_fixedCamCullInvViewProjMatr = s_mainCamera.GetInvViewProjMatrix();
-                s_fixedCamCullFrustum = s_mainCamera.GetFrustum();
+                s_fixedCullCamera = s_mainCamera;
             }
         } else if (keyEvent.key == eng::WndKey::KEY_F7 && keyEvent.IsPressed()) {
             s_csmTestMode = !s_csmTestMode;
@@ -8203,6 +8189,8 @@ void ProcessFrame()
     timer.End().GetDuration<float, std::milli>(s_frameTime).Reset();
 
     s_pWnd->SetTitle("%s | Build Type: %s | CPU: %.3f ms (%.1f FPS)", APP_NAME, APP_BUILD_TYPE_STR, s_frameTime, 1000.f / s_frameTime);
+
+    s_mainCamera.PushPrevState();
 
     s_skipRender = false;
 
