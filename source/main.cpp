@@ -5921,7 +5921,7 @@ void UpdateGPUCommonConstBuffer()
     constBuff.Z_NEAR = s_mainCamera.GetZNear();
     constBuff.Z_FAR = s_mainCamera.GetZFar();
     
-    constBuff.CAM_WPOS = glm::float4(s_mainCamera.GetPosition(), 0.f);
+    constBuff.CAM_WPOS = s_mainCamera.GetPosition();
 
     constBuff.SUN_LIGHT_DIRECTION = SUN_LIGHT_DIR;
     constBuff.SUN_LIGHT_COLOR = glm::packUnorm4x8(ONEF4);
@@ -6274,7 +6274,7 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr char* markerName = "Prev_Frame_Geom_Vis_ID_Buffer_Pass";
+    static constexpr char* markerName = "Geom_Vis_ID_Buffer_Pass";
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
@@ -6477,6 +6477,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
             .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
             .AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
+            .AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
         .Push();
 
@@ -6871,6 +6872,7 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GEOM_QUE
     cmdBuffer
         .BeginBarrierList()
             .AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
+            .AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
             .AddTextureBarrier(s_csmRT, 
                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
@@ -7019,6 +7021,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
     vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
 
     barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+    barrierList.AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
     barrierList.AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
 
     barrierList.Push();    

@@ -5,6 +5,81 @@
 #include "common/math/common.slang"
 
 
+struct PLANE
+{
+    __init()
+    {
+        this.normal = M3D_AXIS_X;
+        this.distance = 0.f;
+    }
+
+    __init(in float3 normal, in float distance)
+    {
+        this.normal = normal;
+        this.distance = distance;
+    }
+
+    float3 normal;
+    float distance;
+};
+
+
+struct FRUSTUM
+{
+    // Must be sync with Frustum::PlaneID in frustum.h
+    enum PLANE_ID
+    {
+        PLANE_LEFT,
+        PLANE_TOP,
+        PLANE_RIGHT,
+        PLANE_BOTTOM,
+        PLANE_NEAR,
+        PLANE_FAR,
+
+        PLANE_COUNT
+    };
+
+    bool IsIntersect(in SPHERE sphere)
+    {
+        for (uint i = 0; i < 6; ++i) {
+            PLANE plane = planes[i];
+
+            if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool IsIntersect(in AABB aabb)
+    {
+        for (uint i = 0; i < 6; ++i) {
+            PLANE plane = planes[i];
+
+            const float3 p = float3(
+                (plane.normal.x >= 0.f) ? aabb.maxx.x : aabb.minn.x,
+                (plane.normal.y >= 0.f) ? aabb.maxx.y : aabb.minn.y,
+                (plane.normal.z >= 0.f) ? aabb.maxx.z : aabb.minn.z
+            );
+
+            if (dot(plane.normal, p) + plane.distance < 0.f) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    PLANE GetPlane(PLANE_ID ID)
+    {
+        return planes[ID];
+    }
+
+    private PLANE planes[6];
+};
+
+
 struct SBOX
 {
     __init()
@@ -181,65 +256,19 @@ struct AABB
         return all(pt >= minn) && all(pt <= maxx);
     }
 
+    bool IntersectsPlane(in PLANE plane)
+    {
+        const float3 center = GetCenter();
+        const float3 size = GetSize();
+
+        const float projectedRadius = dot(abs(plane.normal), size);
+        const float signedDistance = dot(plane.normal, center) + plane.distance;
+
+        return abs(signedDistance) <= projectedRadius;
+    }
+
     float3 minn;
     float3 maxx;
-};
-
-
-struct PLANE
-{
-    __init()
-    {
-        this.normal = M3D_AXIS_X;
-        this.distance = 0.f;
-    }
-
-    __init(in float3 normal, in float distance)
-    {
-        this.normal = normal;
-        this.distance = distance;
-    }
-
-    float3 normal;
-    float distance;
-};
-
-
-struct FRUSTUM
-{
-    bool IsIntersect(in SPHERE sphere)
-    {
-        for (uint i = 0; i < 6; ++i) {
-            PLANE plane = planes[i];
-
-            if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    bool IsIntersect(in AABB aabb)
-    {
-        for (uint i = 0; i < 6; ++i) {
-            PLANE plane = planes[i];
-
-            const float3 p = float3(
-                (plane.normal.x >= 0.f) ? aabb.maxx.x : aabb.minn.x,
-                (plane.normal.y >= 0.f) ? aabb.maxx.y : aabb.minn.y,
-                (plane.normal.z >= 0.f) ? aabb.maxx.z : aabb.minn.z
-            );
-
-            if (dot(plane.normal, p) + plane.distance < 0.f) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    PLANE planes[6];
 };
 
 

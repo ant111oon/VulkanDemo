@@ -21,6 +21,10 @@
     #error Undefined HZB_CULLING_VIEW_PROJ_MATR. Must be defined before hzb_culling.slang include
 #endif
 
+#ifndef HZB_CULLING_VIEW_NEAR_PLANE
+    #error Undefined HZB_CULLING_VIEW_NEAR_PLANE. Must be defined before hzb_culling.slang include
+#endif
+
 
 #include "common/system/sys_constants.slang"
 
@@ -69,6 +73,10 @@ bool HZB_Visibility(in SBOX sbox)
 
 bool HZB_Visibility(in AABB aabb)
 {
+    if (aabb.IntersectsPlane(HZB_CULLING_VIEW_NEAR_PLANE)) {
+        return true;
+    }
+
     SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
     sbox.Saturate();
 
