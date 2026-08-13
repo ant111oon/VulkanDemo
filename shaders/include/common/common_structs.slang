@@ -2,6 +2,7 @@
 #define COMMON_STRUCTS_H
 
 #include "common/math/geom_primitives.slang"
+#include "common/math/bits.slang"
 
 
 static const uint COMMON_MAX_GEOM_LOD_COUNT = 6;
@@ -126,8 +127,8 @@ enum COMMON_GEOM_STREAM_ID
 
 enum COMMON_MATERIAL_FLAGS
 {
-    DOUBLE_SIDED = 0x1,
-    ALPHA_KILL = 0x2,
+    DOUBLE_SIDED = SET_BIT(0),
+    ALPHA_KILL   = SET_BIT(1),
 };
 
 

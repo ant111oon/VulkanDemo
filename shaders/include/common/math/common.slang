@@ -4,9 +4,6 @@
 #include "constants.slang"
 
 
-#define IS_FLAG_SET(VALUE, MASK) (((uint)(VALUE) & (uint)(MASK)) != 0u)
-#define IS_BIT_SET(VALUE, BIT)   IS_FLAG_SET((uint)(VALUE), 1u << (uint)(BIT))
-
 #define M3D_IS_ZERO(x)     IsZero(x)
 #define M3D_IS_EQUAL(l, r) M3D_IS_ZERO((l) - (r))
 

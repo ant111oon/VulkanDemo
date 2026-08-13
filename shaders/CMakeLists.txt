@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required(VERSION 3.8)
 
 project (SHADERS)
 
@@ -31,6 +31,7 @@ endif()
 
 
 set(SHADER_COMPILER $ENV{VULKAN_SDK}/Bin/slangc.exe)
+set(SHADER_DISASSEMBLER $ENV{VULKAN_SDK}/Bin/spirv-dis.exe)
 
 set(SHADER_COMPILER_FLAGS
     -emit-spirv-directly
@@ -38,23 +39,20 @@ set(SHADER_COMPILER_FLAGS
     -fvk-use-entrypoint-name
     -entry main
     -I${SHADERS_INCLUDE_DIR}
+
+    -DENV_API_VULKAN
+
+    $<$<CONFIG:Debug>:-O0$<SEMICOLON>-g$<SEMICOLON>-DENV_DEBUG>
+    $<$<CONFIG:RelWithDebInfo>:-O$<SEMICOLON>-DENV_PROFILE>
+    $<$<CONFIG:Release>:-O$<SEMICOLON>-DENV_RELEASE>
 )
-
-list(APPEND SHADER_COMPILER_FLAGS -DENV_API_VULKAN)
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    list(APPEND SHADER_COMPILER_FLAGS -O0 -g -DENV_DEBUG)
-elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    list(APPEND SHADER_COMPILER_FLAGS -O -DENV_PROFILE)
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    list(APPEND SHADER_COMPILER_FLAGS -O -DENV_RELEASE)
-endif()
 
 if (SHADER_USE_REVERSED_Z)
     list(APPEND SHADER_COMPILER_FLAGS -DENV_REVERSED_Z)
 endif()
 
 message(STATUS "${SHADERS_PROJ_NAME}: COMPILER: ${SHADER_COMPILER}")
+message(STATUS "${SHADERS_PROJ_NAME}: DISASSEMBLER: ${SHADER_DISASSEMBLER}")
 message(STATUS "${SHADERS_PROJ_NAME}: FLAGS: ${SHADER_COMPILER_FLAGS}")
 message(STATUS "${SHADERS_PROJ_NAME}: SOURCE DIR: ${SHADERS_SRC_DIR}")
 message(STATUS "${SHADERS_PROJ_NAME}: INCLUDE DIR: ${SHADERS_INCLUDE_DIR}")
@@ -66,36 +64,87 @@ file(GLOB_RECURSE VS_SHADER_SRC_FILES_LIST ${SHADERS_SRC_DIR}/*.vs.slang)
 file(GLOB_RECURSE PS_SHADER_SRC_FILES_LIST ${SHADERS_SRC_DIR}/*.ps.slang)
 file(GLOB_RECURSE CS_SHADER_SRC_FILES_LIST ${SHADERS_SRC_DIR}/*.cs.slang)
 
-function(compile_shaders SHADER_LIST SHADER_PROFILE OUT_BINARY_LIST)
+function(compile_shaders SHADER_LIST SHADER_PROFILE OUT_BINARY_LIST OUT_DISASM_LIST)
     set(SPIRV_FILES "")
-    
+    set(DISASM_FILES "")
+
     foreach(SHADER_FILE IN LISTS ${SHADER_LIST})
         get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WLE)
+
         set(SPIRV_OUTPUT ${SHADERS_OUTPUT_BIN_DIR}/${SHADER_NAME}.spv)
+        set(SPIRV_DISASM_OUTPUT ${SHADERS_OUTPUT_BIN_DIR}/${SHADER_NAME}.spvasm)
 
         add_custom_command(
             OUTPUT ${SPIRV_OUTPUT}
-            COMMAND ${SHADER_COMPILER} ${SHADER_FILE} ${SHADER_COMPILER_FLAGS} -profile ${SHADER_PROFILE} -o ${SPIRV_OUTPUT}
-            DEPENDS ${SHADER_FILE} ${SHADER_IMPORT_FILES_LIST}
-            COMMENT "${SHADERS_PROJ_NAME}: Compiling ${SPIRV_OUTPUT}"
+            COMMAND
+                ${SHADER_COMPILER}
+                ${SHADER_FILE}
+                ${SHADER_COMPILER_FLAGS}
+                -profile ${SHADER_PROFILE}
+                -o ${SPIRV_OUTPUT}
+            DEPENDS
+                ${SHADER_FILE}
+                ${SHADER_IMPORT_FILES_LIST}
+            COMMENT
+                "${SHADERS_PROJ_NAME}: Compiling ${SPIRV_OUTPUT}"
+            COMMAND_EXPAND_LISTS
+            VERBATIM
+        )
+
+        add_custom_command(
+            OUTPUT ${SPIRV_DISASM_OUTPUT}
+            COMMAND
+                ${SHADER_DISASSEMBLER}
+                ${SPIRV_OUTPUT}
+                -o ${SPIRV_DISASM_OUTPUT}
+            DEPENDS
+                ${SPIRV_OUTPUT}
+            COMMENT
+                "${SHADERS_PROJ_NAME}: Disassembling ${SPIRV_DISASM_OUTPUT}"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
 
         list(APPEND SPIRV_FILES ${SPIRV_OUTPUT})
+        list(APPEND DISASM_FILES ${SPIRV_DISASM_OUTPUT})
     endforeach()
 
     set(${OUT_BINARY_LIST} "${SPIRV_FILES}" PARENT_SCOPE)
+    set(${OUT_DISASM_LIST} "${DISASM_FILES}" PARENT_SCOPE)
 endfunction()
 
 
-compile_shaders(VS_SHADER_SRC_FILES_LIST vs_6_6 VS_SPIRV_BINARY_FILES_LIST)
-compile_shaders(PS_SHADER_SRC_FILES_LIST ps_6_6 PS_SPIRV_BINARY_FILES_LIST)
-compile_shaders(CS_SHADER_SRC_FILES_LIST cs_6_6 CS_SPIRV_BINARY_FILES_LIST)
+compile_shaders(
+    VS_SHADER_SRC_FILES_LIST
+    vs_6_6
+    VS_SPIRV_BINARY_FILES_LIST
+    VS_SPIRV_DISASM_FILES_LIST
+)
+
+compile_shaders(
+    PS_SHADER_SRC_FILES_LIST
+    ps_6_6
+    PS_SPIRV_BINARY_FILES_LIST
+    PS_SPIRV_DISASM_FILES_LIST
+)
+
+compile_shaders(
+    CS_SHADER_SRC_FILES_LIST
+    cs_6_6
+    CS_SPIRV_BINARY_FILES_LIST
+    CS_SPIRV_DISASM_FILES_LIST
+)
 
 
 add_custom_target(${SHADERS_PROJ_NAME} DEPENDS 
     ${SHADER_IMPORT_FILES_LIST}
     ${VS_SPIRV_BINARY_FILES_LIST} 
     ${PS_SPIRV_BINARY_FILES_LIST} 
-    ${CS_SPIRV_BINARY_FILES_LIST} 
+    ${CS_SPIRV_BINARY_FILES_LIST}
+)
+
+target_sources(${SHADERS_PROJ_NAME} PRIVATE
+    $<$<CONFIG:Debug>:${VS_SPIRV_DISASM_FILES_LIST}>
+    $<$<CONFIG:Debug>:${PS_SPIRV_DISASM_FILES_LIST}>
+    $<$<CONFIG:Debug>:${CS_SPIRV_DISASM_FILES_LIST}>
 )

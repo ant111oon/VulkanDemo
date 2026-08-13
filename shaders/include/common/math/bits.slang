@@ -1,5 +1,10 @@
-#ifndef MATH_BITS_PACK_UNPACK_H
-#define MATH_BITS_PACK_UNPACK_H
+#ifndef MATH_BITS_H
+#define MATH_BITS_H
+
+
+#define SET_BIT(BIT)             (1u << (uint)(BIT))
+#define IS_FLAG_SET(VALUE, MASK) (((uint)(VALUE) & (uint)(MASK)) != 0u)
+#define IS_BIT_SET(VALUE, BIT)   IS_FLAG_SET((uint)(VALUE), SET_BIT(BIT))
 
 
 float4 UnpackRGBA8(uint color)

@@ -89,8 +89,8 @@ static const uint COMMON_CSM_CASCADE_COUNT = 3;
 
 enum class COMMON_MATERIAL_FLAGS : glm::uint
 {
-    DOUBLE_SIDED = 0x1,
-    ALPHA_KILL = 0x2,
+    DOUBLE_SIDED = 1u << 0u,
+    ALPHA_KILL   = 1u << 1u,
 };
 
 
@@ -8222,8 +8222,8 @@ int main(int argc, char* argv[])
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    
