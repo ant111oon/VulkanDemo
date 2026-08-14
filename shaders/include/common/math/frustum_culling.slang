@@ -4,7 +4,7 @@
 #include "geom_primitives.slang"
 
 
-bool Frustum_Visibility(in FRUSTUM frustum, in AABB aabb)
+bool Frustum_Visibility(in GPU_Frustum frustum, in GPU_AABB aabb)
 {
     return frustum.IsIntersect(aabb);
 }

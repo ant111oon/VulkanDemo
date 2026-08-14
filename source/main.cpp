@@ -71,16 +71,16 @@ using float4x3 = glm::float4x3;
 using float3x3 = glm::float3x3;
 
 
-struct PLANE
+struct GPU_Plane
 {
     float3 normal;
     float distance;
 };
 
 
-struct FRUSTUM
+struct GPU_Frustum
 {
-    PLANE planes[6];
+    GPU_Plane planes[6];
 };
 
 
@@ -327,7 +327,7 @@ struct COMMON_CSM_PCSS_DATA
 
 struct COMMON_CSM_DATA
 {
-    FRUSTUM VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
+    GPU_Frustum VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
     float4x4 VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
     float4x4 VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
     
@@ -350,8 +350,8 @@ struct COMMON_CSM_DATA
 
 struct COMMON_CB_DATA
 {
-    FRUSTUM CAMERA_FRUSTUM;
-    FRUSTUM CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    GPU_Frustum CAMERA_FRUSTUM;
+    GPU_Frustum CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
 
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
@@ -1783,9 +1783,9 @@ static uint32_t CSMGetBufferIndex(uint32_t cascade, GEOM_QUEUE queue)
 }
 
 
-static FRUSTUM CopyCPUFrustumToGPU(const math::Frustum& cpuFrustum)
+static GPU_Frustum CopyCPUFrustumToGPU(const math::Frustum& cpuFrustum)
 {
-    FRUSTUM gpuFrustum = {};
+    GPU_Frustum gpuFrustum = {};
 
     for (size_t i = 0; i <  M3D_FRUSTUM_PLANE_COUNT; ++i) {
         const math::Plane& srcPlane = cpuFrustum.GetPlane(i);
@@ -5894,16 +5894,16 @@ void UpdateGPUCommonConstBuffer()
 
     const math::Frustum& camFrustum = s_mainCamera.GetFrustum();
 
-    const FRUSTUM frustumGPU = CopyCPUFrustumToGPU(camFrustum);
+    const GPU_Frustum gpuFrustum = CopyCPUFrustumToGPU(camFrustum);
 
-    constBuff.CAMERA_FRUSTUM = frustumGPU;
+    constBuff.CAMERA_FRUSTUM = gpuFrustum;
 
     if (s_cullingTestMode) {
         constBuff.CULLING_CAMERA_FRUSTUM = CopyCPUFrustumToGPU(s_fixedCullCamera.GetFrustum());
         constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCullCamera.GetViewProjMatrix();
         constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_fixedCullCamera.GetViewProjMatrixPrev();
     } else {
-        constBuff.CULLING_CAMERA_FRUSTUM = frustumGPU;
+        constBuff.CULLING_CAMERA_FRUSTUM = gpuFrustum;
         constBuff.CULLING_VIEW_PROJ_MATRIX = viewProjMatrix;
         constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = viewProjMatrixPrev;
     }

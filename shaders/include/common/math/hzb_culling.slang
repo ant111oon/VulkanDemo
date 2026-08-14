@@ -35,7 +35,7 @@
 static const uint HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
 
 
-bool HZB_Visibility(in SBOX sbox)
+bool HZB_Visibility(in GPU_SBox sbox)
 {
     if (any(sbox.minUV >= sbox.maxUV)) {
         return true;
@@ -71,13 +71,13 @@ bool HZB_Visibility(in SBOX sbox)
 }
 
 
-bool HZB_Visibility(in AABB aabb)
+bool HZB_Visibility(in GPU_AABB aabb)
 {
     if (aabb.IntersectsPlane(HZB_CULLING_VIEW_NEAR_PLANE)) {
         return true;
     }
 
-    SBOX sbox = aabb.GetSBOX(HZB_CULLING_VIEW_PROJ_MATR);
+    GPU_SBox sbox = aabb.GetSBox(HZB_CULLING_VIEW_PROJ_MATR);
     sbox.Saturate();
 
     return HZB_Visibility(sbox);

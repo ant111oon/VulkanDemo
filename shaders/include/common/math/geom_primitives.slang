@@ -5,7 +5,7 @@
 #include "common/math/common.slang"
 
 
-struct PLANE
+struct GPU_Plane
 {
     __init()
     {
@@ -24,63 +24,31 @@ struct PLANE
 };
 
 
-struct FRUSTUM
+struct GPU_Sphere
 {
-    // Must be sync with Frustum::PlaneID in frustum.h
-    enum PLANE_ID
+    __init()
     {
-        PLANE_LEFT,
-        PLANE_TOP,
-        PLANE_RIGHT,
-        PLANE_BOTTOM,
-        PLANE_NEAR,
-        PLANE_FAR,
-
-        PLANE_COUNT
-    };
-
-    bool IsIntersect(in SPHERE sphere)
-    {
-        for (uint i = 0; i < 6; ++i) {
-            PLANE plane = planes[i];
-
-            if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
-                return false;
-            }
-        }
-
-        return true;
+        this.position = ZEROF3;
+        this.radius = M3D_EPS;
     }
 
-    bool IsIntersect(in AABB aabb)
+    __init(in float3 position, in float radius)
     {
-        for (uint i = 0; i < 6; ++i) {
-            PLANE plane = planes[i];
-
-            const float3 p = float3(
-                (plane.normal.x >= 0.f) ? aabb.maxx.x : aabb.minn.x,
-                (plane.normal.y >= 0.f) ? aabb.maxx.y : aabb.minn.y,
-                (plane.normal.z >= 0.f) ? aabb.maxx.z : aabb.minn.z
-            );
-
-            if (dot(plane.normal, p) + plane.distance < 0.f) {
-                return false;
-            }
-        }
-
-        return true;
+        this.position = position;
+        this.radius = radius;
     }
 
-    PLANE GetPlane(PLANE_ID ID)
+    float DistanceTo(in float3 pt)
     {
-        return planes[ID];
+        return distance(position, pt) - radius;
     }
 
-    private PLANE planes[6];
+    float3 position;
+    float radius;
 };
 
 
-struct SBOX
+struct GPU_SBox
 {
     __init()
     {
@@ -157,31 +125,7 @@ struct SBOX
 };
 
 
-struct SPHERE
-{
-    __init()
-    {
-        this.position = ZEROF3;
-        this.radius = M3D_EPS;
-    }
-
-    __init(in float3 position, in float radius)
-    {
-        this.position = position;
-        this.radius = radius;
-    }
-
-    float DistanceTo(in float3 pt)
-    {
-        return distance(position, pt) - radius;
-    }
-
-    float3 position;
-    float radius;
-};
-
-
-struct AABB
+struct GPU_AABB
 {
     __init()
     {
@@ -231,12 +175,17 @@ struct AABB
         return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
     }
 
-    SBOX GetSBOX(in float4x4 viewProjMatr)
+    float3 ClosestPoint(in float3 pt)
+    {
+        return clamp(pt, minn, maxx);
+    }
+
+    GPU_SBox GetSBox(in float4x4 viewProjMatr)
     {
         float3 verts[8];
         GetVertices(verts);
 
-        SBOX sbox = SBOX();
+        GPU_SBox sbox = GPU_SBox();
         sbox.BeginUpdate();
 
         for (uint i = 0; i < 8; ++i) {
@@ -256,7 +205,7 @@ struct AABB
         return all(pt >= minn) && all(pt <= maxx);
     }
 
-    bool IntersectsPlane(in PLANE plane)
+    bool IntersectsPlane(in GPU_Plane plane)
     {
         const float3 center = GetCenter();
         const float3 size = GetSize();
@@ -269,6 +218,62 @@ struct AABB
 
     float3 minn;
     float3 maxx;
+};
+
+
+struct GPU_Frustum
+{
+    // Must be sync with Frustum::PlaneID in frustum.h
+    enum PlaneID
+    {
+        PLANE_LEFT,
+        PLANE_TOP,
+        PLANE_RIGHT,
+        PLANE_BOTTOM,
+        PLANE_NEAR,
+        PLANE_FAR,
+
+        PLANE_COUNT
+    };
+
+    bool IsIntersect(in GPU_Sphere sphere)
+    {
+        for (uint i = 0; i < 6; ++i) {
+            GPU_Plane plane = planes[i];
+
+            if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool IsIntersect(in GPU_AABB aabb)
+    {
+        for (uint i = 0; i < 6; ++i) {
+            GPU_Plane plane = planes[i];
+
+            const float3 p = float3(
+                (plane.normal.x >= 0.f) ? aabb.maxx.x : aabb.minn.x,
+                (plane.normal.y >= 0.f) ? aabb.maxx.y : aabb.minn.y,
+                (plane.normal.z >= 0.f) ? aabb.maxx.z : aabb.minn.z
+            );
+
+            if (dot(plane.normal, p) + plane.distance < 0.f) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    GPU_Plane GetPlane(PlaneID ID)
+    {
+        return planes[ID];
+    }
+
+    private GPU_Plane planes[6];
 };
 
 

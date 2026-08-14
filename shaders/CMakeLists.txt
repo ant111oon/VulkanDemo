@@ -143,8 +143,9 @@ add_custom_target(${SHADERS_PROJ_NAME} DEPENDS
     ${CS_SPIRV_BINARY_FILES_LIST}
 )
 
-target_sources(${SHADERS_PROJ_NAME} PRIVATE
-    $<$<CONFIG:Debug>:${VS_SPIRV_DISASM_FILES_LIST}>
-    $<$<CONFIG:Debug>:${PS_SPIRV_DISASM_FILES_LIST}>
-    $<$<CONFIG:Debug>:${CS_SPIRV_DISASM_FILES_LIST}>
-)
+# Enable if you want to disassemble compiled shaders
+# target_sources(${SHADERS_PROJ_NAME} PRIVATE
+#     $<$<CONFIG:Debug>:${VS_SPIRV_DISASM_FILES_LIST}>
+#     $<$<CONFIG:Debug>:${PS_SPIRV_DISASM_FILES_LIST}>
+#     $<$<CONFIG:Debug>:${CS_SPIRV_DISASM_FILES_LIST}>
+# )

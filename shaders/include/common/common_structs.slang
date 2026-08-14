@@ -169,14 +169,14 @@ struct COMMON_MESH_LOD
 
 struct COMMON_MESH
 {
-    property AABB AABB_LCS
+    property GPU_AABB AABB_LCS
     {
         get
         {
             const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).x);
             const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.z));
 
-            return AABB(minn, maxx);
+            return GPU_AABB(minn, maxx);
         }
     }
 
@@ -193,14 +193,14 @@ struct COMMON_MESH
 
 struct COMMON_INST
 {
-    property AABB AABB_WCS
+    property GPU_AABB AABB_WCS
     {
         get
         {
             const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).x);
             const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.z));
 
-            return AABB(minn, maxx);
+            return GPU_AABB(minn, maxx);
         }
     }
 
@@ -231,7 +231,7 @@ struct COMMON_CSM_PCSS_DATA
 
 struct COMMON_CSM_DATA
 {
-    FRUSTUM VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
+    GPU_Frustum VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
     float4x4 VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
     float4x4 VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
     
@@ -254,8 +254,8 @@ struct COMMON_CSM_DATA
 
 struct COMMON_CB_DATA
 {
-    FRUSTUM CAMERA_FRUSTUM;
-    FRUSTUM CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    GPU_Frustum CAMERA_FRUSTUM;
+    GPU_Frustum CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
 
     float4x4 VIEW_MATRIX;
     float4x4 PROJ_MATRIX;
