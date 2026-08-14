@@ -6,7 +6,7 @@
 
 float3 GeomStreamLoadPosition(in uint vertID)
 {
-    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::POSITION];
+    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[GPU_GeomStreamID::POSITION];
 
     const uint2 data = stream.Load<uint2>(vertID * sizeof(uint2));
 
@@ -19,7 +19,7 @@ float3 GeomStreamLoadPosition(in uint vertID)
 
 float3 GeomStreamLoadNormal(in uint vertID)
 {
-    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::NORMAL];
+    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[GPU_GeomStreamID::NORMAL];
 
     const float3 normal = unpackSnorm4x8ToFloat(
         stream.Load<uint>(vertID * sizeof(uint))
@@ -31,7 +31,7 @@ float3 GeomStreamLoadNormal(in uint vertID)
 
 float2 GeomStreamLoadUV(in uint vertID)
 {
-    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::UV];
+    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[GPU_GeomStreamID::UV];
 
     return unpackHalf2x16ToFloat(
         stream.Load<uint>(vertID * sizeof(uint))
@@ -41,7 +41,7 @@ float2 GeomStreamLoadUV(in uint vertID)
 
 float4 GeomStreamLoadTangent(in uint vertID)
 {
-    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[COMMON_GEOM_STREAM_ID::TANGENT];
+    ByteAddressBuffer stream = COMMON_GEOM_STREAMS[GPU_GeomStreamID::TANGENT];
 
     const float4 tangent = unpackSnorm4x8ToFloat(
         stream.Load<uint>(vertID * sizeof(uint))

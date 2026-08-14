@@ -11,8 +11,8 @@ SKYBOX_VS_OUTPUT main(uint vertID : SV_VertexID)
 
     SKYBOX_INPUT_DATA inputData = PrepareSkyboxVSInputData(vertID);
 
-    const float3 viewPos = mul((float3x3)COMMON_CB.VIEW_MATRIX, inputData.position);
-    result.hpos = mul(COMMON_CB.PROJ_MATRIX, float4(viewPos, 1.f));
+    const float3 viewPos = mul((float3x3)COMMON_MAIN_CAM_VIEW_MATRIX, inputData.position);
+    result.hpos = mul(COMMON_MAIN_CAM_PROJ_MATRIX, float4(viewPos, 1.f));
 
 #ifdef ENV_REVERSED_Z
     result.hpos.z = 0.f;

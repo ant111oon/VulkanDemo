@@ -129,7 +129,7 @@ float3 ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir, in floa
 
 float3 GetIndirectDiffuse(in float3 albedo, in float3 normal)
 {
-    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
+    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
 }
 
 
@@ -138,13 +138,13 @@ float3 GetIndirectPrefiltColor(in float3 viewDir, in float3 normal, in float rou
     const float3 reflectDir = reflect(-viewDir, normal);
     const float mip = roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
 }
 
 
 float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 {
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
 }
 
 
@@ -240,7 +240,7 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
 
 float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiver)
 {
-    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
+    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
 
 #ifdef ENV_REVERSED_Z
     return zBlocker < zReceiver ? 1.f : 0.f;
@@ -397,7 +397,7 @@ CSM_PCSS_BLOCKER_SEARCH_RESULT FindCsmPCSSAverageBlocker(in float3 texCoord, in 
     float avgBlocker = 0.f;
     uint blockerCount = 0;
 
-    const SamplerState smp = GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_BORDER);
+    const SamplerState smp = GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_BORDER);
     const uint sampleCount = COMMON_CSM_PCSS_SEARCH_SAMPLES_COUNT;
 
     for (uint i = 0; i < sampleCount; ++i) {
@@ -477,10 +477,10 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
 float CalcCsmFilteredShadow(in float viewZ, in float bias, in float3 texCoord)
 {
 #ifdef ENV_REVERSED_Z
-    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_GREATER);
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(GPU_CommonCmpSamplerID::LINEAR_CLAMP_TO_BORDER_GREATER);
     const float zReceiver = viewZ + bias;
 #else
-    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(COMMON_CMP_SAMPLER_IDX::LINEAR_CLAMP_TO_BORDER_LESS);
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(GPU_CommonCmpSamplerID::LINEAR_CLAMP_TO_BORDER_LESS);
     const float zReceiver = viewZ - bias;
 #endif
 
@@ -490,16 +490,16 @@ float CalcCsmFilteredShadow(in float viewZ, in float bias, in float3 texCoord)
         shadow = CalcCSM_PCSS(cmpSmp, texCoord, zReceiver);
     } else {    
         switch (COMMON_DBG_CSM_PCF_PRESET) {
-            case DBG_CSM_PCF_PRESET::PCF_NONE:
+            case GPU_DbgCsmPCFPreset::NONE:
                 shadow = CalcCsmUnfilteredPCF(texCoord, zReceiver);
                 break;
-            case DBG_CSM_PCF_PRESET::PCF_GRID:
+            case GPU_DbgCsmPCFPreset::GRID:
                 shadow += CalcCsmGridPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_GRID_HALF_SIZE);
                 break;
-            case DBG_CSM_PCF_PRESET::PCF_POISSON_DISK:
+            case GPU_DbgCsmPCFPreset::POISSON_DISK:
                 shadow = CalcCsmPoissonPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED);
                 break;
-            case DBG_CSM_PCF_PRESET::PCF_VOGEL_DISK:
+            case GPU_DbgCsmPCFPreset::VOGEL_DISK:
                 shadow = CalcCsmVogelPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED);
                 break;
             default:
@@ -607,10 +607,10 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
 
     const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
-    const float3 wpos = WPosFromDepth(uv, depth, COMMON_CB.INV_VIEW_MATRIX, COMMON_CB.INV_PROJ_MATRIX);
-    const float3 vpos = (mul(COMMON_CB.VIEW_MATRIX, float4(wpos, 1.f))).xyz;
+    const float3 wpos = WPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_VIEW_MATRIX, COMMON_MAIN_CAM_INV_PROJ_MATRIX);
+    const float3 vpos = mul(COMMON_MAIN_CAM_VIEW_MATRIX, float4(wpos, 1.f)).xyz;
 
-    const float3 V = normalize(COMMON_CAM_WPOS - wpos);
+    const float3 V = normalize(COMMON_MAIN_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
     float3 sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_LIGHT_DIRECTION, COMMON_SUN_LIGHT_COLOR.rgb, F0);

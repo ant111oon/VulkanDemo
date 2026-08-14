@@ -87,124 +87,121 @@ struct GPU_Frustum
 static const uint COMMON_CSM_CASCADE_COUNT = 3;
 
 
-enum class COMMON_MATERIAL_FLAGS : glm::uint
+struct GPU_GeomMaterial
 {
-    DOUBLE_SIDED = 1u << 0u,
-    ALPHA_KILL   = 1u << 1u,
+    float4 albedoMult;
+
+    float3 emissiveMult;
+    float alphaRef;
+
+    float normalScale;
+    float metalnessScale;
+    float roughnessScale;
+    float aoCoef;
+
+    int albedoTexID = -1;
+    int normalTexID = -1;
+    int metalRoughTexID = -1;
+    int aoTexID = -1;
+
+    int emissiveTexID = -1;
+    
+    uint isOpaque : 1;
+    uint isAKill : 1;
+    uint isDoubleSided : 1;
+    
+    uint padding_0 : 29;
+    uint2 padding_1;
 };
 
 
-struct COMMON_MATERIAL
+struct GPU_MeshLOD
 {
-    float4 ALBEDO_MULT;
-
-    float3 EMISSIVE_MULT;
-    float ALPHA_REF;
-
-    float NORMAL_SCALE;
-    float METALNESS_SCALE;
-    float ROUGHNESS_SCALE;
-    float AO_COEF;
-
-    int ALBEDO_TEX_IDX = -1;
-    int NORMAL_TEX_IDX = -1;
-    int MR_TEX_IDX = -1;
-    int AO_TEX_IDX = -1;
-
-    uint2 PADDING;
-    int EMISSIVE_TEX_IDX = -1;
-    uint FLAGS;
+    uint firstIndex;
+    uint indexCount;
 };
 
 
-struct COMMON_MESH_LOD
-{
-    uint FIRST_INDEX;
-    uint INDEX_COUNT;
-};
-
-
-struct COMMON_MESH
+struct GPU_Mesh
 {
     void PackAABB_LCS(const float3& min, const float3& max)
     {
-        AABB_MIN_MAX_LCS_PACKED.x = glm::packHalf2x16(float2(min.x, min.y));
-        AABB_MIN_MAX_LCS_PACKED.y = glm::packHalf2x16(float2(min.z, max.x));
-        AABB_MIN_MAX_LCS_PACKED.z = glm::packHalf2x16(float2(max.y, max.z));
+        aabbMinMaxLcsPacked.x = glm::packHalf2x16(float2(min.x, min.y));
+        aabbMinMaxLcsPacked.y = glm::packHalf2x16(float2(min.z, max.x));
+        aabbMinMaxLcsPacked.z = glm::packHalf2x16(float2(max.y, max.z));
     }
 
     math::AABB GetAABB_LCS() const
     {
         return math::AABB(
-            float3(glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.x), glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.y).x),
-            float3(glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.y).y, glm::unpackHalf2x16(AABB_MIN_MAX_LCS_PACKED.z))
+            float3(glm::unpackHalf2x16(aabbMinMaxLcsPacked.x), glm::unpackHalf2x16(aabbMinMaxLcsPacked.y).x),
+            float3(glm::unpackHalf2x16(aabbMinMaxLcsPacked.y).y, glm::unpackHalf2x16(aabbMinMaxLcsPacked.z))
         );
     }
 
-    uint FIRST_VERTEX;
-    uint VERTEX_COUNT;
+    uint firstVertex;
+    uint vertexCount;
 
-    uint FIRST_LOD; // Index of mesh LOD 0 inside LOD buffer
-    uint LOD_COUNT;
+    uint firstLOD; // Index of mesh LOD 0 inside LOD buffer
+    uint lodCount;
 
-    uint3 AABB_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint  PADDING;
+    uint3 aabbMinMaxLcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint  padding;
 };
 
 
-struct COMMON_INST
+struct GPU_GeomInst
 {
     void PackAABB_WCS(const math::AABB& aabb)
     {
-        AABB_MIN_MAX_WCS_PACKED.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
-        AABB_MIN_MAX_WCS_PACKED.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
-        AABB_MIN_MAX_WCS_PACKED.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
+        aabbMinMaxWcsPacked.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
+        aabbMinMaxWcsPacked.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
+        aabbMinMaxWcsPacked.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
     }
 
     math::AABB GetAABB_WCS() const
     {
-        const float3 minn = float3(glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.x), glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.y).x);
-        const float3 maxx = float3(glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.y).y, glm::unpackHalf2x16(AABB_MIN_MAX_WCS_PACKED.z));
+        const float3 minn = float3(glm::unpackHalf2x16(aabbMinMaxWcsPacked.x), glm::unpackHalf2x16(aabbMinMaxWcsPacked.y).x);
+        const float3 maxx = float3(glm::unpackHalf2x16(aabbMinMaxWcsPacked.y).y, glm::unpackHalf2x16(aabbMinMaxWcsPacked.z));
 
         return math::AABB(minn, maxx);
     }
 
-    float3x4 MATR_WCS;
+    float3x4 matrWCS;
 
-    uint3 AABB_MIN_MAX_WCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint  PADDING_0;
-
-    uint MESH_IDX;
-    uint MATERIAL_IDX;
-    uint2 PADDING_1;
+    uint3 aabbMinMaxWcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint meshID : 16;
+    uint materialID : 16;
 };
 
+static_assert(sizeof(GPU_GeomInst) == 4 * sizeof(uint4));
 
-struct COMMON_CMD_DRAW_INDEXED_INDIRECT
+
+struct GPU_CmdDrawIndexedIndirect
 {
     // NOTE: Don't change order of this variables!!!
-    uint INDEX_COUNT;
-    uint INSTANCE_COUNT;
-    uint FIRST_INDEX;
-    int  VERTEX_OFFSET;
-    uint FIRST_INSTANCE;
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  firstVertex;
+    uint firstInstance;
 };
 
-static_assert(sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT) == sizeof(VkDrawIndexedIndirectCommand));
+static_assert(sizeof(GPU_CmdDrawIndexedIndirect) == sizeof(VkDrawIndexedIndirectCommand));
 
 
-struct COMMON_CMD_DISPATCH_INDIRECT
+struct GPU_CmdDispatchIndirect
 {
     // NOTE: Don't change order of this variables!!!
-    uint GROUP_SIZE_X;
-    uint GROUP_SIZE_Y;
-    uint GROUP_SIZE_Z;
+    uint groupSizeX;
+    uint groupSizeY;
+    uint groupSizeZ;
 };
 
-static_assert(sizeof(COMMON_CMD_DISPATCH_INDIRECT) == sizeof(VkDispatchIndirectCommand));
+static_assert(sizeof(GPU_CmdDispatchIndirect) == sizeof(VkDispatchIndirectCommand));
 
 
-enum COMMON_SAMPLER_IDX : uint32_t
+enum GPU_CommonSamplerID : uint32_t
 {
     SAMPLER_IDX_NEAREST_REPEAT,
     SAMPLER_IDX_NEAREST_MIRRORED_REPEAT,
@@ -246,7 +243,7 @@ enum COMMON_SAMPLER_IDX : uint32_t
 };
 
 
-enum COMMON_CMP_SAMPLER_IDX : uint32_t
+enum GPU_CommonCmpSamplerID : uint32_t
 {
     CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS,
     CMP_SAMPLER_IDX_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
@@ -258,7 +255,7 @@ enum COMMON_CMP_SAMPLER_IDX : uint32_t
 };
 
 
-enum COMMON_GEOM_STREAM
+enum GPU_GeomStreamID
 {
     COMMON_GEOM_STREAM_POSITION,
     COMMON_GEOM_STREAM_NORMAL,
@@ -268,7 +265,7 @@ enum COMMON_GEOM_STREAM
 };
 
 
-enum DBG_RT_VIEW_TYPE : uint32_t
+enum GPU_DbgRTViewType : uint32_t
 {
     DBG_RT_VIEW_TYPE_NONE,
     DBG_RT_VIEW_TYPE_COMMON_DEPTH,
@@ -289,7 +286,7 @@ enum DBG_RT_VIEW_TYPE : uint32_t
 };
 
 
-enum DBG_TONEMAP_PRESET : uint32_t
+enum GPU_DbgTonemapPreset : uint32_t
 {
     DBG_TONEMAP_PRESET_ACES,
     DBG_TONEMAP_PRESET_REINHARD,
@@ -300,7 +297,7 @@ enum DBG_TONEMAP_PRESET : uint32_t
 };
 
 
-enum DBG_CSM_PCF_PRESET : uint32_t
+enum GPU_DbgCsmPCFPreset : uint32_t
 {
     DBG_CSM_PCF_PRESET_NONE,
     DBG_CSM_PCF_PRESET_GRID,
@@ -311,85 +308,85 @@ enum DBG_CSM_PCF_PRESET : uint32_t
 };
 
 
-struct COMMON_CSM_PCSS_DATA
+struct GPU_CommonCSMPcssData
 {
-    float LIGHT_ANGULAR_SLOPE;
-    float MAX_SEARCH_RADIUS_TEXELS;
-    float MAX_FILTER_RADIUS_TEXELS;
-    float MIN_FILTER_RADIUS_TEXELS;
+    float lightAngularSlope;
+    float maxSearchRadiusTexels;
+    float maxFilterRadiusTexels;
+    float minFilterRadiusTexels;
 
-    float SEARCH_RADIUS_SCALE;
-    float FILTER_RADIUS_SCALE;
-    uint  SEARCH_SAMPLES_COUNT;
-    uint  FILTER_SAMPLES_COUNT;
+    float searchRadiusScale;
+    float filterRadiusScale;
+    uint  searchSamplesCount;
+    uint  filterSamplesCount;
 };
 
 
-struct COMMON_CSM_DATA
+struct GPU_CommonCSMData
 {
-    GPU_Frustum VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
-    float4x4 VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4x4 VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    GPU_Frustum viewFrustums[COMMON_CSM_CASCADE_COUNT];
+    float4x4 viewMatrices[COMMON_CSM_CASCADE_COUNT];
+    float4x4 viewProjMatrices[COMMON_CSM_CASCADE_COUNT];
     
-    float4 CASCADE_DISTANCES;
-    float4 CASCADE_Z_NEAR;
-    float4 CASCADE_Z_FAR;
-    float4 CASCADE_WORLD_UNITS_PER_TEXEL;
+    float4 cascadeDistances;
+    float4 cascadeZNear;
+    float4 cascadeZFar;
+    float4 cascadeWorldUnitsPerPixel;
 
-    float CASCADE_BLEND_THRESHOLD_COEF;
-    uint  FILTER_DISK_SAMPLE_COUNT;
-    float FILTER_DISK_RADIUS;
-    uint  FILTER_GRID_HALF_SIZE;
+    float cascadeBlendThresholdCoef;
+    uint  filterDiskSampleCount;
+    float filterDiskRadius;
+    uint  filterGridHalfSize;
 
-    uint2 TEX_SIZE;
-    uint2 PADDING;
+    uint2 texSize;
+    uint2 padding;
 
-    COMMON_CSM_PCSS_DATA PCSS_DATA;
+    GPU_CommonCSMPcssData pcssData;
 };
 
 
-struct COMMON_CB_DATA
+struct GPU_CommonCBData
 {
-    GPU_Frustum CAMERA_FRUSTUM;
-    GPU_Frustum CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    GPU_Frustum mainCamFrustum;
+    GPU_Frustum cullingFrustum; // In most cases is the same as mainCamFrustum but can differ if culling debug mode is enabled
 
-    float4x4 VIEW_MATRIX;
-    float4x4 PROJ_MATRIX;
-    float4x4 VIEW_PROJ_MATRIX;
+    float4x4 mainCamViewMatr;
+    float4x4 mainCamProjMatr;
+    float4x4 mainCamViewProjMatr;
 
-    float4x4 INV_VIEW_MATRIX;
-    float4x4 INV_PROJ_MATRIX;
-    float4x4 INV_VIEW_PROJ_MATRIX;
+    float4x4 mainCamInvViewMatr;
+    float4x4 mainCamInvProjMatr;
+    float4x4 mainCamInvViewProjMatr;
 
-    float4x4 CULLING_VIEW_PROJ_MATRIX_PREV;
-    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
+    float4x4 cullingViewProjMatrPrev;
+    float4x4 cullingViewProjMatr; // In most cases is the same as mainCamViewProjMatr but can differ if culling debug mode is enabled
 
-    uint2 SCREEN_SIZE;
-    float Z_NEAR;
-    float Z_FAR;
+    uint2 screenSize;
+    float mainCamZNear;
+    float mainCamZFar;
 
-    float3 CAM_WPOS;
-    uint   FLAGS;
+    float3 mainCamWPos;
+    uint   flags;
 
-    float3 SUN_LIGHT_DIRECTION;
-    uint SUN_LIGHT_COLOR;
+    float3 sunLightDir;
+    uint sunLightColor;
 
-    COMMON_CSM_DATA CSM_DATA;
+    GPU_CommonCSMData csmData;
 };
 
-static_assert(sizeof(COMMON_CSM_DATA::CASCADE_DISTANCES) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
+static_assert(sizeof(GPU_CommonCSMData::cascadeDistances) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
 
 
-struct COMMON_DBG_CB_DATA
+struct GPU_CommonDbgCBData
 {
-    int  FORCED_GEOM_LOD;
-    uint FLAGS_0;
+    int  forcedGeomLOD;
+    uint flags_0;
 
-    DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
-    DBG_TONEMAP_PRESET TONEMAP_PRESET;
+    GPU_DbgRTViewType rtViewType;
+    GPU_DbgTonemapPreset tonemapPreset;
 
-    uint3 PADDING_0;
-    DBG_CSM_PCF_PRESET CSM_PCF_PRESET;
+    uint3 padding_0;
+    GPU_DbgCsmPCFPreset csmPCFPreset;
 };
 
 
@@ -405,7 +402,7 @@ struct DBG_TRIANGLE_DATA
 };
 
 
-enum GEOM_QUEUE
+enum GPU_GeomQueue
 {
     GEOM_QUEUE_OPAQUE,
     GEOM_QUEUE_AKILL,
@@ -416,12 +413,12 @@ enum GEOM_QUEUE
 static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE_COUNT;
 
 
-struct GEOM_BATCH
+struct GPU_GeomBatch
 {
-    uint MESH_ID;
-    uint LOD_ID;
-    uint FIRST_INST;
-    uint INST_COUNT;
+    uint meshID;
+    uint lodID;
+    uint firstInst;
+    uint instCount;
 };
 
 
@@ -433,13 +430,13 @@ struct GEOM_CULLING_PER_DRAW_DATA
 
 struct GEOM_BATCH_PER_DRAW_DATA
 {
-    uint PADDING;
+    uint padding;
 };
 
 
 struct GEOM_DRAW_CMD_GEN_PER_DRAW_DATA
 {
-    uint PADDING;
+    uint padding;
 };
 
 
@@ -460,7 +457,7 @@ struct HZB_GEN_PER_DRAW_DATA
 struct CSM_PER_DRAW_DATA
 {
     uint CASCADE_IDX;
-    GEOM_QUEUE QUEUE;
+    GPU_GeomQueue QUEUE;
 };
 
 
@@ -1307,10 +1304,10 @@ static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 static std::vector<TextureLoadData> s_cpuTexturesData;
 
-static std::vector<COMMON_MESH_LOD> s_cpuMeshLODData;
-static std::vector<COMMON_MESH>     s_cpuMeshData;
-static std::vector<COMMON_MATERIAL> s_cpuMaterialData;
-static std::vector<COMMON_INST>     s_cpuInstData;
+static std::vector<GPU_MeshLOD>      s_cpuMeshLODData;
+static std::vector<GPU_Mesh>         s_cpuMeshData;
+static std::vector<GPU_GeomMaterial> s_cpuMaterialData;
+static std::vector<GPU_GeomInst>     s_cpuInstData;
 
 
 static std::vector<DBG_LINE_DATA>     s_dbgLineDataCPU;
@@ -1375,7 +1372,7 @@ static eng::Camera s_fixedCullCamera;
 static std::array<glm::float4x4, COMMON_CSM_CASCADE_COUNT> s_fixedCamCsmInvViewProjMatr;
 
 
-static DBG_RT_VIEW_TYPE s_dbgOutputRTType = DBG_RT_VIEW_TYPE_NONE;
+static GPU_DbgRTViewType s_dbgOutputRTType = DBG_RT_VIEW_TYPE_NONE;
 static float s_dbgDepthOutputRTZNear = 0.01f;
 static float s_dbgDepthOutputRTZFar = 100.0f;
 
@@ -1439,8 +1436,8 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_isCSMFilterRandomOffsetEnabled = false;
     static bool s_isCSMPCSSEnabled = true;
 
-    static DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
+    static GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
+    static GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -1458,8 +1455,8 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
     static constexpr bool s_isCSMPCSSEnabled = true;
 
-    static constexpr DBG_TONEMAP_PRESET s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static constexpr DBG_CSM_PCF_PRESET s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
+    static constexpr GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
+    static constexpr GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
 #endif
 
 
@@ -1493,7 +1490,7 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 }
 
 
-static bool IsInstFrustumVisible(const COMMON_INST& inst)
+static bool IsInstFrustumVisible(const GPU_GeomInst& inst)
 {
     ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
 
@@ -1751,15 +1748,15 @@ static void RenderDebugFrustumFilled(const glm::float4x4& invViewProj, const glm
 }
 
 
-static bool IsAKillMaterial(const COMMON_MATERIAL& material)
+static bool IsAKillMaterial(const GPU_GeomMaterial& material)
 {
-    return (material.FLAGS & (uint32_t)COMMON_MATERIAL_FLAGS::ALPHA_KILL) != 0;
+    return static_cast<bool>(material.isAKill);
 }
 
 
-static bool IsOpaqueMaterial(const COMMON_MATERIAL& material)
+static bool IsOpaqueMaterial(const GPU_GeomMaterial& material)
 {
-    return !IsAKillMaterial(material);
+    return static_cast<bool>(material.isOpaque);
 }
 
 
@@ -1777,7 +1774,7 @@ static constexpr VkIndexType GetVkIndexType()
 }
 
 
-static uint32_t CSMGetBufferIndex(uint32_t cascade, GEOM_QUEUE queue)
+static uint32_t CSMGetBufferIndex(uint32_t cascade, GPU_GeomQueue queue)
 {
     return glm::clamp(cascade, 0u, COMMON_CSM_CASCADE_COUNT - 1) * GEOM_QUEUE_COUNT + queue;
 }
@@ -4342,7 +4339,7 @@ static void CreateGeomCullingAndInstancingResources()
         
         s_geomBatchQueueBuffer[queue].Create(
             &s_vkDevice, 
-            s_cpuInstData.size() * sizeof(GEOM_BATCH), 
+            s_cpuInstData.size() * sizeof(GPU_GeomBatch), 
             VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
             allocInfo
         );
@@ -4358,7 +4355,7 @@ static void CreateGeomCullingAndInstancingResources()
 
         s_geomDrawCmdQueueBuffer[queue].Create(
             &s_vkDevice,
-            s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT),
+            s_cpuInstData.size() * sizeof(GPU_CmdDrawIndexedIndirect),
             VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
             allocInfo
         );
@@ -4410,7 +4407,7 @@ static void CreateCSMResources()
             
             s_csmGeomBatchQueueBuffers[cascade][queue].Create(
                 &s_vkDevice, 
-                s_cpuInstData.size() * sizeof(GEOM_BATCH), 
+                s_cpuInstData.size() * sizeof(GPU_GeomBatch), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
                 allocInfo
             );
@@ -4426,7 +4423,7 @@ static void CreateCSMResources()
 
             s_csmGeomDrawCmdQueueBuffers[cascade][queue].Create(
                 &s_vkDevice,
-                s_cpuInstData.size() * sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT),
+                s_cpuInstData.size() * sizeof(GPU_CmdDrawIndexedIndirect),
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
                 allocInfo
             );
@@ -4700,7 +4697,7 @@ static void CreateCommonSMSamplers()
 }
 
 
-static void WriteGeomCullingDescriptorSet(GEOM_QUEUE queue)
+static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -4717,12 +4714,12 @@ static void WriteGeomCullingDescriptorSet(GEOM_QUEUE queue)
 static void WriteGeomCullingDescriptorSet()
 {
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomCullingDescriptorSet((GEOM_QUEUE)queue);
+        WriteGeomCullingDescriptorSet((GPU_GeomQueue)queue);
     }
 }
 
 
-static void WriteGeomBatchingDescriptorSet(GEOM_QUEUE queue)
+static void WriteGeomBatchingDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -4751,12 +4748,12 @@ static void WriteGeomBatchingDescriptorSet(GEOM_QUEUE queue)
 static void WriteGeomBatchingDescriptorSet()
 {
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomBatchingDescriptorSet((GEOM_QUEUE)queue);
+        WriteGeomBatchingDescriptorSet((GPU_GeomQueue)queue);
     }
 }
 
 
-static void WriteGeomDrawCmdGenDescriptorSet(GEOM_QUEUE queue)
+static void WriteGeomDrawCmdGenDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -4781,12 +4778,12 @@ static void WriteGeomDrawCmdGenDescriptorSet(GEOM_QUEUE queue)
 static void WriteGeomDrawCmdGenDescriptorSet()
 {
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomDrawCmdGenDescriptorSet((GEOM_QUEUE)queue);
+        WriteGeomDrawCmdGenDescriptorSet((GPU_GeomQueue)queue);
     }
 }
 
 
-static void WriteZPassDescriptorSet(GEOM_QUEUE queue)
+static void WriteZPassDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -4808,7 +4805,7 @@ static void WriteZPassDescriptorSet(GEOM_QUEUE queue)
 static void WriteZPassDescriptorSet()
 {
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteZPassDescriptorSet((GEOM_QUEUE)queue);
+        WriteZPassDescriptorSet((GPU_GeomQueue)queue);
     }
 }
 
@@ -4827,7 +4824,7 @@ static void WriteHZBGenDescriptorSets()
 }
 
 
-static void WriteCSMGeomCullingDescriptorSet(uint32_t cascade, GEOM_QUEUE queue)
+static void WriteCSMGeomCullingDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -4847,13 +4844,13 @@ static void WriteCSMGeomCullingDescriptorSet()
 {
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomCullingDescriptorSet(cascade, (GEOM_QUEUE)queue);
+            WriteCSMGeomCullingDescriptorSet(cascade, (GPU_GeomQueue)queue);
         }
     }
 }
 
 
-static void WriteCSMGeomBatchingDescriptorSet(uint32_t cascade, GEOM_QUEUE queue)
+static void WriteCSMGeomBatchingDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -4884,13 +4881,13 @@ static void WriteCSMGeomBatchingDescriptorSet()
 {
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomBatchingDescriptorSet(cascade, (GEOM_QUEUE)queue);
+            WriteCSMGeomBatchingDescriptorSet(cascade, (GPU_GeomQueue)queue);
         }
     }
 }
 
 
-static void WriteCSMGeomDrawCmdGenDescriptorSet(uint32_t cascade, GEOM_QUEUE queue)
+static void WriteCSMGeomDrawCmdGenDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -4917,13 +4914,13 @@ static void WriteCSMGeomDrawCmdGenDescriptorSet()
 {
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomDrawCmdGenDescriptorSet(cascade, (GEOM_QUEUE)queue);
+            WriteCSMGeomDrawCmdGenDescriptorSet(cascade, (GPU_GeomQueue)queue);
         }
     }
 }
 
 
-static void WriteCSMRenderDescriptorSet(uint32_t cascade, GEOM_QUEUE queue)
+static void WriteCSMRenderDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -4939,13 +4936,13 @@ static void WriteCSMRenderDescriptorSet()
 {
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMRenderDescriptorSet(cascade, (GEOM_QUEUE)queue);
+            WriteCSMRenderDescriptorSet(cascade, (GPU_GeomQueue)queue);
         }
     }
 }
 
 
-static void WriteGBufferDescriptorSet(GEOM_QUEUE queue)
+static void WriteGBufferDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -4967,7 +4964,7 @@ static void WriteGBufferDescriptorSet(GEOM_QUEUE queue)
 static void WriteGBufferDescriptorSet()
 {
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGBufferDescriptorSet((GEOM_QUEUE)queue);
+        WriteGBufferDescriptorSet((GPU_GeomQueue)queue);
     }
 }
 
@@ -5224,11 +5221,11 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
 
     const size_t currVertCount = s_cpuGeomStreamBuffers[COMMON_GEOM_STREAM_POSITION].size() / 2; // position is packed 2 x uint
 
-    COMMON_MESH cpuMesh = {};
+    GPU_Mesh cpuMesh = {};
     
-    cpuMesh.FIRST_VERTEX = currVertCount;
-    cpuMesh.VERTEX_COUNT = positions.size();
-    cpuMesh.FIRST_LOD = s_cpuMeshLODData.size();
+    cpuMesh.firstVertex = currVertCount;
+    cpuMesh.vertexCount = positions.size();
+    cpuMesh.firstLOD = s_cpuMeshLODData.size();
 
     {
         ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DarkMagenta, "Mesh_%s_LOD_Generation", mesh.name.c_str());
@@ -5237,20 +5234,20 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
         std::vector<IndexType> nextLodIndices(currLodIndices.size());
 
         for (size_t i = 0; i < COMMON_MAX_GEOM_LOD_COUNT; ++i) {
-            COMMON_MESH_LOD lod = {};
-            lod.FIRST_INDEX = s_cpuGeomIndexBuffer.size();
-            lod.INDEX_COUNT = currLodIndices.size();
+            GPU_MeshLOD lod = {};
+            lod.firstIndex = s_cpuGeomIndexBuffer.size();
+            lod.indexCount = currLodIndices.size();
 
-            CORE_LOG_TRACE("Mesh %s LOD %zu: index count: %u", mesh.name.c_str(), i, lod.INDEX_COUNT);
+            CORE_LOG_TRACE("Mesh %s LOD %zu: index count: %u", mesh.name.c_str(), i, lod.indexCount);
             
             s_cpuMeshLODData.emplace_back(lod);
     
-            ++cpuMesh.LOD_COUNT;
+            ++cpuMesh.lodCount;
             
             s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + currLodIndices.size());
     
             for (IndexType index : currLodIndices) {
-                s_cpuGeomIndexBuffer.emplace_back(cpuMesh.FIRST_VERTEX + index);
+                s_cpuGeomIndexBuffer.emplace_back(cpuMesh.firstVertex + index);
             }
     
             const size_t nextLodIndexCountTarget = (size_t)(((float)currLodIndices.size() * LOD_SIMPLIFICATION_COEF) + 2) / 3 * 3;
@@ -5386,70 +5383,69 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
     s_cpuMaterialData.clear();
 
     for (const gltf::Material& material : asset.materials) {
-        COMMON_MATERIAL mtl = {};
+        GPU_GeomMaterial mtl = {};
 
         const gltf::PBRData& pbrData = material.pbrData;
         
-        mtl.ALBEDO_MULT.x = pbrData.baseColorFactor.x();
-        mtl.ALBEDO_MULT.y = pbrData.baseColorFactor.y();
-        mtl.ALBEDO_MULT.z = pbrData.baseColorFactor.z();
-        mtl.ALBEDO_MULT.w = pbrData.baseColorFactor.w();
-        mtl.METALNESS_SCALE = pbrData.metallicFactor;
-        mtl.ROUGHNESS_SCALE = pbrData.roughnessFactor;
+        mtl.albedoMult.x = pbrData.baseColorFactor.x();
+        mtl.albedoMult.y = pbrData.baseColorFactor.y();
+        mtl.albedoMult.z = pbrData.baseColorFactor.z();
+        mtl.albedoMult.w = pbrData.baseColorFactor.w();
+        mtl.metalnessScale = pbrData.metallicFactor;
+        mtl.roughnessScale = pbrData.roughnessFactor;
 
         const auto& albedoTexOpt = pbrData.baseColorTexture;
         if (albedoTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[albedoTexOpt.value().textureIndex];
-            mtl.ALBEDO_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            mtl.albedoTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
 
-        mtl.NORMAL_SCALE = 1.f;
+        mtl.normalScale = 1.f;
 
         const auto& normalTexOpt = material.normalTexture;
         if (normalTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[normalTexOpt.value().textureIndex];
-            mtl.NORMAL_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            mtl.normalTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         
-            mtl.NORMAL_SCALE = normalTexOpt.value().scale;
+            mtl.normalScale = normalTexOpt.value().scale;
         }
 
         const auto& mrTexOpt = material.pbrData.metallicRoughnessTexture;
         if (mrTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[mrTexOpt.value().textureIndex];
-            mtl.MR_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            mtl.metalRoughTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
 
-        mtl.AO_COEF = 1.f;
+        mtl.aoCoef = 1.f;
 
         const auto& aoTexOpt = material.occlusionTexture;
         if (aoTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[aoTexOpt.value().textureIndex];
-            mtl.AO_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            mtl.aoTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         
-            mtl.AO_COEF = aoTexOpt.value().strength;
+            mtl.aoCoef = aoTexOpt.value().strength;
         }
 
         const auto& emissiveTexOpt = material.emissiveTexture;
         if (emissiveTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[emissiveTexOpt.value().textureIndex];
-            mtl.EMISSIVE_TEX_IDX = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            mtl.emissiveTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
         }
 
-        mtl.EMISSIVE_MULT.x = material.emissiveFactor.x();
-        mtl.EMISSIVE_MULT.y = material.emissiveFactor.y();
-        mtl.EMISSIVE_MULT.z = material.emissiveFactor.z();
+        mtl.emissiveMult.x = material.emissiveFactor.x();
+        mtl.emissiveMult.y = material.emissiveFactor.y();
+        mtl.emissiveMult.z = material.emissiveFactor.z();
 
-        mtl.FLAGS = 0;
-        mtl.FLAGS |= (material.doubleSided ? glm::uint(COMMON_MATERIAL_FLAGS::DOUBLE_SIDED) : glm::uint(0));
+        mtl.isDoubleSided = material.doubleSided;
+        
+        mtl.isOpaque = material.alphaMode == gltf::AlphaMode::Opaque;
+        mtl.isAKill = material.alphaMode == gltf::AlphaMode::Mask;
 
-        if (material.alphaMode == gltf::AlphaMode::Mask) {
-            mtl.FLAGS |= glm::uint(COMMON_MATERIAL_FLAGS::ALPHA_KILL);
-        } else if (material.alphaMode == gltf::AlphaMode::Blend) {
+        if (material.alphaMode == gltf::AlphaMode::Blend) {
             CORE_LOG_WARN("Materials %s is transparent which is not supported yet", material.name.c_str());
-            // mtl.FLAGS |= glm::uint(COMMON_MATERIAL_FLAGS::ALPHA_BLEND);
         }
 
-        mtl.ALPHA_REF = material.alphaCutoff;
+        mtl.alphaRef = material.alphaCutoff;
 
         s_cpuMaterialData.emplace_back(mtl);
     }
@@ -5486,7 +5482,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
     auto GetInstAABB = [&](uint32_t meshIdx, const glm::float4x4& wMatr) -> math::AABB
     {
-        const COMMON_MESH& mesh = s_cpuMeshData[meshIdx];
+        const GPU_Mesh& mesh = s_cpuMeshData[meshIdx];
         
         return GetWorldAABB(mesh.GetAABB_LCS(), wMatr);
     };
@@ -5508,15 +5504,15 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                 for (uint32_t i = 0; i < mesh.primitives.size(); ++i) {
                     const gltf::Primitive& primitive = mesh.primitives[i];
 
-                    COMMON_INST inst = {};
+                    GPU_GeomInst inst = {};
 
-                    inst.MESH_IDX = baseIdx + i;
+                    inst.meshID = baseIdx + i;
 
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
-                    inst.MATERIAL_IDX = primitive.materialIndex.value();
+                    inst.materialID = primitive.materialIndex.value();
 
-                    inst.MATR_WCS = glm::transpose(transform);
-                    inst.PackAABB_WCS(GetInstAABB(inst.MESH_IDX, transform));
+                    inst.matrWCS = glm::transpose(transform);
+                    inst.PackAABB_WCS(GetInstAABB(inst.meshID, transform));
 
                     s_cpuInstData.emplace_back(inst);
                 }
@@ -5546,8 +5542,8 @@ static void LoadSceneInstData(const gltf::Asset& asset)
     timer.Reset().Start();
 
     std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), 
-        [](const COMMON_INST& a, const COMMON_INST& b) {
-            return a.MESH_IDX < b.MESH_IDX;
+        [](const GPU_GeomInst& a, const GPU_GeomInst& b) {
+            return a.meshID < b.meshID;
         }
     );
 
@@ -5555,7 +5551,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 }
 
 
-static void UploadGPUGeomStream(COMMON_GEOM_STREAM ID)
+static void UploadGPUGeomStream(GPU_GeomStreamID ID)
 {
     const size_t gpuStreamSize = s_cpuGeomStreamBuffers[ID].size() * sizeof(uint32_t);
     CORE_ASSERT(gpuStreamSize <= s_commonStagingBuffer.GetMemorySize());
@@ -5584,7 +5580,7 @@ static void UploadGPUMeshData()
     eng::Timer timer;
 
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
-        UploadGPUGeomStream(static_cast<COMMON_GEOM_STREAM>(i));
+        UploadGPUGeomStream(static_cast<GPU_GeomStreamID>(i));
     }
 
     const size_t gpuIndexBufferSize = s_cpuGeomIndexBuffer.size() * sizeof(IndexType);
@@ -5605,7 +5601,7 @@ static void UploadGPUMeshData()
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 
-    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(COMMON_MESH);
+    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(GPU_Mesh);
     CORE_ASSERT(meshDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pMeshBufferData = s_commonStagingBuffer.Map();
@@ -5623,7 +5619,7 @@ static void UploadGPUMeshData()
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMeshBuffer, meshDataBufferSize);
     });
 
-    const size_t meshLODDataBufferSize = s_cpuMeshLODData.size() * sizeof(COMMON_MESH_LOD);
+    const size_t meshLODDataBufferSize = s_cpuMeshLODData.size() * sizeof(GPU_MeshLOD);
     CORE_ASSERT(meshLODDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pMeshLODBufferData = s_commonStagingBuffer.Map();
@@ -5742,7 +5738,7 @@ static void UploadGPUMaterialData()
 
     eng::Timer timer;
 
-    const size_t mtlDataBufferSize = s_cpuMaterialData.size() * sizeof(COMMON_MATERIAL);
+    const size_t mtlDataBufferSize = s_cpuMaterialData.size() * sizeof(GPU_GeomMaterial);
     CORE_ASSERT(mtlDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pData = s_commonStagingBuffer.Map();
@@ -5770,7 +5766,7 @@ static void UploadGPUInstData()
 
     eng::Timer timer;
 
-    const size_t instBufferSize = s_cpuInstData.size() * sizeof(COMMON_INST);
+    const size_t instBufferSize = s_cpuInstData.size() * sizeof(GPU_GeomInst);
     CORE_ASSERT(instBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     {
@@ -5859,7 +5855,7 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_CB_DATA));
+    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(GPU_CommonCBData));
     s_vkDevice.SetObjDebugName(s_commonConstBuffer, "COMMON_CB");
 }
 
@@ -5867,7 +5863,7 @@ static void CreateCommonConstBuffer()
 static void CreateCommonDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    s_commonDbgConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(COMMON_DBG_CB_DATA));
+    s_commonDbgConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(GPU_CommonDbgCBData));
     s_vkDevice.SetObjDebugName(s_commonDbgConstBuffer, "COMMON_DBG_CB");
 #endif
 }
@@ -5877,76 +5873,76 @@ void UpdateGPUCommonConstBuffer()
 {
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", eng::ProfileColor::Cyan4);
 
-    COMMON_CB_DATA& constBuff = *reinterpret_cast<COMMON_CB_DATA*>(s_commonConstBuffer.Map());
+    GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
 
     const glm::float4x4& viewMatrix = s_mainCamera.GetViewMatrix();
     const glm::float4x4& projMatrix = s_mainCamera.GetProjMatrix();
     const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
     const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
 
-    constBuff.VIEW_MATRIX = viewMatrix;
-    constBuff.PROJ_MATRIX = projMatrix;
-    constBuff.VIEW_PROJ_MATRIX = viewProjMatrix;
+    constBuff.mainCamViewMatr = viewMatrix;
+    constBuff.mainCamProjMatr = projMatrix;
+    constBuff.mainCamViewProjMatr = viewProjMatrix;
 
-    constBuff.INV_VIEW_MATRIX = glm::inverse(viewMatrix);
-    constBuff.INV_PROJ_MATRIX = glm::inverse(projMatrix);
-    constBuff.INV_VIEW_PROJ_MATRIX = glm::inverse(viewProjMatrix);
+    constBuff.mainCamInvViewMatr = glm::inverse(viewMatrix);
+    constBuff.mainCamInvProjMatr = glm::inverse(projMatrix);
+    constBuff.mainCamInvViewProjMatr = glm::inverse(viewProjMatrix);
 
     const math::Frustum& camFrustum = s_mainCamera.GetFrustum();
 
     const GPU_Frustum gpuFrustum = CopyCPUFrustumToGPU(camFrustum);
 
-    constBuff.CAMERA_FRUSTUM = gpuFrustum;
+    constBuff.mainCamFrustum = gpuFrustum;
 
     if (s_cullingTestMode) {
-        constBuff.CULLING_CAMERA_FRUSTUM = CopyCPUFrustumToGPU(s_fixedCullCamera.GetFrustum());
-        constBuff.CULLING_VIEW_PROJ_MATRIX = s_fixedCullCamera.GetViewProjMatrix();
-        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = s_fixedCullCamera.GetViewProjMatrixPrev();
+        constBuff.cullingFrustum = CopyCPUFrustumToGPU(s_fixedCullCamera.GetFrustum());
+        constBuff.cullingViewProjMatr = s_fixedCullCamera.GetViewProjMatrix();
+        constBuff.cullingViewProjMatrPrev = s_fixedCullCamera.GetViewProjMatrixPrev();
     } else {
-        constBuff.CULLING_CAMERA_FRUSTUM = gpuFrustum;
-        constBuff.CULLING_VIEW_PROJ_MATRIX = viewProjMatrix;
-        constBuff.CULLING_VIEW_PROJ_MATRIX_PREV = viewProjMatrixPrev;
+        constBuff.cullingFrustum = gpuFrustum;
+        constBuff.cullingViewProjMatr = viewProjMatrix;
+        constBuff.cullingViewProjMatrPrev = viewProjMatrixPrev;
     }
     
-    constBuff.SCREEN_SIZE.x = static_cast<float>(s_pWnd->GetWidth());
-    constBuff.SCREEN_SIZE.y = static_cast<float>(s_pWnd->GetHeight());
+    constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
+    constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
 
-    constBuff.Z_NEAR = s_mainCamera.GetZNear();
-    constBuff.Z_FAR = s_mainCamera.GetZFar();
+    constBuff.mainCamZNear = s_mainCamera.GetZNear();
+    constBuff.mainCamZFar = s_mainCamera.GetZFar();
     
-    constBuff.CAM_WPOS = s_mainCamera.GetPosition();
+    constBuff.mainCamWPos = s_mainCamera.GetPosition();
 
-    constBuff.SUN_LIGHT_DIRECTION = SUN_LIGHT_DIR;
-    constBuff.SUN_LIGHT_COLOR = glm::packUnorm4x8(ONEF4);
+    constBuff.sunLightDir = SUN_LIGHT_DIR;
+    constBuff.sunLightColor = glm::packUnorm4x8(ONEF4);
 
     for (size_t i = 0; i < COMMON_CSM_CASCADE_COUNT; ++i) {
         const eng::Camera& cam = s_csmCameras[i];
 
-        constBuff.CSM_DATA.VIEW_FRUSTUMS[i] = CopyCPUFrustumToGPU(cam.GetFrustum());
-        constBuff.CSM_DATA.VIEW_MATRICES[i] = cam.GetViewMatrix();
-        constBuff.CSM_DATA.VIEW_PROJ_MATRICES[i] = cam.GetViewProjMatrix();
-        constBuff.CSM_DATA.CASCADE_DISTANCES[i] = CSM_CASCADE_DISTANCES[i];
-        constBuff.CSM_DATA.CASCADE_Z_NEAR[i] = cam.GetZNear();
-        constBuff.CSM_DATA.CASCADE_Z_FAR[i] = cam.GetZFar();
-        constBuff.CSM_DATA.CASCADE_WORLD_UNITS_PER_TEXEL[i] = s_csmCascadeWorldUnitsPerTexel[i];
+        constBuff.csmData.viewFrustums[i] = CopyCPUFrustumToGPU(cam.GetFrustum());
+        constBuff.csmData.viewMatrices[i] = cam.GetViewMatrix();
+        constBuff.csmData.viewProjMatrices[i] = cam.GetViewProjMatrix();
+        constBuff.csmData.cascadeDistances[i] = CSM_CASCADE_DISTANCES[i];
+        constBuff.csmData.cascadeZNear[i] = cam.GetZNear();
+        constBuff.csmData.cascadeZFar[i] = cam.GetZFar();
+        constBuff.csmData.cascadeWorldUnitsPerPixel[i] = s_csmCascadeWorldUnitsPerTexel[i];
     }
 
-    constBuff.CSM_DATA.CASCADE_BLEND_THRESHOLD_COEF = s_csmCascadeBlendThresholdCoef * 0.01f;
-    constBuff.CSM_DATA.FILTER_DISK_SAMPLE_COUNT = s_csmFilterDiskSampleCount;
-    constBuff.CSM_DATA.FILTER_DISK_RADIUS = s_csmFilterDiskRadius;
-    constBuff.CSM_DATA.FILTER_GRID_HALF_SIZE = s_csmFilterGridHalfSize;
+    constBuff.csmData.cascadeBlendThresholdCoef = s_csmCascadeBlendThresholdCoef * 0.01f;
+    constBuff.csmData.filterDiskSampleCount = s_csmFilterDiskSampleCount;
+    constBuff.csmData.filterDiskRadius = s_csmFilterDiskRadius;
+    constBuff.csmData.filterGridHalfSize = s_csmFilterGridHalfSize;
 
-    constBuff.CSM_DATA.TEX_SIZE = glm::uvec2(CSM_CASCADE_RT_SIZE);
+    constBuff.csmData.texSize = glm::uvec2(CSM_CASCADE_RT_SIZE);
 
-    constBuff.CSM_DATA.PCSS_DATA.LIGHT_ANGULAR_SLOPE = glm::tan(glm::radians(s_csmPcssSettings.lightAngularRadiusDegrees));
-    constBuff.CSM_DATA.PCSS_DATA.MAX_SEARCH_RADIUS_TEXELS = s_csmPcssSettings.maxSearchRadiusTexels;
-    constBuff.CSM_DATA.PCSS_DATA.MAX_FILTER_RADIUS_TEXELS = s_csmPcssSettings.maxFilterRadiusTexels;
-    constBuff.CSM_DATA.PCSS_DATA.MIN_FILTER_RADIUS_TEXELS = s_csmPcssSettings.minFilterRadiusTexels;
+    constBuff.csmData.pcssData.lightAngularSlope = glm::tan(glm::radians(s_csmPcssSettings.lightAngularRadiusDegrees));
+    constBuff.csmData.pcssData.maxSearchRadiusTexels = s_csmPcssSettings.maxSearchRadiusTexels;
+    constBuff.csmData.pcssData.maxFilterRadiusTexels = s_csmPcssSettings.maxFilterRadiusTexels;
+    constBuff.csmData.pcssData.minFilterRadiusTexels = s_csmPcssSettings.minFilterRadiusTexels;
 
-    constBuff.CSM_DATA.PCSS_DATA.SEARCH_RADIUS_SCALE  = s_csmPcssSettings.searchRadiusScale;
-    constBuff.CSM_DATA.PCSS_DATA.FILTER_RADIUS_SCALE  = s_csmPcssSettings.filterRadiusScale;
-    constBuff.CSM_DATA.PCSS_DATA.SEARCH_SAMPLES_COUNT = s_csmPcssSettings.searchSamplesCount;
-    constBuff.CSM_DATA.PCSS_DATA.FILTER_SAMPLES_COUNT = s_csmPcssSettings.filterSamplesCount;
+    constBuff.csmData.pcssData.searchRadiusScale  = s_csmPcssSettings.searchRadiusScale;
+    constBuff.csmData.pcssData.filterRadiusScale  = s_csmPcssSettings.filterRadiusScale;
+    constBuff.csmData.pcssData.searchSamplesCount = s_csmPcssSettings.searchSamplesCount;
+    constBuff.csmData.pcssData.filterSamplesCount = s_csmPcssSettings.filterSamplesCount;
 
     s_commonConstBuffer.Unmap();
 }
@@ -5957,7 +5953,7 @@ void UpdateGPUDbgConstBuffer()
 #ifdef ENG_BUILD_DEBUG
     ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Dbg_Const_Buffer", eng::ProfileColor::Cyan4);
 
-    COMMON_DBG_CB_DATA& constBuff = *reinterpret_cast<COMMON_DBG_CB_DATA*>(s_commonDbgConstBuffer.Map());
+    GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
     uint32_t flags_0 = 0;
 
@@ -5973,11 +5969,11 @@ void UpdateGPUDbgConstBuffer()
     flags_0 |= csmPcssEnabled                                      ? (1u << 7u) : 0u;
     flags_0 |= csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled ? (1u << 8u) : 0u;
 
-    constBuff.FORCED_GEOM_LOD = s_forcedGeomLOD;
-    constBuff.FLAGS_0 = flags_0;
-    constBuff.RT_VIEW_TYPE = s_dbgOutputRTType;
-    constBuff.TONEMAP_PRESET = s_tonemappingPreset;
-    constBuff.CSM_PCF_PRESET = s_csmPCFPreset;
+    constBuff.forcedGeomLOD = s_forcedGeomLOD;
+    constBuff.flags_0 = flags_0;
+    constBuff.rtViewType = s_dbgOutputRTType;
+    constBuff.tonemapPreset = s_tonemappingPreset;
+    constBuff.csmPCFPreset = s_csmPCFPreset;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -6092,7 +6088,7 @@ static void UpdateScene()
 
         static constexpr glm::float4 COLOR = glm::float4(1.f, 1.f, 0.f, 1.f);
 
-        for (const COMMON_INST& inst : s_cpuInstData) {
+        for (const GPU_GeomInst& inst : s_cpuInstData) {
             const math::AABB aabb = inst.GetAABB_WCS(); 
 
             if (frustum.IsIntersect(aabb)) {
@@ -6300,7 +6296,7 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
+static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -6364,7 +6360,7 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
+static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -6438,7 +6434,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
+void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -6501,7 +6497,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
-        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
+        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
 
     cmdBuffer
@@ -6693,7 +6689,7 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GEOM_QUEUE queue)
+static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -6764,7 +6760,7 @@ static void CSMVisGeometryBatchingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GEOM_QUEUE queue)
+static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -6844,7 +6840,7 @@ static void CSMGeometryCullingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GEOM_QUEUE queue)
+static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -6904,7 +6900,7 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GEOM_QUE
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
-        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
+        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
 
     cmdBuffer
@@ -6977,7 +6973,7 @@ static void CSMPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
+static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
@@ -7055,7 +7051,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GEOM_QUEUE queue)
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
         
-        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(COMMON_CMD_DRAW_INDEXED_INDIRECT));
+        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
 }
 
@@ -7691,7 +7687,7 @@ namespace DbgUI
                                     const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFPreset]);
                                     
                                     if (ImGui::Selectable(DBG_CSM_PCF_NAMES[i], isSelected)) {
-                                        s_csmPCFPreset = DBG_CSM_PCF_PRESET(i);
+                                        s_csmPCFPreset = GPU_DbgCsmPCFPreset(i);
                                     }
                                     
                                     if (isSelected) {
@@ -7753,7 +7749,7 @@ namespace DbgUI
                         const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
                         
                         if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                            s_tonemappingPreset = DBG_TONEMAP_PRESET(i);
+                            s_tonemappingPreset = GPU_DbgTonemapPreset(i);
                         }
                         
                         if (isSelected) {
@@ -7774,7 +7770,7 @@ namespace DbgUI
                         const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType]);
                         
                         if (ImGui::Selectable(DBG_RT_OUTPUT_NAMES[i], isSelected)) {
-                            s_dbgOutputRTType = DBG_RT_VIEW_TYPE(i);
+                            s_dbgOutputRTType = GPU_DbgRTViewType(i);
                         }
                         
                         if (isSelected) {
@@ -7874,7 +7870,7 @@ namespace DbgUI
         #endif
 
             // if (ImGui::Begin("Viewport")) {
-            //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE]);
+            //     ImTextureID ID = s_dbgUI.AddTexture(s_colorRTView16F, s_commonSamplers[(size_t)GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE]);
                 
             //     ImVec2 size = ImGui::GetWindowSize();
             //     size.x = std::min((float)s_colorRT16F.GetSizeX(), size.x);

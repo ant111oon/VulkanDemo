@@ -12,9 +12,9 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInst
     GBUFFER_INPUT_DATA inputData = PrepareGBufferVSInputData(vertID);
 
     const uint instID = GBUFFER_INST_ID_QUEUE[instIndex];
-    const COMMON_INST inst = COMMON_INST_BUFFER[instID];
+    const GPU_GeomInst inst = COMMON_INST_BUFFER[instID];
 
-    const float3 wpos = mul(inst.MATR_WCS, float4(inputData.position, 1.f)).xyz;
+    const float3 wpos = mul(inst.matrWCS, float4(inputData.position, 1.f)).xyz;
 
     result.data.lpos = inputData.position;
     result.data.wpos = wpos;
@@ -24,7 +24,7 @@ GBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInst
 
     result.flatData.instID = instID;
 
-    result.hpos = mul(COMMON_CB.VIEW_PROJ_MATRIX, float4(wpos, 1.f));
+    result.hpos = mul(COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(wpos, 1.f));
 
     return result; 
 }

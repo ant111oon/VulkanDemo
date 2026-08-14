@@ -18,7 +18,7 @@ static const uint COMMON_CSM_CASCADE_COUNT = 3;
 static const uint COMMON_CSM_CASCADE_BOUNDS_COUNT = COMMON_CSM_CASCADE_COUNT + 1;
 
 
-enum DBG_RT_VIEW_TYPE
+enum GPU_DbgRTViewType
 {
     NONE,
     COMMON_DEPTH,
@@ -39,7 +39,7 @@ enum DBG_RT_VIEW_TYPE
 };
 
 
-enum DBG_TONEMAP_PRESET
+enum GPU_DbgTonemapPreset
 {
     ACES,
     REINHARD,
@@ -50,18 +50,18 @@ enum DBG_TONEMAP_PRESET
 };
 
 
-enum DBG_CSM_PCF_PRESET
+enum GPU_DbgCsmPCFPreset
 {
-    PCF_NONE,
-    PCF_GRID,
-    PCF_POISSON_DISK,
-    PCF_VOGEL_DISK,
+    NONE,
+    GRID,
+    POISSON_DISK,
+    VOGEL_DISK,
 
     COUNT
 };
 
 
-enum COMMON_SAMPLER_IDX
+enum GPU_CommonSamplerID
 {
     NEAREST_REPEAT,
     NEAREST_MIRRORED_REPEAT,
@@ -103,7 +103,7 @@ enum COMMON_SAMPLER_IDX
 };
 
 
-enum COMMON_CMP_SAMPLER_IDX
+enum GPU_CommonCmpSamplerID
 {
     LINEAR_CLAMP_TO_BORDER_LESS,
     LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
@@ -115,203 +115,103 @@ enum COMMON_CMP_SAMPLER_IDX
 };
 
 
-enum COMMON_GEOM_STREAM_ID
+struct GPU_CommonCSMPcssData
 {
-    POSITION,
-    NORMAL,
-    UV,
-    TANGENT,
-    COUNT
+    float lightAngularSlope;
+    float maxSearchRadiusTexels;
+    float maxFilterRadiusTexels;
+    float minFilterRadiusTexels;
+
+    float searchRadiusScale;
+    float filterRadiusScale;
+    uint  searchSamplesCount;
+    uint  filterSamplesCount;
 };
 
 
-enum COMMON_MATERIAL_FLAGS
+struct GPU_CommonCSMData
 {
-    DOUBLE_SIDED = SET_BIT(0),
-    ALPHA_KILL   = SET_BIT(1),
-};
-
-
-struct COMMON_MATERIAL
-{
-    bool IsAlphaKill() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::ALPHA_KILL); }
-    bool IsOpaque() { return !IsAlphaKill(); }
-
-    bool IsDoubleSided() { return IS_FLAG_SET(FLAGS, COMMON_MATERIAL_FLAGS::DOUBLE_SIDED); }
-
-    float4 ALBEDO_MULT;
-
-    float3 EMISSIVE_MULT;
-    float ALPHA_REF;
-
-    float NORMAL_SCALE;
-    float METALNESS_SCALE;
-    float ROUGHNESS_SCALE;
-    float AO_COEF;
-
-    int ALBEDO_TEX_IDX;
-    int NORMAL_TEX_IDX;
-    int MR_TEX_IDX;
-    int AO_TEX_IDX;
-
-    private uint2 PADDING;
-    int EMISSIVE_TEX_IDX;
-    uint FLAGS;
-};
-
-
-struct COMMON_MESH_LOD
-{
-    uint FIRST_INDEX;
-    uint INDEX_COUNT;
-};
-
-
-struct COMMON_MESH
-{
-    property GPU_AABB AABB_LCS
-    {
-        get
-        {
-            const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).x);
-            const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_LCS_PACKED.z));
-
-            return GPU_AABB(minn, maxx);
-        }
-    }
-
-    uint FIRST_VERTEX;
-    uint VERTEX_COUNT;
-
-    uint FIRST_LOD; // Index of mesh LOD 0 inside LOD buffer
-    uint LOD_COUNT;
-
-    private uint3 AABB_MIN_MAX_LCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    private uint  PADDING;
-};
-
-
-struct COMMON_INST
-{
-    property GPU_AABB AABB_WCS
-    {
-        get
-        {
-            const float3 minn = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.x), unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).x);
-            const float3 maxx = float3(unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.y).y, unpackHalf2x16ToFloat(AABB_MIN_MAX_WCS_PACKED.z));
-
-            return GPU_AABB(minn, maxx);
-        }
-    }
-
-    row_major float3x4 MATR_WCS;
-
-    private uint3 AABB_MIN_MAX_WCS_PACKED; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    private uint  PADDING_0;
-
-    uint MESH_IDX;
-    uint MATERIAL_IDX;
-    private uint2 PADDING_1;
-};
-
-
-struct COMMON_CSM_PCSS_DATA
-{
-    float LIGHT_ANGULAR_SLOPE;
-    float MAX_SEARCH_RADIUS_TEXELS;
-    float MAX_FILTER_RADIUS_TEXELS;
-    float MIN_FILTER_RADIUS_TEXELS;
-
-    float SEARCH_RADIUS_SCALE;
-    float FILTER_RADIUS_SCALE;
-    uint  SEARCH_SAMPLES_COUNT;
-    uint  FILTER_SAMPLES_COUNT;
-};
-
-
-struct COMMON_CSM_DATA
-{
-    GPU_Frustum VIEW_FRUSTUMS[COMMON_CSM_CASCADE_COUNT];
-    float4x4 VIEW_MATRICES[COMMON_CSM_CASCADE_COUNT];
-    float4x4 VIEW_PROJ_MATRICES[COMMON_CSM_CASCADE_COUNT];
+    GPU_Frustum viewFrustums[COMMON_CSM_CASCADE_COUNT];
+    float4x4 viewMatrices[COMMON_CSM_CASCADE_COUNT];
+    float4x4 viewProjMatrices[COMMON_CSM_CASCADE_COUNT];
     
-    float4 CASCADE_DISTANCES;
-    float4 CASCADE_Z_NEAR;
-    float4 CASCADE_Z_FAR;
-    float4 CASCADE_WORLD_UNITS_PER_TEXEL;
+    float4 cascadeDistances;
+    float4 cascadeZNear;
+    float4 cascadeZFar;
+    float4 cascadeWorldUnitsPerPixel;
 
-    float CASCADE_BLEND_THRESHOLD_COEF;
-    uint  FILTER_DISK_SAMPLE_COUNT;
-    float FILTER_DISK_RADIUS;
-    uint  FILTER_GRID_HALF_SIZE;
+    float cascadeBlendThresholdCoef;
+    uint  filterDiskSampleCount;
+    float filterDiskRadius;
+    uint  filterGridHalfSize;
 
-    uint2 TEX_SIZE;
-    uint2 PADDING;
+    uint2 texSize;
+    uint2 padding;
 
-    COMMON_CSM_PCSS_DATA PCSS_DATA;
+    GPU_CommonCSMPcssData pcssData;
 };
 
 
-struct COMMON_CB_DATA
+struct GPU_CommonCBData
 {
-    GPU_Frustum CAMERA_FRUSTUM;
-    GPU_Frustum CULLING_CAMERA_FRUSTUM; // In most cases is the same as CAMERA_FRUSTUM but can differ if culling debug mode is enabled
+    GPU_Frustum mainCamFrustum;
+    GPU_Frustum cullingFrustum; // In most cases is the same as mainCamFrustum but can differ if culling debug mode is enabled
 
-    float4x4 VIEW_MATRIX;
-    float4x4 PROJ_MATRIX;
-    float4x4 VIEW_PROJ_MATRIX;
+    float4x4 mainCamViewMatr;
+    float4x4 mainCamProjMatr;
+    float4x4 mainCamViewProjMatr;
 
-    float4x4 INV_VIEW_MATRIX;
-    float4x4 INV_PROJ_MATRIX;
-    float4x4 INV_VIEW_PROJ_MATRIX;
+    float4x4 mainCamInvViewMatr;
+    float4x4 mainCamInvProjMatr;
+    float4x4 mainCamInvViewProjMatr;
 
-    float4x4 CULLING_VIEW_PROJ_MATRIX_PREV;
-    float4x4 CULLING_VIEW_PROJ_MATRIX; // In most cases is the same as VIEW_PROJ_MATRIX but can differ if culling debug mode is enabled
+    float4x4 cullingViewProjMatrPrev;
+    float4x4 cullingViewProjMatr; // In most cases is the same as mainCamViewProjMatr but can differ if culling debug mode is enabled
 
-    uint2 SCREEN_SIZE;
-    float Z_NEAR;
-    float Z_FAR;
+    uint2 screenSize;
+    float mainCamZNear;
+    float mainCamZFar;
 
-    float3 CAM_WPOS;
-    uint FLAGS;
+    float3 mainCamWPos;
+    uint flags;
 
-    float3 SUN_LIGHT_DIRECTION;
-    uint SUN_LIGHT_COLOR;
+    float3 sunLightDir;
+    uint sunLightColor;
 
-    COMMON_CSM_DATA CSM_DATA;
+    GPU_CommonCSMData csmData;
 };
 
 
-struct COMMON_DBG_CB_DATA
+struct GPU_CommonDbgCBData
 {
-    int  FORCED_GEOM_LOD;
-    uint FLAGS_0;
+    int  forcedGeomLOD;
+    uint flags_0;
 
-    DBG_RT_VIEW_TYPE RT_VIEW_TYPE;
-    DBG_TONEMAP_PRESET TONEMAP_PRESET;
+    GPU_DbgRTViewType rtViewType;
+    GPU_DbgTonemapPreset tonemapPreset;
 
-    uint3 PADDING_0;
-    DBG_CSM_PCF_PRESET CSM_PCF_PRESET;
+    private uint3 padding_0;
+    GPU_DbgCsmPCFPreset csmPCFPreset;
 };
 
 
-struct COMMON_CMD_DRAW_INDEXED_INDIRECT
-{
-    // NOTE: Don't change order of this variables!!!
-    uint INDEX_COUNT;
-    uint INSTANCE_COUNT;
-    uint FIRST_INDEX;
-    int  FIRST_VERTEX;
-    uint FIRST_INSTANCE;
-};
-
-
-struct COMMON_CMD_DISPATCH_INDIRECT
+struct GPU_CmdDrawIndexedIndirect
 {
     // NOTE: Don't change order of this variables!!!
-    uint GROUP_SIZE_X;
-    uint GROUP_SIZE_Y;
-    uint GROUP_SIZE_Z;
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  firstVertex;
+    uint firstInstance;
+};
+
+
+struct GPU_CmdDispatchIndirect
+{
+    // NOTE: Don't change order of this variables!!!
+    uint groupSizeX;
+    uint groupSizeY;
+    uint groupSizeZ;
 };
 
 

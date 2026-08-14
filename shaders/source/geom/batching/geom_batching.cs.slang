@@ -33,7 +33,7 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
     if (DTid < instCount) {
         instID = GEOM_BATCH_VIS_INST_ID_QUEUE[DTid];
 
-        meshID = COMMON_INST_BUFFER[instID].MESH_IDX;
+        meshID = COMMON_INST_BUFFER[instID].meshID;
 
         if (meshID < GEOM_BATCH_CS_GROUP_SIZE) {
             InterlockedAdd(GROUP_BATCH_SIZE[meshID], 1, localIndex);
@@ -63,9 +63,9 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
         uint writeIdx;
         InterlockedAdd(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV[0], 1, writeIdx);
 
-        const uint lodID = clamp(COMMON_DBG_FORCED_GEOM_LOD >= 0 ? COMMON_DBG_FORCED_GEOM_LOD : 0, 0, COMMON_MESH_BUFFER[GI].LOD_COUNT - 1);
+        const uint lodID = clamp(COMMON_DBG_FORCED_GEOM_LOD >= 0 ? COMMON_DBG_FORCED_GEOM_LOD : 0, 0, COMMON_MESH_BUFFER[GI].lodCount - 1);
 
-        const GEOM_BATCH batch = GEOM_BATCH(
+        const GPU_GeomBatch batch = GPU_GeomBatch(
             GI,
             lodID,
             GROUP_BATCH_FIRST_INST_GLOBAL + GROUP_BATCH_FIRST_INST_LOCAL[GI], 

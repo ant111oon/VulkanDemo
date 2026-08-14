@@ -3,19 +3,19 @@
 
 #include "common/math/frustum_culling.slang"
 
-#define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::NEAREST_CLAMP_TO_EDGE)
+#define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE)
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
 #define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #define HZB_CULLING_VIEW_PROJ_MATR  COMMON_CULLING_VIEW_PROJ_MATRIX_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE COMMON_CULLING_CAMERA_FRUSTUM.GetPlane(GPU_Frustum::PlaneID::PLANE_NEAR)
+#define HZB_CULLING_VIEW_NEAR_PLANE COMMON_CULLING_FRUSTUM.GetPlane(GPU_Frustum::PlaneID::PLANE_NEAR)
 #include "common/math/hzb_culling.slang"
 
 
 bool GeomCullingVisibility(in GPU_AABB aabb)
 {
     if (COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED) {
-        if (!Frustum_Visibility(COMMON_CULLING_CAMERA_FRUSTUM, aabb)) {
+        if (!Frustum_Visibility(COMMON_CULLING_FRUSTUM, aabb)) {
             return false;
         }
     }
@@ -30,11 +30,11 @@ bool GeomCullingVisibility(in GPU_AABB aabb)
 }
 
 
-uint GeomCullingGetQueueMask(in COMMON_INST inst)
+uint GeomCullingGetQueueMask(in GPU_GeomInst inst)
 {
     uint mask = 0;
 
-    const COMMON_MATERIAL material = COMMON_MATERIALS[inst.MATERIAL_IDX];
+    const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
     if (material.IsOpaque()) {
         mask |= (1u << GEOM_QUEUE_OPAQUE);
@@ -54,7 +54,7 @@ groupshared uint GROUP_VIS_ID_QUEUE_OFFSETS[GEOM_QUEUE_COUNT];
 [shader("compute")]
 void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : SV_DispatchThreadID)
 {
-    if (GI < GEOM_QUEUE::COUNT) {
+    if (GI < GPU_GeomQueue::COUNT) {
         GROUP_VIS_ID_QUEUE_SIZES[GI] = 0;
         GROUP_VIS_ID_QUEUE_OFFSETS[GI] = 0;
     }
@@ -65,19 +65,19 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
 
     const bool isValidInstID = instID < COMMON_INST_COUNT;
 
-    uint queueLocalOffsets[GEOM_QUEUE::COUNT];
+    uint queueLocalOffsets[GPU_GeomQueue::COUNT];
 
-    COMMON_INST inst;
+    GPU_GeomInst inst;
     bool isVisible = false;
 
     if (isValidInstID) {
         inst = COMMON_INST_BUFFER[instID];
-        isVisible = GeomCullingVisibility(inst.AABB_WCS);
+        isVisible = GeomCullingVisibility(inst.aabbWCS);
     }
 
     if (isVisible) {
         [unroll]
-        for (uint i = 0; i < GEOM_QUEUE::COUNT; ++i) {
+        for (uint i = 0; i < GPU_GeomQueue::COUNT; ++i) {
             queueLocalOffsets[i] = ~0u;
         }
 
@@ -93,14 +93,14 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (GI < GEOM_QUEUE::COUNT && GROUP_VIS_ID_QUEUE_SIZES[GI] > 0) {
+    if (GI < GPU_GeomQueue::COUNT && GROUP_VIS_ID_QUEUE_SIZES[GI] > 0) {
         InterlockedAdd(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GI][0], GROUP_VIS_ID_QUEUE_SIZES[GI], GROUP_VIS_ID_QUEUE_OFFSETS[GI]);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     if (isVisible) {
-        for (uint queue = 0; queue < GEOM_QUEUE::COUNT; ++queue) {
+        for (uint queue = 0; queue < GPU_GeomQueue::COUNT; ++queue) {
             if (queueLocalOffsets[queue] != ~0u) {
                 const uint index = GROUP_VIS_ID_QUEUE_OFFSETS[queue] + queueLocalOffsets[queue];
 

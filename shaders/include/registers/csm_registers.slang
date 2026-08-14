@@ -13,14 +13,14 @@ static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE_COUNT
 struct CSM_PER_DRAW_DATA
 {
     uint CASCADE_IDX;
-    GEOM_QUEUE QUEUE;
+    GPU_GeomQueue QUEUE;
 };
 
 [[vk::push_constant]] CSM_PER_DRAW_DATA CSM_DYN;
 
 #define CSM_CASCADE_IDX     CSM_DYN.CASCADE_IDX
 #define CSM_QUEUE           CSM_DYN.QUEUE
-#define CSM_IS_AKILL_PASS   (CSM_QUEUE == GEOM_QUEUE::AKILL)
+#define CSM_IS_AKILL_PASS   (CSM_QUEUE == GPU_GeomQueue::AKILL)
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> CSM_VIS_INST_ID_QUEUES_UAV[CSM_BUFFER_COUNT];

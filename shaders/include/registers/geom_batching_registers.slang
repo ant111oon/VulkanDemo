@@ -7,7 +7,7 @@
 
 struct GEOM_BATCH_PER_DRAW_DATA
 {
-    uint PADDING;
+    uint padding;
 };
 
 [[vk::push_constant]] GEOM_BATCH_PER_DRAW_DATA GEOM_BATCH_DYN;
@@ -16,7 +16,7 @@ struct GEOM_BATCH_PER_DRAW_DATA
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_BATCH_VIS_INST_ID_QUEUE;
 [vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE;
 
-[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<GEOM_BATCH> GEOM_BATCH_BATCH_QUEUE_UAV;
+[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomBatch> GEOM_BATCH_BATCH_QUEUE_UAV;
 [vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_BATCH_QUEUE_SIZE_UAV;
 
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV;

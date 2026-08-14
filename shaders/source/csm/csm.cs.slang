@@ -36,19 +36,19 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
     uint isVisibleInCascadeMask = 0u;
 
     if (isValidInstID) {
-        const COMMON_INST inst = COMMON_INST_BUFFER[instID];
+        const GPU_GeomInst inst = COMMON_INST_BUFFER[instID];
 
         const uint queueMask = CSMGeomCullingGetQueueMask(inst);
 
         for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT;) {
-            isVisibleInCascadeMask |= Frustum_Visibility(COMMON_CSM_VIEW_FRUSTUM(cascade), inst.AABB_WCS) ? (1u << cascade) : 0u;
+            isVisibleInCascadeMask |= Frustum_Visibility(COMMON_CSM_VIEW_FRUSTUM(cascade), inst.aabbWCS) ? (1u << cascade) : 0u;
 
             if (IS_BIT_SET(isVisibleInCascadeMask, cascade)) {
                 uint mask = queueMask;
 
                 while (mask != 0) {
                     const uint bit = firstbitlow(mask);
-                    const uint queue = CSMGetBufferIndex(cascade, (GEOM_QUEUE)bit);
+                    const uint queue = CSMGetBufferIndex(cascade, (GPU_GeomQueue)bit);
 
                     InterlockedAdd(GROUP_VIS_ID_QUEUE_SIZES[queue], 1u, queueLocalOffsets[queue]);
 
@@ -71,7 +71,7 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
     for (uint cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         if (IS_BIT_SET(isVisibleInCascadeMask, cascade)) {
             for (uint queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-                const uint queueIndex = CSMGetBufferIndex(cascade, (GEOM_QUEUE)queue);
+                const uint queueIndex = CSMGetBufferIndex(cascade, (GPU_GeomQueue)queue);
 
                 if (queueLocalOffsets[queueIndex] != ~0u) {
                     const uint index = GROUP_VIS_ID_QUEUE_OFFSETS[queueIndex] + queueLocalOffsets[queueIndex];

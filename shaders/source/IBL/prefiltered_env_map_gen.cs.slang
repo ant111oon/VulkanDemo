@@ -43,7 +43,7 @@ float3 PreFilterEnvMap(in float roughness, in float3 vReflect)
             const float mipBias = 1.f;
             const float mipLevel = M3D_IS_ZERO(roughness) ? 0.f : max(0.5f * log2(saSample / saTexel) + mipBias, 0.f);
 
-            result += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(COMMON_SAMPLER_IDX::LINEAR_CLAMP_TO_EDGE), vLight, mipLevel).rgb * NdotL; 
+            result += SAMPLE_TEX_LEVEL(PREFILTERED_ENV_MAP_GEN_ENV_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), vLight, mipLevel).rgb * NdotL; 
             totalWeight += NdotL;
         }
     }

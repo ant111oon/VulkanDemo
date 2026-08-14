@@ -16,9 +16,9 @@ CSM_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstance
     const uint queue = CSMGetBufferIndex(CSM_CASCADE_IDX, CSM_QUEUE);
 
     const uint instID = CSM_INST_ID_QUEUE[queue][instIndex];
-    const COMMON_INST inst = COMMON_INST_BUFFER[instID];
+    const GPU_GeomInst inst = COMMON_INST_BUFFER[instID];
 
-    const float3 wpos = mul(inst.MATR_WCS, float4(inputData.position, 1.f)).xyz;
+    const float3 wpos = mul(inst.matrWCS, float4(inputData.position, 1.f)).xyz;
 
     result.data.uv = inputData.uv;
 

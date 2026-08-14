@@ -14,7 +14,7 @@ DBG_DRAW_VS_OUTPUT main(uint vertID : SV_VertexID, uint instID : SV_VulkanInstan
     DBG_DRAW_VS_OUTPUT result = (DBG_DRAW_VS_OUTPUT)0;
 
     result.data.color = unpackUnorm4x8ToFloat(DBG_DRAW_LINES_DATA[instID].COLOR);
-    result.hpos = mul(COMMON_CB.VIEW_PROJ_MATRIX, float4(inputData.wPos, 1.f));
+    result.hpos = mul(COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(inputData.wPos, 1.f));
 
     return result; 
 }
