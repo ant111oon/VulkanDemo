@@ -2,20 +2,20 @@
 #define DBG_RT_VIEW_VS_OUT_H
 
 
-struct DBG_RT_VIEW_VS_OUTPUT_INTERP
+struct GPU_DbgRTViewVsOutputInterp
 {
 };
 
 
-struct DBG_RT_VIEW_VS_OUTPUT_NO_INTERP
+struct GPU_DbgRTViewVsOutputNoInterp
 {
 };
 
 
-struct DBG_RT_VIEW_VS_OUTPUT
+struct GPU_DbgRTViewVsOutput
 {
-    DBG_RT_VIEW_VS_OUTPUT_INTERP data;
-    nointerpolation DBG_RT_VIEW_VS_OUTPUT_NO_INTERP flatData;
+    GPU_DbgRTViewVsOutputInterp data;
+    nointerpolation GPU_DbgRTViewVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position;
 };

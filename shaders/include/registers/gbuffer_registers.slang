@@ -5,14 +5,14 @@
 #include "common/common_geom.slang"
 
 
-struct GBUFFER_PER_DRAW_DATA
+struct GPU_GBufferPerDrawData
 {
-    uint IS_AKILL_PASS;
+    uint isAKillPass;
 };
 
-[[vk::push_constant]] GBUFFER_PER_DRAW_DATA GBUFFER_DYN;
+[[vk::push_constant]] GPU_GBufferPerDrawData GBUFFER_DYN;
 
-#define GBUFFER_IS_AKILL_PASS (GBUFFER_DYN.IS_AKILL_PASS != 0)
+#define GBUFFER_IS_AKILL_PASS (GBUFFER_DYN.isAKillPass != 0)
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GBUFFER_INST_ID_QUEUE;

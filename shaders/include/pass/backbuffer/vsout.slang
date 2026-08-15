@@ -2,20 +2,20 @@
 #define BACKBUFFER_VS_OUT_H
 
 
-struct BACKBUFFER_VS_OUTPUT_INTERP
+struct GPU_BackbufferVsOutputInterp
 {
 };
 
 
-struct BACKBUFFER_VS_OUTPUT_NO_INTERP
+struct GPU_BackbufferVsOutputNoInterp
 {
 };
 
 
-struct BACKBUFFER_VS_OUTPUT
+struct GPU_BackbufferVsOutput
 {
-    BACKBUFFER_VS_OUTPUT_INTERP data;
-    nointerpolation BACKBUFFER_VS_OUTPUT_NO_INTERP flatData;
+    GPU_BackbufferVsOutputInterp data;
+    nointerpolation GPU_BackbufferVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position;
 };

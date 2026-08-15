@@ -10,16 +10,16 @@
 static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE_COUNT;
 
 
-struct CSM_PER_DRAW_DATA
+struct GPU_CsmPerDrawData
 {
-    uint CASCADE_IDX;
-    GPU_GeomQueue QUEUE;
+    uint cascadeIdx;
+    GPU_GeomQueue queue;
 };
 
-[[vk::push_constant]] CSM_PER_DRAW_DATA CSM_DYN;
+[[vk::push_constant]] GPU_CsmPerDrawData CSM_DYN;
 
-#define CSM_CASCADE_IDX     CSM_DYN.CASCADE_IDX
-#define CSM_QUEUE           CSM_DYN.QUEUE
+#define CSM_CASCADE_IDX     CSM_DYN.cascadeIdx
+#define CSM_QUEUE           CSM_DYN.queue
 #define CSM_IS_AKILL_PASS   (CSM_QUEUE == GPU_GeomQueue::AKILL)
 
 

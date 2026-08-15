@@ -5,9 +5,9 @@
 
 
 [shader("vertex")]
-DEFERRED_LIGHTING_VS_OUTPUT main(uint vertID : SV_VertexID)
+GPU_DeferredLightingVsOutput main(uint vertID : SV_VertexID)
 {
-    DEFERRED_LIGHTING_VS_OUTPUT result = (DEFERRED_LIGHTING_VS_OUTPUT)0;
+    GPU_DeferredLightingVsOutput result = (GPU_DeferredLightingVsOutput)0;
 
     result.hpos = float4(GetScreenQuadVertNDC(vertID), 1.f);
 

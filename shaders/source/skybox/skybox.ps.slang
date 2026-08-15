@@ -4,16 +4,16 @@
 #include "pass/skybox/vsout.slang"
 
 
-struct SKYBOX_PS_OUTPUT
+struct GPU_SkyboxPsOutput
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-SKYBOX_PS_OUTPUT main(SKYBOX_VS_OUTPUT input)
+GPU_SkyboxPsOutput main(GPU_SkyboxVsOutput input)
 {
-    SKYBOX_PS_OUTPUT result = (SKYBOX_PS_OUTPUT)0;
+    GPU_SkyboxPsOutput result = (GPU_SkyboxPsOutput)0;
 
     result.color = SAMPLE_TEX_LEVEL(SKYBOX_TEXTURE, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), input.data.uvw, 0);
 

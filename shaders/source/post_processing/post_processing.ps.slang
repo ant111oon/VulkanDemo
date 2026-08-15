@@ -18,19 +18,19 @@ float3 Tonemap(in float3 color)
 }
 
 
-struct POST_PROC_PS_OUTPUT
+struct GPU_PostProcPsOutput
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-POST_PROC_PS_OUTPUT main(POST_PROC_VS_OUTPUT input)
+GPU_PostProcPsOutput main(GPU_PostProcVsOutput input)
 {
     float3 color = LOAD_TEX(POST_PROCESSING_INPUT_COLOR, int3((int2)input.hpos.xy, 0)).rgb;
     color = Tonemap(color);
 
-    POST_PROC_PS_OUTPUT result = (POST_PROC_PS_OUTPUT)0;
+    GPU_PostProcPsOutput result = (GPU_PostProcPsOutput)0;
 
     result.color = float4(color, 1.f);
 

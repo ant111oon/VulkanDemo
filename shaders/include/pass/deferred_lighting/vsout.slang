@@ -2,20 +2,20 @@
 #define DEFERRED_LIGHTING_VS_OUT_H
 
 
-struct DEFERRED_LIGHTING_VS_OUTPUT_INTERP
+struct GPU_DeferredLightingVsOutputInterp
 {
 };
 
 
-struct DEFERRED_LIGHTING_VS_OUTPUT_NO_INTERP
+struct GPU_DeferredLightingVsOutputNoInterp
 {
 };
 
 
-struct DEFERRED_LIGHTING_VS_OUTPUT
+struct GPU_DeferredLightingVsOutput
 {
-    DEFERRED_LIGHTING_VS_OUTPUT_INTERP data;
-    nointerpolation DEFERRED_LIGHTING_VS_OUTPUT_NO_INTERP flatData;
+    GPU_DeferredLightingVsOutputInterp data;
+    nointerpolation GPU_DeferredLightingVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position;
 };

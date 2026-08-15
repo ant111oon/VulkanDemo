@@ -5,15 +5,15 @@
 #include "common/gbuffer_incl.slang"
 
 
-struct ZPASS_PS_OUTPUT
+struct GPU_ZPassPsOutput
 {
 };
 
 
 [shader("fragment")]
-ZPASS_PS_OUTPUT main(ZPASS_VS_OUTPUT input)
+GPU_ZPassPsOutput main(GPU_ZPassVsOutput input)
 {
-    ZPASS_PS_OUTPUT result = (ZPASS_PS_OUTPUT)0;
+    GPU_ZPassPsOutput result = (GPU_ZPassPsOutput)0;
 
     if (ZPASS_IS_AKILL_PASS) {
         const GPU_GeomMaterial material = COMMON_MATERIALS[COMMON_INST_BUFFER[input.flatData.instID].materialID];

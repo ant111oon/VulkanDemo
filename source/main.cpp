@@ -126,16 +126,16 @@ struct GPU_Mesh
 {
     void PackAABB_LCS(const float3& min, const float3& max)
     {
-        aabbMinMaxLcsPacked.x = glm::packHalf2x16(float2(min.x, min.y));
-        aabbMinMaxLcsPacked.y = glm::packHalf2x16(float2(min.z, max.x));
-        aabbMinMaxLcsPacked.z = glm::packHalf2x16(float2(max.y, max.z));
+        aabbMinMaxLCS.x = glm::packHalf2x16(float2(min.x, min.y));
+        aabbMinMaxLCS.y = glm::packHalf2x16(float2(min.z, max.x));
+        aabbMinMaxLCS.z = glm::packHalf2x16(float2(max.y, max.z));
     }
 
     math::AABB GetAABB_LCS() const
     {
         return math::AABB(
-            float3(glm::unpackHalf2x16(aabbMinMaxLcsPacked.x), glm::unpackHalf2x16(aabbMinMaxLcsPacked.y).x),
-            float3(glm::unpackHalf2x16(aabbMinMaxLcsPacked.y).y, glm::unpackHalf2x16(aabbMinMaxLcsPacked.z))
+            float3(glm::unpackHalf2x16(aabbMinMaxLCS.x), glm::unpackHalf2x16(aabbMinMaxLCS.y).x),
+            float3(glm::unpackHalf2x16(aabbMinMaxLCS.y).y, glm::unpackHalf2x16(aabbMinMaxLCS.z))
         );
     }
 
@@ -145,7 +145,7 @@ struct GPU_Mesh
     uint firstLOD; // Index of mesh LOD 0 inside LOD buffer
     uint lodCount;
 
-    uint3 aabbMinMaxLcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint3 aabbMinMaxLCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint  padding;
 };
 
@@ -154,22 +154,22 @@ struct GPU_GeomInst
 {
     void PackAABB_WCS(const math::AABB& aabb)
     {
-        aabbMinMaxWcsPacked.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
-        aabbMinMaxWcsPacked.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
-        aabbMinMaxWcsPacked.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
+        aabbMinMaxWCS.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
+        aabbMinMaxWCS.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
+        aabbMinMaxWCS.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
     }
 
     math::AABB GetAABB_WCS() const
     {
-        const float3 minn = float3(glm::unpackHalf2x16(aabbMinMaxWcsPacked.x), glm::unpackHalf2x16(aabbMinMaxWcsPacked.y).x);
-        const float3 maxx = float3(glm::unpackHalf2x16(aabbMinMaxWcsPacked.y).y, glm::unpackHalf2x16(aabbMinMaxWcsPacked.z));
+        const float3 minn = float3(glm::unpackHalf2x16(aabbMinMaxWCS.x), glm::unpackHalf2x16(aabbMinMaxWCS.y).x);
+        const float3 maxx = float3(glm::unpackHalf2x16(aabbMinMaxWCS.y).y, glm::unpackHalf2x16(aabbMinMaxWCS.z));
 
         return math::AABB(minn, maxx);
     }
 
     float3x4 matrWCS;
 
-    uint3 aabbMinMaxWcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint meshID : 16;
     uint materialID : 16;
 };
@@ -390,15 +390,15 @@ struct GPU_CommonDbgCBData
 };
 
 
-struct DBG_LINE_DATA
+struct GPU_DbgLineData
 {
-    uint COLOR;
+    uint color;
 };
 
 
-struct DBG_TRIANGLE_DATA
+struct GPU_DbgTriangleData
 {
-    uint COLOR;
+    uint color;
 };
 
 
@@ -422,71 +422,71 @@ struct GPU_GeomBatch
 };
 
 
-struct GEOM_CULLING_PER_DRAW_DATA
+struct GPU_GeomCullingPerDrawData
 {
-    uint HZB_MIPS_COUNT;
+    uint hzbMipsCount;
 };
 
 
-struct GEOM_BATCH_PER_DRAW_DATA
+struct GPU_GeomBatchPerDrawData
 {
     uint padding;
 };
 
 
-struct GEOM_DRAW_CMD_GEN_PER_DRAW_DATA
+struct GPU_GeomDrawCmdGenPerDrawData
 {
     uint padding;
 };
 
 
-struct ZPASS_PER_DRAW_DATA
+struct GPU_ZPassPerDrawData
 {
-    uint IS_AKILL_PASS;
+    uint isAKillPass;
 };
 
 
-struct HZB_GEN_PER_DRAW_DATA
+struct GPU_HzbGenPerDrawData
 {
-    uint2 SRC_MIP_RESOLUTION;
-    uint2 DST_MIP_RESOLUTION;
-    uint  DST_MIP_IDX;
+    uint2 srcMipResolution;
+    uint2 dstMipResolution;
+    uint  dstMipIdx;
 };
 
 
-struct CSM_PER_DRAW_DATA
+struct GPU_CsmPerDrawData
 {
-    uint CASCADE_IDX;
-    GPU_GeomQueue QUEUE;
+    uint cascadeIdx;
+    GPU_GeomQueue queue;
 };
 
 
-struct GBUFFER_PER_DRAW_DATA
+struct GPU_GBufferPerDrawData
 {
-    uint IS_AKILL_PASS;
+    uint isAKillPass;
 };
 
 
-struct IRRADIANCE_MAP_PER_DRAW_DATA
+struct GPU_IrradianceMapPerDrawData
 {
-    uint2 ENV_MAP_FACE_SIZE;
+    uint2 envMapFaceSize;
 };
 
 
-struct PREFILTERED_ENV_MAP_PER_DRAW_DATA
+struct GPU_PrefilteredEnvMapPerDrawData
 {
-    uint2 ENV_MAP_FACE_SIZE;
-    uint  MIP;
+    uint2 envMapFaceSize;
+    uint  mip;
 };
 
 
-struct DBG_RT_VIEW_PER_DRAW_DATA
+struct GPU_DbgRTViewPerDrawData
 {
-    uint MIP;
-    uint FACE;
-    uint CSM_CASCADE_IDX;
-    float DEPTH_Z_NEAR;
-    float DEPTH_Z_FAR;
+    uint  mip;
+    uint  face;
+    uint  csmCascadeIdx;
+    float depthZNear;
+    float depthZFar;
 };
 
 
@@ -1310,8 +1310,8 @@ static std::vector<GPU_GeomMaterial> s_cpuMaterialData;
 static std::vector<GPU_GeomInst>     s_cpuInstData;
 
 
-static std::vector<DBG_LINE_DATA>     s_dbgLineDataCPU;
-static std::vector<DBG_TRIANGLE_DATA> s_dbgTriangleDataCPU;
+static std::vector<GPU_DbgLineData>     s_dbgLineDataCPU;
+static std::vector<GPU_DbgTriangleData> s_dbgTriangleDataCPU;
 
 static std::vector<glm::uint> s_dbgLineVertexDataCPU;
 static std::vector<glm::uint> s_dbgTriangleVertexDataCPU;
@@ -1532,8 +1532,8 @@ static void RenderDebugLine(const glm::float3& wPos0, const glm::float3& wPos1, 
         return;
     }
 
-    DBG_LINE_DATA data = {};
-    data.COLOR = glm::packUnorm4x8(color);
+    GPU_DbgLineData data = {};
+    data.color = glm::packUnorm4x8(color);
 
     s_dbgLineDataCPU.emplace_back(data);
 
@@ -1568,8 +1568,8 @@ static void RenderDebugTriangleFilled(const glm::float3& wPos0, const glm::float
         return;
     }
 
-    DBG_TRIANGLE_DATA data = {};
-    data.COLOR = glm::packUnorm4x8(color);
+    GPU_DbgTriangleData data = {};
+    data.color = glm::packUnorm4x8(color);
 
     s_dbgTriangleDataCPU.emplace_back(data);
 
@@ -2791,7 +2791,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        s_dbgLineDataGPU.Create(&s_vkDevice, MAX_DBG_LINE_COUNT * sizeof(DBG_LINE_DATA), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
+        s_dbgLineDataGPU.Create(&s_vkDevice, MAX_DBG_LINE_COUNT * sizeof(GPU_DbgLineData), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
     }
 
@@ -2813,7 +2813,7 @@ static void CreateDbgDrawResources()
         allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     
-        s_dbgTriangleDataGPU.Create(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT * sizeof(DBG_TRIANGLE_DATA), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
+        s_dbgTriangleDataGPU.Create(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT * sizeof(GPU_DbgTriangleData), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
         s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
     }
 
@@ -3361,7 +3361,7 @@ static void CreateDescriptorSets()
 
 static void CreateGeomCullingPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_CULLING_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullingPerDrawData) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
@@ -3376,7 +3376,7 @@ static void CreateGeomCullingPipelineLayout()
 
 static void CreateGeomBatchingPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_BATCH_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomBatchPerDrawData) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
@@ -3391,7 +3391,7 @@ static void CreateGeomBatchingPipelineLayout()
 
 static void CreateGeomDrawCmdGenPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEOM_DRAW_CMD_GEN_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomDrawCmdGenPerDrawData) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
@@ -3410,7 +3410,7 @@ static void CreateZPassPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_DEPTH];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ZPASS_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_ZPassPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_DEPTH];
 
@@ -3425,7 +3425,7 @@ static void CreateHZBGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_HZB_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HZB_GEN_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_HzbGenPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_HZB_GEN];
 
@@ -3440,7 +3440,7 @@ static void CreateCSMGeomCullingPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_CSM_GEOM_CULLING];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSM_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_CsmPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_CSM_GEOM_CULLING];
     
@@ -3455,7 +3455,7 @@ static void CreateCSMRenderPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_CSM_RENDER];
     
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CSM_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_CsmPerDrawData) };
     
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_CSM_RENDER];
     
@@ -3470,7 +3470,7 @@ static void CreateGBufferPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_GBUFFER];
     
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GBUFFER_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_GBufferPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_GBUFFER];
 
@@ -3537,7 +3537,7 @@ static void CreateIrradianceMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_IRRADIANCE_MAP_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(IRRADIANCE_MAP_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_IrradianceMapPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_IRRADIANCE_MAP_GEN];
 
@@ -3552,7 +3552,7 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_PREFILT_ENV_MAP_GEN];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PREFILTERED_ENV_MAP_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_PrefilteredEnvMapPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_PREFILT_ENV_MAP_GEN];
     
@@ -3611,7 +3611,7 @@ static void CreateDbgRTViewPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &s_descSetLayouts[PASS_ID_COMMON];
     layoutPtrs[DESC_SET_PER_DRAW] = &s_descSetLayouts[PASS_ID_DBG_RT_VIEW];
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DBG_RT_VIEW_PER_DRAW_DATA) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgRTViewPerDrawData) };
 
     vkn::PSOLayout& layout = s_PSOLayouts[PASS_ID_DBG_RT_VIEW];
 
@@ -6143,9 +6143,9 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_IRRADIANCE_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    IRRADIANCE_MAP_PER_DRAW_DATA pushConsts = {};
-    pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
-    pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
+    GPU_IrradianceMapPerDrawData pushConsts = {};
+    pushConsts.envMapFaceSize.x = s_skyboxTexture.GetSizeX();
+    pushConsts.envMapFaceSize.y = s_skyboxTexture.GetSizeY();
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6170,9 +6170,9 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    PREFILTERED_ENV_MAP_PER_DRAW_DATA pushConsts = {};
-    pushConsts.ENV_MAP_FACE_SIZE.x = s_skyboxTexture.GetSizeX();
-    pushConsts.ENV_MAP_FACE_SIZE.y = s_skyboxTexture.GetSizeY();
+    GPU_PrefilteredEnvMapPerDrawData pushConsts = {};
+    pushConsts.envMapFaceSize.x = s_skyboxTexture.GetSizeX();
+    pushConsts.envMapFaceSize.y = s_skyboxTexture.GetSizeY();
 
     cmdBuffer
         .BeginBarrierList()
@@ -6184,7 +6184,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_PREFILT_ENV_MAP_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-        pushConsts.MIP = mip;
+        pushConsts.mip = mip;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6287,8 +6287,8 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passDescID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    GEOM_CULLING_PER_DRAW_DATA pushConsts = {};
-    pushConsts.HZB_MIPS_COUNT = s_HZB.GetMipCount();
+    GPU_GeomCullingPerDrawData pushConsts = {};
+    pushConsts.hzbMipsCount = s_HZB.GetMipCount();
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6328,7 +6328,7 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = (uint32_t)setID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    // GEOM_BATCH_PER_DRAW_DATA pushConsts = {};
+    // GPU_GeomBatchPerDrawData pushConsts = {};
     // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
@@ -6389,7 +6389,7 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = setID, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    // GEOM_DRAW_CMD_GEN_PER_DRAW_DATA pushConsts = {};
+    // GPU_GeomDrawCmdGenPerDrawData pushConsts = {};
     // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE), 1, 1);
@@ -6492,8 +6492,8 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
-        ZPASS_PER_DRAW_DATA pushConsts = {};
-        pushConsts.IS_AKILL_PASS = isAKillPass;
+        GPU_ZPassPerDrawData pushConsts = {};
+        pushConsts.isAKillPass = isAKillPass;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
@@ -6576,10 +6576,10 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     glm::uvec2 srcMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
     glm::uvec2 dstMipSize = srcMipSize;
 
-    HZB_GEN_PER_DRAW_DATA pushConsts = {};
-    pushConsts.SRC_MIP_RESOLUTION = dstMipSize;
-    pushConsts.DST_MIP_RESOLUTION = dstMipSize;
-    pushConsts.DST_MIP_IDX = 0;
+    GPU_HzbGenPerDrawData pushConsts = {};
+    pushConsts.srcMipResolution = dstMipSize;
+    pushConsts.dstMipResolution = dstMipSize;
+    pushConsts.dstMipIdx = 0;
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6601,9 +6601,9 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
                     VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1)
             .Push();
 
-        pushConsts.SRC_MIP_RESOLUTION = srcMipSize;
-        pushConsts.DST_MIP_RESOLUTION = dstMipSize;
-        pushConsts.DST_MIP_IDX = mip;
+        pushConsts.srcMipResolution = srcMipSize;
+        pushConsts.dstMipResolution = dstMipSize;
+        pushConsts.dstMipIdx = mip;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
@@ -6894,9 +6894,9 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_Geom
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
-        CSM_PER_DRAW_DATA pushConsts = {};
-        pushConsts.CASCADE_IDX = cascade;
-        pushConsts.QUEUE = queue;
+        GPU_CsmPerDrawData pushConsts = {};
+        pushConsts.cascadeIdx = cascade;
+        pushConsts.queue = queue;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
@@ -7046,8 +7046,8 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
-        GBUFFER_PER_DRAW_DATA pushConsts = {};
-        pushConsts.IS_AKILL_PASS = isAKillPass;
+        GPU_GBufferPerDrawData pushConsts = {};
+        pushConsts.isAKillPass = isAKillPass;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
         
@@ -7309,12 +7309,12 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
         cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_DBG_RT_VIEW, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-        DBG_RT_VIEW_PER_DRAW_DATA pushConsts = {};
-        pushConsts.MIP = s_dbgOutputRTMip;
-        pushConsts.FACE = s_dbgOutputRTFace;
-        pushConsts.CSM_CASCADE_IDX = s_dbgOutputRTCascadeIndex;
-        pushConsts.DEPTH_Z_NEAR = s_dbgDepthOutputRTZNear;
-        pushConsts.DEPTH_Z_FAR = s_dbgDepthOutputRTZFar;
+        GPU_DbgRTViewPerDrawData pushConsts = {};
+        pushConsts.mip = s_dbgOutputRTMip;
+        pushConsts.face = s_dbgOutputRTFace;
+        pushConsts.csmCascadeIdx = s_dbgOutputRTCascadeIndex;
+        pushConsts.depthZNear = s_dbgDepthOutputRTZNear;
+        pushConsts.depthZFar = s_dbgDepthOutputRTZFar;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
@@ -7337,7 +7337,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     if (lineInstCount > 0) {
         void* pLineData = s_dbgLineDataGPU.Map();
-        memcpy(pLineData, s_dbgLineDataCPU.data(), lineInstCount * sizeof(DBG_LINE_DATA));
+        memcpy(pLineData, s_dbgLineDataCPU.data(), lineInstCount * sizeof(GPU_DbgLineData));
         s_dbgLineDataGPU.Unmap();
 
         void* pLineVertData = s_dbgLineVertexDataGPU.Map();
@@ -7347,7 +7347,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     if (triInstCount > 0) {
         void* pTriData = s_dbgTriangleDataGPU.Map();
-        memcpy(pTriData, s_dbgTriangleDataCPU.data(), triInstCount * sizeof(DBG_TRIANGLE_DATA));
+        memcpy(pTriData, s_dbgTriangleDataCPU.data(), triInstCount * sizeof(GPU_DbgTriangleData));
         s_dbgTriangleDataGPU.Unmap();
 
         void* pTriVertData = s_dbgTriangleVertexDataGPU.Map();

@@ -2,21 +2,21 @@
 #define DBG_DRAW_VS_OUT_H
 
 
-struct DBG_DRAW_VS_OUTPUT_INTERP
+struct GPU_DbgDrawVsOutputInterp
 {
     [[vk::location(0)]] float4 color;
 };
 
 
-struct DBG_DRAW_VS_OUTPUT_NO_INTERP
+struct GPU_DbgDrawVsOutputNoInterp
 {
 };
 
 
-struct DBG_DRAW_VS_OUTPUT
+struct GPU_DbgDrawVsOutput
 {
-    DBG_DRAW_VS_OUTPUT_INTERP data;
-    nointerpolation DBG_DRAW_VS_OUTPUT_NO_INTERP flatData;
+    GPU_DbgDrawVsOutputInterp data;
+    nointerpolation GPU_DbgDrawVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position; 
 };

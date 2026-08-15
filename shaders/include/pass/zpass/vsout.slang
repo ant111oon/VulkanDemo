@@ -2,22 +2,22 @@
 #define ZPASS_VS_OUT_H
 
 
-struct ZPASS_VS_OUTPUT_INTERP
+struct GPU_ZPassVsOutputInterp
 {
     [[vk::location(0)]] float2 uv;
 };
 
 
-struct ZPASS_VS_OUTPUT_NO_INTERP
+struct GPU_ZPassVsOutputNoInterp
 {
     [[vk::location(1)]] uint instID;
 };
 
 
-struct ZPASS_VS_OUTPUT
+struct GPU_ZPassVsOutput
 {
-    ZPASS_VS_OUTPUT_INTERP data;
-    nointerpolation ZPASS_VS_OUTPUT_NO_INTERP flatData;
+    GPU_ZPassVsOutputInterp data;
+    nointerpolation GPU_ZPassVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position; 
 };

@@ -7,7 +7,7 @@
 #include "common/geom_stream_incl.slang"
 
 
-struct GBUFFER_INPUT_DATA
+struct GPU_GBufferInput
 {
     float3 position;
     float3 lnorm;
@@ -16,9 +16,9 @@ struct GBUFFER_INPUT_DATA
 };
 
 
-GBUFFER_INPUT_DATA PrepareGBufferVSInputData(uint vertID)
+GPU_GBufferInput PrepareGBufferVSInputData(uint vertID)
 {
-    GBUFFER_INPUT_DATA data = (GBUFFER_INPUT_DATA)0;
+    GPU_GBufferInput data = (GPU_GBufferInput)0;
 
     data.position = GeomStreamLoadPosition(vertID);
     data.lnorm = GeomStreamLoadNormal(vertID);

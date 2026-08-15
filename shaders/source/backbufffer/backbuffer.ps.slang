@@ -6,16 +6,16 @@
 #include "common/system/sys_constants.slang"
 
 
-struct BACKBUFFER_PS_OUTPUT
+struct GPU_BackbufferPsOutput
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-BACKBUFFER_PS_OUTPUT main(BACKBUFFER_VS_OUTPUT input)
+GPU_BackbufferPsOutput main(GPU_BackbufferVsOutput input)
 {
-    BACKBUFFER_PS_OUTPUT result = (BACKBUFFER_PS_OUTPUT)0;
+    GPU_BackbufferPsOutput result = (GPU_BackbufferPsOutput)0;
 
     result.color = float4(LOAD_TEX(BACKBUFFER_INPUT_COLOR, int3((int2)input.hpos.xy, 0)).rgb, 1.f);
 

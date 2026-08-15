@@ -2,7 +2,7 @@
 #define GBUFFER_VS_OUT_H
 
 
-struct GBUFFER_VS_OUTPUT_INTERP
+struct GPU_GBufferVsOutputInterp
 {
     [[vk::location(0)]] float3 lpos;
     [[vk::location(1)]] float3 wpos;
@@ -12,16 +12,16 @@ struct GBUFFER_VS_OUTPUT_INTERP
 };
 
 
-struct GBUFFER_VS_OUTPUT_NO_INTERP
+struct GPU_GBufferVsOutputNoInterp
 {
     [[vk::location(5)]] uint instID;
 };
 
 
-struct GBUFFER_VS_OUTPUT
+struct GPU_GBufferVsOutput
 {
-    GBUFFER_VS_OUTPUT_INTERP data;
-    nointerpolation GBUFFER_VS_OUTPUT_NO_INTERP flatData;
+    GPU_GBufferVsOutputInterp data;
+    nointerpolation GPU_GBufferVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position; 
 };

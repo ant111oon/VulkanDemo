@@ -5,9 +5,9 @@
 
 
 [shader("vertex")]
-POST_PROC_VS_OUTPUT main(uint vertID : SV_VertexID)
+GPU_PostProcVsOutput main(uint vertID : SV_VertexID)
 {
-    POST_PROC_VS_OUTPUT result = (POST_PROC_VS_OUTPUT)0;
+    GPU_PostProcVsOutput result = (GPU_PostProcVsOutput)0;
 
     result.hpos = float4(GetScreenQuadVertNDC(vertID), 1.f);
 

@@ -5,16 +5,16 @@
 #include "common/math/constants.slang"
 
 
-struct PREFILTERED_ENV_MAP_PER_DRAW_DATA
+struct GPU_PrefilteredEnvMapPerDrawData
 {
-    uint2 ENV_MAP_FACE_SIZE;
-    uint  MIP;
+    uint2 envMapFaceSize;
+    uint  mip;
 };
 
-[[vk::push_constant]] PREFILTERED_ENV_MAP_PER_DRAW_DATA PREFILTERED_ENV_MAP_DYN;
+[[vk::push_constant]] GPU_PrefilteredEnvMapPerDrawData PREFILTERED_ENV_MAP_DYN;
 
-#define PREFILTERED_ENV_MAP_FACE_SIZE PREFILTERED_ENV_MAP_DYN.ENV_MAP_FACE_SIZE
-#define PREFILTERED_ENV_MAP_MIP       PREFILTERED_ENV_MAP_DYN.MIP
+#define PREFILTERED_ENV_MAP_FACE_SIZE PREFILTERED_ENV_MAP_DYN.envMapFaceSize
+#define PREFILTERED_ENV_MAP_MIP       PREFILTERED_ENV_MAP_DYN.mip
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] TextureCube PREFILTERED_ENV_MAP_GEN_ENV_MAP;

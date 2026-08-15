@@ -3,7 +3,7 @@
 #include "pass/gbuffer/vsout.slang"
 
 
-struct GBUFFER_PS_OUTPUT
+struct GPU_GBufferPsOutput
 {
     [[vk::location(0)]] float4 rt0;
     [[vk::location(1)]] float4 rt1;
@@ -13,9 +13,9 @@ struct GBUFFER_PS_OUTPUT
 
 
 [shader("fragment")]
-GBUFFER_PS_OUTPUT main(GBUFFER_VS_OUTPUT input)
+GPU_GBufferPsOutput main(GPU_GBufferVsOutput input)
 {
-    GBUFFER_PS_OUTPUT result = (GBUFFER_PS_OUTPUT)0;
+    GPU_GBufferPsOutput result = (GPU_GBufferPsOutput)0;
 
     input.data.lnorm = normalize(input.data.lnorm);
     input.data.tangent.xyz = normalize(input.data.tangent.xyz);

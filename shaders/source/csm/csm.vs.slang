@@ -7,11 +7,9 @@
 
 
 [shader("vertex")]
-CSM_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
+GPU_CsmVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
 {
-    CSM_VS_OUTPUT result = (CSM_VS_OUTPUT)0;
-
-    CSM_INPUT_DATA inputData = PrepareCSMPassVSInputData(vertID, CSM_IS_AKILL_PASS);
+    GPU_CsmInput inputData = PrepareCSMPassVSInputData(vertID, CSM_IS_AKILL_PASS);
 
     const uint queue = CSMGetBufferIndex(CSM_CASCADE_IDX, CSM_QUEUE);
 
@@ -20,6 +18,8 @@ CSM_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstance
 
     const float3 wpos = mul(inst.matrWCS, float4(inputData.position, 1.f)).xyz;
 
+    GPU_CsmVsOutput result = (GPU_CsmVsOutput)0;
+    
     result.data.uv = inputData.uv;
 
     result.flatData.instID = instID;

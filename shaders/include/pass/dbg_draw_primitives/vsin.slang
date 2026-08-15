@@ -10,15 +10,15 @@
 #endif
 
 
-struct DBG_DRAW_INPUT_DATA
+struct GPU_DbgDrawInput
 {
     float3 wPos;
 };
 
 
-DBG_DRAW_INPUT_DATA PrepareDbgDrawVSInputData(uint vertID)
+GPU_DbgDrawInput PrepareDbgDrawVSInputData(uint vertID)
 {
-    DBG_DRAW_INPUT_DATA inputData = (DBG_DRAW_INPUT_DATA)0;
+    GPU_DbgDrawInput inputData = (GPU_DbgDrawInput)0;
 
 #if defined(DBG_DRAW_LINES_PASS)
     const uint offset = vertID * DBG_LINE_VERTEX_DATA_SIZE_UI;

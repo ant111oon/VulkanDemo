@@ -5,15 +5,15 @@
 #include "common/gbuffer_incl.slang"
 
 
-struct CSM_PS_OUTPUT
+struct GPU_CsmPsOutput
 {
 };
 
 
 [shader("fragment")]
-CSM_PS_OUTPUT main(CSM_VS_OUTPUT input)
+GPU_CsmPsOutput main(GPU_CsmVsOutput input)
 {
-    CSM_PS_OUTPUT result = (CSM_PS_OUTPUT)0;
+    GPU_CsmPsOutput result = (GPU_CsmPsOutput)0;
 
     if (CSM_IS_AKILL_PASS) {
         const GPU_GeomMaterial material = COMMON_MATERIALS[COMMON_INST_BUFFER[input.flatData.instID].materialID];

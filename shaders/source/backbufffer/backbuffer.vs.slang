@@ -5,9 +5,9 @@
 
 
 [shader("vertex")]
-BACKBUFFER_VS_OUTPUT main(uint vertID : SV_VertexID)
+GPU_BackbufferVsOutput main(uint vertID : SV_VertexID)
 {
-    BACKBUFFER_VS_OUTPUT result = (BACKBUFFER_VS_OUTPUT)0;
+    GPU_BackbufferVsOutput result = (GPU_BackbufferVsOutput)0;
 
     result.hpos = float4(GetScreenQuadVertNDC(vertID), 1.f);
 

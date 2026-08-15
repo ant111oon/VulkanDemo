@@ -5,22 +5,22 @@
 #include "common/common_structs.slang"
 
 
-struct DBG_RT_VIEW_PER_DRAW_DATA
+struct GPU_DbgRTViewPerDrawData
 {
-    uint MIP;
-    uint FACE;
-    uint CSM_CASCADE_IDX;
-    float DEPTH_Z_NEAR;
-    float DEPTH_Z_FAR;
+    uint  mip;
+    uint  face;
+    uint  csmCascadeIdx;
+    float depthZNear;
+    float depthZFar;
 };
 
-[[vk::push_constant]] DBG_RT_VIEW_PER_DRAW_DATA DBG_RT_VIEW_DYN;
+[[vk::push_constant]] GPU_DbgRTViewPerDrawData DBG_RT_VIEW_DYN;
 
-#define DBG_RT_VIEW_MIP         DBG_RT_VIEW_DYN.MIP
-#define DBG_RT_VIEW_FACE        DBG_RT_VIEW_DYN.FACE
-#define DBG_RT_DEPTH_Z_NEAR     DBG_RT_VIEW_DYN.DEPTH_Z_NEAR
-#define DBG_RT_DEPTH_Z_FAR      DBG_RT_VIEW_DYN.DEPTH_Z_FAR
-#define DBG_RT_CSM_CASCADE_IDX  DBG_RT_VIEW_DYN.CSM_CASCADE_IDX
+#define DBG_RT_VIEW_MIP         DBG_RT_VIEW_DYN.mip
+#define DBG_RT_VIEW_FACE        DBG_RT_VIEW_DYN.face
+#define DBG_RT_DEPTH_Z_NEAR     DBG_RT_VIEW_DYN.depthZNear
+#define DBG_RT_DEPTH_Z_FAR      DBG_RT_VIEW_DYN.depthZFar
+#define DBG_RT_CSM_CASCADE_IDX  DBG_RT_VIEW_DYN.csmCascadeIdx
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D DBG_RT_VIEW_COMMON_DEPTH;

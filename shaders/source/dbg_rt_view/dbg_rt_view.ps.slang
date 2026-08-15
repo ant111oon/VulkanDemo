@@ -130,16 +130,16 @@ void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
 }
 
 
-struct DBG_RT_VIEW_PS_OUTPUT
+struct GPU_DbgRTViewPsOutput
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-DBG_RT_VIEW_PS_OUTPUT main(DBG_RT_VIEW_VS_OUTPUT input, uint2 pixCoord : SV_Position)
+GPU_DbgRTViewPsOutput main(GPU_DbgRTViewVsOutput input, uint2 pixCoord : SV_Position)
 {
-    DBG_RT_VIEW_PS_OUTPUT result = (DBG_RT_VIEW_PS_OUTPUT)0;
+    GPU_DbgRTViewPsOutput result = (GPU_DbgRTViewPsOutput)0;
 
     switch (COMMON_DBG_RT_VIEW_TYPE) {
         case GPU_DbgRTViewType::NONE:

@@ -2,20 +2,20 @@
 #define POST_PROCESSING_VS_OUT_H
 
 
-struct POST_PROC_VS_OUTPUT_INTERP
+struct GPU_PostProcVsOutputInterp
 {
 };
 
 
-struct POST_PROC_VS_OUTPUT_NO_INTERP
+struct GPU_PostProcVsOutputNoInterp
 {
 };
 
 
-struct POST_PROC_VS_OUTPUT
+struct GPU_PostProcVsOutput
 {
-    POST_PROC_VS_OUTPUT_INTERP data;
-    nointerpolation POST_PROC_VS_OUTPUT_NO_INTERP flatData;
+    GPU_PostProcVsOutputInterp data;
+    nointerpolation GPU_PostProcVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position;
 };

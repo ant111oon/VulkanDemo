@@ -2,21 +2,21 @@
 #define SKYBOX_VS_OUT_H
 
 
-struct SKYBOX_VS_OUTPUT_INTERP
+struct GPU_SkyboxVsOutputInterp
 {
     [[vk::location(0)]] float3 uvw;
 };
 
 
-struct SKYBOX_VS_OUTPUT_NO_INTERP
+struct GPU_SkyboxVsOutputNoInterp
 {
 };
 
 
-struct SKYBOX_VS_OUTPUT
+struct GPU_SkyboxVsOutput
 {
-    SKYBOX_VS_OUTPUT_INTERP data;
-    nointerpolation SKYBOX_VS_OUTPUT_NO_INTERP flatData;
+    GPU_SkyboxVsOutputInterp data;
+    nointerpolation GPU_SkyboxVsOutputNoInterp flatData;
 
     float4 hpos : SV_Position; 
 };

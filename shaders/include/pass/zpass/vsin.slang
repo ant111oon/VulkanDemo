@@ -7,16 +7,16 @@
 #include "common/geom_stream_incl.slang"
 
 
-struct ZPASS_INPUT_DATA
+struct GPU_ZPassInput
 {
     float3 position;
     float2 uv;
 };
 
 
-ZPASS_INPUT_DATA PrepareZPassVSInputData(uint vertID, bool fetchUV = true)
+GPU_ZPassInput PrepareZPassVSInputData(uint vertID, bool fetchUV = true)
 {
-    ZPASS_INPUT_DATA data = (ZPASS_INPUT_DATA)0;
+    GPU_ZPassInput data = (GPU_ZPassInput)0;
 
     data.position = GeomStreamLoadPosition(vertID);
 

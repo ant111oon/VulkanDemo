@@ -5,12 +5,12 @@
 #include "common/common_geom.slang"
 
 
-struct GEOM_BATCH_PER_DRAW_DATA
+struct GPU_GeomBatchPerDrawData
 {
     uint padding;
 };
 
-[[vk::push_constant]] GEOM_BATCH_PER_DRAW_DATA GEOM_BATCH_DYN;
+[[vk::push_constant]] GPU_GeomBatchPerDrawData GEOM_BATCH_DYN;
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_BATCH_VIS_INST_ID_QUEUE;

@@ -5,14 +5,14 @@
 #include "common/common_geom.slang"
 
 
-struct GEOM_CULLING_PER_DRAW_DATA
+struct GPU_GeomCullingPerDrawData
 {
-    uint  HZB_MIPS_COUNT;
+    uint  hzbMipsCount;
 };
 
-[[vk::push_constant]] GEOM_CULLING_PER_DRAW_DATA GEOM_CULLING_DYN;
+[[vk::push_constant]] GPU_GeomCullingPerDrawData GEOM_CULLING_DYN;
 
-#define GEOM_CULLING_HZB_MIPS_COUNT GEOM_CULLING_DYN.HZB_MIPS_COUNT
+#define GEOM_CULLING_HZB_MIPS_COUNT GEOM_CULLING_DYN.hzbMipsCount
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];

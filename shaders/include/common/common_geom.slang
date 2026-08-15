@@ -59,12 +59,12 @@ struct GPU_Mesh
 {
     property float3 minPosLCS
     {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLcsPacked.x), unpackHalf2x16ToFloat(aabbMinMaxLcsPacked.y).x); }
+        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLCS.x), unpackHalf2x16ToFloat(aabbMinMaxLCS.y).x); }
     }
 
     property float3 maxPosLCS
     {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLcsPacked.y).y, unpackHalf2x16ToFloat(aabbMinMaxLcsPacked.z)); }
+        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLCS.y).y, unpackHalf2x16ToFloat(aabbMinMaxLCS.z)); }
     }
 
     property GPU_AABB aabbLCS
@@ -78,7 +78,7 @@ struct GPU_Mesh
     uint firstLOD; // Index of mesh LOD 0 inside LOD buffer
     uint lodCount;
 
-    private uint3 aabbMinMaxLcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    private uint3 aabbMinMaxLCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     private uint padding;
 };
 
@@ -87,12 +87,12 @@ struct GPU_GeomInst
 {
     property float3 minPosWCS
     {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWcsPacked.x), unpackHalf2x16ToFloat(aabbMinMaxWcsPacked.y).x); }
+        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.x), unpackHalf2x16ToFloat(aabbMinMaxWCS.y).x); }
     }
 
     property float3 maxPosWCS
     {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWcsPacked.y).y, unpackHalf2x16ToFloat(aabbMinMaxWcsPacked.z)); }
+        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.y).y, unpackHalf2x16ToFloat(aabbMinMaxWCS.z)); }
     }
 
     property GPU_AABB aabbWCS
@@ -102,7 +102,7 @@ struct GPU_GeomInst
 
     row_major float3x4 matrWCS;
 
-    private uint3 aabbMinMaxWcsPacked; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
+    private uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint meshID : 16;
     uint materialID : 16;
 };

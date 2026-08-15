@@ -4,14 +4,14 @@
 #include "common/system/sys_constants.slang"
 
 
-struct IRRADIANCE_MAP_PER_DRAW_DATA
+struct GPU_IrradianceMapPerDrawData
 {
-    uint2 ENV_MAP_FACE_SIZE;
+    uint2 envMapFaceSize;
 };
 
-[[vk::push_constant]] IRRADIANCE_MAP_PER_DRAW_DATA IRRADIANCE_MAP_DYN;
+[[vk::push_constant]] GPU_IrradianceMapPerDrawData IRRADIANCE_MAP_DYN;
 
-#define IRRADIANCE_MAP_ENV_MAP_FACE_SIZE IRRADIANCE_MAP_DYN.ENV_MAP_FACE_SIZE
+#define IRRADIANCE_MAP_ENV_MAP_FACE_SIZE IRRADIANCE_MAP_DYN.envMapFaceSize
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] TextureCube IRRADIANCE_MAP_GEN_ENV_MAP;

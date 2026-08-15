@@ -2,22 +2,22 @@
 #define CSM_VS_OUT_H
 
 
-struct CSM_VS_OUTPUT_INTERP
+struct GPU_CsmOutputInterp
 {
     [[vk::location(0)]] float2 uv;
 };
 
 
-struct CSM_VS_OUTPUT_NO_INTERP
+struct GPU_CsmOutputNoInterp
 {
     [[vk::location(1)]] uint instID;
 };
 
 
-struct CSM_VS_OUTPUT
+struct GPU_CsmVsOutput
 {
-    CSM_VS_OUTPUT_INTERP data;
-    nointerpolation CSM_VS_OUTPUT_NO_INTERP flatData;
+    GPU_CsmOutputInterp data;
+    nointerpolation GPU_CsmOutputNoInterp flatData;
 
     float4 hpos : SV_Position; 
 };

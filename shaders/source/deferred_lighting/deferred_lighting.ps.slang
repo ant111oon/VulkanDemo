@@ -28,7 +28,7 @@ static const float3 DBG_CSM_CASCADE_COLORS[] = {
 };
 
 
-struct GBUFFER
+struct GPU_GBuffer
 {
     float3 albedo;
     float metalness;
@@ -39,7 +39,7 @@ struct GBUFFER
 };
 
 
-struct POINT_LIGHT
+struct GPU_PointLight
 {
     float3 color;
     float3 wpos;
@@ -49,7 +49,7 @@ struct POINT_LIGHT
 
 // static const uint G_POINT_LIGHTS_COUNT = 4;
 
-// static POINT_LIGHT G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
+// static GPU_PointLight G_POINT_LIGHTS[G_POINT_LIGHTS_COUNT] =
 // {
 //     { 8.f * float3(1.f, 0.f, 0.f), float3(-2.f, 2.f, -2.f), 3.f },
 //     { 8.f * float3(0.f, 1.f, 0.f), float3( 2.f, 2.f, -2.f), 3.f },
@@ -78,9 +78,9 @@ float CalcLightAttenuation(in float distToLight, in float lightRadius)
 }
 
 
-GBUFFER SampleGBuffer(in int3 texCoord)
+GPU_GBuffer SampleGBuffer(in int3 texCoord)
 {
-    GBUFFER gbuffer = (GBUFFER)0;
+    GPU_GBuffer gbuffer = (GPU_GBuffer)0;
 
     gbuffer.albedo = LOAD_TEX(DEFERRED_LIGHTING_GBUFFER_0, texCoord).rgb;
     gbuffer.normal = normalize(LOAD_TEX(DEFERRED_LIGHTING_GBUFFER_1, texCoord).xyz);
@@ -97,7 +97,7 @@ GBUFFER SampleGBuffer(in int3 texCoord)
 }
 
 
-float3 ProcessLight(in GBUFFER gbuffer, in float3 V, in float3 lightDir, in float3 lightColor, in float3 F0)
+float3 ProcessLight(in GPU_GBuffer gbuffer, in float3 V, in float3 lightDir, in float3 lightColor, in float3 F0)
 {
     const float3 L = -lightDir;
     const float3 H = normalize(V + L);
@@ -148,7 +148,7 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 }
 
 
-float3 ProcessIBL(in GBUFFER gbuffer, in float3 V, in float3 F0)
+float3 ProcessIBL(in GPU_GBuffer gbuffer, in float3 V, in float3 F0)
 {
     if (!COMMON_DBG_USE_IBL) {
         return gbuffer.albedo * gbuffer.ao * 0.015f;
@@ -183,7 +183,7 @@ uint GetCsmCascadeIndex(in float viewZ)
 }
 
 
-struct CSM_CASCADE_BLEND_DATA
+struct GPU_CsmCascadeBlendData
 {
     __init()
     {
@@ -198,7 +198,7 @@ struct CSM_CASCADE_BLEND_DATA
 };
 
 
-CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascadeIndex)
+GPU_CsmCascadeBlendData GetCsmCascadeBlendData(in float viewZ, in uint currCascadeIndex)
 {
     const float2 bounds = COMMON_CSM_CASCADE_BOUNDS(currCascadeIndex);
     const float cascadeSize = bounds[1] - bounds[0];
@@ -214,7 +214,7 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
     needBlend = needBlend && (thresholdCoef <= COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF);
 
     if (!needBlend) {
-        return CSM_CASCADE_BLEND_DATA();
+        return GPU_CsmCascadeBlendData();
     }
 
     const uint closestCascadeIdx = currCascadeIndex + (closestBoundIdx == 0 ? -1 : 1);
@@ -225,7 +225,7 @@ CSM_CASCADE_BLEND_DATA GetCsmCascadeBlendData(in float viewZ, in uint currCascad
     const float leftThresholdDist = (closestBoundIdx == 0 ? closestCascadeSize : cascadeSize) * COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF;
     const float rightThresholdDist = (closestBoundIdx == 0 ? cascadeSize : closestCascadeSize) * COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF;
 
-    CSM_CASCADE_BLEND_DATA result;
+    GPU_CsmCascadeBlendData result;
 
     result.closestCascade = closestCascadeIdx;
     result.blendCoef = smoothstep(bound - leftThresholdDist, bound + rightThresholdDist, viewZ);
@@ -377,7 +377,7 @@ float CalcCsmVogelPCF(in SamplerComparisonState smSmp, in float3 texCoord, in fl
 }
 
 
-struct CSM_PCSS_BLOCKER_SEARCH_RESULT
+struct GPU_CsmPcssBlockerSearchResult
 {
     bool HasBlocker() { return blockerCount > 0; }
 
@@ -386,7 +386,7 @@ struct CSM_PCSS_BLOCKER_SEARCH_RESULT
 };
 
 
-CSM_PCSS_BLOCKER_SEARCH_RESULT FindCsmPCSSAverageBlocker(in float3 texCoord, in float zReceiverViewSpace, in float radius, in bool randRotEnabled)
+GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in float zReceiverViewSpace, in float radius, in bool randRotEnabled)
 {
     const float2 searchRadius = COMMON_CSM_INV_TEX_SIZE * radius;
 
@@ -423,7 +423,7 @@ CSM_PCSS_BLOCKER_SEARCH_RESULT FindCsmPCSSAverageBlocker(in float3 texCoord, in 
         }
     }
 
-    CSM_PCSS_BLOCKER_SEARCH_RESULT result;
+    GPU_CsmPcssBlockerSearchResult result;
 
     result.blockerCount = blockerCount;
     result.avgZViewSpace = blockerCount > 0u ? avgBlocker / blockerCount : 0.f;
@@ -450,7 +450,7 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
     const float worldUnitsPerTexel = max(COMMON_CSM_CASCADE_WORLD_UNITS_PER_TEXEL(cascade), M3D_EPS);
     const float searchRadiusTexels = min(searchRadiusWorld / worldUnitsPerTexel, COMMON_CSM_PCSS_MAX_SEARCH_RADIUS_TEXELS);
 
-    const CSM_PCSS_BLOCKER_SEARCH_RESULT blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
+    const GPU_CsmPcssBlockerSearchResult blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
 
     if (!blockers.HasBlocker()) {
         return 1.f;
@@ -527,7 +527,7 @@ float3 CalcCsmShadowCascade(in uint cascade, in float3 wpos, in float bias)
 }
 
 
-float3 GetCsmCascadeColor(in uint currCascadeIdx, in CSM_CASCADE_BLEND_DATA blendData)
+float3 GetCsmCascadeColor(in uint currCascadeIdx, in GPU_CsmCascadeBlendData blendData)
 {
     if (!COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED) {
         return ONEF3;
@@ -560,7 +560,7 @@ float CalcCsmBias(in float3 wnorm)
 
 float3 ApplyCSMCascadeBlend(inout float3 shadow, in float3 wpos, in float vDist, in float bias, in uint currCascadeIndex)
 {
-    CSM_CASCADE_BLEND_DATA blendData;
+    GPU_CsmCascadeBlendData blendData;
 
     if (COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED) {
         blendData = GetCsmCascadeBlendData(vDist, currCascadeIndex);
@@ -602,7 +602,7 @@ float3 ComputeLighting(in int2 pixelCoord)
 {
     const int3 texCoord = int3(pixelCoord, 0);
 
-    GBUFFER gbuffer = SampleGBuffer(texCoord);
+    GPU_GBuffer gbuffer = SampleGBuffer(texCoord);
 
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
 
@@ -636,16 +636,16 @@ float3 ComputeLighting(in int2 pixelCoord)
 }
 
 
-struct DEFERRED_LIGHTING_PS_OUTPUT
+struct GPU_DeferredLightingPsOutput
 {
     [[vk::location(0)]] float4 color;
 };
 
 
 [shader("fragment")]
-DEFERRED_LIGHTING_PS_OUTPUT main(DEFERRED_LIGHTING_VS_OUTPUT input, uint2 pixCoord : SV_Position)
+GPU_DeferredLightingPsOutput main(GPU_DeferredLightingVsOutput input, uint2 pixCoord : SV_Position)
 {
-    DEFERRED_LIGHTING_PS_OUTPUT result = (DEFERRED_LIGHTING_PS_OUTPUT)0;
+    GPU_DeferredLightingPsOutput result = (GPU_DeferredLightingPsOutput)0;
 
     result.color = float4(ComputeLighting(pixCoord), 1.f);
 

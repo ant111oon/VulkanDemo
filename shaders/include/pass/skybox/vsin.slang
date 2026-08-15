@@ -62,15 +62,15 @@ namespace utils
 }
 
 
-struct SKYBOX_INPUT_DATA
+struct GPU_SkyboxInput
 {
     float3 position;
 };
 
 
-SKYBOX_INPUT_DATA PrepareSkyboxVSInputData(uint vertID)
+GPU_SkyboxInput PrepareSkyboxVSInputData(uint vertID)
 {
-    SKYBOX_INPUT_DATA inputData = (SKYBOX_INPUT_DATA)0;
+    GPU_SkyboxInput inputData = (GPU_SkyboxInput)0;
 
     const uint offset = vertID * utils::SKYBOX_VERT_SIZE_F;
 

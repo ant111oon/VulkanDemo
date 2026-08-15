@@ -7,16 +7,16 @@
 #include "common/geom_stream_incl.slang"
 
 
-struct CSM_INPUT_DATA
+struct GPU_CsmInput
 {
     float3 position;
     float2 uv;
 };
 
 
-CSM_INPUT_DATA PrepareCSMPassVSInputData(uint vertID, bool fetchUV = true)
+GPU_CsmInput PrepareCSMPassVSInputData(uint vertID, bool fetchUV = true)
 {
-    CSM_INPUT_DATA data = (CSM_INPUT_DATA)0;
+    GPU_CsmInput data = (GPU_CsmInput)0;
 
     data.position = GeomStreamLoadPosition(vertID);
 

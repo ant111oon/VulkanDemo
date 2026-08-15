@@ -5,16 +5,16 @@
 
 
 [shader("vertex")]
-ZPASS_VS_OUTPUT main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
+GPU_ZPassVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
 {
-    ZPASS_VS_OUTPUT result = (ZPASS_VS_OUTPUT)0;
-
-    ZPASS_INPUT_DATA inputData = PrepareZPassVSInputData(vertID, ZPASS_IS_AKILL_PASS);
+    GPU_ZPassInput inputData = PrepareZPassVSInputData(vertID, ZPASS_IS_AKILL_PASS);
 
     const uint instID = ZPASS_INST_ID_QUEUE[instIndex];
     const GPU_GeomInst inst = COMMON_INST_BUFFER[instID];
 
     const float3 wpos = mul(inst.matrWCS, float4(inputData.position, 1.f)).xyz;
+
+    GPU_ZPassVsOutput result = (GPU_ZPassVsOutput)0;
 
     result.data.uv = inputData.uv;
 
