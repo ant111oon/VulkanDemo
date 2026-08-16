@@ -5,24 +5,6 @@
 
 namespace vkn
 {
-    struct PhysicalDeviceFeaturesRequirenments
-    {
-        bool independentBlend;
-        bool descriptorBindingPartiallyBound;
-        bool runtimeDescriptorArray;
-        bool descriptorIndexing;
-        bool samplerAnisotropy;
-        bool samplerMirrorClampToEdge;
-        bool drawIndirectCount;
-        bool vertexPipelineStoresAndAtomics;
-        bool bufferDeviceAddress;
-        bool bufferDeviceAddressCaptureReplay;
-        bool shaderFloat16;
-        bool dynamicPolygonMode;
-        bool shaderInt64;
-    };
-
-
     struct PhysicalDevicePropertiesRequirenments
     {
         VkPhysicalDeviceType deviceType;
@@ -32,7 +14,6 @@ namespace vkn
     struct PhysicalDeviceCreateInfo
     {
         Instance* pInstance;
-        const PhysicalDeviceFeaturesRequirenments* pFeaturesRequirenments;
         const PhysicalDevicePropertiesRequirenments* pPropertiesRequirenments;
     };
 

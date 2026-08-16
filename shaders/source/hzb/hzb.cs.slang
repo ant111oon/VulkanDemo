@@ -23,8 +23,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
     const uint mip = HZB_GEN_DST_MIP_IDX;
 
-    if (HZB_GEN_IS_DEPTH_BUFFER_COPY_PASS) {
-        HZB_DST_MIP_UAVS[mip][DTid] = LOAD_TEX_ARRAY(HZB_SRC_MIPS, mip, int3(DTid, 0));
+    if (mip == 0) {
+        // NOTE: If we are here, it's a bug. We copy depth buffer into HZB mip 0 with cmd buffer command
         return;
     }
 

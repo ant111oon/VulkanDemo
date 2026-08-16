@@ -16,7 +16,6 @@ struct GPU_HzbGenPerDrawData
 
 [[vk::push_constant]] GPU_HzbGenPerDrawData HZB_GEN_DYN;
 
-#define HZB_GEN_IS_DEPTH_BUFFER_COPY_PASS (HZB_GEN_DYN.dstMipIdx == 0)
 #define HZB_GEN_SRC_MIP_RESOLUTION         HZB_GEN_DYN.srcMipResolution
 #define HZB_GEN_DST_MIP_RESOLUTION         HZB_GEN_DYN.dstMipResolution
 #define HZB_GEN_DST_MIP_IDX                HZB_GEN_DYN.dstMipIdx

@@ -2028,29 +2028,12 @@ static void CreateImmediateSubmitObjects()
 
 static void CreateVkPhysAndLogicalDevices()
 {
-    vkn::PhysicalDeviceFeaturesRequirenments physDeviceFeturesReq = {};
-    physDeviceFeturesReq.independentBlend = true;
-    physDeviceFeturesReq.descriptorIndexing = true;
-    physDeviceFeturesReq.descriptorBindingPartiallyBound = true; // Allow to left dome descriptors unwriten
-    physDeviceFeturesReq.runtimeDescriptorArray = true;          // Allows to use unsised arrays in shader
-    physDeviceFeturesReq.samplerAnisotropy = true;
-    physDeviceFeturesReq.samplerMirrorClampToEdge = true;
-    physDeviceFeturesReq.vertexPipelineStoresAndAtomics = true;
-    physDeviceFeturesReq.bufferDeviceAddress = true;
-    physDeviceFeturesReq.dynamicPolygonMode = true;
-    physDeviceFeturesReq.shaderInt64 = true;
-
-#ifndef ENG_BUILD_RETAIL
-    physDeviceFeturesReq.bufferDeviceAddressCaptureReplay = VK_TRUE;
-#endif
-
     vkn::PhysicalDevicePropertiesRequirenments physDevicePropsReq = {};
     physDevicePropsReq.deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 
     vkn::PhysicalDeviceCreateInfo physDeviceCreateInfo = {};
     physDeviceCreateInfo.pInstance = &s_vkInstance;
     physDeviceCreateInfo.pPropertiesRequirenments = &physDevicePropsReq;
-    physDeviceCreateInfo.pFeaturesRequirenments = &physDeviceFeturesReq;
 
     s_vkPhysDevice.Create(physDeviceCreateInfo);
     CORE_ASSERT(s_vkPhysDevice.IsCreated()); 
@@ -2059,10 +2042,16 @@ static void CreateVkPhysAndLogicalDevices()
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
         VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+        VK_KHR_MAINTENANCE_8_EXTENSION_NAME,
     };
+
+    VkPhysicalDeviceMaintenance8FeaturesKHR maintenance8Features = {};
+    maintenance8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR;
+    maintenance8Features.maintenance8 = VK_TRUE;
 
     VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynStateFeatures = {};
     extendedDynStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    extendedDynStateFeatures.pNext = &maintenance8Features;
     extendedDynStateFeatures.extendedDynamicState3PolygonMode = VK_TRUE;
 
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descBuffFeatures = {};
@@ -6621,6 +6610,51 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation_Pass", eng::ProfileColor::Grey80);
     eng::Timer timer;
 
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(
+                s_depthRT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COPY_BIT,
+                VK_ACCESS_2_TRANSFER_READ_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT,
+                0, 1)
+            .AddTextureBarrier(
+                s_HZB,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COPY_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0, 1)
+        .Push();
+
+    VkImageCopy copyRegion = {};
+
+    copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    copyRegion.srcSubresource.mipLevel = 0;
+    copyRegion.srcSubresource.baseArrayLayer = 0;
+    copyRegion.srcSubresource.layerCount = 1;
+
+    copyRegion.srcOffset = { 0, 0, 0 };
+
+    copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copyRegion.dstSubresource.mipLevel = 0;
+    copyRegion.dstSubresource.baseArrayLayer = 0;
+    copyRegion.dstSubresource.layerCount = 1;
+
+    copyRegion.dstOffset = { 0, 0, 0 };
+
+    CORE_ASSERT(s_depthRT.GetSizeX() == s_HZB.GetSizeX());
+    CORE_ASSERT(s_depthRT.GetSizeY() == s_HZB.GetSizeY());
+
+    copyRegion.extent = { s_depthRT.GetSizeX(), s_depthRT.GetSizeY(), 1 };
+
+    cmdBuffer.CmdCopyTexture(s_depthRT, s_HZB, copyRegion);
+
+    glm::uvec2 srcMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
+    glm::uvec2 dstMipSize = srcMipSize;
+
     vkn::PSO& pso = s_PSOs[PASS_ID_HZB_GEN];
     
     cmdBuffer.CmdBindPSO(pso);
@@ -6628,38 +6662,7 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_COMMON, .shaderSetIdx = DESC_SET_PER_FRAME });
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = DESC_SET_ID_HZB_GEN, .shaderSetIdx = DESC_SET_PER_DRAW });
 
-    cmdBuffer
-        .BeginBarrierList()
-            .AddTextureBarrier(
-                s_depthRT,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-                VK_IMAGE_ASPECT_DEPTH_BIT)
-            .AddTextureBarrier(
-                s_HZB,
-                VK_IMAGE_LAYOUT_GENERAL,
-                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                0, 1)
-        .Push();
-
-    glm::uvec2 srcMipSize = glm::uvec2(s_HZB.GetSizeX(), s_HZB.GetSizeY());
-    glm::uvec2 dstMipSize = srcMipSize;
-
     GPU_HzbGenPerDrawData pushConsts = {};
-    pushConsts.srcMipResolution = dstMipSize;
-    pushConsts.dstMipResolution = dstMipSize;
-    pushConsts.dstMipIdx = 0;
-
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
-
-    cmdBuffer.CmdDispatch(
-        (uint32_t)glm::ceil(s_HZB.GetSizeX() / (float)HZB_BUILD_CS_GROUP_SIZE), 
-        (uint32_t)glm::ceil(s_HZB.GetSizeY() / (float)HZB_BUILD_CS_GROUP_SIZE),
-        1u
-    );
 
     for (uint32_t mip = 1; mip < s_HZB.GetMipCount(); ++mip) {
         srcMipSize = dstMipSize;

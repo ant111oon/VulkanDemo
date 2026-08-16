@@ -143,32 +143,33 @@ struct GPU_GeomSortKey
 
         key = ZEROU2;
 
-        // Low 32 bits.
-        key.x = FloatToSortableUint(depth);
-
-        // High 32 bits.
-        key.y = bitfieldInsert(key.y, lodID, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS);
-        key.y = bitfieldInsert(key.y, meshID, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS);
-        key.y = bitfieldInsert(key.y, (uint)type, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS);
+        this.depth = depth;
+        this.lodID = lodID;
+        this.meshID = meshID;
+        this.geomType = type;
     }
 
     property GPU_GeomType geomType
     {
+        set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS); }
         get { return GPU_GeomType(bitfieldExtract(key.y, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS)); }
     }
 
     property uint meshID
     {
+        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS); }
         get { return bitfieldExtract(key.y, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS); }
     }
 
     property uint lodID
     {
+        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS); }
         get { return bitfieldExtract(key.y, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS); }
     }
 
     property float depth
     {
+        set { key.x = FloatToSortableUint(newValue); }
         get { return SortableUintToFloat(key.x); }
     }
 
@@ -179,7 +180,7 @@ struct GPU_GeomSortKey
     private static const uint GEOM_SORT_TYPE_OFFSET = 19;
     private static const uint GEOM_SORT_TYPE_BITS = 2;
 
-    uint2 key;
+    private uint2 key;
 };
 
 

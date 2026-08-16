@@ -261,6 +261,9 @@ namespace vkn
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, std::span<const BufferToTextureCopyInfo> regions);
         CmdBuffer& CmdCopyBuffer(const Buffer& srcBuffer, Texture& dstTexture, const BufferToTextureCopyInfo& region);
 
+        CmdBuffer& CmdCopyTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const VkImageCopy> regions);
+        CmdBuffer& CmdCopyTexture(const Texture& srcTexture, Texture& dstTexture, const VkImageCopy& region);
+
         CmdBuffer& CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType);
 
         CmdBuffer& CmdBindDescriptorBuffer(DescriptorBuffer& buffer);

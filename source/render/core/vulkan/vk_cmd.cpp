@@ -776,6 +776,45 @@ namespace vkn
     }
 
 
+    CmdBuffer& CmdBuffer::CmdCopyTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const VkImageCopy> regions)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+        VK_ASSERT(regions.size() >= 1);
+
+        const TextureAccessTracker& srcTracker = srcTexture.GetAccessTracker();
+        const TextureAccessTracker& dstTracker = dstTexture.GetAccessTracker();
+
+        const VkImageSubresourceLayers& srcSubres = regions[0].srcSubresource;
+        const VkImageSubresourceLayers& dstSubres = regions[0].dstSubresource;
+
+        VK_ASSERT_MSG(
+            srcTracker.CheckLayoutConsistency(srcSubres.baseArrayLayer, srcSubres.layerCount, srcSubres.mipLevel, 1),
+            "Src texture %s has inconsisten layout in subresource range: [baseLayer: %u, layerCount: %u, mip: %u",
+            srcTexture.GetDebugName().data(), srcSubres.baseArrayLayer, srcSubres.layerCount, srcSubres.mipLevel
+        );
+
+        VK_ASSERT_MSG(
+            dstTracker.CheckLayoutConsistency(dstSubres.baseArrayLayer, dstSubres.layerCount, dstSubres.mipLevel, 1),
+            "Dst texture %s has inconsisten layout in subresource range: [baseLayer: %u, layerCount: %u, mip: %u",
+            dstTexture.GetDebugName().data(), dstSubres.baseArrayLayer, dstSubres.layerCount, dstSubres.mipLevel
+        );
+
+        const TextureAccessTracker::State& srcState = srcTracker.GetState(srcSubres.baseArrayLayer, srcSubres.mipLevel);
+        const TextureAccessTracker::State& dstState = dstTracker.GetState(dstSubres.baseArrayLayer, dstSubres.mipLevel);
+
+        vkCmdCopyImage(Get(), srcTexture.Get(), srcState.layout, dstTexture.Get(), dstState.layout, regions.size(), regions.data());
+
+        return *this;
+    }
+
+
+    CmdBuffer& CmdBuffer::CmdCopyTexture(const Texture& srcTexture, Texture& dstTexture, const VkImageCopy& region)
+    {
+        std::span<const VkImageCopy> regions(&region, 1);
+        return CmdCopyTexture(srcTexture, dstTexture, regions);
+    }
+
+
     CmdBuffer& CmdBuffer::CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
@@ -794,7 +833,6 @@ namespace vkn
 
         return *this;
     }
-
 
 
     CmdBuffer& CmdBuffer::CmdBindIndexBuffer(vkn::Buffer& idxBuffer, VkDeviceSize offset, VkIndexType idxType)
