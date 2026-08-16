@@ -7,7 +7,7 @@
 
 struct GPU_GeomCullingPerDrawData
 {
-    uint  hzbMipsCount;
+    uint hzbMipsCount;
 };
 
 [[vk::push_constant]] GPU_GeomCullingPerDrawData GEOM_CULLING_DYN;
@@ -17,5 +17,13 @@ struct GPU_GeomCullingPerDrawData
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];
 [vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
+
+[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_SORT_KEYS_UAV;
+[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV;
+
+[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_GEOM_IDS_UAV;
+
+[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV;
+
 
 #endif

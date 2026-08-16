@@ -46,14 +46,49 @@ uint GeomCullingGetQueueMask(in GPU_GeomInst inst)
 }
 
 
+GPU_GeomSortKey GeomGetSortKey(in GPU_GeomInst inst)
+{
+    const float depth = -mul(COMMON_MAIN_CAM_VIEW_MATRIX, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
+
+    const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
+
+    GPU_GeomType geomType = GPU_GeomType::OPAQUE;
+
+    if (material.IsOpaque()) {
+        geomType = GPU_GeomType::OPAQUE;
+    } else if (material.IsAlphaKill()) {
+        geomType = GPU_GeomType::AKILL;
+    }
+
+    uint lodID;
+
+    if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
+        lodID = COMMON_DBG_FORCED_GEOM_LOD;
+    } else {
+        // Calculate fair LOD
+        lodID = 0;
+    }
+
+    lodID = clamp(lodID, 0, COMMON_MESH_BUFFER[inst.meshID].lodCount - 1);
+
+    return GPU_GeomSortKey(geomType, inst.meshID, lodID, depth);
+}
+
+
+groupshared uint GROUP_CULL_VIS_INST_COUNTER;
+groupshared uint GROUP_CULL_VIS_INST_OFFSET;
+groupshared uint GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GPU_GeomType::COUNT];
+
 groupshared uint GROUP_VIS_ID_QUEUE_SIZES[GEOM_QUEUE_COUNT];
 groupshared uint GROUP_VIS_ID_QUEUE_OFFSETS[GEOM_QUEUE_COUNT];
 
+// #define GEOM_NEW_INSTANCING
 
 [numthreads(GEOM_CULLING_CS_GROUP_SIZE, 1, 1)]
 [shader("compute")]
 void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : SV_DispatchThreadID)
 {
+#ifndef GEOM_NEW_INSTANCING
     if (GI < GPU_GeomQueue::COUNT) {
         GROUP_VIS_ID_QUEUE_SIZES[GI] = 0;
         GROUP_VIS_ID_QUEUE_OFFSETS[GI] = 0;
@@ -108,4 +143,60 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
             }
         }
     }
+#else
+    if (GI == 0) {
+        GROUP_CULL_VIS_INST_COUNTER = 0;
+        GROUP_CULL_VIS_INST_OFFSET = 0;
+    }
+
+    if (GI < GPU_GeomType::COUNT) {
+        GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GI] = 0;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    const uint instID = DTid;
+
+    GPU_GeomSortKey sortKey;
+    GPU_GeomInst inst;
+
+    bool isVisible = false;
+
+    if (instID < COMMON_INST_COUNT) {
+        inst = COMMON_INST_BUFFER[instID];
+        isVisible = GeomCullingVisibility(inst.aabbWCS);
+    }
+
+    uint groupLocalIndex = 0;
+
+    if (isVisible) {
+        sortKey = GeomGetSortKey(inst);
+
+        InterlockedAdd(GROUP_CULL_VIS_INST_COUNTER, 1, groupLocalIndex);
+        InterlockedAdd(GROUP_CULL_PER_GEOM_TYPE_COUNTERS[sortKey.geomType], 1);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (GI == 0 && GROUP_CULL_VIS_INST_COUNTER > 0) { ;
+        InterlockedAdd(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV[0], GROUP_CULL_VIS_INST_COUNTER, GROUP_CULL_VIS_INST_OFFSET);
+    }
+
+    if (GI < GPU_GeomType::COUNT) {
+        const uint count = GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GI];
+
+        if (count > 0) {
+            InterlockedAdd(GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV[GI], count);
+        }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (isVisible) {
+        const uint index = GROUP_CULL_VIS_INST_OFFSET + groupLocalIndex;
+
+        GEOM_CULL_VIS_SORT_KEYS_UAV[index] = sortKey;
+        GEOM_CULL_VIS_GEOM_IDS_UAV[index] = instID;
+    }
+#endif
 }

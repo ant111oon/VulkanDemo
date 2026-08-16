@@ -85,6 +85,14 @@ struct GPU_Mesh
 
 struct GPU_GeomInst
 {
+    __init()
+    {
+        matrWCS = M3D_IDENTITY_3X4;
+        aabbMinMaxWCS = ZEROU3;
+        meshID = ~0u;
+        materialID = ~0u;
+    }
+
     property float3 minPosWCS
     {
         get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.x), unpackHalf2x16ToFloat(aabbMinMaxWCS.y).x); }
@@ -105,6 +113,73 @@ struct GPU_GeomInst
     private uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint meshID : 16;
     uint materialID : 16;
+};
+
+
+enum GPU_GeomType
+{
+    OPAQUE,
+    AKILL,
+    COUNT
+};
+
+
+struct GPU_GeomSortKey
+{
+    __init()
+    {
+        key = ZEROU2;
+    }
+
+    __init(in GPU_GeomType type, in uint meshID, in uint lodID, in float depth)
+    {
+        Construct(type, meshID, lodID, depth);
+    }
+
+    [mutating]
+    void Construct(in GPU_GeomType type, in uint meshID, in uint lodID, in float depth)
+    {
+        static_assert(GPU_GeomType::COUNT <= (1 << GEOM_SORT_TYPE_BITS), "GPU_GeomType is out of bit bounds");
+
+        key = ZEROU2;
+
+        // Low 32 bits.
+        key.x = FloatToSortableUint(depth);
+
+        // High 32 bits.
+        key.y = bitfieldInsert(key.y, lodID, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS);
+        key.y = bitfieldInsert(key.y, meshID, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS);
+        key.y = bitfieldInsert(key.y, (uint)type, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS);
+    }
+
+    property GPU_GeomType geomType
+    {
+        get { return GPU_GeomType(bitfieldExtract(key.y, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS)); }
+    }
+
+    property uint meshID
+    {
+        get { return bitfieldExtract(key.y, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS); }
+    }
+
+    property uint lodID
+    {
+        get { return bitfieldExtract(key.y, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS); }
+    }
+
+    property float depth
+    {
+        get { return SortableUintToFloat(key.x); }
+    }
+
+    private static const uint GEOM_SORT_LOD_OFFSET = 0;
+    private static const uint GEOM_SORT_LOD_BITS = 3;
+    private static const uint GEOM_SORT_MESH_OFFSET = 3;
+    private static const uint GEOM_SORT_MESH_BITS = 16;
+    private static const uint GEOM_SORT_TYPE_OFFSET = 19;
+    private static const uint GEOM_SORT_TYPE_BITS = 2;
+
+    uint2 key;
 };
 
 

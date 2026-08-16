@@ -402,6 +402,20 @@ struct GPU_DbgTriangleData
 };
 
 
+enum GPU_GeomType
+{
+    GEOM_TYPE_OPAQUE,
+    GEOM_TYPE_AKILL,
+    GEOM_TYPE_COUNT
+};
+
+
+struct GPU_GeomSortKey
+{
+    uint2 key;
+};
+
+
 enum GPU_GeomQueue
 {
     GEOM_QUEUE_OPAQUE,
@@ -806,6 +820,10 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -1266,6 +1284,12 @@ static vkn::Buffer s_commonInstBuffer;
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
+
+static vkn::Buffer s_geomCullVisSortKeysBuffer;
+static vkn::Buffer s_geomCullVisSortKeysCounterBuffer;
+static vkn::Buffer s_geomCullVisGeomIDsBuffer;
+static vkn::Buffer s_geomCullPerGeomTypeCountersBuffer;
+
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueSizeBuffer;
@@ -2886,6 +2910,10 @@ static void CreateGeomCullingDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4327,6 +4355,38 @@ static void CreateGeomCullingAndInstancingResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
+    s_geomCullVisSortKeysBuffer.Create(
+        &s_vkDevice, 
+        s_cpuInstData.size() * sizeof(GPU_GeomSortKey), 
+        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+        allocInfo
+    );
+    s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysBuffer, "GEOM_CULL_VIS_SORT_KEYS_BUFFER");
+
+    s_geomCullVisSortKeysCounterBuffer.Create(
+        &s_vkDevice,
+        sizeof(glm::uint), 
+        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+        allocInfo
+    );
+    s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysCounterBuffer, "GEOM_CULL_VIS_SORT_KEYS_COUNTER_BUFFER");
+
+    s_geomCullVisGeomIDsBuffer.Create(
+        &s_vkDevice, 
+        s_cpuInstData.size() * sizeof(glm::uint), 
+        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+        allocInfo
+    );
+    s_vkDevice.SetObjDebugName(s_geomCullVisGeomIDsBuffer, "GEOM_CULL_VIS_GEOM_IDS_BUFFER");
+
+    s_geomCullPerGeomTypeCountersBuffer.Create(
+        &s_vkDevice,
+        GEOM_TYPE_COUNT * sizeof(glm::uint), 
+        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+        allocInfo
+    );
+    s_vkDevice.SetObjDebugName(s_geomCullPerGeomTypeCountersBuffer, "GEOM_CULL_PER_GEOM_TYPE_COUNTERS_BUFFER");
+
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
         s_visGeomIDQueueBuffer[queue].Create(
@@ -4703,11 +4763,13 @@ static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
     
     const DescSetID setID = DESC_SET_ID_GEOM_CULLING;
 
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, 
-        queue, s_visGeomIDQueueBuffer[queue]);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, 
-        queue, s_visGeomIDQueueSizeBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]);
+    
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomTypeCountersBuffer);
 }
 
 
@@ -6246,6 +6308,9 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
         barriers.AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
 
+    barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullPerGeomTypeCountersBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
     barriers.Push();
 
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
@@ -6253,6 +6318,9 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
         cmdBuffer.CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
     }
+
+    cmdBuffer.CmdFillBuffer(s_geomCullVisSortKeysCounterBuffer, 0);
+    cmdBuffer.CmdFillBuffer(s_geomCullPerGeomTypeCountersBuffer, 0);
 }
 
 
@@ -6272,9 +6340,13 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
-    barriers
-        .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barriers.AddBufferBarrier(s_geomCullVisSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullPerGeomTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+
+    barriers.AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
     barriers.Push();
 
