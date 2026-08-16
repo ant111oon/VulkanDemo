@@ -87,6 +87,14 @@ struct GPU_Frustum
 static const uint COMMON_CSM_CASCADE_COUNT = 3;
 
 
+enum GPU_GeomMatType : uint
+{
+    GEOM_MAT_TYPE_OPAQUE,
+    GEOM_MAT_TYPE_AKILL,
+    GEOM_MAT_TYPE_COUNT
+};
+
+
 struct GPU_GeomMaterial
 {
     float4 albedoMult;
@@ -106,12 +114,12 @@ struct GPU_GeomMaterial
 
     int emissiveTexID = -1;
     
-    uint isOpaque : 1;
-    uint isAKill : 1;
-    uint isDoubleSided : 1;
+    GPU_GeomMatType type;
+
+    uint doubleSided : 1;
     
-    uint padding_0 : 29;
-    uint2 padding_1;
+    uint padding_0 : 31;
+    uint padding_1;
 };
 
 
@@ -399,14 +407,6 @@ struct GPU_DbgLineData
 struct GPU_DbgTriangleData
 {
     uint color;
-};
-
-
-enum GPU_GeomType
-{
-    GEOM_TYPE_OPAQUE,
-    GEOM_TYPE_AKILL,
-    GEOM_TYPE_COUNT
 };
 
 
@@ -823,7 +823,7 @@ static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 
 static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 2;
 static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
 static constexpr size_t GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT = 5;
+static constexpr size_t GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -1288,7 +1288,7 @@ static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
 static vkn::Buffer s_geomCullVisSortKeysBuffer;
 static vkn::Buffer s_geomCullVisSortKeysCounterBuffer;
 static vkn::Buffer s_geomCullVisGeomIDsBuffer;
-static vkn::Buffer s_geomCullPerGeomTypeCountersBuffer;
+static vkn::Buffer s_geomCullPerGeomMatTypeCountersBuffer;
 
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueBuffer;
@@ -1774,13 +1774,13 @@ static void RenderDebugFrustumFilled(const glm::float4x4& invViewProj, const glm
 
 static bool IsAKillMaterial(const GPU_GeomMaterial& material)
 {
-    return static_cast<bool>(material.isAKill);
+    return material.type == GEOM_MAT_TYPE_AKILL;
 }
 
 
 static bool IsOpaqueMaterial(const GPU_GeomMaterial& material)
 {
-    return static_cast<bool>(material.isOpaque);
+    return material.type == GEOM_MAT_TYPE_OPAQUE;
 }
 
 
@@ -2902,7 +2902,7 @@ static void CreateGeomCullingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4368,13 +4368,13 @@ static void CreateGeomCullingAndInstancingResources()
     );
     s_vkDevice.SetObjDebugName(s_geomCullVisGeomIDsBuffer, "GEOM_CULL_VIS_GEOM_IDS_BUFFER");
 
-    s_geomCullPerGeomTypeCountersBuffer.Create(
+    s_geomCullPerGeomMatTypeCountersBuffer.Create(
         &s_vkDevice,
-        GEOM_TYPE_COUNT * sizeof(glm::uint), 
+        GEOM_MAT_TYPE_COUNT * sizeof(glm::uint), 
         VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
         allocInfo
     );
-    s_vkDevice.SetObjDebugName(s_geomCullPerGeomTypeCountersBuffer, "GEOM_CULL_PER_GEOM_TYPE_COUNTERS_BUFFER");
+    s_vkDevice.SetObjDebugName(s_geomCullPerGeomMatTypeCountersBuffer, "GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_BUFFER");
 
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
@@ -4758,7 +4758,7 @@ static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomTypeCountersBuffer);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
 }
 
 
@@ -5487,13 +5487,19 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
         mtl.emissiveMult.y = material.emissiveFactor.y();
         mtl.emissiveMult.z = material.emissiveFactor.z();
 
-        mtl.isDoubleSided = material.doubleSided;
+        mtl.doubleSided = material.doubleSided;
         
-        mtl.isOpaque = material.alphaMode == gltf::AlphaMode::Opaque;
-        mtl.isAKill = material.alphaMode == gltf::AlphaMode::Mask;
-
-        if (material.alphaMode == gltf::AlphaMode::Blend) {
-            CORE_LOG_WARN("Materials %s is transparent which is not supported yet", material.name.c_str());
+        switch(material.alphaMode) {
+            case gltf::AlphaMode::Opaque:
+                mtl.type = GEOM_MAT_TYPE_OPAQUE;
+                break;
+            case gltf::AlphaMode::Mask:
+                mtl.type = GEOM_MAT_TYPE_AKILL;
+                break;
+            case gltf::AlphaMode::Blend:
+                CORE_LOG_WARN("Materials %s is transparent which is not supported yet", material.name.c_str());
+                mtl.type = GEOM_MAT_TYPE_OPAQUE;
+                break;
         }
 
         mtl.alphaRef = material.alphaCutoff;
@@ -6298,7 +6304,7 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
     }
 
     barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullPerGeomTypeCountersBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
     barriers.Push();
 
@@ -6309,7 +6315,7 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
     }
 
     cmdBuffer.CmdFillBuffer(s_geomCullVisSortKeysCounterBuffer, 0);
-    cmdBuffer.CmdFillBuffer(s_geomCullPerGeomTypeCountersBuffer, 0);
+    cmdBuffer.CmdFillBuffer(s_geomCullPerGeomMatTypeCountersBuffer, 0);
 }
 
 
@@ -6332,7 +6338,7 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
     barriers.AddBufferBarrier(s_geomCullVisSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullPerGeomTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
     barriers.AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);

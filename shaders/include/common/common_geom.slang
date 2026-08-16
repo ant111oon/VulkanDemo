@@ -5,7 +5,7 @@
 #include "common/math/geom_primitives.slang"
 
 
-enum GPU_GeomStreamID
+enum GPU_GeomStreamID : uint
 {
     POSITION,
     NORMAL,
@@ -15,12 +15,30 @@ enum GPU_GeomStreamID
 };
 
 
+enum GPU_GeomMatType : uint
+{
+    OPAQUE,
+    AKILL,
+    COUNT
+};
+
+
 struct GPU_GeomMaterial
 {
-    bool IsOpaque() { return (bool)isOpaque; }
-    bool IsAlphaKill() { return (bool)isAKill; }
+    property bool isOpaque
+    {
+        get { return type == GPU_GeomMatType::OPAQUE; }
+    }
 
-    bool IsDoubleSided() { return (bool)isDoubleSided; }
+    property bool isAlphaKill
+    {
+        get { return type == GPU_GeomMatType::AKILL; }
+    }
+
+    property bool isDoubleSided
+    {
+        get { return (bool)doubleSided; }
+    }
 
     float4 albedoMult;
 
@@ -39,12 +57,12 @@ struct GPU_GeomMaterial
 
     int emissiveTexID;
 
-    uint isOpaque : 1;
-    uint isAKill : 1;
-    uint isDoubleSided : 1;
+    GPU_GeomMatType type;
+
+    private uint doubleSided : 1;
     
-    private uint padding_0 : 29;
-    private uint2 padding_1;
+    private uint padding_0 : 31;
+    private uint padding_1;
 };
 
 
@@ -89,8 +107,8 @@ struct GPU_GeomInst
     {
         matrWCS = M3D_IDENTITY_3X4;
         aabbMinMaxWCS = ZEROU3;
-        meshID = ~0u;
-        materialID = ~0u;
+        meshID = 0u;
+        materialID = 0u;
     }
 
     property float3 minPosWCS
@@ -116,14 +134,6 @@ struct GPU_GeomInst
 };
 
 
-enum GPU_GeomType
-{
-    OPAQUE,
-    AKILL,
-    COUNT
-};
-
-
 struct GPU_GeomSortKey
 {
     __init()
@@ -131,28 +141,28 @@ struct GPU_GeomSortKey
         key = ZEROU2;
     }
 
-    __init(in GPU_GeomType type, in uint meshID, in uint lodID, in float depth)
+    __init(in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
     {
-        Construct(type, meshID, lodID, depth);
+        Construct(matType, meshID, lodID, depth);
     }
 
     [mutating]
-    void Construct(in GPU_GeomType type, in uint meshID, in uint lodID, in float depth)
+    void Construct(in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
     {
-        static_assert(GPU_GeomType::COUNT <= (1 << GEOM_SORT_TYPE_BITS), "GPU_GeomType is out of bit bounds");
+        static_assert(GPU_GeomMatType::COUNT <= (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
 
         key = ZEROU2;
 
         this.depth = depth;
         this.lodID = lodID;
         this.meshID = meshID;
-        this.geomType = type;
+        this.matType = matType;
     }
 
-    property GPU_GeomType geomType
+    property GPU_GeomMatType matType
     {
-        set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS); }
-        get { return GPU_GeomType(bitfieldExtract(key.y, GEOM_SORT_TYPE_OFFSET, GEOM_SORT_TYPE_BITS)); }
+        set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS); }
+        get { return GPU_GeomMatType(bitfieldExtract(key.y, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS)); }
     }
 
     property uint meshID
@@ -177,8 +187,8 @@ struct GPU_GeomSortKey
     private static const uint GEOM_SORT_LOD_BITS = 3;
     private static const uint GEOM_SORT_MESH_OFFSET = 3;
     private static const uint GEOM_SORT_MESH_BITS = 16;
-    private static const uint GEOM_SORT_TYPE_OFFSET = 19;
-    private static const uint GEOM_SORT_TYPE_BITS = 2;
+    private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 19;
+    private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
 
     private uint2 key;
 };

@@ -16,9 +16,9 @@ uint CSMGeomCullingGetQueueMask(in GPU_GeomInst inst)
 
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
-    if (material.IsOpaque()) {
+    if (material.isOpaque) {
         mask |= (1u << GEOM_QUEUE_OPAQUE);
-    } else if (material.IsAlphaKill()) {
+    } else if (material.isAlphaKill) {
         mask |= (1u << GEOM_QUEUE_AKILL);
     }
 

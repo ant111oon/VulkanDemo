@@ -23,7 +23,7 @@ struct GPU_GeomCullingPerDrawData
 
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_GEOM_IDS_UAV;
 
-[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV;
+[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV;
 
 
 #endif

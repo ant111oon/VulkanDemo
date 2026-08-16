@@ -36,9 +36,9 @@ uint GeomCullingGetQueueMask(in GPU_GeomInst inst)
 
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
-    if (material.IsOpaque()) {
+    if (material.isOpaque) {
         mask |= (1u << GEOM_QUEUE_OPAQUE);
-    } else if (material.IsAlphaKill()) {
+    } else if (material.isAlphaKill) {
         mask |= (1u << GEOM_QUEUE_AKILL);
     }
 
@@ -49,16 +49,6 @@ uint GeomCullingGetQueueMask(in GPU_GeomInst inst)
 GPU_GeomSortKey GeomGetSortKey(in GPU_GeomInst inst)
 {
     const float depth = -mul(COMMON_MAIN_CAM_VIEW_MATRIX, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
-
-    const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
-
-    GPU_GeomType geomType = GPU_GeomType::OPAQUE;
-
-    if (material.IsOpaque()) {
-        geomType = GPU_GeomType::OPAQUE;
-    } else if (material.IsAlphaKill()) {
-        geomType = GPU_GeomType::AKILL;
-    }
 
     uint lodID;
 
@@ -71,13 +61,15 @@ GPU_GeomSortKey GeomGetSortKey(in GPU_GeomInst inst)
 
     lodID = clamp(lodID, 0, COMMON_MESH_BUFFER[inst.meshID].lodCount - 1);
 
-    return GPU_GeomSortKey(geomType, inst.meshID, lodID, depth);
+    const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
+
+    return GPU_GeomSortKey(material.type, inst.meshID, lodID, depth);
 }
 
 
 groupshared uint GROUP_CULL_VIS_INST_COUNTER;
 groupshared uint GROUP_CULL_VIS_INST_OFFSET;
-groupshared uint GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GPU_GeomType::COUNT];
+groupshared uint GROUP_CULL_PER_MAT_TYPE_COUNTERS[GPU_GeomMatType::COUNT];
 
 groupshared uint GROUP_VIS_ID_QUEUE_SIZES[GEOM_QUEUE_COUNT];
 groupshared uint GROUP_VIS_ID_QUEUE_OFFSETS[GEOM_QUEUE_COUNT];
@@ -149,8 +141,8 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
         GROUP_CULL_VIS_INST_OFFSET = 0;
     }
 
-    if (GI < GPU_GeomType::COUNT) {
-        GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GI] = 0;
+    if (GI < GPU_GeomMatType::COUNT) {
+        GROUP_CULL_PER_MAT_TYPE_COUNTERS[GI] = 0;
     }
 
     GroupMemoryBarrierWithGroupSync();
@@ -173,7 +165,7 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
         sortKey = GeomGetSortKey(inst);
 
         InterlockedAdd(GROUP_CULL_VIS_INST_COUNTER, 1, groupLocalIndex);
-        InterlockedAdd(GROUP_CULL_PER_GEOM_TYPE_COUNTERS[sortKey.geomType], 1);
+        InterlockedAdd(GROUP_CULL_PER_MAT_TYPE_COUNTERS[sortKey.matType], 1);
     }
 
     GroupMemoryBarrierWithGroupSync();
@@ -182,11 +174,11 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
         InterlockedAdd(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV[0], GROUP_CULL_VIS_INST_COUNTER, GROUP_CULL_VIS_INST_OFFSET);
     }
 
-    if (GI < GPU_GeomType::COUNT) {
-        const uint count = GROUP_CULL_PER_GEOM_TYPE_COUNTERS[GI];
+    if (GI < GPU_GeomMatType::COUNT) {
+        const uint count = GROUP_CULL_PER_MAT_TYPE_COUNTERS[GI];
 
         if (count > 0) {
-            InterlockedAdd(GEOM_CULL_PER_GEOM_TYPE_COUNTERS_UAV[GI], count);
+            InterlockedAdd(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV[GI], count);
         }
     }
 
