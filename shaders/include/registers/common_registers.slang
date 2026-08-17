@@ -44,7 +44,7 @@
 #define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 5, true)
 #define COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED     DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 6, false)
 #define COMMON_DBG_IS_CSM_PCSS_ENABLED                      DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 7, true)
-#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 8, true)
+#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 8, false)
 
 #define COMMON_DBG_FORCED_GEOM_LOD                          DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
 #define COMMON_DBG_RT_VIEW_TYPE                             DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)

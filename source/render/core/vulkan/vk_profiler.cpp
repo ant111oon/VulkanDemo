@@ -82,7 +82,7 @@ namespace vkn
 
     const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName) const
     {
-        BeginCmdGroup(cmd, groupName, eng::ProfileColor::Grey51);
+        BeginCmdGroup(cmd, groupName, 0x7f7f7f);
         return *this;
     }
 

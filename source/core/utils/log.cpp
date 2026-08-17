@@ -69,16 +69,16 @@ namespace eng
             
             switch (level) {
                 case LogLevel::TRACE:
-                    ENG_PROFILE_LOG_C(profilerMsgBuffer, eng::ProfileColor::White);
+                    ENG_PROFILE_LOG_C(0xffffff, profilerMsgBuffer);
                     break;
                 case LogLevel::INFO:
-                    ENG_PROFILE_LOG_C(profilerMsgBuffer, eng::ProfileColor::Green);
+                    ENG_PROFILE_LOG_C(0x00ff00, profilerMsgBuffer);
                     break;
                 case LogLevel::WARN:
-                    ENG_PROFILE_LOG_C(profilerMsgBuffer, eng::ProfileColor::Yellow);
+                    ENG_PROFILE_LOG_C(0xffff00, profilerMsgBuffer);
                     break;
                 case LogLevel::ERROR:
-                    ENG_PROFILE_LOG_C(profilerMsgBuffer, eng::ProfileColor::Red);
+                    ENG_PROFILE_LOG_C(0xff0000, profilerMsgBuffer);
                     break;
             }
         #endif

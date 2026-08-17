@@ -12,10 +12,13 @@
 
 #if defined(ENG_PROFILING_ENABLED)
 #include "tracy/../common/TracyColor.hpp"
+#endif
 
 
 namespace eng
 {
-    using ProfileColor = tracy::Color;
+    namespace profile
+    {    
+        inline constexpr size_t ENG_PROFILE_MARKER_NAME_LEN = 256;
+    }
 }
-#endif

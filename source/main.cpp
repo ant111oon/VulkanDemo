@@ -969,6 +969,13 @@ static_assert(std::size(CSM_CASCADE_DISTANCES) == COMMON_CSM_CASCADE_COUNT);
 static_assert(std::size(CSM_CASCADE_COLORS) == COMMON_CSM_CASCADE_COUNT);
 
 
+static const std::pair<GPU_GeomQueue, const char*> GEOM_QUEUE_TO_NAME[] =
+{
+    std::make_pair(GEOM_QUEUE_OPAQUE, "Opaque"),
+    std::make_pair(GEOM_QUEUE_AKILL, "AKill"),
+};
+
+
 class TextureLoadData
 {
 public:
@@ -1443,7 +1450,7 @@ struct CsmPcssSettings
     int32_t searchSamplesCount = 32u;
     int32_t filterSamplesCount = 64u;
 
-    bool randomRotationEnabled = true;
+    bool randomRotationEnabled = false;
 } s_csmPcssSettings;
 
 static float s_mainCameraSpeed = 0.02f;
@@ -1516,7 +1523,7 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 
 static bool IsInstFrustumVisible(const GPU_GeomInst& inst)
 {
-    ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C("CPU_Is_Inst_Visible", eng::ProfileColor::Purple1);
+    ENG_PROFILE_TRANSIENT_SCOPED_MARKER_C(0x9b30ff, "CPU_Is_Inst_Visible");
 
     const math::Frustum& frustum = s_mainCamera.GetFrustum();
 
@@ -5191,7 +5198,7 @@ static void WriteDescriptorSets()
 
 static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& mesh, size_t primIdx)
 {
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DarkMagenta, "Load_Scene_Mesh_Data_%s", mesh.name.c_str());
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(0x8b008b, "Load_Scene_Mesh_Data_%s", mesh.name.c_str());
 
     auto GetVertexAttribAccessor = [](const gltf::Asset& asset, const gltf::Primitive& primitive, std::string_view name) -> const gltf::Accessor*
     {
@@ -5279,7 +5286,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     cpuMesh.firstLOD = s_cpuMeshLODData.size();
 
     {
-        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DarkMagenta, "Mesh_%s_LOD_Generation", mesh.name.c_str());
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(0x8b008b, "Mesh_%s_LOD_Generation", mesh.name.c_str());
 
         std::vector<IndexType> currLodIndices = indices;
         std::vector<IndexType> nextLodIndices(currLodIndices.size());
@@ -5364,7 +5371,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
 
 static void LoadSceneMeshData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Mesh_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Load_Scene_Mesh_Data");
 
     eng::Timer timer;
 
@@ -5380,7 +5387,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
 static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Textures_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Load_Scene_Textures_Data");
 
     eng::Timer timer;
 
@@ -5426,7 +5433,7 @@ static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirP
 
 static void LoadSceneMaterialData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Material_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Load_Scene_Material_Data");
 
     eng::Timer timer;
 
@@ -5513,7 +5520,7 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 
 static void LoadSceneInstData(const gltf::Asset& asset)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene_Inst_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Load_Scene_Inst_Data");
 
     eng::Timer timer;
 
@@ -5632,7 +5639,7 @@ static void UploadGPUGeomStream(GPU_GeomStreamID ID)
 
 static void UploadGPUMeshData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Mesh_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Upload_GPU_Mesh_Data");
 
     eng::Timer timer;
 
@@ -5700,7 +5707,7 @@ static void UploadGPUMeshData()
 
 static void UploadGPUTextureData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Texture_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Upload_GPU_Texture_Data");
 
     eng::Timer timer;
 
@@ -5791,7 +5798,7 @@ static void UploadGPUTextureData()
 
 static void UploadGPUMaterialData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Material_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Upload_GPU_Material_Data");
 
     eng::Timer timer;
 
@@ -5819,7 +5826,7 @@ static void UploadGPUMaterialData()
 
 static void UploadGPUInstData()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Upload_GPU_Inst_Data", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Upload_GPU_Inst_Data");
 
     eng::Timer timer;
 
@@ -5865,7 +5872,7 @@ static void LoadScene(const fs::path& filepath)
 		return;
 	}
     
-    ENG_PROFILE_SCOPED_MARKER_C("Load_Scene", eng::ProfileColor::DarkMagenta);
+    ENG_PROFILE_SCOPED_MARKER_C(0x8b008b, "Load_Scene");
     
     eng::Timer timer;
 
@@ -5928,7 +5935,7 @@ static void CreateCommonDbgConstBuffer()
 
 void UpdateGPUCommonConstBuffer()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Const_Buffer", eng::ProfileColor::Cyan4);
+    ENG_PROFILE_SCOPED_MARKER_C(0x008b8b, "Update_Common_Const_Buffer");
 
     GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
 
@@ -6008,7 +6015,7 @@ void UpdateGPUCommonConstBuffer()
 void UpdateGPUDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    ENG_PROFILE_SCOPED_MARKER_C("Update_Common_Dbg_Const_Buffer", eng::ProfileColor::Cyan4);
+    ENG_PROFILE_SCOPED_MARKER_C(0x008b8b, "Update_Common_Dbg_Const_Buffer");
 
     GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
@@ -6061,7 +6068,7 @@ static void UpdateMainCamera()
 
 static void UpdateCSMDataCPU()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Update_CSM_Data_CPU", eng::ProfileColor::Cyan4);
+    ENG_PROFILE_SCOPED_MARKER_C(0x008b8b, "Update_CSM_Data_CPU");
 
     auto GetCascadeSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
         float radius = 0.f;
@@ -6120,7 +6127,7 @@ static void UpdateCSMDataCPU()
 
 static void UpdateScene()
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Update_Scene", eng::ProfileColor::Cyan4);
+    ENG_PROFILE_SCOPED_MARKER_C(0x008b8b, "Update_Scene");
 
     ClearDebugDrawData();
 
@@ -6170,7 +6177,7 @@ static void UpdateScene()
 
 static void PresentImage(uint32_t imageIndex)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Present_Swapchain_Image", eng::ProfileColor::Maroon3);
+    ENG_PROFILE_SCOPED_MARKER_C(0xcd2990, "Present_Swapchain_Image");
 
     const VkResult presentResult = s_vkDevice.GetQueue().Present(s_vkSwapchain, imageIndex, &s_renderFinishedSemaphores[imageIndex]);
 
@@ -6184,7 +6191,8 @@ static void PresentImage(uint32_t imageIndex)
 
 static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Irradiance_Map", eng::ProfileColor::OrangeRed);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_Irradiance_Map");
+
     eng::Timer timer;
 
     cmdBuffer
@@ -6220,7 +6228,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_Prefiltered_Env_Map", eng::ProfileColor::OrangeRed);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_Prefiltered_Env_Map");
     eng::Timer timer;
 
     vkn::PSO& pso = s_PSOs[PASS_ID_PREFILT_ENV_MAP_GEN];
@@ -6263,7 +6271,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Precompute_IBL_BRDF_Intergration_LUT", eng::ProfileColor::OrangeRed);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_BRDF_Intergration_LUT");
     eng::Timer timer;
 
     vkn::PSO& pso = s_PSOs[PASS_ID_BRDF_LUT_GEN];
@@ -6293,7 +6301,7 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Clear_Counters", eng::ProfileColor::Black);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0x000000, "Geom_Culling_Clear_Counters");
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
@@ -6321,10 +6329,11 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr char* markerName = "Geom_Vis_ID_Buffer_Pass";
+    static constexpr const char* passName = "Geom_Vis_ID_Buffer_Pass";
+    static constexpr uint32_t passColor = 0xff6a6a;
 
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     const PassID pass = PASS_ID_GEOM_CULLING;
 
@@ -6404,25 +6413,17 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    {
-        static constexpr char* markerName = "Geom_Batching_Pass";
+    static constexpr const char* passName = "Geom_Batching_Pass";
+    static constexpr uint32_t passColor = 0xcae1ff;
 
-        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, markerName);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::LightSteelBlue1);
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Geom_Batching_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Batching_Pass_Opaque", eng::ProfileColor::LightSteelBlue1);
-    
-            GeomBatchingPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
-        }
-    
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, "Geom_Batching_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Batching_Pass_AKill", eng::ProfileColor::LightSteelBlue1);
-    
-            GeomBatchingPass(cmdBuffer, GEOM_QUEUE_AKILL);
-        }
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+
+        GeomBatchingPass(cmdBuffer, pair.first);
     }
 }
 
@@ -6465,33 +6466,28 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 {
-    {
-        static constexpr char* markerName = "Geom_Draw_Cmd_Gen_Pass";
+    static constexpr const char* passName = "Geom_Draw_Cmd_Gen_Pass";
+    static constexpr uint32_t passColor = 0x228b22;
 
-        ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, markerName);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::ForestGreen);
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Geom_Draw_Cmd_Gen_Pass_Opaque");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Draw_Cmd_Gen_Pass_Opaque", eng::ProfileColor::ForestGreen);
-    
-            GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
-        }
-    
-        {
-            ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, "Geom_Draw_Cmd_Gen_Pass_AKill");
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Draw_Cmd_Gen_Pass_AKill", eng::ProfileColor::ForestGreen);
-    
-            GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_AKILL);
-        }
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+
+        GeomDrawCmdGenPass(cmdBuffer, pair.first);
     }
 }
 
 
 static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DodgerBlue1, "Geom_Culling_Pass");
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Geom_Culling_Pass", eng::ProfileColor::DodgerBlue1);
+    static constexpr const char* passName = "Geom_Culling_Pass";
+    static constexpr uint32_t passColor = 0x1e90ff;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     GeomCullingClearCounters(cmdBuffer);
 
@@ -6577,28 +6573,21 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passLabelName = "Geom_Depth_Pass";
+    static constexpr const char* passName = "Geom_Depth_Pass";
+    static constexpr uint32_t passColor = 0x7f7f7f;
 
-    ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    {
-        static constexpr const char* localPassLabelName = "Geom_Depth_Pass_Opaque";
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
 
-        ENG_PROFILE_SCOPED_MARKER_C(localPassLabelName, eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_OPAQUE);
-    }
-    {
-        static constexpr const char* localPassLabelName = "Geom_Depth_Pass_AKill";
-
-        ENG_PROFILE_SCOPED_MARKER_C(localPassLabelName, eng::ProfileColor::Grey51);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, localPassLabelName, eng::ProfileColor::Grey51);
-        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_AKILL);
+        RenderPass_Depth(cmdBuffer, pair.first);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -6613,9 +6602,13 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "HZB_Generation_Pass", eng::ProfileColor::Grey80);
-    eng::Timer timer;
+    static constexpr const char* passName = "HZB_Generation_Pass";
+    static constexpr uint32_t passColor = 0xcccccc;
 
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
+
+    eng::Timer timer;
 
     cmdBuffer
         .BeginBarrierList()
@@ -6704,20 +6697,9 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void DepthPass(vkn::CmdBuffer& cmdBuffer)
-{
-    static constexpr char* markerName = "Depth_Pass";
-
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::Grey80, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::Grey80);
-
-    GeomDepthPass(cmdBuffer);
-}
-
-
 static void CSMGeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "CSM_Geom_Culling_Clear_Counters", eng::ProfileColor::Black);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0x000000, "CSM_Geom_Culling_Clear_Counters");
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
@@ -6743,10 +6725,11 @@ static void CSMGeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 
 static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr char* markerName = "CSM_Geom_Vis_ID_Buffer_Pass";
+    static constexpr const char* passName = "CSM_Geom_Vis_ID_Buffer_Pass";
+    static constexpr uint32_t passColor = 0xff6a6a;
 
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::IndianRed1, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::IndianRed1);
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
@@ -6807,37 +6790,22 @@ static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU
 }
 
 
-#define CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX) "CSM_Vis_Occluders_Batching_Pass_Cascade_" #CASCADE_IDX
-
-#define CSMVisGeometryBatchingPassCascadeN(CMD_BUFFER, CASCADE_IDX)                                                                \
-{                                                                                                                                  \
-    ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::LightSteelBlue1);                 \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::LightSteelBlue1); \
-                                                                                                                                   \
-    {                                                                                                                              \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::LightSteelBlue1);                 \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::LightSteelBlue1); \
-        CSMGeomBatchingPass(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_OPAQUE);                                                           \
-    }                                                                                                                              \
-                                                                                                                                   \
-    {                                                                                                                              \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::LightSteelBlue1);                 \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_BATCH_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::LightSteelBlue1); \
-        CSMGeomBatchingPass(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_AKILL);                                                            \
-    }                                                                                                                              \
-}
-
-
 static void CSMVisGeometryBatchingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr char* markerName = "CSM_Vis_Occluders_Batching_Pass";
+    static constexpr const char* passName = "CSM_Vis_Geom_Batching_Pass";
+    static constexpr uint32_t passColor = 0xcae1ff;
 
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::LightSteelBlue1, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::LightSteelBlue1);
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-    CSMVisGeometryBatchingPassCascadeN(cmdBuffer, 0);
-    CSMVisGeometryBatchingPassCascadeN(cmdBuffer, 1);
-    CSMVisGeometryBatchingPassCascadeN(cmdBuffer, 2);
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+    
+            CSMGeomBatchingPass(cmdBuffer, cascade, pair.first);
+        }
+    }
 }
 
 
@@ -6875,43 +6843,32 @@ static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, G
 }
 
 
-#define CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX) "CSM_Draw_Cmd_Gen_Pass_Cascade_Cascade_" #CASCADE_IDX
-
-#define CSMGeometryDrawCmdGenPassCascadeN(CMD_BUFFER, CASCADE_IDX)                                                                    \
-{                                                                                                                                     \
-    ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::ForestGreen);                 \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::ForestGreen); \
-                                                                                                                                      \
-    {                                                                                                                                 \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::ForestGreen);                 \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::ForestGreen); \
-        CSMGeomDrawCmdGenPass(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_OPAQUE);                                                         \
-    }                                                                                                                              \
-                                                                                                                                   \
-    {                                                                                                                              \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::ForestGreen);                 \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_VIS_GEOM_DRAW_CMD_GEN_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::ForestGreen); \
-        CSMGeomDrawCmdGenPass(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_AKILL);                                                          \
-    }                                                                                                                              \
-}
-
 static void CSMGeometryDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr char* markerName = "CSM_Draw_Cmd_Gen_Pass";
+    static constexpr const char* passName = "CSM_Draw_Cmd_Gen_Pass";
+    static constexpr uint32_t passColor = 0x228b22;
 
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::ForestGreen, markerName);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, markerName, eng::ProfileColor::ForestGreen);
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-    CSMGeometryDrawCmdGenPassCascadeN(cmdBuffer, 0);
-    CSMGeometryDrawCmdGenPassCascadeN(cmdBuffer, 1);
-    CSMGeometryDrawCmdGenPassCascadeN(cmdBuffer, 2);
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+    
+            CSMGeomDrawCmdGenPass(cmdBuffer, cascade, pair.first);
+        }
+    }
 }
 
 
 static void CSMGeometryCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(eng::ProfileColor::DodgerBlue1, "CSM_Culling_Pass");
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "CSM_Culling_Pass", eng::ProfileColor::DodgerBlue1);
+    static constexpr const char* passName = "CSM_Culling_Pass";
+    static constexpr uint32_t passColor = 0x1e90ff;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     CSMGeomCullingClearCounters(cmdBuffer);
 
@@ -6997,60 +6954,30 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_Geom
 }
 
 
-#define CSM_RND_PASS_N_LABEL(CASCADE_IDX) "CSM_Render_Pass_Cascade_" #CASCADE_IDX
-
-#define CSMRenderPassCascadeN(CMD_BUFFER, CASCADE_IDX)                                                                        \
-{                                                                                                                             \
-    ENG_PROFILE_SCOPED_MARKER_C(CSM_RND_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::Grey50);                                \
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_RND_PASS_N_LABEL(CASCADE_IDX), eng::ProfileColor::Grey50);                \
-                                                                                                                              \
-    {                                                                                                                         \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_RND_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::Grey50);                  \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_RND_PASS_N_LABEL(CASCADE_IDX) "_Opaque", eng::ProfileColor::Grey50);  \
-        RenderPass_CSM(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_OPAQUE);                                                           \
-    }                                                                                                                         \
-                                                                                                                              \
-    {                                                                                                                         \
-        ENG_PROFILE_SCOPED_MARKER_C(CSM_RND_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::Grey50);                   \
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(CMD_BUFFER, CSM_RND_PASS_N_LABEL(CASCADE_IDX) "_AKill", eng::ProfileColor::Grey50);   \
-        RenderPass_CSM(CMD_BUFFER, CASCADE_IDX, GEOM_QUEUE_AKILL);                                                            \
-    }                                                                                                                         \
-}
-
-
 static void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passLabelName = "CSM_Render_Pass";
+    static constexpr const char* passName = "CSM_Render_Pass";
+    static constexpr uint32_t passColor = 0x7f7f7f;
 
-    ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey50);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey50);
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    CSMRenderPassCascadeN(cmdBuffer, 0);
-    CSMRenderPassCascadeN(cmdBuffer, 1);
-    CSMRenderPassCascadeN(cmdBuffer, 2);
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+            ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+    
+            RenderPass_CSM(cmdBuffer, cascade, pair.first);
+        }
+    }
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
 #endif
-}
-
-
-static void CSMPass(vkn::CmdBuffer& cmdBuffer)
-{
-    if (!s_isCSMEnabled) {
-        return;
-    }
-
-    static constexpr const char* passLabelName = "CSM_Pass";
-
-    ENG_PROFILE_SCOPED_MARKER_C(passLabelName, eng::ProfileColor::Grey51);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passLabelName, eng::ProfileColor::Grey51);
-
-    CSMRenderPass(cmdBuffer);
 }
 
 
@@ -7139,25 +7066,22 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass", eng::ProfileColor::ForestGreen);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass", eng::ProfileColor::ForestGreen);
+    static constexpr const char* passName = "GBuffer_Pass";
+    static constexpr uint32_t passColor = 0x228b22;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_Opaque", eng::ProfileColor::ForestGreen);
-        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_OPAQUE);
-    }
+    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
 
-    {
-        ENG_PROFILE_SCOPED_MARKER_C("GBuffer_Pass_AKill", eng::ProfileColor::ForestGreen);
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "GBuffer_Pass_AKill", eng::ProfileColor::ForestGreen);
-        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_AKILL);
+        RenderPass_GBuffer(cmdBuffer, pair.first);
     }
-
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
@@ -7167,8 +7091,11 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Deferred_Lighting_Pass", eng::ProfileColor::Yellow);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Deferred_Lighting_Pass", eng::ProfileColor::Yellow);
+    static constexpr const char* passName = "Deferred_Lighting_Pass";
+    static constexpr uint32_t passColor = 0xffff00;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -7214,8 +7141,11 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
 void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Skybox_Pass", eng::ProfileColor::Aquamarine);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Skybox_Pass", eng::ProfileColor::Aquamarine);
+    static constexpr const char* passName = "Skybox_Pass";
+    static constexpr uint32_t passColor = 0x7fffd4;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     cmdBuffer
         .BeginBarrierList()
@@ -7259,8 +7189,11 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
 void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Post_Processing_Pass", eng::ProfileColor::RebeccaPurple);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Post_Processing_Pass", eng::ProfileColor::RebeccaPurple);
+    static constexpr const char* passName = "Post_Processing_Pass";
+    static constexpr uint32_t passColor = 0x663399;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     cmdBuffer
         .BeginBarrierList()
@@ -7305,8 +7238,11 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Dbg_RT_View_Render_Pass", eng::ProfileColor::Red);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_RT_View_Render_Pass", eng::ProfileColor::Red);
+    static constexpr const char* passName = "Dbg_RT_View_Render_Pass";
+    static constexpr uint32_t passColor = 0xff0000;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::Texture* pVisTex = nullptr;
 
@@ -7413,8 +7349,11 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass", eng::ProfileColor::Red);
+    static constexpr const char* passName = "Dbg_Draw_Render_Pass";
+    static constexpr uint32_t passColor = 0xff0000;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     if (lineInstCount > 0) {
         void* pLineData = s_dbgLineDataGPU.Map();
@@ -7480,7 +7419,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
         if (lineInstCount > 0) {
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Lines", eng::ProfileColor::Red2);
+            ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, 0xee0000, "%s_Lines", passName);
     
             vkn::PSO& pso = s_PSOs[PASS_ID_DBG_DRAW_LINES];
 
@@ -7493,7 +7432,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         }
 
         if (triInstCount > 0) {
-            ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_Draw_Render_Pass_Triangles", eng::ProfileColor::Red2);
+            ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, 0xee0000, "%s_Triangles", passName);
 
             vkn::PSO& pso = s_PSOs[PASS_ID_DBG_DRAW_TRIANGLES];
 
@@ -7966,8 +7905,11 @@ namespace DbgUI
 
 static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Dbg_UI_Render_Pass", eng::ProfileColor::Red);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Dbg_UI_Render_Pass", eng::ProfileColor::Red);
+    static constexpr const char* passName = "Dbg_UI_Render_Pass";
+    static constexpr uint32_t passColor = 0xff0000;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     s_dbgUI.BeginFrame(s_frameTime);
 
@@ -8001,8 +7943,11 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 
 void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    ENG_PROFILE_SCOPED_MARKER_C("Resolve_To_Backbuffer_Pass", eng::ProfileColor::DimGrey);
-    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Resolve_To_Backbuffer_Pass", eng::ProfileColor::DimGrey);
+    static constexpr const char* passName = "Resolve_To_Backbuffer_Pass";
+    static constexpr uint32_t passColor = 0x696969;
+
+    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
     vkn::SCTextureView& scTextureView = s_vkSwapchain.GetTextureView(s_nextImageIdx);
@@ -8055,7 +8000,7 @@ static void RenderScene()
         return;
     }
 
-    ENG_PROFILE_SCOPED_MARKER_C("Render_Scene", eng::ProfileColor::DimGrey);
+    ENG_PROFILE_SCOPED_MARKER_C(0x696969, "Render_Scene");
 
     UpdateGPUCommonConstBuffer();
     UpdateGPUDbgConstBuffer();
@@ -8076,18 +8021,21 @@ static void RenderScene()
 
     cmdBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
-        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, "Render_Scene_GPU", eng::ProfileColor::Grey10);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, 0x1a1a1a, "Render_Scene_GPU");
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
         HZBGeneratePass(cmdBuffer);
         GeomCullingPass(cmdBuffer);
 
-        DepthPass(cmdBuffer);
-
         if (s_isCSMEnabled) {
             CSMGeometryCullingPass(cmdBuffer);
-            CSMPass(cmdBuffer);
+        }
+
+        GeomDepthPass(cmdBuffer);
+
+        if (s_isCSMEnabled) {
+            CSMRenderPass(cmdBuffer);
         }
 
         GBufferRenderPass(cmdBuffer);
