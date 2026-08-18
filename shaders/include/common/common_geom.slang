@@ -141,21 +141,22 @@ struct GPU_GeomSortKey
         key = ZEROU2;
     }
 
-    __init(in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
+    __init(in GPU_GeomMatType matType, in uint matID, in uint meshID, in uint lodID, in float depth)
     {
-        Construct(matType, meshID, lodID, depth);
+        Construct(matType, matID, meshID, lodID, depth);
     }
 
     [mutating]
-    void Construct(in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
+    void Construct(in GPU_GeomMatType matType, in uint materialID, in uint meshID, in uint lodID, in float depth)
     {
-        static_assert(GPU_GeomMatType::COUNT <= (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
+        static_assert(GPU_GeomMatType::COUNT < (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
 
         key = ZEROU2;
 
         this.depth = depth;
         this.lodID = lodID;
         this.meshID = meshID;
+        this.materialID = materialID;
         this.matType = matType;
     }
 
@@ -163,6 +164,12 @@ struct GPU_GeomSortKey
     {
         set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS); }
         get { return GPU_GeomMatType(bitfieldExtract(key.y, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS)); }
+    }
+
+    property uint materialID
+    {
+        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_MAT_ID_OFFSET, GEOM_SORT_MAT_ID_BITS); }
+        get { return bitfieldExtract(key.y, GEOM_SORT_MAT_ID_OFFSET, GEOM_SORT_MAT_ID_BITS); }
     }
 
     property uint meshID
@@ -185,9 +192,14 @@ struct GPU_GeomSortKey
 
     private static const uint GEOM_SORT_LOD_OFFSET = 0;
     private static const uint GEOM_SORT_LOD_BITS = 3;
+
     private static const uint GEOM_SORT_MESH_OFFSET = 3;
     private static const uint GEOM_SORT_MESH_BITS = 16;
-    private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 19;
+
+    private static const uint GEOM_SORT_MAT_ID_OFFSET = 19;
+    private static const uint GEOM_SORT_MAT_ID_BITS = 11;
+
+    private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
     private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
 
     private uint2 key;

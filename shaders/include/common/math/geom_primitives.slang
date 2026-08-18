@@ -268,10 +268,13 @@ struct GPU_Frustum
         return true;
     }
 
-    GPU_Plane GetPlane(PlaneID ID)
-    {
-        return planes[ID];
-    }
+    GPU_Plane GetPlane(PlaneID ID) { return planes[ID]; }
+    GPU_Plane GetLeftPlane()       { return planes[PlaneID::PLANE_LEFT]; }
+    GPU_Plane GetTopPlane()        { return planes[PlaneID::PLANE_TOP]; }
+    GPU_Plane GetRightPlane()      { return planes[PlaneID::PLANE_RIGHT]; }
+    GPU_Plane GetBottomPlane()     { return planes[PlaneID::PLANE_BOTTOM]; }
+    GPU_Plane GetNearPlane()       { return planes[PlaneID::PLANE_NEAR]; }
+    GPU_Plane GetFarPlane()        { return planes[PlaneID::PLANE_FAR]; }
 
     private GPU_Plane planes[6];
 };

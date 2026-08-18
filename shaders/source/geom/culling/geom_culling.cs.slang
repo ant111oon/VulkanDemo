@@ -8,7 +8,7 @@
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
 #define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #define HZB_CULLING_VIEW_PROJ_MATR  COMMON_CULLING_VIEW_PROJ_MATRIX_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE COMMON_CULLING_FRUSTUM.GetPlane(GPU_Frustum::PlaneID::PLANE_NEAR)
+#define HZB_CULLING_VIEW_NEAR_PLANE COMMON_CULLING_FRUSTUM.GetNearPlane()
 #include "common/math/hzb_culling.slang"
 
 
@@ -63,7 +63,7 @@ GPU_GeomSortKey GeomGetSortKey(in GPU_GeomInst inst)
 
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
-    return GPU_GeomSortKey(material.type, inst.meshID, lodID, depth);
+    return GPU_GeomSortKey(material.type, inst.materialID, inst.meshID, lodID, depth);
 }
 
 

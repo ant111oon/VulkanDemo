@@ -412,6 +412,18 @@ struct GPU_DbgTriangleData
 
 struct GPU_GeomSortKey
 {
+    static const uint GEOM_SORT_LOD_OFFSET = 0;
+    static const uint GEOM_SORT_LOD_BITS = 3;
+    
+    static const uint GEOM_SORT_MESH_OFFSET = 3;
+    static const uint GEOM_SORT_MESH_BITS = 16;
+    
+    static const uint GEOM_SORT_MAT_ID_OFFSET = 19;
+    static const uint GEOM_SORT_MAT_ID_BITS = 11;
+    
+    static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
+    static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
+
     uint2 key;
 };
 
@@ -5572,8 +5584,14 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 
                     inst.meshID = baseIdx + i;
 
+                    static constexpr uint32_t MAX_MESH_ID = (1u << GPU_GeomSortKey::GEOM_SORT_MESH_BITS) - 1;
+                    CORE_ASSERT_MSG(inst.meshID <= MAX_MESH_ID, "For now GPU sort key supports only mesh IDs less or equal to %u", MAX_MESH_ID);
+
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     inst.materialID = primitive.materialIndex.value();
+
+                    static constexpr uint32_t MAX_MATERIAL_ID = (1u << GPU_GeomSortKey::GEOM_SORT_MAT_ID_BITS) - 1;
+                    CORE_ASSERT_MSG(inst.materialID <= MAX_MATERIAL_ID, "For now GPU sort key supports only material IDs less or equal to %u", MAX_MATERIAL_ID);
 
                     inst.matrWCS = glm::transpose(transform);
                     inst.PackAABB_WCS(GetInstAABB(inst.meshID, transform));
