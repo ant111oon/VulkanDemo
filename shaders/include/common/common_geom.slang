@@ -160,6 +160,26 @@ struct GPU_GeomSortKey
         this.matType = matType;
     }
 
+    uint GetDigits(in uint offset, in uint bits)
+    {
+        if (offset >= 32) {
+            return bitfieldExtract(key.y, offset - 32, bits);
+        }
+
+        if (offset + bits <= 32) {
+            return bitfieldExtract(key.x, offset, bits);
+        }
+
+        // Digit crosses from key.x into key.y
+        const uint loBits = 32 - offset;
+        const uint hiBits = bits - loBits;
+
+        const uint lo = bitfieldExtract(key.x, offset, loBits);
+        const uint hi = bitfieldExtract(key.y, 0, hiBits);
+
+        return lo | (hi << loBits);
+    }
+
     property GPU_GeomMatType matType
     {
         set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS); }
