@@ -1,8 +1,8 @@
-#define DBG_DRAW_LINES_PASS
+#define DBG_DRAW_TRIANGLES_PASS
 
-#include "registers/dbg_draw_lines_registers.slang"
+#include "registers/dbg_primitives_registers.slang"
 
-#include "pass/dbg_draw_primitives/vsout.slang"
+#include "pass/dbg_primitives/vsout.slang"
 
 
 struct GPU_DbgDrawPsOutput
@@ -12,7 +12,7 @@ struct GPU_DbgDrawPsOutput
 
 
 [shader("fragment")]
-GPU_DbgDrawPsOutput main(GPU_DbgDrawVsOutput input)
+GPU_DbgDrawPsOutput main(GPU_DbgPrimVsOutput input)
 {
     GPU_DbgDrawPsOutput result = (GPU_DbgDrawPsOutput)0;
     result.color = input.data.color;

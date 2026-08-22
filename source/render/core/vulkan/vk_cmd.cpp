@@ -522,6 +522,16 @@ namespace vkn
         return *this;
     }
 
+
+    CmdBuffer& CmdBuffer::CmdSetPrimitiveTopology(VkPrimitiveTopology topology)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetPrimitiveTopology(Get(), topology);
+        
+        return *this;
+    }
+
     
     CmdBuffer& CmdBuffer::CmdSetPolygonMode(VkPolygonMode mode)
     {
