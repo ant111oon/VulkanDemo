@@ -160,7 +160,7 @@ struct GPU_GeomSortKey
         this.matType = matType;
     }
 
-    uint GetDigits(in uint offset, in uint bits)
+    uint GetDigit(in uint offset, in uint bits)
     {
         if (offset >= 32) {
             return bitfieldExtract(key.y, offset - 32, bits);
@@ -246,6 +246,16 @@ struct GPU_GeomBatch
 #define GEOM_QUEUE_OPAQUE (uint)GPU_GeomQueue::OPAQUE
 #define GEOM_QUEUE_AKILL  (uint)GPU_GeomQueue::AKILL
 #define GEOM_QUEUE_COUNT  (uint)GPU_GeomQueue::COUNT
+
+
+static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
+
+static const uint GEOM_SORT_RADIX_BITS = 4u;
+static const uint GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
+
+static const uint GEOM_SORT_RADIX_MASK_WORD_BITS  = 32;
+static const uint GEOM_SORT_RADIX_MASK_WORD_COUNT = GEOM_SORT_CS_GROUP_SIZE / GEOM_SORT_RADIX_MASK_WORD_BITS;
+
 
 static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
 static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;

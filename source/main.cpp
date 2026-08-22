@@ -832,10 +832,6 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
-static constexpr size_t GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -2918,10 +2914,6 @@ static void CreateGeomCullingDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4326,34 +4318,53 @@ static void CreatePipelines()
     CreateDbgRTViewPipelineLayout();
 
 
-    CreateGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_culling.cs.spv"));
-    CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_batching.cs.spv"));
-    CreateGeomDrawCmdGenPipeline(RND_SHADER_SPIRV_FULL_PATH("geom_draw_cmd_gen.cs.spv"));
+    CreateGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/culling/culling.cs.spv"));
+    CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/batching/batching.cs.spv"));
+    CreateGeomDrawCmdGenPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/draw_cmd_gen/draw_cmd_gen.cs.spv"));
     
-    CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass.ps.spv"));
+    CreateZPassPipeline(RND_SHADER_SPIRV_FULL_PATH("zpass/zpass.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("zpass/zpass.ps.spv"));
     
-    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb.cs.spv"));
+    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb/hzb.cs.spv"));
 
-    CreateCSMGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("csm.cs.spv"));
-    CreateCSMRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("csm.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("csm.ps.spv"));
+    CreateCSMGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("csm/csm.cs.spv"));
+    CreateCSMRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("csm/csm.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("csm/csm.ps.spv"));
     
-    CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer.ps.spv"));
+    CreateGBufferRenderPipeline(RND_SHADER_SPIRV_FULL_PATH("gbuffer/gbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("gbuffer/gbuffer.ps.spv"));
     
-    CreateDeferredLightingPipeline(RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("deferred_lighting.ps.spv"));
+    CreateDeferredLightingPipeline(
+        RND_SHADER_SPIRV_FULL_PATH("deferred_lighting/deferred_lighting.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("deferred_lighting/deferred_lighting.ps.spv")
+    );
     
-    CreatePostProcessingPipeline(RND_SHADER_SPIRV_FULL_PATH("post_processing.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("post_processing.ps.spv"));
+    CreatePostProcessingPipeline(
+        RND_SHADER_SPIRV_FULL_PATH("post_processing/post_processing.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("post_processing/post_processing.ps.spv")
+    );
     
-    CreateBackbufferPassPipeline(RND_SHADER_SPIRV_FULL_PATH("backbuffer.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("backbuffer.ps.spv"));
+    CreateBackbufferPassPipeline(
+        RND_SHADER_SPIRV_FULL_PATH("backbuffer/backbuffer.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("backbuffer/backbuffer.ps.spv")
+    );
     
-    CreateSkyboxPipeline(RND_SHADER_SPIRV_FULL_PATH("skybox.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("skybox.ps.spv"));
+    CreateSkyboxPipeline(RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.ps.spv"));
     
-    CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("irradiance_map_gen.cs.spv"));
-    CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("prefiltered_env_map_gen.cs.spv"));
-    CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("brdf_integration_gen.cs.spv"));
+    CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/irradiance_map_gen.cs.spv"));
+    CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/prefiltered_env_map_gen.cs.spv"));
+    CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/brdf_integration_gen.cs.spv"));
     
-    CreateDbgDrawLinePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_lines.ps.spv"));
-    CreateDbgDrawTrianglePipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_draw_triangles.ps.spv"));
-    CreateDbgRTViewPipeline(RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.vs.spv"), RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view.ps.spv"));
+    CreateDbgDrawLinePipeline(
+        RND_SHADER_SPIRV_FULL_PATH("dbg_draw_primitives/dbg_draw_lines.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("dbg_draw_primitives/dbg_draw_lines.ps.spv")
+    );
+    CreateDbgDrawTrianglePipeline(
+        RND_SHADER_SPIRV_FULL_PATH("dbg_draw_primitives/dbg_draw_triangles.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("dbg_draw_primitives/dbg_draw_triangles.ps.spv")
+    );
+
+    CreateDbgRTViewPipeline(
+        RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.ps.spv")
+    );
 }
 
 
@@ -4774,10 +4785,10 @@ static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]);
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]);
     
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
+    // s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
+    // s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
+    // s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
+    // s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
 }
 
 
