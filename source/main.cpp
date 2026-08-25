@@ -8468,11 +8468,9 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
 static void RenderScene()
 {
-    if (s_renderFinishedFence.GetStatus() == VK_NOT_READY) {
-        return;
-    }
-
     ENG_PROFILE_SCOPED_MARKER_C(0x696969, "Render_Scene");
+
+    s_renderFinishedFence.WaitFor(10'000'000'000);
 
     UpdateGPUCommonConstBuffer();
     UpdateGPUDbgConstBuffer();
@@ -8535,7 +8533,7 @@ static void RenderScene()
     s_renderFinishedFence.Reset();
 
     vkn::QueueSyncData waitData = { &s_presentFinishedSemaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT };
-    vkn::QueueSyncData signalData = { &renderingFinishedSemaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT };
+    vkn::QueueSyncData signalData = { &renderingFinishedSemaphore, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT };
 
     s_vkDevice.GetQueue().Submit(cmdBuffer, &s_renderFinishedFence, &waitData, &signalData);
 

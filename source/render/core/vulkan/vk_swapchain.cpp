@@ -401,7 +401,15 @@ namespace vkn
             return *this;
         }
 
-        if (newExtent.width == m_textureExtent.width && newExtent.height == m_textureExtent.height) {
+        const bool recreateRequired =
+            newExtent.width  != m_textureExtent.width  ||
+            newExtent.height != m_textureExtent.height ||
+            swapchainCreateInfo.presentMode != m_presentMode ||
+            swapchainCreateInfo.imageFormat != m_textureFormat ||
+            swapchainCreateInfo.imageColorSpace != m_textureColorSpace ||
+            swapchainCreateInfo.minImageCount != m_minImageCount;
+            
+        if (!recreateRequired) {
             succeded = true;
             return *this;
         }
