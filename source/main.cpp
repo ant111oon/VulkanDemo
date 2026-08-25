@@ -746,34 +746,34 @@ enum PassID : uint32_t
 
 
 static constexpr const char* PASS_DBG_NAME[] = {
-    "PASS_ID_GEOM_CULLING",
-    "PASS_ID_GEOM_BATCHING",
-    "PASS_ID_GEOM_DRAW_CMD_GEN",
+    "GEOM_CULLING",
+    "GEOM_BATCHING",
+    "GEOM_DRAW_CMD_GEN",
     
-    "PASS_ID_DEPTH",
+    "DEPTH",
     
-    "PASS_ID_HZB_GEN",
+    "HZB_GEN",
 
-    "PASS_ID_CSM_GEOM_CULLING",
-    "PASS_ID_CSM_RENDER",
+    "CSM_GEOM_CULLING",
+    "CSM_RENDER",
     
-    "PASS_ID_GBUFFER",
+    "GBUFFER",
     
-    "PASS_ID_DEFERRED_LIGHTING",
+    "DEFERRED_LIGHTING",
     
-    "PASS_ID_SKYBOX",
+    "SKYBOX",
     
-    "PASS_ID_POST_PROCESSING",
+    "POST_PROCESSING",
     
-    "PASS_ID_BACKBUFFER",
+    "BACKBUFFER",
     
-    "PASS_ID_IRRADIANCE_MAP_GEN",
-    "PASS_ID_BRDF_LUT_GEN",
-    "PASS_ID_PREFILT_ENV_MAP_GEN",
+    "IRRADIANCE_MAP_GEN",
+    "BRDF_LUT_GEN",
+    "PREFILT_ENV_MAP_GEN",
 
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    "PASS_ID_DBG_DRAW_PRIMITIVES",
-    "PASS_ID_DBG_RT_VIEW",
+    "DBG_DRAW_PRIMITIVES",
+    "DBG_RT_VIEW",
 #endif
 };
 
@@ -3797,7 +3797,7 @@ static void CreateGeomCullingPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_CULLING);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GEOM_CULLING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
 }
 
 
@@ -3812,7 +3812,7 @@ static void CreateGeomBatchingPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_BATCHING);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GEOM_BATCHING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
 }
 
 
@@ -3827,7 +3827,7 @@ static void CreateGeomDrawCmdGenPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GEOM_DRAW_CMD_GEN_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
 }
 
 
@@ -3842,7 +3842,7 @@ static void CreateZPassPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DEPTH);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "ZPASS_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DEPTH]);
 }
 
 
@@ -3857,7 +3857,7 @@ static void CreateHZBGenPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_HZB_GEN);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "HZB_GEN_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
 }
 
 
@@ -3872,7 +3872,7 @@ static void CreateCSMGeomCullingPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_CSM_GEOM_CULLING);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "CSM_GEOM_CULLING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
 }
 
 
@@ -3887,7 +3887,7 @@ static void CreateCSMRenderPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_CSM_RENDER);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "CSM_RENDER_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
 }
 
 
@@ -3902,7 +3902,7 @@ static void CreateGBufferPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GBUFFER);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "GBUFFER_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GBUFFER]);
 }
 
 
@@ -3915,7 +3915,7 @@ static void CreateDeferredLightingPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DEFERRED_LIGHTING);
 
     layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "DEFERRED_LIGHTING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
 }
 
 
@@ -3928,7 +3928,7 @@ static void CreatePostProcessingPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_POST_PROCESSING);
 
     layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "POST_PROCESSING_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
 }
 
 
@@ -3941,7 +3941,7 @@ static void CreateBackbufferPassPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_BACKBUFFER);
 
     layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "BACKBUFFER_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
 }
 
 
@@ -3954,7 +3954,7 @@ static void CreateSkyboxPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_SKYBOX);
 
     layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "SKYBOX_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_SKYBOX]);
 }
 
 
@@ -3969,7 +3969,7 @@ static void CreateIrradianceMapGenPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_IRRADIANCE_MAP_GEN);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "IRRAD_MAP_GEN_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
 }
 
 
@@ -3984,7 +3984,7 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN);
     
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "PREFILT_ENV_MAP_GET_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
 }
 
 
@@ -3997,7 +3997,7 @@ static void CreateBRDFIntegrationLUTGenPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_BRDF_LUT_GEN);
 
     layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "GRDF_LUT_GEN_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
 }
 
 
@@ -4013,7 +4013,7 @@ static void CreateDbgDrawPrimitivesPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_DRAW_PRIMITIVES);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "DBG_DRAW_LINE_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
 #endif
 }
 
@@ -4030,7 +4030,7 @@ static void CreateDbgRTViewPipelineLayout()
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_RT_VIEW);
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "DBG_RT_VIEW_PIPELINE_LAYOUT");
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
 #endif
 }
 
@@ -4043,7 +4043,7 @@ static void CreateGeomCullingPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "GEOM_CULLING_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_CULLING);
 
@@ -4053,7 +4053,7 @@ static void CreateGeomCullingPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_GEOM_CULLING))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "GEOM_CULLING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
 }
 
 
@@ -4065,7 +4065,7 @@ static void CreateGeomBatchingPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "GEOM_BATCHING_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCHING);
 
@@ -4075,7 +4075,7 @@ static void CreateGeomBatchingPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_GEOM_BATCHING))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "GEOM_BATCHING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
 }
 
 
@@ -4087,7 +4087,7 @@ static void CreateGeomDrawCmdGenPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "GEOM_DRAW_CMD_GEN_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_DRAW_CMD_GEN);
 
@@ -4097,7 +4097,7 @@ static void CreateGeomDrawCmdGenPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "GEOM_DRAW_CMD_GEN_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
 }
 
 
@@ -4109,7 +4109,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "ZPASS_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DEPTH]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4117,7 +4117,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "ZPASS_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DEPTH]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DEPTH);
 
@@ -4149,7 +4149,7 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "ZPASS_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DEPTH]);
 }
 
 
@@ -4161,7 +4161,7 @@ static void CreateHZBGenPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "HZB_GEN_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_HZB_GEN);
 
@@ -4171,7 +4171,7 @@ static void CreateHZBGenPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_HZB_GEN))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "HZB_GEN_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
 }
 
 
@@ -4183,7 +4183,7 @@ static void CreateCSMGeomCullingPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "CSM_GEOM_CULLING_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_CSM_GEOM_CULLING);
 
@@ -4193,7 +4193,7 @@ static void CreateCSMGeomCullingPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_CSM_GEOM_CULLING))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "CSM_GEOM_CULLING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
 }
 
 
@@ -4205,7 +4205,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "CSM_RENDER_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4213,7 +4213,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "CSM_RENDER_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_CSM_RENDER);
 
@@ -4245,7 +4245,7 @@ static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPa
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "CSM_RENDER_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
 }
     
 
@@ -4257,7 +4257,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "GBUFFER_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_GBUFFER]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4265,7 +4265,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "GBUFFER_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_GBUFFER]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_GBUFFER);
 
@@ -4298,7 +4298,7 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "GBUFFER_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GBUFFER]);
 }
 
 
@@ -4310,7 +4310,7 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "DEFERRED_LIGHTING_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4318,7 +4318,7 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "DEFERRED_LIGHTING_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DEFERRED_LIGHTING);
 
@@ -4337,7 +4337,7 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "DEFERRED_LIGHTING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
 }
 
 
@@ -4349,7 +4349,7 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "POST_PROCESSING_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4357,7 +4357,7 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "POST_PROCESSING_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_POST_PROCESSING);
 
@@ -4376,7 +4376,7 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "POST_PROCESSING_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
 }
 
 
@@ -4388,7 +4388,7 @@ static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path&
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "BACKBUFFER_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4396,7 +4396,7 @@ static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path&
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "BACKBUFFER_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_BACKBUFFER);
 
@@ -4415,7 +4415,7 @@ static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path&
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "BACKBUFFER_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
 }
 
 
@@ -4427,7 +4427,7 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "SKYBOX_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_SKYBOX]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4435,7 +4435,7 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "SKYBOX_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_SKYBOX]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_SKYBOX);
 
@@ -4461,7 +4461,7 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "SKYBOX_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_SKYBOX]);
 }
 
 
@@ -4473,7 +4473,7 @@ static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "IRRADIANCE_MAP_GEN_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_IRRADIANCE_MAP_GEN);
 
@@ -4483,7 +4483,7 @@ static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_IRRADIANCE_MAP_GEN))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "IRRADIANCE_MAP_GEN_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
 }
 
 
@@ -4495,7 +4495,7 @@ static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "PREFILT_ENV_MAP_GEN_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_PREFILT_ENV_MAP_GEN);
 
@@ -4505,7 +4505,7 @@ static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "PREFILT_ENV_MAP_GEN_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
 }
 
 
@@ -4517,7 +4517,7 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
     
     vkn::Shader shader;
     shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "BRDF_LUT_GEN_COMPUTE_SHADER");
+    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_BRDF_LUT_GEN);
 
@@ -4527,7 +4527,7 @@ static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
         .SetLayout(GetPSOLayout(PASS_ID_BRDF_LUT_GEN))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "BRDF_LUT_GEN_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
 }
 
 
@@ -4540,7 +4540,7 @@ static void CreateDbgDrawPrimitivesPipeline(const fs::path& vsPath, const fs::pa
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "DBG_DRAW_PRIMITIVES_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4548,7 +4548,7 @@ static void CreateDbgDrawPrimitivesPipeline(const fs::path& vsPath, const fs::pa
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "DBG_DRAW_PRIMITIVES_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DBG_DRAW_PRIMITIVES);
 
@@ -4579,7 +4579,7 @@ static void CreateDbgDrawPrimitivesPipeline(const fs::path& vsPath, const fs::pa
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "DBG_DRAW_PRIMITIVES_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
 #endif
 }
 
@@ -4593,7 +4593,7 @@ static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPa
     
     vkn::Shader vsShader;
     vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "DBG_RT_VIEW_VERTEX_SHADER");
+    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
 
     if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
         VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
@@ -4601,7 +4601,7 @@ static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPa
     
     vkn::Shader psShader;
     psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "DBG_RT_VIEW_FRAGMENT_SHADER");
+    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DBG_RT_VIEW);
 
@@ -4620,7 +4620,7 @@ static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPa
     
     pso = s_graphicsPSOBuilder.Build();
     
-    s_vkDevice.SetObjDebugName(pso, "DBG_RT_VIEW_PSO");
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
 #endif
 }
 
