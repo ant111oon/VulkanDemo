@@ -86,9 +86,6 @@ struct GPU_Frustum
 };
 
 
-static const uint COMMON_CSM_CASCADE_COUNT = 3;
-
-
 enum GPU_GeomMatType : uint
 {
     GEOM_MAT_TYPE_OPAQUE,
@@ -332,6 +329,9 @@ struct GPU_CommonCSMPcssData
 };
 
 
+static constexpr uint COMMON_CSM_CASCADE_COUNT = 3;
+
+
 struct GPU_CommonCSMData
 {
     GPU_Frustum viewFrustums[COMMON_CSM_CASCADE_COUNT];
@@ -438,9 +438,6 @@ enum GPU_GeomQueue
 };
 
 
-static const uint CSM_BUFFER_COUNT = COMMON_CSM_CASCADE_COUNT * GEOM_QUEUE_COUNT;
-
-
 struct GPU_GeomBatch
 {
     uint meshID;
@@ -453,6 +450,8 @@ struct GPU_GeomBatch
 struct GPU_GeomCullingPerDrawData
 {
     uint hzbMipsCount;
+    uint cascade;
+    uint isCsmPass;
 };
 
 
@@ -470,7 +469,9 @@ struct GPU_GeomDrawCmdGenPerDrawData
 
 struct GPU_ZPassPerDrawData
 {
+    uint cascade;
     uint isAKillPass;
+    uint isCsmPass;
 };
 
 
@@ -479,13 +480,6 @@ struct GPU_HzbGenPerDrawData
     uint2 srcMipResolution;
     uint2 dstMipResolution;
     uint  dstMipIdx;
-};
-
-
-struct GPU_CsmPerDrawData
-{
-    uint cascadeIdx;
-    GPU_GeomQueue queue;
 };
 
 
@@ -645,9 +639,6 @@ enum DescSetLayoutID : uint32_t
     DESC_SET_LAYOUT_ID_DEPTH,
     
     DESC_SET_LAYOUT_ID_HZB_GEN,
-
-    DESC_SET_LAYOUT_ID_CSM_GEOM_CULLING,
-    DESC_SET_LAYOUT_ID_CSM_RENDER,
     
     DESC_SET_LAYOUT_ID_GBUFFER,
     
@@ -682,9 +673,6 @@ static constexpr const char* DESC_SET_LAYOUT_DBG_NAME[] = {
     "DESC_SET_LAYOUT_DEPTH",
     
     "DESC_SET_LAYOUT_HZB_GEN",
-
-    "DESC_SET_LAYOUT_CSM_GEOM_CULLING",
-    "DESC_SET_LAYOUT_CSM_RENDER",
     
     "DESC_SET_LAYOUT_GBUFFER",
     
@@ -718,9 +706,6 @@ enum PassID : uint32_t
     PASS_ID_DEPTH,
     
     PASS_ID_HZB_GEN,
-
-    PASS_ID_CSM_GEOM_CULLING,
-    PASS_ID_CSM_RENDER,
     
     PASS_ID_GBUFFER,
     
@@ -753,9 +738,6 @@ static constexpr const char* PASS_DBG_NAME[] = {
     "DEPTH",
     
     "HZB_GEN",
-
-    "CSM_GEOM_CULLING",
-    "CSM_RENDER",
     
     "GBUFFER",
     
@@ -803,7 +785,7 @@ public:
         eng::HashBuilder hasher;            \
         hasher.AddValue(LAYOUT_ID);
 
-#define ADD_DESCRIPTOR_SET_HASH_VALUE(VALUE) \
+#define DESCRIPTOR_SET_HASH_VALUE(VALUE) \
         hasher.AddValue(VALUE)
 
 #define END_DESCRIPTOR_SET_HASH_FUNC \
@@ -819,15 +801,20 @@ END_DESCRIPTOR_SET_DESC;
 
 BEGIN_DESCRIPTOR_SET_DESC(GeomCullingDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_CULLING)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
+        DESCRIPTOR_SET_HASH_VALUE(isCsm);
+        DESCRIPTOR_SET_HASH_VALUE(cascade);
     END_DESCRIPTOR_SET_HASH_FUNC;
+
+    uint32_t cascade;
+    bool isCsm;
 END_DESCRIPTOR_SET_DESC;
 
 
 BEGIN_DESCRIPTOR_SET_DESC(GeomBatchingDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_BATCHING)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        ADD_DESCRIPTOR_SET_HASH_VALUE(matType);
-        ADD_DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        ADD_DESCRIPTOR_SET_HASH_VALUE(cascade);
+        DESCRIPTOR_SET_HASH_VALUE(matType);
+        DESCRIPTOR_SET_HASH_VALUE(isCsm);
+        DESCRIPTOR_SET_HASH_VALUE(cascade);
     END_DESCRIPTOR_SET_HASH_FUNC;
 
     GPU_GeomMatType matType;
@@ -838,9 +825,9 @@ END_DESCRIPTOR_SET_DESC;
 
 BEGIN_DESCRIPTOR_SET_DESC(GeomDrawCmdGenDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        ADD_DESCRIPTOR_SET_HASH_VALUE(matType);
-        ADD_DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        ADD_DESCRIPTOR_SET_HASH_VALUE(cascade);
+        DESCRIPTOR_SET_HASH_VALUE(matType);
+        DESCRIPTOR_SET_HASH_VALUE(isCsm);
+        DESCRIPTOR_SET_HASH_VALUE(cascade);
     END_DESCRIPTOR_SET_HASH_FUNC;
 
     GPU_GeomMatType matType;
@@ -851,10 +838,14 @@ END_DESCRIPTOR_SET_DESC;
 
 BEGIN_DESCRIPTOR_SET_DESC(DepthDescSetDesc, DESC_SET_LAYOUT_ID_DEPTH)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        ADD_DESCRIPTOR_SET_HASH_VALUE(matType);
+        DESCRIPTOR_SET_HASH_VALUE(matType);
+        DESCRIPTOR_SET_HASH_VALUE(isCsm);
+        DESCRIPTOR_SET_HASH_VALUE(cascade);
     END_DESCRIPTOR_SET_HASH_FUNC;
 
     GPU_GeomMatType matType;
+    uint32_t cascade;
+    bool isCsm;
 END_DESCRIPTOR_SET_DESC;
 
 
@@ -864,21 +855,9 @@ BEGIN_DESCRIPTOR_SET_DESC(HZBGenDescSetDesc, DESC_SET_LAYOUT_ID_HZB_GEN)
 END_DESCRIPTOR_SET_DESC;
 
 
-BEGIN_DESCRIPTOR_SET_DESC(CSMGeomCullingDescSetDesc, DESC_SET_LAYOUT_ID_CSM_GEOM_CULLING)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(CSMGeomRenderDescSetDesc, DESC_SET_LAYOUT_ID_CSM_RENDER)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
 BEGIN_DESCRIPTOR_SET_DESC(GBufferDescSetDesc, DESC_SET_LAYOUT_ID_GBUFFER)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        ADD_DESCRIPTOR_SET_HASH_VALUE(matType);
+        DESCRIPTOR_SET_HASH_VALUE(matType);
     END_DESCRIPTOR_SET_HASH_FUNC;
 
     GPU_GeomMatType matType;
@@ -977,10 +956,6 @@ static constexpr size_t ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
-
-static constexpr size_t CSM_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
-static constexpr size_t CSM_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t CSM_INST_ID_QUEUE_DESCRIPTOR_SLOT = 2;
 
 static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 
@@ -1437,15 +1412,13 @@ static vkn::Buffer s_commonMeshBuffer;
 static vkn::Buffer s_commonMaterialBuffer;
 static vkn::Buffer s_commonInstBuffer;
 
+//static vkn::Buffer s_geomCullVisSortKeysBuffer;
+//static vkn::Buffer s_geomCullVisSortKeysCounterBuffer;
+//static vkn::Buffer s_geomCullVisGeomIDsBuffer;
+//static vkn::Buffer s_geomCullPerGeomMatTypeCountersBuffer;
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
-
-static vkn::Buffer s_geomCullVisSortKeysBuffer;
-static vkn::Buffer s_geomCullVisSortKeysCounterBuffer;
-static vkn::Buffer s_geomCullVisGeomIDsBuffer;
-static vkn::Buffer s_geomCullPerGeomMatTypeCountersBuffer;
-
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomBatchQueueSizeBuffer;
@@ -1454,7 +1427,6 @@ static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_sortedVisGeomIDQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_sortedVisGeomIDQueueSizeBuffer;
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_geomDrawCmdQueueBuffer;
-
 
 // CSM Data
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, COMMON_CSM_CASCADE_COUNT> s_csmVisGeomIDQueueBuffers;
@@ -1534,7 +1506,7 @@ static vkn::Texture                  s_HZB;
 static vkn::TextureView              s_HZBView;
 static std::vector<vkn::TextureView> s_HZBMipViews;
 
-static vkn::ComputePSOBuilder s_computePSOBuilder;
+static vkn::ComputePSOBuilder  s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
 static std::vector<uint8_t> s_shaderCodeBuffer;
 
@@ -1951,12 +1923,6 @@ static constexpr VkIndexType GetVkIndexType()
     } else {
         return VK_INDEX_TYPE_UINT32;
     }
-}
-
-
-static uint32_t CSMGetBufferIndex(uint32_t cascade, GPU_GeomQueue queue)
-{
-    return glm::clamp(cascade, 0u, COMMON_CSM_CASCADE_COUNT - 1) * GEOM_QUEUE_COUNT + queue;
 }
 
 
@@ -3182,49 +3148,6 @@ static void CreateHZBGenDescriptorSetLayout()
 }
 
 
-static void CreateCSMGeomCullingDescriptorSetLayout()
-{
-    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
-
-    createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-
-    std::array descriptors = {
-        vkn::DescriptorInfo::Create(CSM_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_BUFFER_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(CSM_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_BUFFER_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-    };
-
-    createInfo.descriptorInfos = descriptors;
-
-    vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_CSM_GEOM_CULLING);
-
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_CSM_GEOM_CULLING]);
-}
-
-
-static void CreateCSMRenderDescriptorSetLayout()
-{
-    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
-
-    createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-
-    std::array descriptors = {
-        vkn::DescriptorInfo::Create(CSM_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_BUFFER_COUNT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
-    };
-
-    createInfo.descriptorInfos = descriptors;
-
-    vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_CSM_RENDER);
-
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_CSM_RENDER]);
-}
-
-
 static void CreateGBufferDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
@@ -3477,9 +3400,6 @@ static void CreateDescriptorSetLayouts()
     
     CreateHZBGenDescriptorSetLayout();
     
-    CreateCSMGeomCullingDescriptorSetLayout();
-    CreateCSMRenderDescriptorSetLayout();
-
     CreateGBufferDescriptorSetLayout();
     
     CreateDeferredLightingDescriptorSetLayout();
@@ -3529,12 +3449,8 @@ uint32_t GetDescriptorSetIndex(const DESC& desc)
 template <typename DESC>
 uint32_t AddDescriptorSet(const DESC& desc)
 {
-    const auto indexOpt = FindDescriptorSetIndex(desc);
-
-    if (indexOpt.has_value()) {
-        CORE_LOG_WARN("Descriptor set with such description for layout %s is already exist", DESC_SET_LAYOUT_DBG_NAME[DESC::LAYOUT_ID]);
-        return indexOpt.value();
-    }
+    CORE_ASSERT_MSG(!FindDescriptorSetIndex(desc).has_value(),
+        "Descriptor set with such description for layout %s is already exist", DESC_SET_LAYOUT_DBG_NAME[DESC::LAYOUT_ID]);
 
     const uint32_t index = s_descSetCount++;
     const uint64_t hash = desc.Hash();
@@ -3563,7 +3479,10 @@ static void ReserveCommonDescriptorSetIndex()
 
 static void ReserveGeomCullingDescriptorSetIndex()
 {
-    AddDescriptorSet(GeomCullingDescSetDesc{});
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = false;
+
+    AddDescriptorSet(desc);
 }
 
 
@@ -3596,6 +3515,7 @@ static void ReserveGeomDrawCmdGenDescriptorSetIndex()
 static void ReserveZPassDescriptorSetIndex()
 {
     DepthDescSetDesc desc = {};
+    desc.isCsm = false;
 
     desc.matType = GEOM_MAT_TYPE_OPAQUE;
     AddDescriptorSet(desc);
@@ -3613,7 +3533,14 @@ static void ReserveHZBGenDescriptorSetIndex()
 
 static void ReserveCSMGeomCullingDescriptorSetIndex()
 {
-    AddDescriptorSet(CSMGeomCullingDescSetDesc{});
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = true;
+
+    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+        desc.cascade = cascade;
+
+        AddDescriptorSet(desc);
+    }
 }
 
 
@@ -3653,7 +3580,18 @@ static void ReserveCSMGeomDrawCmdGenDescriptorSetIndex()
 
 static void ReserveCSMGeomRenderDescriptorSetIndex()
 {
-    AddDescriptorSet(CSMGeomRenderDescSetDesc{});
+    DepthDescSetDesc desc = {};
+    desc.isCsm = true;
+
+    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
+        desc.cascade = cascade;
+
+        desc.matType = GEOM_MAT_TYPE_OPAQUE;
+        AddDescriptorSet(desc);
+
+        desc.matType = GEOM_MAT_TYPE_AKILL;
+        AddDescriptorSet(desc);
+    }
 }
 
 
@@ -3858,36 +3796,6 @@ static void CreateHZBGenPipelineLayout()
 
     layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
     s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
-}
-
-
-static void CreateCSMGeomCullingPipelineLayout()
-{
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_CSM_GEOM_CULLING);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_CsmPerDrawData) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_CSM_GEOM_CULLING);
-    
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
-}
-
-
-static void CreateCSMRenderPipelineLayout()
-{   
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_CSM_RENDER);
-    
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_CsmPerDrawData) };
-    
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_CSM_RENDER);
-    
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
 }
 
 
@@ -4173,80 +4081,6 @@ static void CreateHZBGenPipeline(const fs::path& csPath)
 
     s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
 }
-
-
-static void CreateCSMGeomCullingPipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_CSM_GEOM_CULLING);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_CSM_GEOM_CULLING))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_CSM_GEOM_CULLING]);
-}
-
-
-static void CreateCSMRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
-{
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_CSM_RENDER);
-
-    s_graphicsPSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .AddShader(vsShader)
-        .AddShader(psShader)
-        .SetLayout(GetPSOLayout(PASS_ID_CSM_RENDER))
-        .SetInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .SetRasterizerPolygonMode(VK_POLYGON_MODE_FILL)
-        .SetRasterizerCullMode(VK_CULL_MODE_BACK_BIT)
-        .SetRasterizerFrontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-        .SetRasterizerLineWidth(1.f)
-    #ifdef ENG_REVERSED_Z
-        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_GREATER_OR_EQUAL)
-    #else
-        .SetDepthTestState(VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL)
-    #endif
-        .SetDepthWriteState(VK_TRUE)
-        .SetDepthBoundsTestState(VK_TRUE, 0.f, 1.f)
-        .AddDynamicState(std::array{
-            VK_DYNAMIC_STATE_VIEWPORT, 
-            VK_DYNAMIC_STATE_SCISSOR,
-        #ifdef ENG_BUILD_DEBUG
-            VK_DYNAMIC_STATE_POLYGON_MODE_EXT
-        #endif
-        })        
-        .SetDepthAttachment(s_csmRT.GetFormat());
-    
-    pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_CSM_RENDER]);
-}
     
 
 static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
@@ -4285,7 +4119,6 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
-
         #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
         #endif
@@ -4634,9 +4467,6 @@ static void CreatePipelines()
     CreateZPassPipelineLayout();
     
     CreateHZBGenPipelineLayout();
-
-    CreateCSMGeomCullingPipelineLayout();
-    CreateCSMRenderPipelineLayout();
     
     CreateGBufferPipelineLayout();
     
@@ -4666,12 +4496,6 @@ static void CreatePipelines()
     );
     
     CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb/hzb.cs.spv"));
-
-    CreateCSMGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("csm/csm.cs.spv"));
-    CreateCSMRenderPipeline(
-        RND_SHADER_SPIRV_FULL_PATH("csm/csm.vs.spv"),
-        RND_SHADER_SPIRV_FULL_PATH("csm/csm.ps.spv")
-    );
     
     CreateGBufferRenderPipeline(
         RND_SHADER_SPIRV_FULL_PATH("gbuffer/gbuffer.vs.spv"),
@@ -4720,37 +4544,37 @@ static void CreateGeomCullingAndInstancingResources()
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    s_geomCullVisSortKeysBuffer.Create(
-        &s_vkDevice, 
-        s_cpuInstData.size() * sizeof(GPU_GeomSortKey), 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-        allocInfo
-    );
-    s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysBuffer, "GEOM_CULL_VIS_SORT_KEYS_BUFFER");
+    // s_geomCullVisSortKeysBuffer.Create(
+    //     &s_vkDevice, 
+    //     s_cpuInstData.size() * sizeof(GPU_GeomSortKey), 
+    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+    //     allocInfo
+    // );
+    // s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysBuffer, "GEOM_CULL_VIS_SORT_KEYS_BUFFER");
 
-    s_geomCullVisSortKeysCounterBuffer.Create(
-        &s_vkDevice,
-        sizeof(glm::uint), 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-        allocInfo
-    );
-    s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysCounterBuffer, "GEOM_CULL_VIS_SORT_KEYS_COUNTER_BUFFER");
+    // s_geomCullVisSortKeysCounterBuffer.Create(
+    //     &s_vkDevice,
+    //     sizeof(glm::uint), 
+    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+    //     allocInfo
+    // );
+    // s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysCounterBuffer, "GEOM_CULL_VIS_SORT_KEYS_COUNTER_BUFFER");
 
-    s_geomCullVisGeomIDsBuffer.Create(
-        &s_vkDevice, 
-        s_cpuInstData.size() * sizeof(glm::uint), 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-        allocInfo
-    );
-    s_vkDevice.SetObjDebugName(s_geomCullVisGeomIDsBuffer, "GEOM_CULL_VIS_GEOM_IDS_BUFFER");
+    // s_geomCullVisGeomIDsBuffer.Create(
+    //     &s_vkDevice, 
+    //     s_cpuInstData.size() * sizeof(glm::uint), 
+    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
+    //     allocInfo
+    // );
+    // s_vkDevice.SetObjDebugName(s_geomCullVisGeomIDsBuffer, "GEOM_CULL_VIS_GEOM_IDS_BUFFER");
 
-    s_geomCullPerGeomMatTypeCountersBuffer.Create(
-        &s_vkDevice,
-        GEOM_MAT_TYPE_COUNT * sizeof(glm::uint), 
-        VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-        allocInfo
-    );
-    s_vkDevice.SetObjDebugName(s_geomCullPerGeomMatTypeCountersBuffer, "GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_BUFFER");
+    // s_geomCullPerGeomMatTypeCountersBuffer.Create(
+    //     &s_vkDevice,
+    //     GEOM_MAT_TYPE_COUNT * sizeof(glm::uint), 
+    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
+    //     allocInfo
+    // );
+    // s_vkDevice.SetObjDebugName(s_geomCullPerGeomMatTypeCountersBuffer, "GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_BUFFER");
 
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
@@ -4883,7 +4707,7 @@ static void CreateCSMResources()
     vkn::TextureCreateInfo rtCreateInfo = {};
     rtCreateInfo.pDevice = &s_vkDevice;
     rtCreateInfo.type = VK_IMAGE_TYPE_2D;
-    rtCreateInfo.format = VK_FORMAT_D16_UNORM;
+    rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
     rtCreateInfo.extent = VkExtent3D{ CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE, 1u };
     rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     rtCreateInfo.flags = 0;
@@ -5126,15 +4950,18 @@ static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
-    const uint32_t setID = GetDescriptorSetIndex(GeomCullingDescSetDesc{});
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = false;
+
+    const uint32_t setID = GetDescriptorSetIndex(desc);
 
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]);
     s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]);
     
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
+    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
+    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
+    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
+    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
 }
 
 
@@ -5151,6 +4978,7 @@ static void WriteGeomBatchingDescriptorSet(GPU_GeomQueue queue)
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     GeomBatchingDescSetDesc desc = {};
+    desc.isCsm = false;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
@@ -5187,6 +5015,7 @@ static void WriteGeomDrawCmdGenDescriptorSet(GPU_GeomQueue queue)
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
     GeomDrawCmdGenDescSetDesc desc = {};
+    desc.isCsm = false;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
@@ -5219,6 +5048,7 @@ static void WriteZPassDescriptorSet(GPU_GeomQueue queue)
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
     
     DepthDescSetDesc desc = {};
+    desc.isCsm = false;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
@@ -5263,16 +5093,15 @@ static void WriteCSMGeomCullingDescriptorSet(uint32_t cascade, GPU_GeomQueue que
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-    
-    const uint32_t setID = GetDescriptorSetIndex(CSMGeomCullingDescSetDesc{});
 
-    const uint32_t index = CSMGetBufferIndex(cascade, queue);
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = true;
+    desc.cascade = cascade;
 
-    s_descriptorBuffer.WriteDescriptor(setID, CSM_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, 
-        index, s_csmVisGeomIDQueueBuffers[cascade][queue]);
+    const uint32_t setID = GetDescriptorSetIndex(desc);
 
-    s_descriptorBuffer.WriteDescriptor(setID, CSM_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, 
-        index, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueBuffers[cascade][queue]);
+    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]);
 }
 
 
@@ -5368,11 +5197,23 @@ static void WriteCSMRenderDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
+    
+    DepthDescSetDesc desc = {};
+    desc.isCsm = true;
+    desc.cascade = cascade;
 
-    const uint32_t setID = GetDescriptorSetIndex(CSMGeomRenderDescSetDesc{});
-    const uint32_t index = CSMGetBufferIndex(cascade, queue);
+    switch(queue) {
+        case GEOM_QUEUE_OPAQUE:
+            desc.matType = GEOM_MAT_TYPE_OPAQUE;
+            break;
+        case GEOM_QUEUE_AKILL:
+            desc.matType = GEOM_MAT_TYPE_AKILL;
+            break;
+    }
 
-    s_descriptorBuffer.WriteDescriptor(setID, CSM_INST_ID_QUEUE_DESCRIPTOR_SLOT, index, s_csmSortedVisGeomIDQueueBuffers[cascade][queue]);
+    const uint32_t setID = GetDescriptorSetIndex(desc);
+
+    s_descriptorBuffer.WriteDescriptor(setID, ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue]);
 }
 
 
@@ -6726,8 +6567,8 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
         barriers.AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
 
-    barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
     barriers.Push();
 
@@ -6737,8 +6578,8 @@ static void GeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
     }
 
-    cmdBuffer.CmdFillBuffer(s_geomCullVisSortKeysCounterBuffer, 0);
-    cmdBuffer.CmdFillBuffer(s_geomCullPerGeomMatTypeCountersBuffer, 0);
+    //cmdBuffer.CmdFillBuffer(s_geomCullVisSortKeysCounterBuffer, 0);
+    //cmdBuffer.CmdFillBuffer(s_geomCullPerGeomMatTypeCountersBuffer, 0);
 }
 
 
@@ -6759,10 +6600,10 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
-    barriers.AddBufferBarrier(s_geomCullVisSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullVisSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    //barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
     barriers.AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -6773,7 +6614,10 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
     
-    const uint32_t passSetIndex = GetDescriptorSetIndex(GeomCullingDescSetDesc{});
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = false;
+
+    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
     const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
 
     cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
@@ -6926,6 +6770,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
     DepthDescSetDesc desc = {};
+    desc.isCsm = false;
 
     switch(queue) {
         case GEOM_QUEUE_OPAQUE:
@@ -7153,6 +6998,41 @@ static void CSMGeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
+{
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        barriers.AddBufferBarrier(s_csmVisGeomIDQueueBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+        barriers.AddBufferBarrier(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    }
+
+    barriers.Push();
+
+    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_CULLING);
+
+    cmdBuffer.CmdBindPSO(pso);
+
+    GeomCullingDescSetDesc desc = {};
+    desc.isCsm = true;
+    desc.cascade = cascade;
+
+    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
+    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+
+    GPU_GeomCullingPerDrawData pushConsts = {};
+    pushConsts.isCsmPass = true;
+    pushConsts.cascade = cascade;
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+
+    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULLING_CS_GROUP_SIZE), 1, 1);
+}
+
+
 static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
 {
     static constexpr const char* passName = "CSM_Geom_Vis_ID_Buffer_Pass";
@@ -7161,28 +7041,12 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
     ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
-
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            barriers.AddBufferBarrier(s_csmVisGeomIDQueueBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-            barriers.AddBufferBarrier(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-        }
+        ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_Cascade_%u", passName, cascade);
+        ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u", passName, cascade);
+
+        CSMGeomVisIDBufferPass(cmdBuffer, cascade);
     }
-
-    barriers.Push();
-
-    vkn::PSO& pso = GetPSO(PASS_ID_CSM_GEOM_CULLING);
-
-    cmdBuffer.CmdBindPSO(pso);
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(CSMGeomCullingDescSetDesc{});
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULLING_CS_GROUP_SIZE), 1, 1);
 }
 
 
@@ -7321,14 +7185,28 @@ static void CSMGeometryCullingPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue queue)
+void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue queue)
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
+    DepthDescSetDesc desc = {};
+    desc.isCsm = true;
+    desc.cascade = cascade;
+
+    switch(queue) {
+        case GEOM_QUEUE_OPAQUE:
+            desc.matType = GEOM_MAT_TYPE_OPAQUE;
+            break;
+        case GEOM_QUEUE_AKILL:
+            desc.matType = GEOM_MAT_TYPE_AKILL;
+            break;
+    }
+
+    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
     const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-    const uint32_t passSetIndex = GetDescriptorSetIndex(CSMGeomRenderDescSetDesc{});
     
+    const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
     const bool needClearDepth = queue == GEOM_QUEUE_OPAQUE;
 
     vkn::Buffer& drawCmdBuffer = s_csmGeomDrawCmdQueueBuffers[cascade][queue];
@@ -7367,7 +7245,7 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_Geom
         cmdBuffer.CmdSetViewport(0.f, 0.f, extent.width, extent.height);
         cmdBuffer.CmdSetScissor(0, 0, extent.width, extent.height);
 
-        vkn::PSO& pso = GetPSO(PASS_ID_CSM_RENDER);
+        vkn::PSO& pso = GetPSO(PASS_ID_DEPTH);
 
         cmdBuffer.CmdBindPSO(pso);
         
@@ -7376,9 +7254,10 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_Geom
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
-        GPU_CsmPerDrawData pushConsts = {};
-        pushConsts.cascadeIdx = cascade;
-        pushConsts.queue = queue;
+        GPU_ZPassPerDrawData pushConsts = {};
+        pushConsts.isAKillPass = isAKillPass;
+        pushConsts.isCsmPass = true;
+        pushConsts.cascade = cascade;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
@@ -7398,12 +7277,12 @@ static void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_Geom
 }
 
 
-static void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
+void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
     static constexpr const char* passName = "CSM_Render_Pass";
     static constexpr uint32_t passColor = 0x7f7f7f;
 
-    ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
 #ifdef ENG_BUILD_DEBUG
@@ -8470,6 +8349,8 @@ static void RenderScene()
 {
     ENG_PROFILE_SCOPED_MARKER_C(0x696969, "Render_Scene");
 
+    // We have only one frame context, so make sure the previous
+    // submission is completely finished before reusing its resources.
     s_renderFinishedFence.WaitFor(10'000'000'000);
 
     UpdateGPUCommonConstBuffer();
@@ -8530,6 +8411,7 @@ static void RenderScene()
     }
     cmdBuffer.End();
 
+    // Only reset once we know a submission WILL happen.
     s_renderFinishedFence.Reset();
 
     vkn::QueueSyncData waitData = { &s_presentFinishedSemaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT };

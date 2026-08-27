@@ -3,24 +3,26 @@
 
 #include "common/math/frustum_culling.slang"
 
+#define GEOM_CULLING_FRUSTUM (GEOM_CULLING_IS_CSM_PASS ? COMMON_CSM_VIEW_FRUSTUM(GEOM_CULLING_CSM_CASCADE) : COMMON_CULLING_FRUSTUM)
+
 #define HZB_CULLING_HZB_TEX_SAMPLER GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE)
 #define HZB_CULLING_HZB_TEX         COMMON_HZB
 #define HZB_CULLING_HZB_MIP_0_SIZE  COMMON_SCREEN_SIZE
 #define HZB_CULLING_HZB_MIPS_COUNT  GEOM_CULLING_HZB_MIPS_COUNT
 #define HZB_CULLING_VIEW_PROJ_MATR  COMMON_CULLING_VIEW_PROJ_MATRIX_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE COMMON_CULLING_FRUSTUM.GetNearPlane()
+#define HZB_CULLING_VIEW_NEAR_PLANE GEOM_CULLING_FRUSTUM.GetNearPlane()
 #include "common/math/hzb_culling.slang"
 
 
 bool GeomCullingVisibility(in GPU_AABB aabb)
 {
     if (COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED) {
-        if (!Frustum_Visibility(COMMON_CULLING_FRUSTUM, aabb)) {
+        if (!Frustum_Visibility(GEOM_CULLING_FRUSTUM, aabb)) {
             return false;
         }
     }
 
-    if (COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED) {
+    if (!GEOM_CULLING_IS_CSM_PASS && COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED) {
         if (!HZB_Visibility(aabb)) {
             return false;
         }

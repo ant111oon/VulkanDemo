@@ -8,11 +8,15 @@
 struct GPU_GeomCullingPerDrawData
 {
     uint hzbMipsCount;
+    uint cascade;
+    uint isCsmPass;
 };
 
 [[vk::push_constant]] GPU_GeomCullingPerDrawData GEOM_CULLING_DYN;
 
 #define GEOM_CULLING_HZB_MIPS_COUNT GEOM_CULLING_DYN.hzbMipsCount
+#define GEOM_CULLING_IS_CSM_PASS    (GEOM_CULLING_DYN.isCsmPass != 0)
+#define GEOM_CULLING_CSM_CASCADE    GEOM_CULLING_DYN.cascade
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];

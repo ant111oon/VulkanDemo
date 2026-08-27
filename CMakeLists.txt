@@ -51,7 +51,7 @@ include(FetchContent)
 FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG        1.0.1
+    GIT_TAG        1.0.3
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(glm)
@@ -88,7 +88,7 @@ if (ENG_ENABLE_TRACY)
     FetchContent_Declare(
         tracy
         GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-        GIT_TAG        v0.13.1
+        GIT_TAG        v0.14.1
         GIT_SHALLOW    TRUE
         GIT_PROGRESS   TRUE
     )
@@ -100,7 +100,7 @@ if (ENG_ENABLE_DBG_DRAW)
     FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG        v1.92.4-docking
+        GIT_TAG        master
         GIT_PROGRESS   TRUE
     )
     FetchContent_MakeAvailable(imgui)
@@ -124,7 +124,7 @@ endif()
 FetchContent_Declare(
     vma
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG        v3.3.0
+    GIT_TAG        v3.4.0
     GIT_PROGRESS   TRUE
 )
 FetchContent_MakeAvailable(vma)

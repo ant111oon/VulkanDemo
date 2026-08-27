@@ -235,15 +235,6 @@ namespace eng
         if (!ImGui_ImplWin32_Init(window.GetNativeHandle())) {
             CORE_ASSERT_FAIL("Failed to initialize ImGui Win32 part");
         }
-
-        ImGui::GetPlatformIO().Platform_CreateVkSurface = [](ImGuiViewport* viewport, ImU64 vkInstance, const void* vkAllocator, ImU64* outVkSurface)
-        {
-            VkWin32SurfaceCreateInfoKHR createInfo = {};
-            createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-            createInfo.hwnd = (HWND)viewport->PlatformHandleRaw;
-            createInfo.hinstance = ::GetModuleHandle(nullptr);
-            return (int)vkCreateWin32SurfaceKHR((VkInstance)vkInstance, &createInfo, (VkAllocationCallbacks*)vkAllocator, (VkSurfaceKHR*)outVkSurface);
-        };
     #endif
 
         vkn::PhysicalDevice& physDevice = device.GetPhysDevice();

@@ -20,7 +20,7 @@ GPU_ZPassVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInst
 
     result.flatData.instID = instID;
 
-    result.hpos = mul(COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
+    result.hpos = mul(ZPASS_IS_CSM_PASS ? COMMON_CSM_VIEW_PROJ_MATRIX(ZPASS_CSM_CASCADE) : COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
 
     return result; 
 }
