@@ -5,14 +5,6 @@
 #include "common/common_geom.slang"
 
 
-struct GPU_GeomDrawCmdGenPerDrawData
-{
-    uint padding;
-};
-
-[[vk::push_constant]] GPU_GeomDrawCmdGenPerDrawData GEOM_DRAW_CMD_GEN_DYN;
-
-
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<GPU_GeomBatch> GEOM_DRAW_CMD_GEN_BATCH_QUEUE;
 [vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE;
 

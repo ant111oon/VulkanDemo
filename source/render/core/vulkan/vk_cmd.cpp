@@ -307,28 +307,30 @@ namespace vkn
     }
 
     
-    PushDescriptor PushDescriptor::SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view)
+    PushDescriptor PushDescriptor::SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view, VkImageLayout layout)
     {
         VK_ASSERT(view.IsCreated());
 
         PushDescriptor result(binding, arrayElement);
 
         result.m_resource = SampledTextureRes {
-            .pView = &view
+            .pView = &view,
+            .layout = layout
         };
 
         return result;
     }
 
     
-    PushDescriptor PushDescriptor::StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view)
+    PushDescriptor PushDescriptor::StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view, VkImageLayout layout)
     {
         VK_ASSERT(view.IsCreated());
 
         PushDescriptor result(binding, arrayElement);
 
         result.m_resource = StorageTextureRes {
-            .pView = &view
+            .pView = &view,
+            .layout = layout
         };
 
         return result;
@@ -380,20 +382,14 @@ namespace vkn
             write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             write.pBufferInfo = &bufferInfoCache;
         } else if (auto pRes = std::get_if<PushDescriptor::SampledTextureRes>(&m_resource)) {
-            const Texture& owner = pRes->pView->GetOwner();
-            const TextureView::SubresourceRange& range = pRes->pView->GetSubresourceRange();
-
             imageInfoCache.imageView = pRes->pView->Get();
-            imageInfoCache.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+            imageInfoCache.imageLayout = pRes->layout;
 
             write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             write.pImageInfo = &imageInfoCache;
         } else if (auto pRes = std::get_if<PushDescriptor::StorageTextureRes>(&m_resource)) {
-            const Texture& owner = pRes->pView->GetOwner();
-            const TextureView::SubresourceRange& range = pRes->pView->GetSubresourceRange();
-
             imageInfoCache.imageView = pRes->pView->Get();
-            imageInfoCache.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+            imageInfoCache.imageLayout = pRes->layout;
 
             write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             write.pImageInfo = &imageInfoCache;

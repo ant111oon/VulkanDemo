@@ -22,7 +22,7 @@ static const uint DBG_LINE_VERTEX_DATA_SIZE_UI = 2;
 static const uint DBG_TRIANGLE_VERTEX_DATA_SIZE_UI = 2;
 
 
-struct GPU_DbgPrimPerDrawData
+struct GPU_DbgPrimPushConst
 {
     property bool isLinePass
     {
@@ -32,7 +32,7 @@ struct GPU_DbgPrimPerDrawData
     private uint linePass : 1;
 };
 
-[[vk::push_constant]] GPU_DbgPrimPerDrawData DBG_PRIM_DYN;
+[[vk::push_constant]] GPU_DbgPrimPushConst DBG_PRIM_CONST;
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> DBG_DRAW_TRIANGLES_VERTEX_BUFFER;

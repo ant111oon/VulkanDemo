@@ -73,6 +73,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     const float roughness = saturate(COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA * PREFILTERED_ENV_MAP_MIP);
 
-    const uint dstIdx = face * COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT + PREFILTERED_ENV_MAP_MIP;
-    PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV[dstIdx][pixCoord] = float4(PreFilterEnvMap(roughness, UVFaceToDir(uv, face)), 1.f);
+    PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV[face][pixCoord] = float4(PreFilterEnvMap(roughness, UVFaceToDir(uv, face)), 1.f);
 }

@@ -222,8 +222,8 @@ namespace vkn
             VkDeviceSize offset = 0,
             VkDeviceSize size = VK_WHOLE_SIZE);
 
-        static PushDescriptor SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view);
-        static PushDescriptor StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view);
+        static PushDescriptor SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view, VkImageLayout layout);
+        static PushDescriptor StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view, VkImageLayout layout);
         static PushDescriptor Sampler(uint32_t binding, uint32_t arrayElement, const vkn::Sampler& sampler);
 
     public:
@@ -252,11 +252,13 @@ namespace vkn
         struct SampledTextureRes
         {
             const TextureView* pView = nullptr;
+            VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         };
 
         struct StorageTextureRes
         {
             const TextureView* pView = nullptr;
+            VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         };
 
         struct SamplerRes

@@ -447,68 +447,56 @@ struct GPU_GeomBatch
 };
 
 
-struct GPU_GeomCullingPerDrawData
+struct GPU_GeomCullingPushConst
 {
     uint hzbMipsCount;
     uint cascade;
-    uint isCsmPass;
+    uint csmPass : 1;
 };
 
 
-struct GPU_GeomBatchPerDrawData
-{
-    uint padding;
-};
-
-
-struct GPU_GeomDrawCmdGenPerDrawData
-{
-    uint padding;
-};
-
-
-struct GPU_ZPassPerDrawData
+struct GPU_ZPassPushConst
 {
     uint cascade;
-    uint isAKillPass;
-    uint isCsmPass;
+
+    uint csmPass : 1;
+    uint akillPass : 1;
 };
 
 
-struct GPU_HzbGenPerDrawData
+struct GPU_HzbGenPushConst
 {
     uint2 srcMipResolution;
     uint2 dstMipResolution;
-    uint  dstMipIdx;
 };
 
 
-struct GPU_GBufferPerDrawData
+struct GPU_GBufferPushConst
 {
-    uint isAKillPass;
+    uint akillPass : 1;
 };
 
 
-struct GPU_IrradianceMapPerDrawData
+struct GPU_IrradianceMapPushConst
 {
     uint2 envMapFaceSize;
 };
 
 
-struct GPU_PrefilteredEnvMapPerDrawData
+struct GPU_PrefilteredEnvMapPushConst
 {
     uint2 envMapFaceSize;
     uint  mip;
 };
 
 
-struct GPU_DbgPrimPerDrawData
+struct GPU_DbgPrimPushConst
 {
     uint linePass : 1;
 };
 
 
-struct GPU_DbgRTViewPerDrawData
+struct GPU_DbgRTViewPushConst
 {
     uint  mip;
     uint  face;
@@ -799,121 +787,6 @@ BEGIN_DESCRIPTOR_SET_DESC(CommonDescSetDesc, DESC_SET_LAYOUT_ID_COMMON)
 END_DESCRIPTOR_SET_DESC;
 
 
-BEGIN_DESCRIPTOR_SET_DESC(GeomCullingDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_CULLING)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        DESCRIPTOR_SET_HASH_VALUE(cascade);
-    END_DESCRIPTOR_SET_HASH_FUNC;
-
-    uint32_t cascade;
-    bool isCsm;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(GeomBatchingDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_BATCHING)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        DESCRIPTOR_SET_HASH_VALUE(matType);
-        DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        DESCRIPTOR_SET_HASH_VALUE(cascade);
-    END_DESCRIPTOR_SET_HASH_FUNC;
-
-    GPU_GeomMatType matType;
-    uint32_t cascade;
-    bool isCsm;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(GeomDrawCmdGenDescSetDesc, DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        DESCRIPTOR_SET_HASH_VALUE(matType);
-        DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        DESCRIPTOR_SET_HASH_VALUE(cascade);
-    END_DESCRIPTOR_SET_HASH_FUNC;
-
-    GPU_GeomMatType matType;
-    uint32_t cascade;
-    bool isCsm;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(DepthDescSetDesc, DESC_SET_LAYOUT_ID_DEPTH)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        DESCRIPTOR_SET_HASH_VALUE(matType);
-        DESCRIPTOR_SET_HASH_VALUE(isCsm);
-        DESCRIPTOR_SET_HASH_VALUE(cascade);
-    END_DESCRIPTOR_SET_HASH_FUNC;
-
-    GPU_GeomMatType matType;
-    uint32_t cascade;
-    bool isCsm;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(HZBGenDescSetDesc, DESC_SET_LAYOUT_ID_HZB_GEN)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(GBufferDescSetDesc, DESC_SET_LAYOUT_ID_GBUFFER)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-        DESCRIPTOR_SET_HASH_VALUE(matType);
-    END_DESCRIPTOR_SET_HASH_FUNC;
-
-    GPU_GeomMatType matType;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(DeferredLightingDescSetDesc, DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(SkyboxDescSetDesc, DESC_SET_LAYOUT_ID_SKYBOX)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(PostProcessDescSetDesc, DESC_SET_LAYOUT_ID_POST_PROCESSING)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(IrradianceMapGenDescSetDesc, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(BRDFLUTGenDescSetDesc, DESC_SET_LAYOUT_ID_BRDF_LUT_GEN)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(PrefilteredEnvMapGenDescSetDesc, DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-#ifdef ENG_DEBUG_DRAW_ENABLED
-BEGIN_DESCRIPTOR_SET_DESC(DbgDrawPrimitivesDescSetDesc, DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
-BEGIN_DESCRIPTOR_SET_DESC(DbgRTViewDescSetDesc, DESC_SET_LAYOUT_ID_DBG_RT_VIEW)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-#endif
-
-
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT = 1;
 // 2 - free
@@ -948,8 +821,8 @@ static constexpr size_t GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT = 2;
 
 static constexpr size_t ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 
-static constexpr size_t HZB_SRC_MIPS_DESCRIPTOR_SLOT = 0;
-static constexpr size_t HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t HZB_SRC_MIP_DESCRIPTOR_SLOT = 0;
+static constexpr size_t HZB_DST_MIP_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 
@@ -1477,7 +1350,7 @@ static vkn::TextureView s_irradianceMapTextureViewRW;
 
 static vkn::Texture     s_prefilteredEnvMapTexture;
 static vkn::TextureView s_prefilteredEnvMapTextureView;
-static std::array<vkn::TextureView, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT * CUBEMAP_FACE_COUNT> s_prefilteredEnvMapTextureViewRWs;
+static std::array<std::array<vkn::TextureView, CUBEMAP_FACE_COUNT>, COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT> s_prefilteredEnvMapTextureViewRWs;
 
 static vkn::Texture     s_brdfLUTTexture;
 static vkn::TextureView s_brdfLUTTextureView;
@@ -2389,7 +2262,12 @@ static void CreateColorRTs()
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.BeginBarrierList()
-            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_colorRT16F, 
+                VK_IMAGE_LAYOUT_GENERAL, 
+                VK_PIPELINE_STAGE_2_NONE, 
+                VK_ACCESS_2_NONE, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
     });
 }
@@ -2453,8 +2331,12 @@ static void CreateDepthRT()
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         cmdBuffer
             .BeginBarrierList()
-                .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+                .AddTextureBarrier(
+                    s_depthRT, 
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                    VK_IMAGE_ASPECT_DEPTH_BIT)
             .Push();
 
         vkn::TextureClearInfo clear = {};
@@ -2584,10 +2466,26 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
 
     for (uint32_t mip = 1; mip < loadData.GetMipsCount(); ++mip) {
         cmdBuffer.BeginBarrierList()
-            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
-                VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 1, layerIdx, 1)
-            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
-                VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1)
+            .AddTextureBarrier(
+                texture, 
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                VK_ACCESS_2_TRANSFER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, 
+                mip - 1, 
+                1, 
+                layerIdx, 
+                1)
+            .AddTextureBarrier(
+                texture, 
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, 
+                mip, 
+                1, 
+                layerIdx, 
+                1)
         .Push();
 
         vkn::TextureBlitInfo blit = {};
@@ -2617,8 +2515,16 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
     // Add this barrier to get all mips in same VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL layout
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
-                VK_IMAGE_ASPECT_COLOR_BIT, loadData.GetMipsCount() - 1, 1, layerIdx, 1)
+            .AddTextureBarrier(
+                texture, 
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                VK_ACCESS_2_TRANSFER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT, 
+                loadData.GetMipsCount() - 1, 
+                1, 
+                layerIdx, 
+                1)
         .Push();
 }
 
@@ -2694,8 +2600,14 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
             cmdBuffer
                 .BeginBarrierList()
-                    .AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+                    .AddTextureBarrier(
+                        s_skyboxTexture, 
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                        VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                        VK_IMAGE_ASPECT_COLOR_BIT, 
+                        0, 
+                        1)
                 .Push();
 
             const uint32_t faceIdx = i;
@@ -2718,9 +2630,12 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
         cmdBuffer
             .BeginBarrierList()
-                .AddTextureBarrier(s_skyboxTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                .AddTextureBarrier(
+                    s_skyboxTexture, 
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+                    VK_ACCESS_2_SHADER_READ_BIT, 
+                    VK_IMAGE_ASPECT_COLOR_BIT)
             .Push();
     });
 
@@ -2863,15 +2778,15 @@ static void CreateIBLResources()
         viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        for (size_t layer = 0; layer < CUBEMAP_FACE_COUNT; ++layer) {
-            viewCreateInfo.subresourceRange.baseArrayLayer = layer;
-            viewCreateInfo.subresourceRange.layerCount = 1;
+        for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+            viewCreateInfo.subresourceRange.baseMipLevel = mip;
+            viewCreateInfo.subresourceRange.levelCount = 1;
 
-            for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
-                viewCreateInfo.subresourceRange.baseMipLevel = mip;
-                viewCreateInfo.subresourceRange.levelCount = 1;
-    
-                vkn::TextureView& mipView = s_prefilteredEnvMapTextureViewRWs[layer * COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT + mip];
+            for (size_t layer = 0; layer < CUBEMAP_FACE_COUNT; ++layer) {
+                viewCreateInfo.subresourceRange.baseArrayLayer = layer;
+                viewCreateInfo.subresourceRange.layerCount = 1;
+
+                vkn::TextureView& mipView = s_prefilteredEnvMapTextureViewRWs[mip][layer];
                 mipView.Create(viewCreateInfo);
                 s_vkDevice.SetObjDebugName(mipView, "COMMON_PREFILTERED_ENV_MAP_VIEW_RW_LAYER_%zu_MIP_%zu", layer, mip);
             }
@@ -3030,8 +2945,7 @@ static void CreateGeomCullingDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3056,8 +2970,7 @@ static void CreateGeomBatchingDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3082,8 +2995,7 @@ static void CreateGeomDrawCmdGenDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3105,8 +3017,7 @@ static void CreateZPassDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3126,12 +3037,11 @@ static void CreateHZBGenDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(HZB_SRC_MIPS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, HZB_MAX_MIP_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(HZB_SRC_MIP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(HZB_DST_MIP_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3148,8 +3058,7 @@ static void CreateGBufferDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3169,8 +3078,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3198,8 +3106,7 @@ static void CreatePostProcessingDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3239,8 +3146,7 @@ static void CreateSkyboxDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(SKYBOX_TEXTURE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3260,8 +3166,7 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3282,14 +3187,13 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 
             1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT * CUBEMAP_FACE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+            CUBEMAP_FACE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3306,8 +3210,7 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3328,8 +3231,7 @@ static void CreateDbgDrawPrimitivesDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3354,8 +3256,7 @@ static void CreateDbgRTViewDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3471,219 +3372,9 @@ static void ReserveCommonDescriptorSetIndex()
 }
 
 
-static void ReserveGeomCullingDescriptorSetIndex()
-{
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    AddDescriptorSet(desc);
-}
-
-
-static void ReserveGeomBatchingDescriptorSetIndex()
-{
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    desc.matType = GEOM_MAT_TYPE_OPAQUE;
-    AddDescriptorSet(desc);
-
-    desc.matType = GEOM_MAT_TYPE_AKILL;
-    AddDescriptorSet(desc);
-}
-
-
-static void ReserveGeomDrawCmdGenDescriptorSetIndex()
-{
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    desc.matType = GEOM_MAT_TYPE_OPAQUE;
-    AddDescriptorSet(desc);
-
-    desc.matType = GEOM_MAT_TYPE_AKILL;
-    AddDescriptorSet(desc);
-}
-
-
-static void ReserveZPassDescriptorSetIndex()
-{
-    DepthDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    desc.matType = GEOM_MAT_TYPE_OPAQUE;
-    AddDescriptorSet(desc);
-
-    desc.matType = GEOM_MAT_TYPE_AKILL;
-    AddDescriptorSet(desc);
-}
-
-
-static void ReserveHZBGenDescriptorSetIndex()
-{
-    AddDescriptorSet(HZBGenDescSetDesc{});
-}
-
-
-static void ReserveCSMGeomCullingDescriptorSetIndex()
-{
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = true;
-
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        desc.cascade = cascade;
-
-        AddDescriptorSet(desc);
-    }
-}
-
-
-static void ReserveCSMGeomBatchingDescriptorSetIndex()
-{
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = true;
-
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        desc.cascade = cascade;
-
-        desc.matType = GEOM_MAT_TYPE_OPAQUE;
-        AddDescriptorSet(desc);
-
-        desc.matType = GEOM_MAT_TYPE_AKILL;
-        AddDescriptorSet(desc);
-    }
-}
-
-
-static void ReserveCSMGeomDrawCmdGenDescriptorSetIndex()
-{
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = true;
-
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        desc.cascade = cascade;
-
-        desc.matType = GEOM_MAT_TYPE_OPAQUE;
-        AddDescriptorSet(desc);
-
-        desc.matType = GEOM_MAT_TYPE_AKILL;
-        AddDescriptorSet(desc);
-    }
-}
-
-
-static void ReserveCSMGeomRenderDescriptorSetIndex()
-{
-    DepthDescSetDesc desc = {};
-    desc.isCsm = true;
-
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        desc.cascade = cascade;
-
-        desc.matType = GEOM_MAT_TYPE_OPAQUE;
-        AddDescriptorSet(desc);
-
-        desc.matType = GEOM_MAT_TYPE_AKILL;
-        AddDescriptorSet(desc);
-    }
-}
-
-
-static void ReserveGBufferDescriptorSetIndex()
-{
-    GBufferDescSetDesc desc = {};
-
-    desc.matType = GEOM_MAT_TYPE_OPAQUE;
-    AddDescriptorSet(desc);
-
-    desc.matType = GEOM_MAT_TYPE_AKILL;
-    AddDescriptorSet(desc);
-}
-
-
-static void ReserveDeferredLightingDescriptorSetIndex()
-{
-    AddDescriptorSet(DeferredLightingDescSetDesc{});
-}
-
-
-static void ReservePostProcessingDescriptorSetIndex()
-{
-    AddDescriptorSet(PostProcessDescSetDesc{});
-}
-
-
-static void ReserveSkyboxDescriptorSetIndex()
-{
-    AddDescriptorSet(SkyboxDescSetDesc{});
-}
-
-
-static void ReserveIrradianceMapGenDescriptorSetIndex()
-{
-    AddDescriptorSet(IrradianceMapGenDescSetDesc{});
-}
-
-
-static void ReservePrefilteredEnvMapGenDescriptorSetIndex()
-{
-    AddDescriptorSet(PrefilteredEnvMapGenDescSetDesc{});
-}
-
-
-static void ReserveBRDFIntegrationLUTGenDescriptorSetIndex()
-{
-    AddDescriptorSet(BRDFLUTGenDescSetDesc{});
-}
-
-
-static void ReserveDbgDrawPrimitivesDescriptorSetIndex()
-{
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    AddDescriptorSet(DbgDrawPrimitivesDescSetDesc{});
-#endif
-}
-
-
-static void ReserveDbgRTViewDescriptorSetIndex()
-{
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    AddDescriptorSet(DbgRTViewDescSetDesc{});
-#endif
-}
-
-
 static void ReserveDescriptorSetIndices()
 {
     ReserveCommonDescriptorSetIndex();
-
-    ReserveGeomCullingDescriptorSetIndex();
-    ReserveGeomBatchingDescriptorSetIndex();
-    ReserveGeomDrawCmdGenDescriptorSetIndex();
-    
-    ReserveZPassDescriptorSetIndex();
-    
-    ReserveHZBGenDescriptorSetIndex();
-    
-    ReserveCSMGeomCullingDescriptorSetIndex();
-    ReserveCSMGeomBatchingDescriptorSetIndex();
-    ReserveCSMGeomDrawCmdGenDescriptorSetIndex();
-    ReserveCSMGeomRenderDescriptorSetIndex();
-
-    ReserveGBufferDescriptorSetIndex();
-    
-    ReserveDeferredLightingDescriptorSetIndex();
-    
-    ReservePostProcessingDescriptorSetIndex();
-    
-    ReserveSkyboxDescriptorSetIndex();
-    
-    ReserveIrradianceMapGenDescriptorSetIndex();
-    ReservePrefilteredEnvMapGenDescriptorSetIndex();
-    ReserveBRDFIntegrationLUTGenDescriptorSetIndex();
-    
-    ReserveDbgDrawPrimitivesDescriptorSetIndex();
-    ReserveDbgRTViewDescriptorSetIndex();
 }
 
 
@@ -3712,7 +3403,7 @@ static void CreateDescriptors()
 
 static void CreateGeomCullingPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullingPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullingPushConst) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
@@ -3727,30 +3418,26 @@ static void CreateGeomCullingPipelineLayout()
 
 static void CreateGeomBatchingPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomBatchPerDrawData) };
-
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_BATCHING);
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_BATCHING);
     
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
+    layout.Create(&s_vkDevice, layoutPtrs);
     s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
 }
 
 
 static void CreateGeomDrawCmdGenPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomDrawCmdGenPerDrawData) };
-
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN);
     
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
+    layout.Create(&s_vkDevice, layoutPtrs);
     s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
 }
 
@@ -3761,7 +3448,7 @@ static void CreateZPassPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEPTH);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_ZPassPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_ZPassPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DEPTH);
 
@@ -3776,7 +3463,7 @@ static void CreateHZBGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_HZB_GEN);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_HzbGenPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_HzbGenPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_HZB_GEN);
 
@@ -3791,7 +3478,7 @@ static void CreateGBufferPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GBUFFER);
     
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_GBufferPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_GBufferPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GBUFFER);
 
@@ -3858,7 +3545,7 @@ static void CreateIrradianceMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_IrradianceMapPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_IrradianceMapPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_IRRADIANCE_MAP_GEN);
 
@@ -3873,7 +3560,7 @@ static void CreatePrefilteredEnvMapGenPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_PrefilteredEnvMapPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_PrefilteredEnvMapPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN);
     
@@ -3902,7 +3589,7 @@ static void CreateDbgDrawPrimitivesPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgPrimPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgPrimPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_DRAW_PRIMITIVES);
 
@@ -3919,7 +3606,7 @@ static void CreateDbgRTViewPipelineLayout()
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
     layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_RT_VIEW);
 
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgRTViewPerDrawData) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgRTViewPushConst) };
 
     vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_RT_VIEW);
 
@@ -4932,382 +4619,6 @@ static void CreateCommonSMSamplers()
 }
 
 
-static void WriteGeomCullingDescriptorSet(GPU_GeomQueue queue)
-{
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]);
-    
-    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer);
-    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer);
-    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer);
-    //s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer);
-}
-
-
-static void WriteGeomCullingDescriptorSet()
-{
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomCullingDescriptorSet((GPU_GeomQueue)queue);
-    }
-}
-
-
-static void WriteGeomBatchingDescriptorSet(GPU_GeomQueue queue)
-{
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-    
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueBuffer[queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueSizeBuffer[queue]);
-    
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueSizeBuffer[queue]);
-}
-
-
-static void WriteGeomBatchingDescriptorSet()
-{
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomBatchingDescriptorSet((GPU_GeomQueue)queue);
-    }
-}
-
-
-static void WriteGeomDrawCmdGenDescriptorSet(GPU_GeomQueue queue)
-{
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdQueueBuffer[queue]);
-}
-
-
-static void WriteGeomDrawCmdGenDescriptorSet()
-{
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGeomDrawCmdGenDescriptorSet((GPU_GeomQueue)queue);
-    }
-}
-
-
-static void WriteZPassDescriptorSet(GPU_GeomQueue queue)
-{
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-    
-    DepthDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
-}
-
-
-static void WriteZPassDescriptorSet()
-{
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteZPassDescriptorSet((GPU_GeomQueue)queue);
-    }
-}
-
-
-static void WriteHZBGenDescriptorSets()
-{
-    const uint32_t setID = GetDescriptorSetIndex(HZBGenDescSetDesc{});
-
-    for (uint32_t i = 0; i < s_HZB.GetMipCount(); ++i) {
-        vkn::TextureView& mip = s_HZBMipViews[i];
-
-        s_descriptorBuffer.WriteDescriptor(setID, HZB_SRC_MIPS_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        s_descriptorBuffer.WriteDescriptor(setID, HZB_DST_MIPS_UAV_DESCRIPTOR_SLOT, i, mip, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    // First source mip must contain original depth buffer
-    s_descriptorBuffer.WriteDescriptor(setID, HZB_SRC_MIPS_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
-static void WriteCSMGeomCullingDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
-{
-    CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueBuffers[cascade][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]);
-}
-
-
-static void WriteCSMGeomCullingDescriptorSet()
-{
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomCullingDescriptorSet(cascade, (GPU_GeomQueue)queue);
-        }
-    }
-}
-
-
-static void WriteCSMGeomBatchingDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
-{
-    CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmVisGeomIDQueueBuffers[cascade][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]);
-    
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueBuffers[cascade][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueSizeBuffers[cascade][queue]);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue]);
-}
-
-
-static void WriteCSMGeomBatchingDescriptorSet()
-{
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomBatchingDescriptorSet(cascade, (GPU_GeomQueue)queue);
-        }
-    }
-}
-
-
-static void WriteCSMGeomDrawCmdGenDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
-{
-    CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueBuffers[cascade][queue]);
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueSizeBuffers[cascade][queue]);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomDrawCmdQueueBuffers[cascade][queue]);
-}
-
-
-static void WriteCSMGeomDrawCmdGenDescriptorSet()
-{
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMGeomDrawCmdGenDescriptorSet(cascade, (GPU_GeomQueue)queue);
-        }
-    }
-}
-
-
-static void WriteCSMRenderDescriptorSet(uint32_t cascade, GPU_GeomQueue queue)
-{
-    CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-    
-    DepthDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue]);
-}
-
-
-static void WriteCSMRenderDescriptorSet()
-{
-    for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            WriteCSMRenderDescriptorSet(cascade, (GPU_GeomQueue)queue);
-        }
-    }
-}
-
-
-static void WriteGBufferDescriptorSet(GPU_GeomQueue queue)
-{
-    CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-    
-    GBufferDescSetDesc desc = {};
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t setID = GetDescriptorSetIndex(desc);
-
-    s_descriptorBuffer.WriteDescriptor(setID, GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]);
-}
-
-
-static void WriteGBufferDescriptorSet()
-{
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        WriteGBufferDescriptorSet((GPU_GeomQueue)queue);
-    }
-}
-
-
-static void WriteDeferredLightingDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(DeferredLightingDescSetDesc{});
-
-    std::array<vkn::TextureView*, GBUFFER_RT_COUNT> gbufferViews = {};
-    for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
-        gbufferViews[i] = &s_gbufferRTViews[i];
-    }
-
-    for (size_t i = 0; i < GBUFFER_RT_COUNT; ++i) {
-        s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT + i, 0, *gbufferViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    }
-
-    s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
-static void WritePostProcessingDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(PostProcessDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
-static void WriteSkyboxDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(SkyboxDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
-static void WriteIrradianceMapGenDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(IrradianceMapGenDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW, VK_IMAGE_LAYOUT_GENERAL);
-}
-
-
-static void WritePrefilteredEnvMapGenDescriptorSets()
-{
-    const uint32_t setID = GetDescriptorSetIndex(PrefilteredEnvMapGenDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    
-    for (uint32_t i = 0; i < s_prefilteredEnvMapTextureViewRWs.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor(setID, PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, i, s_prefilteredEnvMapTextureViewRWs[i], VK_IMAGE_LAYOUT_GENERAL);
-    }
-}
-
-
-static void WriteBRDFIntegrationLUTGenDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(BRDFLUTGenDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW, VK_IMAGE_LAYOUT_GENERAL);
-}
-
-
 static void WriteCommonDescriptorSet()
 {
     const uint32_t setID = GetDescriptorSetIndex(CommonDescSetDesc{});
@@ -5345,71 +4656,9 @@ static void WriteCommonDescriptorSet()
 }
 
 
-static void WriteDbgDrawPrimitivesDescriptorSet()
-{
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    const uint32_t setID = GetDescriptorSetIndex(DbgDrawPrimitivesDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU);
-#endif
-}
-
-
-static void WriteDbgRTViewDescriptorSet()
-{
-#ifdef ENG_DEBUG_DRAW_ENABLED
-    const uint32_t setID = GetDescriptorSetIndex(DbgRTViewDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTColorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-#endif
-}
-
-
 static void WriteDescriptorSets()
 {
     WriteCommonDescriptorSet();
-
-    WriteGeomCullingDescriptorSet();
-    WriteGeomBatchingDescriptorSet();
-    WriteGeomDrawCmdGenDescriptorSet();
-    
-    WriteZPassDescriptorSet();
-    
-    WriteCSMGeomCullingDescriptorSet();
-    WriteCSMGeomBatchingDescriptorSet();
-    WriteCSMGeomDrawCmdGenDescriptorSet();
-    WriteHZBGenDescriptorSets();
-
-    WriteCSMRenderDescriptorSet();
-    
-    WriteGBufferDescriptorSet();
-    
-    WriteDeferredLightingDescriptorSet();
-    
-    WritePostProcessingDescriptorSet();
-    
-    WriteSkyboxDescriptorSet();
-    
-    WriteIrradianceMapGenDescriptorSet();
-    WritePrefilteredEnvMapGenDescriptorSets();
-    WriteBRDFIntegrationLUTGenDescriptorSet();
-    
-    WriteDbgDrawPrimitivesDescriptorSet();
-    WriteDbgRTViewDescriptorSet();
 }
 
 
@@ -5992,8 +5241,14 @@ static void UploadGPUTextureData()
 
             cmdBuffer
                 .BeginBarrierList()
-                    .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
-                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1)
+                    .AddTextureBarrier(
+                        texture, 
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                        VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                        VK_IMAGE_ASPECT_COLOR_BIT, 
+                        0, 
+                        1)
                 .Push();
 
             vkn::BufferToTextureCopyInfo copyInfo = {};
@@ -6011,8 +5266,12 @@ static void UploadGPUTextureData()
 
             cmdBuffer
                 .BeginBarrierList()
-                    .AddTextureBarrier(texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
-                        VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+                    .AddTextureBarrier(
+                        texture, 
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                        VK_ACCESS_2_SHADER_READ_BIT, 
+                        VK_IMAGE_ASPECT_COLOR_BIT)
                 .Push();
         });
     }
@@ -6420,32 +5679,42 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_irradianceMapTexture, 
+                VK_IMAGE_LAYOUT_GENERAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     vkn::PSO& pso = GetPSO(PASS_ID_IRRADIANCE_MAP_GEN);
 
     cmdBuffer.CmdBindPSO(pso);
     
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-    const uint32_t passSetIndex = GetDescriptorSetIndex(IrradianceMapGenDescSetDesc{});
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::SampledTexture(IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        vkn::PushDescriptor::StorageTexture(IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureViewRW, VK_IMAGE_LAYOUT_GENERAL),
+    });
 
-    GPU_IrradianceMapPerDrawData pushConsts = {};
-    pushConsts.envMapFaceSize.x = s_skyboxTexture.GetSizeX();
-    pushConsts.envMapFaceSize.y = s_skyboxTexture.GetSizeY();
-
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_IrradianceMapPushConst {
+        .envMapFaceSize = uint2(s_skyboxTexture.GetSizeX(), s_skyboxTexture.GetSizeY())
+    });
 
     cmdBuffer.CmdDispatch(ceil(COMMON_IRRADIANCE_MAP_SIZE.x / 32.f), ceil(COMMON_IRRADIANCE_MAP_SIZE.y / 32.f), 6);
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_irradianceMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_irradianceMapTexture, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     CORE_LOG_INFO("Irradiance map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -6461,23 +5730,49 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    GPU_PrefilteredEnvMapPerDrawData pushConsts = {};
+    GPU_PrefilteredEnvMapPushConst pushConsts = {};
     pushConsts.envMapFaceSize.x = s_skyboxTexture.GetSizeX();
     pushConsts.envMapFaceSize.y = s_skyboxTexture.GetSizeY();
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_skyboxTexture,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_prefilteredEnvMapTexture,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
             .Push();
 
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-    const uint32_t passSetIndex = GetDescriptorSetIndex(PrefilteredEnvMapGenDescSetDesc{});
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::SampledTexture(PREFILTERED_ENV_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    });
 
     for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+        std::array<vkn::PushDescriptor, CUBEMAP_FACE_COUNT> descSet;
+
+        for (uint32_t face = 0; face < CUBEMAP_FACE_COUNT; ++face) {
+            descSet[face] = vkn::PushDescriptor::StorageTexture(
+                PREFILTERED_ENV_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT,
+                face,
+                s_prefilteredEnvMapTextureViewRWs[mip][face],
+                VK_IMAGE_LAYOUT_GENERAL
+            );
+        }
+
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, descSet);
+
         pushConsts.mip = mip;
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
@@ -6490,8 +5785,12 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_prefilteredEnvMapTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_prefilteredEnvMapTexture, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     CORE_LOG_INFO("Prefiltered env map generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -6509,22 +5808,33 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_brdfLUTTexture, 
+                VK_IMAGE_LAYOUT_GENERAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_WRITE_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-    const uint32_t passSetIndex = GetDescriptorSetIndex(BRDFLUTGenDescSetDesc{});
-
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+    
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
+        vkn::PushDescriptor::StorageTexture(BRDF_INTEGRATION_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureViewRW, VK_IMAGE_LAYOUT_GENERAL)
+    );
 
     cmdBuffer.CmdDispatch((uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.x / 32.f), (uint32_t)ceil(COMMON_BRDF_INTEGRATION_LUT_SIZE.y / 32.f), 1u);
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_brdfLUTTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_brdfLUTTexture, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     CORE_LOG_INFO("BRDF LUT generation finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -6581,25 +5891,36 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
     //barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     //barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
-    barriers.AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    barriers.AddTextureBarrier(
+        s_HZB, 
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+        VK_IMAGE_ASPECT_COLOR_BIT);
 
     barriers.Push();
 
     vkn::PSO& pso = GetPSO(pass);
 
     cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
     
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = false;
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+            vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]),
+            vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]),
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer)
+        });
+    }
 
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    GPU_GeomCullingPerDrawData pushConsts = {};
+    GPU_GeomCullingPushConst pushConsts = {};
     pushConsts.hzbMipsCount = s_HZB.GetMipCount();
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
@@ -6625,27 +5946,20 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCHING);
 
     cmdBuffer.CmdBindPSO(pso);
-
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = false;
     
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-    
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    // GPU_GeomBatchPerDrawData pushConsts = {};
-    // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_visGeomIDQueueSizeBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueSizeBuffer[queue]),
+    });
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
 }
@@ -6683,26 +5997,16 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = false;
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    // GPU_GeomDrawCmdGenPerDrawData pushConsts = {};
-    // cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_geomBatchQueueSizeBuffer[queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdQueueBuffer[queue]),
+    });
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE), 1, 1);
 }
@@ -6744,21 +6048,6 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    DepthDescSetDesc desc = {};
-    desc.isCsm = false;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
     
     const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
     const bool needClearDepth = queue == GEOM_QUEUE_OPAQUE;
@@ -6769,8 +6058,12 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddTextureBarrier(
+                s_depthRT,
+                VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT)
             .AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
@@ -6797,24 +6090,32 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
         vkn::PSO& pso = GetPSO(PASS_ID_DEPTH);
 
         cmdBuffer.CmdBindPSO(pso);
-        
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
+        
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
 
-        GPU_ZPassPerDrawData pushConsts = {};
-        pushConsts.isAKillPass = isAKillPass;
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+            vkn::PushDescriptor::StorageBuffer(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
+        );
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_ZPassPushConst {
+            .akillPass = isAKillPass,
+        });
 
         cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddTextureBarrier(
+                s_depthRT, 
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
+                VK_IMAGE_ASPECT_DEPTH_BIT)
         .Push();
 }
 
@@ -6906,13 +6207,10 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     
     cmdBuffer.CmdBindPSO(pso);
 
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-    const uint32_t passSetIndex = GetDescriptorSetIndex(HZBGenDescSetDesc{});
-
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    GPU_HzbGenPerDrawData pushConsts = {};
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
     for (uint32_t mip = 1; mip < s_HZB.GetMipCount(); ++mip) {
         srcMipSize = dstMipSize;
@@ -6920,17 +6218,33 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer
             .BeginBarrierList()
-                .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                    VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 1)
-                .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                    VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT, mip, 1)
+                .AddTextureBarrier(
+                    s_HZB,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                    VK_ACCESS_2_SHADER_READ_BIT, 
+                    VK_IMAGE_ASPECT_COLOR_BIT, 
+                    mip - 1,
+                    1)
+                .AddTextureBarrier(
+                    s_HZB,
+                    VK_IMAGE_LAYOUT_GENERAL,
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                    VK_ACCESS_2_SHADER_WRITE_BIT,
+                    VK_IMAGE_ASPECT_COLOR_BIT,
+                    mip,
+                    1)
             .Push();
 
-        pushConsts.srcMipResolution = srcMipSize;
-        pushConsts.dstMipResolution = dstMipSize;
-        pushConsts.dstMipIdx = mip;
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
+            vkn::PushDescriptor::SampledTexture(HZB_SRC_MIP_DESCRIPTOR_SLOT, 0, s_HZBMipViews[mip - 1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::StorageTexture(HZB_DST_MIP_UAV_DESCRIPTOR_SLOT, 0, s_HZBMipViews[mip], VK_IMAGE_LAYOUT_GENERAL),
+        });
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_HzbGenPushConst {
+            .srcMipResolution = srcMipSize,
+            .dstMipResolution = dstMipSize
+        });
 
         cmdBuffer.CmdDispatch(
             (uint32_t)glm::ceil(dstMipSize.x / (float)HZB_BUILD_CS_GROUP_SIZE), 
@@ -6942,8 +6256,14 @@ static void HZBGeneratePass(vkn::CmdBuffer& cmdBuffer)
     // To get all mips in same layout
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_HZB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT, s_HZB.GetMipCount() - 1, 1)
+            .AddTextureBarrier(
+                s_HZB, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                s_HZB.GetMipCount() - 1,
+                1)
         .Push();
 }
 
@@ -6956,9 +6276,21 @@ static void CSMGeomCullingClearCounters(vkn::CmdBuffer& cmdBuffer)
 
     for (uint32_t cascade = 0; cascade < COMMON_CSM_CASCADE_COUNT; ++cascade) {
         for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            barriers.AddBufferBarrier(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-            barriers.AddBufferBarrier(s_csmGeomBatchQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-            barriers.AddBufferBarrier(s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+            barriers.AddBufferBarrier(
+                s_csmVisGeomIDQueueSizeBuffers[cascade][queue], 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT
+            );
+            barriers.AddBufferBarrier(
+                s_csmGeomBatchQueueSizeBuffers[cascade][queue], 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT
+            );
+            barriers.AddBufferBarrier(
+                s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], 
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT
+            );
         }
     }
 
@@ -6979,8 +6311,14 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        barriers.AddBufferBarrier(s_csmVisGeomIDQueueBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-        barriers.AddBufferBarrier(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+        barriers.AddBufferBarrier(
+            s_csmVisGeomIDQueueBuffers[cascade][queue], 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_WRITE_BIT);
+        barriers.AddBufferBarrier(
+            s_csmVisGeomIDQueueSizeBuffers[cascade][queue],
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
     barriers.Push();
@@ -6989,21 +6327,26 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
 
     cmdBuffer.CmdBindPSO(pso);
 
-    GeomCullingDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
 
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
+    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+            vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueBuffers[cascade][queue]),
+            vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]),
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisSortKeysBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisSortKeysCounterBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisGeomIDsBuffer)
+            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullPerGeomMatTypeCountersBuffer)
+        });
+    }
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-    GPU_GeomCullingPerDrawData pushConsts = {};
-    pushConsts.isCsmPass = true;
-    pushConsts.cascade = cascade;
-
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_GeomCullingPushConst {
+        .cascade = cascade,
+        .csmPass = true
+    });
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULLING_CS_GROUP_SIZE), 1, 1);
 }
@@ -7031,22 +6374,6 @@ static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
-    GeomBatchingDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
     cmdBuffer
         .BeginBarrierList()
             .AddBufferBarrier(s_csmVisGeomIDQueueBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
@@ -7061,8 +6388,19 @@ static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU
 
     cmdBuffer.CmdBindPSO(pso);
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmVisGeomIDQueueBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_BATCH_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_BATCH_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueSizeBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue]),
+    });
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
 }
@@ -7092,22 +6430,6 @@ static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, G
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
-    GeomDrawCmdGenDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
     cmdBuffer
         .BeginBarrierList()
             .AddBufferBarrier(s_csmGeomBatchQueueBuffers[cascade][queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
@@ -7119,8 +6441,16 @@ static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, G
 
     cmdBuffer.CmdBindPSO(pso);
 
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-    cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT, 0, s_csmGeomBatchQueueSizeBuffers[cascade][queue]),
+        vkn::PushDescriptor::StorageBuffer(GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomDrawCmdQueueBuffers[cascade][queue]),
+    });
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE), 1, 1);
 }
@@ -7165,22 +6495,6 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
 {
     CORE_ASSERT(cascade < COMMON_CSM_CASCADE_COUNT);
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
-
-    DepthDescSetDesc desc = {};
-    desc.isCsm = true;
-    desc.cascade = cascade;
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
     
     const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
     const bool needClearDepth = queue == GEOM_QUEUE_OPAQUE;
@@ -7194,13 +6508,16 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
             .AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
             .AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
-            .AddTextureBarrier(s_csmRT, 
+            .AddTextureBarrier(
+                s_csmRT, 
                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, 
                 VK_IMAGE_ASPECT_DEPTH_BIT, 
-                0, VK_REMAINING_MIP_LEVELS, 
-                cascade, 1)
+                0,
+                VK_REMAINING_MIP_LEVELS, 
+                cascade,
+                1)
         .Push();
 
     const VkExtent2D extent = VkExtent2D { CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE };
@@ -7224,31 +6541,38 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
         vkn::PSO& pso = GetPSO(PASS_ID_DEPTH);
 
         cmdBuffer.CmdBindPSO(pso);
-        
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
+        
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
 
-        GPU_ZPassPerDrawData pushConsts = {};
-        pushConsts.isAKillPass = isAKillPass;
-        pushConsts.isCsmPass = true;
-        pushConsts.cascade = cascade;
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+            vkn::PushDescriptor::StorageBuffer(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue])
+        );        
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_ZPassPushConst {
+           .cascade = cascade,
+           .csmPass = true,
+           .akillPass = isAKillPass
+        });
 
         cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_csmRT, 
+            .AddTextureBarrier(
+                s_csmRT, 
                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT,
-                0, VK_REMAINING_MIP_LEVELS, 
-                cascade, 1)
+                0,
+                VK_REMAINING_MIP_LEVELS, 
+                cascade,
+                1)
         .Push();
 }
 
@@ -7284,31 +6608,25 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
 
-    GBufferDescSetDesc desc = {};
-
-    switch(queue) {
-        case GEOM_QUEUE_OPAQUE:
-            desc.matType = GEOM_MAT_TYPE_OPAQUE;
-            break;
-        case GEOM_QUEUE_AKILL:
-            desc.matType = GEOM_MAT_TYPE_AKILL;
-            break;
-    }
-
-    const uint32_t passSetIndex = GetDescriptorSetIndex(desc);
-    const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-
     const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
  
     for (vkn::Texture& colorRT : s_gbufferRTs) {
-        barrierList.AddTextureBarrier(colorRT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        barrierList.AddTextureBarrier(
+            colorRT,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    barrierList.AddTextureBarrier(
+        s_depthRT,
+        VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT);
 
     vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
     vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
@@ -7351,15 +6669,20 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
+        
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
+            vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
+        );
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
-        GPU_GBufferPerDrawData pushConsts = {};
-        pushConsts.isAKillPass = isAKillPass;
-
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_GBufferPushConst {
+            .akillPass = isAKillPass
+        });
         
         cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
@@ -7402,14 +6725,27 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
     for (vkn::Texture& gbufferRT : s_gbufferRTs) {
-        barrierList.AddTextureBarrier(gbufferRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+        barrierList.AddTextureBarrier(
+            gbufferRT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    barrierList.AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barrierList.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    barrierList.AddTextureBarrier(
+        s_colorRT16F,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    barrierList.AddTextureBarrier(
+        s_depthRT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT);
 
     barrierList.Push();
     
@@ -7432,12 +6768,23 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         vkn::PSO& pso = GetPSO(PASS_ID_DEFERRED_LIGHTING);
 
         cmdBuffer.CmdBindPSO(pso);
-
-        const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-        const uint32_t passSetIndex = GetDescriptorSetIndex(DeferredLightingDescSetDesc{});
         
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
+
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);
     cmdBuffer.CmdEndRendering();
@@ -7454,10 +6801,18 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-            .AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddTextureBarrier(
+                s_colorRT16F,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_depthRT,
+                VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT)
         .Push();
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
@@ -7484,11 +6839,14 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-        const uint32_t passSetIndex = GetDescriptorSetIndex(SkyboxDescSetDesc{});
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
 
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+            vkn::PushDescriptor::SampledTexture(SKYBOX_TEXTURE_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        });
 
         cmdBuffer.CmdDraw(36, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -7505,10 +6863,18 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_colorRT16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
-                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_colorRT16F,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_colorRT8U,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
@@ -7531,11 +6897,14 @@ void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
         
-        const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-        const uint32_t passSetIndex = GetDescriptorSetIndex(PostProcessDescSetDesc{});
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
 
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
+            vkn::PushDescriptor::SampledTexture(POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();
@@ -7608,10 +6977,18 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
     }
 
     cmdBuffer.BeginBarrierList()
-        .AddTextureBarrier(*pVisTex, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
-            VK_ACCESS_2_SHADER_READ_BIT, aspect)
-        .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+        .AddTextureBarrier(
+            *pVisTex,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT,
+            aspect)
+        .AddTextureBarrier(
+            s_colorRT8U,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT)
     .Push();
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
@@ -7633,14 +7010,28 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         vkn::PSO& pso = GetPSO(PASS_ID_DBG_RT_VIEW);
 
         cmdBuffer.CmdBindPSO(pso);
+
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
         
-        const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-        const uint32_t passSetIndex = GetDescriptorSetIndex(DbgRTViewDescSetDesc{});
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTColorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COLOR_16F_DESCRIPTOR_SLOT, 0, s_colorRTView16F, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        });
 
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
-
-        GPU_DbgRTViewPerDrawData pushConsts = {};
+        GPU_DbgRTViewPushConst pushConsts = {};
         pushConsts.mip = s_dbgOutputRTMip;
         pushConsts.face = s_dbgOutputRTFace;
         pushConsts.csmCascadeIdx = s_dbgOutputRTCascadeIndex;
@@ -7691,10 +7082,19 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
-    barriers.AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
-    barriers.AddTextureBarrier(s_depthRT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);  
+    barriers.AddTextureBarrier(
+        s_colorRT8U,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    barriers.AddTextureBarrier(
+        s_depthRT,
+        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT);  
 
     if (lineInstCount > 0) {
         barriers.AddBufferBarrier(s_dbgLineDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
@@ -7737,14 +7137,20 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         if (lineInstCount > 0 || triInstCount > 0) {
             cmdBuffer.CmdBindPSO(pso);
 
-            const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-            const uint32_t passSetIndex = GetDescriptorSetIndex(DbgDrawPrimitivesDescSetDesc{});
-
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-            cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+            cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+                .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+                .shaderSetIdx = DESC_SET_PER_FRAME
+            });
+            
+            cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+                vkn::PushDescriptor::StorageBuffer(DBG_DRAW_TRIANGLES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgTriangleVertexDataGPU),
+                vkn::PushDescriptor::StorageBuffer(DBG_DRAW_TRIANGLES_DATA_DESCRIPTOR_SLOT, 0, s_dbgTriangleDataGPU),
+                vkn::PushDescriptor::StorageBuffer(DBG_DRAW_LINES_VERTEX_BUFFER_DESCRIPTOR_SLOT, 0, s_dbgLineVertexDataGPU),
+                vkn::PushDescriptor::StorageBuffer(DBG_DRAW_LINES_DATA_DESCRIPTOR_SLOT, 0, s_dbgLineDataGPU),
+            });
         }
 
-        GPU_DbgPrimPerDrawData pushConsts = {};
+        GPU_DbgPrimPushConst pushConsts = {};
 
         if (lineInstCount > 0) {
             ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, 0xee0000, "%s_Lines", passName);
@@ -8241,8 +7647,12 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_colorRT8U,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     vkn::RenderInfo renderInfo = {};
@@ -8278,10 +7688,18 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(s_colorRT8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
-            .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                s_colorRT8U, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                scTexture, 
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 
     const VkExtent2D extent = VkExtent2D { s_pWnd->GetWidth(), s_pWnd->GetHeight() };
@@ -8304,10 +7722,13 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdBindPSO(pso);
 
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}), .shaderSetIdx = DESC_SET_PER_FRAME });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { 
+            .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}), 
+            .shaderSetIdx = DESC_SET_PER_FRAME
+        });
         
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
-            vkn::PushDescriptor::SampledTexture(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U)
+            vkn::PushDescriptor::SampledTexture(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
         );
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
@@ -8315,8 +7736,12 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddTextureBarrier(scTexture, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
-                VK_ACCESS_2_NONE, VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
+                scTexture,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
+                VK_ACCESS_2_NONE,
+                VK_IMAGE_ASPECT_COLOR_BIT)
         .Push();
 }
 

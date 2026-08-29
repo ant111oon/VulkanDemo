@@ -21,14 +21,6 @@ void main(uint2 DTid : SV_DispatchThreadID)
         return;
     }
 
-    const uint mip = HZB_GEN_DST_MIP_IDX;
-
-    if (mip == 0) {
-        // NOTE: If we are here, it's a bug. We copy depth buffer into HZB mip 0 with cmd buffer command
-        return;
-    }
-
-    const uint prevMip = mip - 1u;
     const uint2 srcMipSize = HZB_GEN_SRC_MIP_RESOLUTION;
 
     const int2 dstPixCoord = DTid;
@@ -40,10 +32,10 @@ void main(uint2 DTid : SV_DispatchThreadID)
     const int3 texCoord3 = int3(min(srcPixCoord + int2(1, 1), srcMipSize - 1), 0);
 
     float4 samples;
-    samples.x = LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord0).r;
-    samples.y = LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord1).r;
-    samples.z = LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord2).r;
-    samples.w = LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord3).r;
+    samples.x = LOAD_TEX(HZB_SRC_MIP, texCoord0).r;
+    samples.y = LOAD_TEX(HZB_SRC_MIP, texCoord1).r;
+    samples.z = LOAD_TEX(HZB_SRC_MIP, texCoord2).r;
+    samples.w = LOAD_TEX(HZB_SRC_MIP, texCoord3).r;
 
     float depth = HZB_GET_FAREST_DEPTH(samples);
 
@@ -56,8 +48,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
         const int3 texCoord5 = int3(min(srcPixCoord + int2(2, 1), srcMipSize - 1), 0);
 
         const float2 extraValues = float2(
-            LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord4).r,
-            LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord5).r
+            LOAD_TEX(HZB_SRC_MIP, texCoord4).r,
+            LOAD_TEX(HZB_SRC_MIP, texCoord5).r
         );
 
         depth = HZB_GET_FAREST_DEPTH(depth, HZB_GET_FAREST_DEPTH(extraValues));
@@ -68,8 +60,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
         const int3 texCoord5 = int3(min(srcPixCoord + int2(1, 2), srcMipSize - 1), 0);
 
         const float2 extraValues = float2(
-            LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord4).r,
-            LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord5).r
+            LOAD_TEX(HZB_SRC_MIP, texCoord4).r,
+            LOAD_TEX(HZB_SRC_MIP, texCoord5).r
         );
 
         depth = HZB_GET_FAREST_DEPTH(depth, HZB_GET_FAREST_DEPTH(extraValues));
@@ -78,10 +70,10 @@ void main(uint2 DTid : SV_DispatchThreadID)
     if (isPrevMipWidthOdd && isPrevMipHeightOdd) {
         const int3 texCoord6 = int3(min(srcPixCoord + int2(2, 2), srcMipSize - 1), 0);
 
-        const float extraCornerValue = LOAD_TEX_ARRAY(HZB_SRC_MIPS, prevMip, texCoord6).r;
+        const float extraCornerValue = LOAD_TEX(HZB_SRC_MIP, texCoord6).r;
 
         depth = HZB_GET_FAREST_DEPTH(depth, extraCornerValue);
     }
 
-    HZB_DST_MIP_UAVS[mip][dstPixCoord] = depth;
+    HZB_DST_MIP_UAV[dstPixCoord] = depth;
 }
