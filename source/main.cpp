@@ -882,12 +882,6 @@ BEGIN_DESCRIPTOR_SET_DESC(PostProcessDescSetDesc, DESC_SET_LAYOUT_ID_POST_PROCES
 END_DESCRIPTOR_SET_DESC;
 
 
-BEGIN_DESCRIPTOR_SET_DESC(BackbufferDescSetDesc, DESC_SET_LAYOUT_ID_BACKBUFFER)
-    BEGIN_DESCRIPTOR_SET_HASH_FUNC()
-    END_DESCRIPTOR_SET_HASH_FUNC;
-END_DESCRIPTOR_SET_DESC;
-
-
 BEGIN_DESCRIPTOR_SET_DESC(IrradianceMapGenDescSetDesc, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN)
     BEGIN_DESCRIPTOR_SET_HASH_FUNC()
     END_DESCRIPTOR_SET_HASH_FUNC;
@@ -2066,7 +2060,7 @@ static void CreateVkInstance()
     instCreateInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     instCreateInfo.pEngineName = "VkEngine";
     instCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    instCreateInfo.apiVersion = VK_API_VERSION_1_3;
+    instCreateInfo.apiVersion = VK_API_VERSION_1_4;
     instCreateInfo.extensions = instExtensions;
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
     instCreateInfo.layers = instLayers;
@@ -2165,6 +2159,7 @@ static void CreateVkPhysAndLogicalDevices()
         VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
         VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
         VK_KHR_MAINTENANCE_8_EXTENSION_NAME,
+        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceMaintenance8FeaturesKHR maintenance8Features = {};
@@ -2180,6 +2175,7 @@ static void CreateVkPhysAndLogicalDevices()
     descBuffFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
     descBuffFeatures.pNext = &extendedDynStateFeatures;
     descBuffFeatures.descriptorBuffer = VK_TRUE;
+    descBuffFeatures.descriptorBufferPushDescriptors = VK_TRUE;
 
 #ifndef ENG_BUILD_RETAIL
     descBuffFeatures.descriptorBufferCaptureReplay = VK_TRUE;
@@ -2594,7 +2590,7 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
                 VK_IMAGE_ASPECT_COLOR_BIT, mip, 1, layerIdx, 1)
         .Push();
 
-        vkn::BlitInfo blit = {};
+        vkn::TextureBlitInfo blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         blit.srcSubresource.mipLevel = mip - 1;
         blit.srcSubresource.baseArrayLayer = layerIdx;
@@ -3004,7 +3000,6 @@ static void CreateCommonDescriptorSetLayout()
 
     createInfo.pDevice = &s_vkDevice;
     createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SAMPLER_IDX_COUNT, VK_SHADER_STAGE_ALL),
@@ -3224,8 +3219,7 @@ static void CreateBackbufferPassDescriptorSetLayout()
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
     createInfo.pDevice = &s_vkDevice;
-    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-    // createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -3619,12 +3613,6 @@ static void ReservePostProcessingDescriptorSetIndex()
 }
 
 
-static void ReserveBackbufferPassDescriptorSetIndex()
-{
-    AddDescriptorSet(BackbufferDescSetDesc{});
-}
-
-
 static void ReserveSkyboxDescriptorSetIndex()
 {
     AddDescriptorSet(SkyboxDescSetDesc{});
@@ -3687,8 +3675,6 @@ static void ReserveDescriptorSetIndices()
     ReserveDeferredLightingDescriptorSetIndex();
     
     ReservePostProcessingDescriptorSetIndex();
-    
-    ReserveBackbufferPassDescriptorSetIndex();
     
     ReserveSkyboxDescriptorSetIndex();
     
@@ -5285,14 +5271,6 @@ static void WritePostProcessingDescriptorSet()
 }
 
 
-static void WriteBackbufferPassDescriptorSet()
-{
-    const uint32_t setID = GetDescriptorSetIndex(BackbufferDescSetDesc{});
-
-    s_descriptorBuffer.WriteDescriptor(setID, BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-}
-
-
 static void WriteSkyboxDescriptorSet()
 {
     const uint32_t setID = GetDescriptorSetIndex(SkyboxDescSetDesc{});
@@ -5423,8 +5401,6 @@ static void WriteDescriptorSets()
     WriteDeferredLightingDescriptorSet();
     
     WritePostProcessingDescriptorSet();
-    
-    WriteBackbufferPassDescriptorSet();
     
     WriteSkyboxDescriptorSet();
     
@@ -8327,12 +8303,12 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
         vkn::PSO& pso = GetPSO(PASS_ID_BACKBUFFER);
 
         cmdBuffer.CmdBindPSO(pso);
-        
-        const uint32_t commonSetIndex = GetDescriptorSetIndex(CommonDescSetDesc{});
-        const uint32_t passSetIndex = GetDescriptorSetIndex(BackbufferDescSetDesc{});
 
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = commonSetIndex, .shaderSetIdx = DESC_SET_PER_FRAME });
-        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = passSetIndex, .shaderSetIdx = DESC_SET_PER_DRAW });
+        cmdBuffer.CmdBindDescriptorBufferSets(pso, { .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}), .shaderSetIdx = DESC_SET_PER_FRAME });
+        
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
+            vkn::PushDescriptor::SampledTexture(BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT, 0, s_colorRTView8U)
+        );
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);        
     cmdBuffer.CmdEndRendering();

@@ -272,7 +272,142 @@ namespace vkn
             : std::get<SCTextureView*>(stencilAttachment.view) != nullptr;
     }
 
+
+    PushDescriptor PushDescriptor::UniformBuffer(uint32_t binding, uint32_t arrayElement, const Buffer& buffer, VkDeviceSize offset, VkDeviceSize size)
+    {
+        VK_ASSERT(buffer.IsCreated());
+        VK_ASSERT(buffer.IsUniformBuffer());
+
+        PushDescriptor result(binding, arrayElement);
+
+        result.m_resource = UniformBufferRes {
+            .pBuffer = &buffer,
+            .offset = offset,
+            .size = size
+        };
+
+        return result;
+    }
+
     
+    PushDescriptor PushDescriptor::StorageBuffer(uint32_t binding, uint32_t arrayElement, const Buffer &buffer, VkDeviceSize offset, VkDeviceSize size)
+    {
+        VK_ASSERT(buffer.IsCreated());
+        VK_ASSERT(buffer.IsStorageBuffer());
+
+        PushDescriptor result(binding, arrayElement);
+
+        result.m_resource = StorageBufferRes {
+            .pBuffer = &buffer,
+            .offset = offset,
+            .size = size
+        };
+
+        return result;
+    }
+
+    
+    PushDescriptor PushDescriptor::SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view)
+    {
+        VK_ASSERT(view.IsCreated());
+
+        PushDescriptor result(binding, arrayElement);
+
+        result.m_resource = SampledTextureRes {
+            .pView = &view
+        };
+
+        return result;
+    }
+
+    
+    PushDescriptor PushDescriptor::StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view)
+    {
+        VK_ASSERT(view.IsCreated());
+
+        PushDescriptor result(binding, arrayElement);
+
+        result.m_resource = StorageTextureRes {
+            .pView = &view
+        };
+
+        return result;
+    }
+
+    
+    PushDescriptor PushDescriptor::Sampler(uint32_t binding, uint32_t arrayElement, const vkn::Sampler& sampler)
+    {
+        VK_ASSERT(sampler.IsCreated());
+
+        PushDescriptor result(binding, arrayElement);
+
+        result.m_resource = SamplerRes {
+            .pSampler = &sampler
+        };
+
+        return result;
+    }
+
+
+    PushDescriptor::PushDescriptor(uint32_t binding, uint32_t arrayElement)
+        : m_binding(binding), m_arrayElement(arrayElement), m_resource(UniformBufferRes{})
+    {
+    }
+
+    
+    void PushDescriptor::Fill(VkWriteDescriptorSet& write, VkDescriptorBufferInfo& bufferInfoCache, VkDescriptorImageInfo& imageInfoCache) const
+    {
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+
+        write.dstBinding = m_binding;
+        write.dstArrayElement = m_arrayElement;
+        write.descriptorCount = 1;
+
+        if (auto pRes = std::get_if<PushDescriptor::StorageBufferRes>(&m_resource)) {
+            bufferInfoCache.buffer = pRes->pBuffer->Get();
+            bufferInfoCache.offset = pRes->offset;
+
+            bufferInfoCache.range = pRes->size == VK_WHOLE_SIZE ? pRes->pBuffer->GetMemorySize() - pRes->offset : pRes->size;
+
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            write.pBufferInfo = &bufferInfoCache;
+        } else if (auto pRes = std::get_if<PushDescriptor::UniformBufferRes>(&m_resource)) {
+            bufferInfoCache.buffer = pRes->pBuffer->Get();
+            bufferInfoCache.offset = pRes->offset;
+
+            bufferInfoCache.range = pRes->size == VK_WHOLE_SIZE ? pRes->pBuffer->GetMemorySize() - pRes->offset : pRes->size;
+
+            write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            write.pBufferInfo = &bufferInfoCache;
+        } else if (auto pRes = std::get_if<PushDescriptor::SampledTextureRes>(&m_resource)) {
+            const Texture& owner = pRes->pView->GetOwner();
+            const TextureView::SubresourceRange& range = pRes->pView->GetSubresourceRange();
+
+            imageInfoCache.imageView = pRes->pView->Get();
+            imageInfoCache.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+
+            write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            write.pImageInfo = &imageInfoCache;
+        } else if (auto pRes = std::get_if<PushDescriptor::StorageTextureRes>(&m_resource)) {
+            const Texture& owner = pRes->pView->GetOwner();
+            const TextureView::SubresourceRange& range = pRes->pView->GetSubresourceRange();
+
+            imageInfoCache.imageView = pRes->pView->Get();
+            imageInfoCache.imageLayout = owner.GetAccessTracker().GetState(range.baseArrayLayer, range.baseMipLevel).layout;
+
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            write.pImageInfo = &imageInfoCache;
+        } else if (auto pRes = std::get_if<PushDescriptor::SamplerRes>(&m_resource)) {
+            imageInfoCache.sampler = pRes->pSampler->Get();
+
+            write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+            write.pImageInfo = &imageInfoCache;
+        } else {
+            VK_ASSERT_FAIL("Invalid push descriptor resource type");
+        }
+    }
+
+
     bool CmdBuffer::IsValid() const
     {
         return m_pOwner ? (m_pOwner->IsCreated() && IsCreated() && IsValidID(m_ID)) : false;
@@ -310,6 +445,7 @@ namespace vkn
         m_barrierList.Swap(cmdBuffer.m_barrierList);
 
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
+        std::swap(m_pushDescriptorsCache, cmdBuffer.m_pushDescriptorsCache);
         std::swap(m_blitCache, cmdBuffer.m_blitCache);
         std::swap(m_bufImageCopyCache, cmdBuffer.m_bufImageCopyCache);
         std::swap(m_texSubresCache, cmdBuffer.m_texSubresCache);
@@ -547,7 +683,7 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const BlitInfo> regions, VkFilter filter)
+    CmdBuffer& CmdBuffer::CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const TextureBlitInfo> regions, VkFilter filter)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
         VK_ASSERT(regions.size() >= 1);
@@ -565,7 +701,7 @@ namespace vkn
 
         m_blitCache.resize(regions.size());
         for (size_t i = 0; i < m_blitCache.size(); ++i) {
-            const BlitInfo& region = regions[i];
+            const TextureBlitInfo& region = regions[i];
             VkImageBlit2& blit = m_blitCache[i];
 
             blit.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
@@ -589,11 +725,11 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const BlitInfo& region, VkFilter filter)
+    CmdBuffer& CmdBuffer::CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const TextureBlitInfo& region, VkFilter filter)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
-        std::span<const BlitInfo> regions(&region, 1);
+        std::span<const TextureBlitInfo> regions(&region, 1);
         return CmdBlitTexture(srcTexture, dstTexture, regions, filter);
     }
 
@@ -825,7 +961,41 @@ namespace vkn
     }
 
 
-    CmdBuffer& CmdBuffer::CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+    CmdBuffer& CmdBuffer::CmdPushDescriptors(const PSO& pso, uint32_t set, std::span<const PushDescriptor> descriptors)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        VK_ASSERT(pso.IsCreated());
+        VK_ASSERT(!descriptors.empty());
+
+        m_pushDescriptorsCache.Reserve(descriptors.size());
+        m_pushDescriptorsCache.Clear();
+
+        std::vector<VkWriteDescriptorSet>& writesCache = m_pushDescriptorsCache.writes;
+        std::vector<VkDescriptorBufferInfo>& bufferCache = m_pushDescriptorsCache.bufferInfos;
+        std::vector<VkDescriptorImageInfo>& texCache = m_pushDescriptorsCache.imageInfos;
+
+        for (const PushDescriptor& descriptor : descriptors) {
+            VkWriteDescriptorSet& write = writesCache.emplace_back();
+            VkDescriptorBufferInfo& bufferWrite = bufferCache.emplace_back();
+            VkDescriptorImageInfo& texWrite = texCache.emplace_back();
+
+            descriptor.Fill(write, bufferWrite, texWrite);
+        }
+
+        vkCmdPushDescriptorSet(Get(), pso.GetBindPoint(), pso.GetLayout().Get(), set, writesCache.size(), writesCache.data());
+
+        return *this;
+    }
+
+    
+    CmdBuffer& CmdBuffer::CmdPushDescriptors(const PSO& pso, uint32_t set, const PushDescriptor& descriptor)
+    {
+        return CmdPushDescriptors(pso, set, std::span(&descriptor, 1));
+    }
+
+
+    CmdBuffer &CmdBuffer::CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
     {
         VK_CHECK_CMD_BUFFER_STARTED(this);
 
@@ -1144,6 +1314,7 @@ namespace vkn
         
         m_barrierList = {};
 
+        m_pushDescriptorsCache = {};
         m_blitCache = {};
         m_bufImageCopyCache = {};
         m_texSubresCache = {};
@@ -1167,6 +1338,7 @@ namespace vkn
 
     CmdBuffer& CmdBuffer::ResetCache()
     {
+        m_pushDescriptorsCache.Clear();
         m_blitCache.clear();
         m_bufImageCopyCache.clear();
         m_texSubresCache.clear();
@@ -1346,5 +1518,21 @@ namespace vkn
         VK_ASSERT_MSG(m_freeIds.size() + 1 <= m_freeIds.capacity(), "Preallocated cmd buffer IDs pool overflow");
 
         m_freeIds.emplace_back(id);
+    }
+    
+
+    void CmdBuffer::PushDescriptorsCache::Reserve(size_t capacity)
+    {
+        writes.reserve(capacity);
+        bufferInfos.reserve(capacity);
+        imageInfos.reserve(capacity);
+    }
+    
+    
+    void CmdBuffer::PushDescriptorsCache::Clear()
+    {
+        writes.clear();
+        bufferInfos.clear();
+        imageInfos.clear();
     }
 }

@@ -13,6 +13,7 @@ namespace vkn
     class CmdPool;
     class QueryPool;
     class Buffer;
+    class Sampler;
     class Texture;
     class TextureView;
     class SCTexture;
@@ -129,7 +130,7 @@ namespace vkn
     };
 
 
-    struct BlitInfo
+    struct TextureBlitInfo
     {
         VkImageSubresourceLayers srcSubresource;
         VkOffset3D               srcOffsets[2];
@@ -204,6 +205,74 @@ namespace vkn
     };
 
 
+    class PushDescriptor
+    {
+    public:
+        static PushDescriptor UniformBuffer(
+            uint32_t binding,
+            uint32_t arrayElement,
+            const Buffer& buffer,
+            VkDeviceSize offset = 0,
+            VkDeviceSize size = VK_WHOLE_SIZE);
+
+        static PushDescriptor StorageBuffer(
+            uint32_t binding,
+            uint32_t arrayElement,
+            const Buffer& buffer,
+            VkDeviceSize offset = 0,
+            VkDeviceSize size = VK_WHOLE_SIZE);
+
+        static PushDescriptor SampledTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view);
+        static PushDescriptor StorageTexture(uint32_t binding, uint32_t arrayElement, const TextureView& view);
+        static PushDescriptor Sampler(uint32_t binding, uint32_t arrayElement, const vkn::Sampler& sampler);
+
+    public:
+        PushDescriptor() = default;
+        
+        void Fill(VkWriteDescriptorSet& write, VkDescriptorBufferInfo& bufferInfoCache, VkDescriptorImageInfo& imageInfoCache) const;
+
+    private:
+        PushDescriptor(uint32_t binding, uint32_t arrayElement);
+
+    private:
+        struct UniformBufferRes
+        {
+            const Buffer* pBuffer = nullptr;
+            VkDeviceSize offset = 0;
+            VkDeviceSize size = VK_WHOLE_SIZE;
+        };
+
+        struct StorageBufferRes
+        {
+            const Buffer* pBuffer = nullptr;
+            VkDeviceSize offset = 0;
+            VkDeviceSize size = VK_WHOLE_SIZE;
+        };
+
+        struct SampledTextureRes
+        {
+            const TextureView* pView = nullptr;
+        };
+
+        struct StorageTextureRes
+        {
+            const TextureView* pView = nullptr;
+        };
+
+        struct SamplerRes
+        {
+            const vkn::Sampler* pSampler = nullptr;
+        };
+
+        using Resource = std::variant<UniformBufferRes, StorageBufferRes, SampledTextureRes, StorageTextureRes, SamplerRes>;
+
+        uint32_t m_binding = 0;
+        uint32_t m_arrayElement = 0;
+
+        Resource m_resource = UniformBufferRes{};
+    };
+
+
     class CmdBuffer : public Handle<VkCommandBuffer>
     {
         friend class CmdPool;
@@ -246,8 +315,8 @@ namespace vkn
         CmdBuffer& CmdSetPrimitiveTopology(VkPrimitiveTopology topology);
         CmdBuffer& CmdSetPolygonMode(VkPolygonMode mode);
 
-        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const BlitInfo> regions, VkFilter filter);
-        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const BlitInfo& region, VkFilter filter);
+        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const TextureBlitInfo> regions, VkFilter filter);
+        CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const TextureBlitInfo& region, VkFilter filter);
         
         CmdBuffer& CmdFillBuffer(Buffer& buffer, uint32_t value, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
 
@@ -279,6 +348,9 @@ namespace vkn
             static_assert(std::is_trivially_copyable_v<T>, "T must be a trivially copyable type");
             return CmdPushConstants(pso, stagesMask, &data, sizeof(T), offset);
         }
+
+        CmdBuffer& CmdPushDescriptors(const PSO& pso, uint32_t set, std::span<const PushDescriptor> descriptors);
+        CmdBuffer& CmdPushDescriptors(const PSO& pso, uint32_t set, const PushDescriptor& descriptor);
 
         CmdBuffer& CmdDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
         CmdBuffer& CmdDispatchIndirect(Buffer& argBuffer, VkDeviceSize offset = 0);
@@ -327,10 +399,21 @@ namespace vkn
         static constexpr ID INVALID_ID = static_cast<ID>(-1);
 
     private:
+        struct PushDescriptorsCache
+        {
+            void Reserve(size_t capacity);
+            void Clear();
+
+            std::vector<VkWriteDescriptorSet>   writes;
+            std::vector<VkDescriptorBufferInfo> bufferInfos;
+            std::vector<VkDescriptorImageInfo>  imageInfos;
+        };
+
         CmdPool* m_pOwner = nullptr;
 
         BarrierList m_barrierList;
 
+        PushDescriptorsCache m_pushDescriptorsCache;
         std::vector<VkImageBlit2> m_blitCache;
         std::vector<VkBufferImageCopy2> m_bufImageCopyCache;
         std::vector<VkImageSubresourceRange> m_texSubresCache;

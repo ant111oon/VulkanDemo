@@ -10,6 +10,8 @@ namespace vkn
     static PFN_vkGetDescriptorSetLayoutBindingOffsetEXT vkGetDescriptorSetLayoutBindingOffset = nullptr;
     static PFN_vkGetDescriptorEXT vkGetDescriptor = nullptr;
 
+    static constexpr size_t VKN_MAX_PUSH_DESCRIPTORS_COUNT = 32u;
+
 
     static VkDeviceSize GetAlignedSize(VkDeviceSize value, VkDeviceSize alignment)
     {
@@ -105,6 +107,8 @@ namespace vkn
         bool needSort = false;
         int64_t lastBinding = INT64_MIN;
 
+        uint32_t descriptorsCount = 0;
+
         for (size_t i = 0; i < bindings.size(); ++i) {
             const DescriptorInfo& descriptorInfo = descriptorInfos[i];
 
@@ -117,6 +121,8 @@ namespace vkn
             binding.descriptorType = descriptorInfo.type;
             binding.descriptorCount = descriptorInfo.count;
             binding.stageFlags = descriptorInfo.stagesMask;
+
+            descriptorsCount += descriptorInfo.count;
 
             if (descriptorInfo.flags != 0) {
                 bindingsFlags.emplace_back(descriptorInfo.flags);
@@ -152,7 +158,12 @@ namespace vkn
 
         m_pDevice = pDevice;
 
-        if ((flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
+        if ((flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT) != 0u) {
+            VK_ASSERT_MSG(descriptorsCount <= VKN_MAX_PUSH_DESCRIPTORS_COUNT, 
+                "Descriptor set layout is marked as push descriptors, but actual descriptors count (%u) is greater than max possible value (%u)", descriptorsCount, VKN_MAX_PUSH_DESCRIPTORS_COUNT);
+        } else if ((flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
+            // If VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT is set than we don't need to get descriptor offsets
+
             m_state.set(BIT_IS_DESCRIPTOR_BUFFER_SOMPATIBLE, true);
 
             vkGetDescriptorSetLayoutSize(pDevice->Get(), Get(), &m_size);
