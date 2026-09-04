@@ -15,7 +15,7 @@ GPU_DbgPrimInput PrepareDbgDrawVSInputData(uint instID, uint vertID)
 {
     GPU_DbgPrimInput inputData = (GPU_DbgPrimInput)0;
 
-    if (DBG_PRIM_CONST.isLinePass) {
+    if (DBG_PRIM_IS_LINE_PASS) {
         vertID = instID * DBG_LINE_VERTEX_COUNT + vertID;
         const uint offset = vertID * DBG_LINE_VERTEX_DATA_SIZE_UI;
 

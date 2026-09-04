@@ -190,11 +190,16 @@ struct GPU_CmdDrawIndexedIndirect
     uint indexCount;
     uint instanceCount;
     uint firstIndex;
-    int  firstVertex;
+    int  vertexOffset;
     uint firstInstance;
 };
 
 static_assert(sizeof(GPU_CmdDrawIndexedIndirect) == sizeof(VkDrawIndexedIndirectCommand));
+static_assert(offsetof(GPU_CmdDrawIndexedIndirect, indexCount)    == offsetof(VkDrawIndexedIndirectCommand, indexCount));
+static_assert(offsetof(GPU_CmdDrawIndexedIndirect, instanceCount) == offsetof(VkDrawIndexedIndirectCommand, instanceCount));
+static_assert(offsetof(GPU_CmdDrawIndexedIndirect, firstIndex)    == offsetof(VkDrawIndexedIndirectCommand, firstIndex));
+static_assert(offsetof(GPU_CmdDrawIndexedIndirect, vertexOffset)  == offsetof(VkDrawIndexedIndirectCommand, vertexOffset));
+static_assert(offsetof(GPU_CmdDrawIndexedIndirect, firstInstance) == offsetof(VkDrawIndexedIndirectCommand, firstInstance));
 
 
 struct GPU_CmdDispatchIndirect
@@ -206,6 +211,9 @@ struct GPU_CmdDispatchIndirect
 };
 
 static_assert(sizeof(GPU_CmdDispatchIndirect) == sizeof(VkDispatchIndirectCommand));
+static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeX) == offsetof(VkDispatchIndirectCommand, x));
+static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeY) == offsetof(VkDispatchIndirectCommand, y));
+static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeZ) == offsetof(VkDispatchIndirectCommand, z));
 
 
 enum GPU_CommonSamplerID : uint32_t
@@ -447,11 +455,13 @@ struct GPU_GeomBatch
 };
 
 
-struct GPU_GeomCullingPushConst
+struct GPU_GeomCullPushConst
 {
     uint hzbMipsCount;
     uint cascade;
+
     uint csmPass : 1;
+    uint padding : 31;
 };
 
 
@@ -493,6 +503,7 @@ struct GPU_PrefilteredEnvMapPushConst
 struct GPU_DbgPrimPushConst
 {
     uint linePass : 1;
+    uint padding : 31;
 };
 
 
@@ -803,10 +814,6 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
-static constexpr size_t GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT = 4;
-static constexpr size_t GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -901,9 +908,9 @@ static constexpr glm::uvec2 COMMON_IRRADIANCE_MAP_SIZE       = glm::uvec2(32);
 static constexpr glm::uvec2 COMMON_PREFILTERED_ENV_MAP_SIZE  = glm::uvec2(glm::uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
-static constexpr uint32_t HZB_MAX_MIP_COUNT = 12;
+static constexpr uint32_t COMMON_HZB_MAX_MIP_COUNT = 12;
 
-static constexpr uint32_t GEOM_CULLING_CS_GROUP_SIZE = 1024;
+static constexpr uint32_t GEOM_CULL_CS_GROUP_SIZE = 1024;
 static constexpr uint32_t GEOM_BATCH_CS_GROUP_SIZE = 1024;
 static constexpr uint32_t GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
 
@@ -1278,11 +1285,6 @@ static vkn::Buffer s_commonMeshLODBuffer;
 static vkn::Buffer s_commonMeshBuffer;
 static vkn::Buffer s_commonMaterialBuffer;
 static vkn::Buffer s_commonInstBuffer;
-
-//static vkn::Buffer s_geomCullVisSortKeysBuffer;
-//static vkn::Buffer s_geomCullVisSortKeysCounterBuffer;
-//static vkn::Buffer s_geomCullVisGeomIDsBuffer;
-//static vkn::Buffer s_geomCullPerGeomMatTypeCountersBuffer;
 
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
@@ -2363,7 +2365,7 @@ static void CreateHZB()
     const VkExtent3D extent = {s_pWnd->GetWidth(), s_pWnd->GetHeight(), 1};
 
     const uint32_t mipsCount = glm::floor(glm::log2((float)glm::max(extent.width, extent.height))) + 1;
-    CORE_ASSERT(mipsCount <= HZB_MAX_MIP_COUNT);
+    CORE_ASSERT(mipsCount <= COMMON_HZB_MAX_MIP_COUNT);
 
     vkn::AllocationInfo rtAllocInfo = {};
     rtAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
@@ -2950,10 +2952,6 @@ static void CreateGeomCullingDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3403,7 +3401,7 @@ static void CreateDescriptors()
 
 static void CreateGeomCullingPipelineLayout()
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullingPushConst) };
+    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullPushConst) };
 
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
@@ -4216,38 +4214,6 @@ static void CreateGeomCullingAndInstancingResources()
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    // s_geomCullVisSortKeysBuffer.Create(
-    //     &s_vkDevice, 
-    //     s_cpuInstData.size() * sizeof(GPU_GeomSortKey), 
-    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-    //     allocInfo
-    // );
-    // s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysBuffer, "GEOM_CULL_VIS_SORT_KEYS_BUFFER");
-
-    // s_geomCullVisSortKeysCounterBuffer.Create(
-    //     &s_vkDevice,
-    //     sizeof(glm::uint), 
-    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-    //     allocInfo
-    // );
-    // s_vkDevice.SetObjDebugName(s_geomCullVisSortKeysCounterBuffer, "GEOM_CULL_VIS_SORT_KEYS_COUNTER_BUFFER");
-
-    // s_geomCullVisGeomIDsBuffer.Create(
-    //     &s_vkDevice, 
-    //     s_cpuInstData.size() * sizeof(glm::uint), 
-    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-    //     allocInfo
-    // );
-    // s_vkDevice.SetObjDebugName(s_geomCullVisGeomIDsBuffer, "GEOM_CULL_VIS_GEOM_IDS_BUFFER");
-
-    // s_geomCullPerGeomMatTypeCountersBuffer.Create(
-    //     &s_vkDevice,
-    //     GEOM_MAT_TYPE_COUNT * sizeof(glm::uint), 
-    //     VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT,
-    //     allocInfo
-    // );
-    // s_vkDevice.SetObjDebugName(s_geomCullPerGeomMatTypeCountersBuffer, "GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_BUFFER");
 
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
@@ -5886,11 +5852,6 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     }
 
-    //barriers.AddBufferBarrier(s_geomCullVisSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    //barriers.AddBufferBarrier(s_geomCullVisSortKeysCounterBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    //barriers.AddBufferBarrier(s_geomCullVisGeomIDsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-    //barriers.AddBufferBarrier(s_geomCullPerGeomMatTypeCountersBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
-
     barriers.AddTextureBarrier(
         s_HZB, 
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
@@ -5913,19 +5874,15 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
             vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueBuffer[queue]),
             vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_visGeomIDQueueSizeBuffer[queue]),
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisSortKeysCounterBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisGeomIDsBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullPerGeomMatTypeCountersBuffer)
         });
     }
 
-    GPU_GeomCullingPushConst pushConsts = {};
+    GPU_GeomCullPushConst pushConsts = {};
     pushConsts.hzbMipsCount = s_HZB.GetMipCount();
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
 
-    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULLING_CS_GROUP_SIZE), 1, 1);
+    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULL_CS_GROUP_SIZE), 1, 1);
 }
 
 
@@ -6336,19 +6293,15 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
             vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueBuffers[cascade][queue]),
             vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, queue, s_csmVisGeomIDQueueSizeBuffers[cascade][queue]),
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisSortKeysBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisSortKeysCounterBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_GEOM_IDS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullVisGeomIDsBuffer)
-            //vkn::PushDescriptor::StorageBuffer(GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV_DESCRIPTOR_SLOT, 0, s_csmGeomCullPerGeomMatTypeCountersBuffer)
         });
     }
 
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_GeomCullingPushConst {
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_GeomCullPushConst {
         .cascade = cascade,
         .csmPass = true
     });
 
-    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULLING_CS_GROUP_SIZE), 1, 1);
+    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULL_CS_GROUP_SIZE), 1, 1);
 }
 
 
@@ -7588,7 +7541,7 @@ namespace DbgUI
                     }
 
                     if (needExtraMip) {
-                        ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)HZB_MAX_MIP_COUNT - 1, 20));
+                        ImGui::SliderInt("Mip", &s_dbgOutputRTMip, 0, glm::min((int32_t)COMMON_HZB_MAX_MIP_COUNT - 1, 20));
                     }
 
                     if (needExtraFace) {

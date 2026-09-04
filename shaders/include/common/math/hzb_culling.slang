@@ -32,9 +32,6 @@
 #include "common/math/geom_primitives.slang"
 
 
-static const uint HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
-
-
 bool HZB_Visibility(in GPU_SBox sbox)
 {
     if (any(sbox.minUV >= sbox.maxUV)) {

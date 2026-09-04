@@ -17,6 +17,8 @@ static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
 static const uint COMMON_CSM_CASCADE_COUNT = 3;
 static const uint COMMON_CSM_CASCADE_BOUNDS_COUNT = COMMON_CSM_CASCADE_COUNT + 1;
 
+static const uint COMMON_HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
+
 
 enum GPU_DbgRTViewType
 {
@@ -193,26 +195,5 @@ struct GPU_CommonDbgCBData
     private uint3 padding_0;
     GPU_DbgCsmPCFPreset csmPCFPreset;
 };
-
-
-struct GPU_CmdDrawIndexedIndirect
-{
-    // NOTE: Don't change order of this variables!!!
-    uint indexCount;
-    uint instanceCount;
-    uint firstIndex;
-    int  firstVertex;
-    uint firstInstance;
-};
-
-
-struct GPU_CmdDispatchIndirect
-{
-    // NOTE: Don't change order of this variables!!!
-    uint groupSizeX;
-    uint groupSizeY;
-    uint groupSizeZ;
-};
-
 
 #endif

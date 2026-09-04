@@ -117,7 +117,7 @@ namespace vkn
         }
 
         if ((info.usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
-            m_state.set(BIT_IS_UNIFORM_BUFFER, true);
+            m_state.set(BIT_IS_CONSTANT_BUFFER, true);
         } else if ((info.usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) != 0) {
             m_state.set(BIT_IS_STORAGE_BUFFER, true);
         } else if ((info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0) {
@@ -273,10 +273,10 @@ namespace vkn
     }
 
 
-    bool Buffer::IsUniformBuffer() const
+    bool Buffer::IsConstantBuffer() const
     {
         VK_ASSERT(IsCreated());
-        return m_state.test(BIT_IS_UNIFORM_BUFFER);
+        return m_state.test(BIT_IS_CONSTANT_BUFFER);
     }
 
 

@@ -5,6 +5,11 @@
 #include "common/math/geom_primitives.slang"
 
 
+static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
+static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
+static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
+
+
 enum GPU_GeomStreamID : uint
 {
     POSITION,
@@ -246,10 +251,5 @@ struct GPU_GeomBatch
 #define GEOM_QUEUE_OPAQUE (uint)GPU_GeomQueue::OPAQUE
 #define GEOM_QUEUE_AKILL  (uint)GPU_GeomQueue::AKILL
 #define GEOM_QUEUE_COUNT  (uint)GPU_GeomQueue::COUNT
-
-static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
-static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
-static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
-
 
 #endif

@@ -58,7 +58,7 @@ namespace vkn
 
         bool IsMapped() const;
         bool IsPersistentlyMapped() const;
-        bool IsUniformBuffer() const;
+        bool IsConstantBuffer() const;
         bool IsStorageBuffer() const;
         bool IsIndexBuffer() const;
         bool IsDescriptorBuffer() const;
@@ -71,7 +71,7 @@ namespace vkn
         enum StateBits
         {
             BIT_IS_STORAGE_BUFFER,
-            BIT_IS_UNIFORM_BUFFER,
+            BIT_IS_CONSTANT_BUFFER,
             BIT_IS_INDEX_BUFFER,
             BIT_IS_DESCRIPTOR_BUFFER,
             BIT_IS_MAPPED,

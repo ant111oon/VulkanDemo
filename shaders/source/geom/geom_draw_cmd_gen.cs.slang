@@ -1,6 +1,8 @@
 #include "registers/geom_draw_cmd_gen_registers.slang"
 #include "registers/common_registers.slang"
 
+#include "common/common_indirect.slang"
+
 
 void WriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in GPU_CmdDrawIndexedIndirect cmd)
 {
@@ -11,7 +13,7 @@ void WriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in GPU_CmdDraw
     buffer[offset + 0] = cmd.indexCount;
     buffer[offset + 1] = cmd.instanceCount;
     buffer[offset + 2] = cmd.firstIndex;
-    buffer[offset + 3] = asuint(cmd.firstVertex);
+    buffer[offset + 3] = asuint(cmd.vertexOffset);
     buffer[offset + 4] = cmd.firstInstance;
 }
 

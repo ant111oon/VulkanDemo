@@ -5,20 +5,21 @@
 #include "common/common_geom.slang"
 
 
-struct GPU_GeomCullingPushConst
+struct GPU_GeomCullPushConst
 {
-    uint hzbMipsCount;
-    uint cascade;
-
     property bool isCsmPass
     {
         get { return (bool)csmPass; }
     }
 
+    uint hzbMipsCount;
+    uint cascade;
+
     private uint csmPass : 1;
+    private uint padding : 31;
 };
 
-[[vk::push_constant]] GPU_GeomCullingPushConst GEOM_CULLING_CONST;
+[[vk::push_constant]] GPU_GeomCullPushConst GEOM_CULLING_CONST;
 
 #define GEOM_CULLING_HZB_MIPS_COUNT GEOM_CULLING_CONST.hzbMipsCount
 #define GEOM_CULLING_IS_CSM_PASS    GEOM_CULLING_CONST.isCsmPass
@@ -27,13 +28,5 @@ struct GPU_GeomCullingPushConst
 
 [vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];
 [vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
-
-[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_SORT_KEYS_UAV;
-[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_SORT_KEYS_COUNTER_UAV;
-
-[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_GEOM_IDS_UAV;
-
-[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_PER_GEOM_MAT_TYPE_COUNTERS_UAV;
-
 
 #endif

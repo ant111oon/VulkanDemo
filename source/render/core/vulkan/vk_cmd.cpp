@@ -273,14 +273,14 @@ namespace vkn
     }
 
 
-    PushDescriptor PushDescriptor::UniformBuffer(uint32_t binding, uint32_t arrayElement, const Buffer& buffer, VkDeviceSize offset, VkDeviceSize size)
+    PushDescriptor PushDescriptor::ConstantBuffer(uint32_t binding, uint32_t arrayElement, const Buffer& buffer, VkDeviceSize offset, VkDeviceSize size)
     {
         VK_ASSERT(buffer.IsCreated());
-        VK_ASSERT(buffer.IsUniformBuffer());
+        VK_ASSERT(buffer.IsConstantBuffer());
 
         PushDescriptor result(binding, arrayElement);
 
-        result.m_resource = UniformBufferRes {
+        result.m_resource = ConstantBufferRes {
             .pBuffer = &buffer,
             .offset = offset,
             .size = size
@@ -352,7 +352,7 @@ namespace vkn
 
 
     PushDescriptor::PushDescriptor(uint32_t binding, uint32_t arrayElement)
-        : m_binding(binding), m_arrayElement(arrayElement), m_resource(UniformBufferRes{})
+        : m_binding(binding), m_arrayElement(arrayElement), m_resource(ConstantBufferRes{})
     {
     }
 
@@ -373,7 +373,7 @@ namespace vkn
 
             write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             write.pBufferInfo = &bufferInfoCache;
-        } else if (auto pRes = std::get_if<PushDescriptor::UniformBufferRes>(&m_resource)) {
+        } else if (auto pRes = std::get_if<PushDescriptor::ConstantBufferRes>(&m_resource)) {
             bufferInfoCache.buffer = pRes->pBuffer->Get();
             bufferInfoCache.offset = pRes->offset;
 

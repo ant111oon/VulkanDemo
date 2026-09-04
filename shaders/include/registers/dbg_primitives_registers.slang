@@ -30,9 +30,12 @@ struct GPU_DbgPrimPushConst
     }
 
     private uint linePass : 1;
+    private uint padding : 31;
 };
 
 [[vk::push_constant]] GPU_DbgPrimPushConst DBG_PRIM_CONST;
+
+#define DBG_PRIM_IS_LINE_PASS   DBG_PRIM_CONST.isLinePass
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> DBG_DRAW_TRIANGLES_VERTEX_BUFFER;

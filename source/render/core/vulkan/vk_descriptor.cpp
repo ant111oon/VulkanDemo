@@ -416,7 +416,7 @@ namespace vkn
         size_t descrSize = 0;
         VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
 
-        if (buffer.IsUniformBuffer()) {
+        if (buffer.IsConstantBuffer()) {
             descrSize = buffProps.uniformBufferDescriptorSize;
             type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         } else if (buffer.IsStorageBuffer()) {

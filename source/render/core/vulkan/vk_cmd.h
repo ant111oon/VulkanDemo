@@ -208,7 +208,7 @@ namespace vkn
     class PushDescriptor
     {
     public:
-        static PushDescriptor UniformBuffer(
+        static PushDescriptor ConstantBuffer(
             uint32_t binding,
             uint32_t arrayElement,
             const Buffer& buffer,
@@ -235,7 +235,7 @@ namespace vkn
         PushDescriptor(uint32_t binding, uint32_t arrayElement);
 
     private:
-        struct UniformBufferRes
+        struct ConstantBufferRes
         {
             const Buffer* pBuffer = nullptr;
             VkDeviceSize offset = 0;
@@ -266,12 +266,12 @@ namespace vkn
             const vkn::Sampler* pSampler = nullptr;
         };
 
-        using Resource = std::variant<UniformBufferRes, StorageBufferRes, SampledTextureRes, StorageTextureRes, SamplerRes>;
+        using Resource = std::variant<ConstantBufferRes, StorageBufferRes, SampledTextureRes, StorageTextureRes, SamplerRes>;
 
         uint32_t m_binding = 0;
         uint32_t m_arrayElement = 0;
 
-        Resource m_resource = UniformBufferRes{};
+        Resource m_resource = ConstantBufferRes{};
     };
 
 
