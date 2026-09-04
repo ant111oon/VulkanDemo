@@ -6466,9 +6466,9 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, 
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, 
-                VK_IMAGE_ASPECT_DEPTH_BIT, 
+                VK_IMAGE_ASPECT_DEPTH_BIT,
                 0,
-                VK_REMAINING_MIP_LEVELS, 
+                1, 
                 cascade,
                 1)
         .Push();
@@ -6513,20 +6513,6 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
 
         cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
     cmdBuffer.CmdEndRendering();
-
-    cmdBuffer
-        .BeginBarrierList()
-            .AddTextureBarrier(
-                s_csmRT, 
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                VK_IMAGE_ASPECT_DEPTH_BIT,
-                0,
-                VK_REMAINING_MIP_LEVELS, 
-                cascade,
-                1)
-        .Push();
 }
 
 
@@ -6681,7 +6667,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         barrierList.AddTextureBarrier(
             gbufferRT,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT);
     }
@@ -6699,6 +6685,34 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);
+        
+    barrierList.AddTextureBarrier(
+        s_csmRT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    barrierList.AddTextureBarrier(
+        s_irradianceMapTexture,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+    
+    barrierList.AddTextureBarrier(
+        s_prefilteredEnvMapTexture,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    barrierList.AddTextureBarrier(
+        s_brdfLUTTexture,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT);
 
     barrierList.Push();
     
