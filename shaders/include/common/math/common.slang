@@ -219,4 +219,10 @@ float3 WPosToNDC(in float3 wpos, in float4x4 viewProjMatr)
     return clipPos.xyz / clipPos.w;
 }
 
+
+uint CeilDiv(in uint value, in uint divisor)
+{
+    return (uint)ceil((float)value / float(divisor));
+}
+
 #endif

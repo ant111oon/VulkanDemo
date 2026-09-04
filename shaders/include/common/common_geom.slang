@@ -5,6 +5,19 @@
 #include "common/math/geom_primitives.slang"
 
 
+static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
+static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
+static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
+
+static const uint GEOM_SORT_RADIX_BITS = 4u;
+static const uint GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
+
+static const uint GEOM_SORT_RADIX_MASK_WORD_BITS = 32;
+static const uint GEOM_SORT_RADIX_MASK_WORD_COUNT = GEOM_SORT_CS_GROUP_SIZE / GEOM_SORT_RADIX_MASK_WORD_BITS;
+
+static const uint GEOM_SORT_RADIX_MASK_COUNT = GEOM_SORT_RADIX_BUCKET_COUNT * GEOM_SORT_RADIX_MASK_WORD_COUNT;
+
+
 enum GPU_GeomStreamID : uint
 {
     POSITION,
@@ -224,32 +237,5 @@ struct GPU_GeomSortKey
 
     private uint2 key;
 };
-
-
-enum GPU_GeomQueue : uint
-{
-    OPAQUE,
-    AKILL,
-    COUNT
-};
-
-
-struct GPU_GeomBatch
-{
-    uint meshID;
-    uint lodID;
-    uint firstInst;
-    uint instCount;
-};
-
-
-#define GEOM_QUEUE_OPAQUE (uint)GPU_GeomQueue::OPAQUE
-#define GEOM_QUEUE_AKILL  (uint)GPU_GeomQueue::AKILL
-#define GEOM_QUEUE_COUNT  (uint)GPU_GeomQueue::COUNT
-
-static const uint GEOM_CULLING_CS_GROUP_SIZE = 1024;
-static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
-static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
-
 
 #endif
