@@ -37,8 +37,8 @@
 
 
 #define COMMON_DBG_USE_IBL                                  DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 0, false)
-#define COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED      DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 1, true)
-#define COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED          DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 2, true)
+// 1 - free
+// 2 - free
 #define COMMON_DBG_IS_CSM_ENABLED                           DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 3, true)
 #define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 4, false)
 #define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 5, true)
@@ -50,8 +50,6 @@
 #define COMMON_DBG_RT_VIEW_TYPE                             DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)
 #define COMMON_DBG_TONEMAP_PRESET                           DBG_VALUE(COMMON_DBG_CB.tonemapPreset, GPU_DbgTonemapPreset::ACES)
 #define COMMON_DBG_CSM_PCF_PRESET                           DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
-
-#define COMMON_DBG_IS_GEOM_GPU_CULLING_ENABLED              (COMMON_DBG_IS_GEOM_GPU_FRUSTUM_CULLING_ENABLED || COMMON_DBG_IS_GEOM_GPU_HZB_CULLING_ENABLED)
 
 
 #define COMMON_MAIN_CAM_WPOS                        COMMON_CB.mainCamWPos

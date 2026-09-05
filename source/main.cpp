@@ -457,11 +457,21 @@ struct GPU_GeomBatch
 
 struct GPU_GeomCullPushConst
 {
-    uint hzbMipsCount;
-    uint cascade;
+    static constexpr uint32_t HZB_SIZE_X_MIP_0_BITS_COUNT = 12;
+    static constexpr uint32_t HZB_SIZE_Y_MIP_0_BITS_COUNT = 12;
+    static constexpr uint32_t HZB_MIPS_BITS_COUNT = 4;
 
-    uint csmPass : 1;
-    uint padding : 31;
+    GPU_Frustum frustum;
+    float4x4 viewProjMatrPrev;
+
+    uint hzbSizeXMip0 : 12;
+    uint hzbSizeYMip0 : 12;
+    uint hzbMipsCount : 4;
+    
+    uint frustumCullingEnabled : 1;
+    uint hzbCullingEnabled : 1;
+
+    uint padding : 2;
 };
 
 
@@ -814,6 +824,7 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 2;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -2952,6 +2963,7 @@ static void CreateGeomCullingDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -5472,8 +5484,6 @@ void UpdateGPUDbgConstBuffer()
     const bool csmPcssEnabled = s_isCSMEnabled && s_isCSMPCSSEnabled;
 
     flags_0 |= s_useIBL                                            ? (1u << 0u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshFrustumCulling         ? (1u << 1u) : 0u;
-    flags_0 |= s_useMeshCulling && s_useMeshHZBCulling             ? (1u << 2u) : 0u;
     flags_0 |= s_isCSMEnabled                                      ? (1u << 3u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled       ? (1u << 4u) : 0u;
     flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled        ? (1u << 5u) : 0u;
@@ -5877,10 +5887,30 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         });
     }
 
-    GPU_GeomCullPushConst pushConsts = {};
-    pushConsts.hzbMipsCount = s_HZB.GetMipCount();
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+        vkn::PushDescriptor::SampledTexture(GEOM_CULL_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    );
 
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConsts);
+    const eng::Camera& cam = s_cullingTestMode ? s_fixedCullCamera : s_mainCamera;
+    
+    GPU_GeomCullPushConst pushConst = {};
+
+    pushConst.frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
+    pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
+
+    pushConst.hzbSizeXMip0 = s_HZB.GetSizeX();
+    CORE_ASSERT(pushConst.hzbSizeXMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_X_MIP_0_BITS_COUNT));
+    
+    pushConst.hzbSizeYMip0 = s_HZB.GetSizeY();
+    CORE_ASSERT(pushConst.hzbSizeYMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_Y_MIP_0_BITS_COUNT));
+    
+    pushConst.hzbMipsCount = s_HZB.GetMipCount();
+    CORE_ASSERT(pushConst.hzbMipsCount < (1u << GPU_GeomCullPushConst::HZB_MIPS_BITS_COUNT));
+
+    pushConst.frustumCullingEnabled = s_useMeshCulling && s_useMeshFrustumCulling;
+    pushConst.hzbCullingEnabled = s_useMeshCulling && s_useMeshHZBCulling;
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConst);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULL_CS_GROUP_SIZE), 1, 1);
 }
@@ -6296,10 +6326,32 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
         });
     }
 
-    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_GeomCullPushConst {
-        .cascade = cascade,
-        .csmPass = true
-    });
+    // cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+    //     vkn::PushDescriptor::SampledTexture(GEOM_CULL_HZB_DESCRIPTOR_SLOT, 0, s_csmHZBView[cascade], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    // );
+
+    const eng::Camera& cam = s_csmCameras[cascade];
+    
+    GPU_GeomCullPushConst pushConst = {};
+    
+    pushConst.frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
+    
+    // HZB culling is disabled for CSM for now
+    // pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
+    //
+    // pushConst.hzbSizeXMip0 = s_HZB.GetSizeX();
+    // CORE_ASSERT(pushConst.hzbSizeXMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_X_MIP_0_BITS_COUNT));
+    //
+    // pushConst.hzbSizeYMip0 = s_HZB.GetSizeY();
+    // CORE_ASSERT(pushConst.hzbSizeYMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_Y_MIP_0_BITS_COUNT));
+    //
+    // pushConst.hzbMipsCount = s_HZB.GetMipCount();
+    // CORE_ASSERT(pushConst.hzbMipsCount < (1u << GPU_GeomCullPushConst::HZB_MIPS_BITS_COUNT));
+
+    pushConst.frustumCullingEnabled = true;
+    pushConst.hzbCullingEnabled = false; // Disabled for now
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConst);
 
     cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULL_CS_GROUP_SIZE), 1, 1);
 }

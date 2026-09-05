@@ -1,13 +1,6 @@
 #ifndef MATH_HZB_CULLING_H
 #define MATH_HZB_CULLING_H
 
-#ifndef HZB_CULLING_HZB_TEX
-    #error Undefined HZB_CULLING_HZB_TEX. Must be defined before hzb_culling.slang include
-#endif
-
-#ifndef HZB_CULLING_HZB_TEX_SAMPLER
-    #error Undefined HZB_CULLING_HZB_TEX_SAMPLER. Must be defined before hzb_culling.slang include
-#endif
 
 #ifndef HZB_CULLING_HZB_MIP_0_SIZE
     #error Undefined HZB_CULLING_HZB_MIP_0_SIZE. Must be defined before hzb_culling.slang include
@@ -17,8 +10,8 @@
     #error Undefined HZB_CULLING_HZB_MIPS_COUNT. Must be defined before hzb_culling.slang include
 #endif
 
-#ifndef HZB_CULLING_VIEW_PROJ_MATR
-    #error Undefined HZB_CULLING_VIEW_PROJ_MATR. Must be defined before hzb_culling.slang include
+#ifndef HZB_CULLING_VIEW_PROJ_MATR_PREV
+    #error Undefined HZB_CULLING_VIEW_PROJ_MATR_PREV. Must be defined before hzb_culling.slang include
 #endif
 
 #ifndef HZB_CULLING_VIEW_NEAR_PLANE
@@ -32,7 +25,7 @@
 #include "common/math/geom_primitives.slang"
 
 
-bool HZB_Visibility(in GPU_SBox sbox)
+bool HZB_Visibility(in GPU_SBox sbox, Texture2D HZB)
 {
     if (any(sbox.minUV >= sbox.maxUV)) {
         return true;
@@ -52,11 +45,13 @@ bool HZB_Visibility(in GPU_SBox sbox)
         mip = levelLower;
     }
 
+    SamplerState hzbSampler = GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE);
+
     float4 samples = ZEROF4;
-    samples.x = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.GetCornerBL(), mip).x;
-    samples.y = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.GetCornerBR(), mip).x;
-    samples.z = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.GetCornerUL(), mip).x;
-    samples.w = SAMPLE_TEX_LEVEL(HZB_CULLING_HZB_TEX, HZB_CULLING_HZB_TEX_SAMPLER, sbox.GetCornerUR(), mip).x;
+    samples.x = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerBL(), mip).x;
+    samples.y = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerBR(), mip).x;
+    samples.z = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerUL(), mip).x;
+    samples.w = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerUR(), mip).x;
 
 #ifdef ENV_REVERSED_Z
     const float depth = Min(samples);
@@ -68,16 +63,16 @@ bool HZB_Visibility(in GPU_SBox sbox)
 }
 
 
-bool HZB_Visibility(in GPU_AABB aabb)
+bool HZB_Visibility(in GPU_AABB aabb, Texture2D HZB)
 {
     if (aabb.IntersectsPlane(HZB_CULLING_VIEW_NEAR_PLANE)) {
         return true;
     }
 
-    GPU_SBox sbox = aabb.GetSBox(HZB_CULLING_VIEW_PROJ_MATR);
+    GPU_SBox sbox = aabb.GetSBox(HZB_CULLING_VIEW_PROJ_MATR_PREV);
     sbox.Saturate();
 
-    return HZB_Visibility(sbox);
+    return HZB_Visibility(sbox, HZB);
 }
 
 #endif
