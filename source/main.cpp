@@ -324,6 +324,26 @@ enum GPU_DbgCsmPCFPreset : uint32_t
 };
 
 
+struct GPU_CommonCameraData
+{
+    GPU_Frustum frustum;
+
+    float4x4 viewMatr;
+    float4x4 projMatr;
+    float4x4 viewProjMatr;
+
+    float4x4 invViewMatr;
+    float4x4 invProjMatr;
+    float4x4 invViewProjMatr;
+
+    float3 wPos;
+    float zNear;
+    
+    float3 padding;
+    float zFar;
+};
+
+
 struct GPU_CommonCSMPcssData
 {
     float lightAngularSlope;
@@ -363,49 +383,39 @@ struct GPU_CommonCSMData
     GPU_CommonCSMPcssData pcssData;
 };
 
+static_assert(sizeof(GPU_CommonCSMData::cascadeDistances) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
+
 
 struct GPU_CommonCBData
 {
-    GPU_Frustum mainCamFrustum;
-    GPU_Frustum cullingFrustum; // In most cases is the same as mainCamFrustum but can differ if culling debug mode is enabled
-
-    float4x4 mainCamViewMatr;
-    float4x4 mainCamProjMatr;
-    float4x4 mainCamViewProjMatr;
-
-    float4x4 mainCamInvViewMatr;
-    float4x4 mainCamInvProjMatr;
-    float4x4 mainCamInvViewProjMatr;
-
-    float4x4 cullingViewProjMatrPrev;
-    float4x4 cullingViewProjMatr; // In most cases is the same as mainCamViewProjMatr but can differ if culling debug mode is enabled
-
-    uint2 screenSize;
-    float mainCamZNear;
-    float mainCamZFar;
-
-    float3 mainCamWPos;
-    uint   flags;
+    GPU_CommonCameraData mainCam;
+    GPU_CommonCSMData csmData;
 
     float3 sunLightDir;
     uint sunLightColor;
 
-    GPU_CommonCSMData csmData;
+    uint2 screenSize;
+    uint flags;
+    uint padding;
 };
-
-static_assert(sizeof(GPU_CommonCSMData::cascadeDistances) >= sizeof(float[COMMON_CSM_CASCADE_COUNT]));
 
 
 struct GPU_CommonDbgCBData
 {
-    int  forcedGeomLOD;
-    uint flags_0;
-
     GPU_DbgRTViewType rtViewType;
     GPU_DbgTonemapPreset tonemapPreset;
-
-    uint3 padding_0;
     GPU_DbgCsmPCFPreset csmPCFPreset;
+    int forcedGeomLOD;
+    
+    uint3 padding;
+    uint enableIBL : 1;
+    uint enableCSM : 1;
+    uint enableCsmVisualization : 1;
+    uint enableCsmCascadeBlend : 1;
+    uint enableCsmFilterRandOffsets : 1;
+    uint enableCsmPCSS : 1;
+    uint enableCsmPCSSRandRotation : 1;
+    uint padding_1 : 25;
 };
 
 
@@ -423,17 +433,19 @@ struct GPU_DbgTriangleData
 
 struct GPU_GeomSortKey
 {
-    static const uint GEOM_SORT_LOD_OFFSET = 0;
-    static const uint GEOM_SORT_LOD_BITS = 3;
+    static constexpr uint GEOM_SORT_LOD_OFFSET = 0;
+    static constexpr uint GEOM_SORT_LOD_BITS = 3;
     
-    static const uint GEOM_SORT_MESH_OFFSET = 3;
-    static const uint GEOM_SORT_MESH_BITS = 16;
+    static constexpr uint GEOM_SORT_MESH_OFFSET = 3;
+    static constexpr uint GEOM_SORT_MESH_BITS = 16;
     
-    static const uint GEOM_SORT_MAT_ID_OFFSET = 19;
-    static const uint GEOM_SORT_MAT_ID_BITS = 11;
+    static constexpr uint GEOM_SORT_MAT_ID_OFFSET = 19;
+    static constexpr uint GEOM_SORT_MAT_ID_BITS = 11;
     
-    static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
-    static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
+    static constexpr uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
+    static constexpr uint GEOM_SORT_MAT_TYPE_BITS = 2;
+
+    static constexpr uint GEOM_SORT_KEY_TOTAL_BITS = 64;
 
     uint2 key;
 };
@@ -476,7 +488,7 @@ struct GPU_GeomCullPushConst
 };
 
 
-struct GPU_ZPassPushConst
+struct GPU_DepthPushConst
 {
     uint cascade;
 
@@ -839,7 +851,7 @@ static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GEOM_DRAW_CMD_GEN_CMD_QUEUE_UAV_DESCRIPTOR_SLOT = 2;
 
-static constexpr size_t ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t HZB_SRC_MIP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIP_UAV_DESCRIPTOR_SLOT = 1;
@@ -1467,7 +1479,7 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
-    static bool s_useIBL = false;
+    static bool s_isIBLEnabled = false;
     static bool s_drawInstAABBs = false;
     static bool s_isCSMEnabled = true;
     static bool s_useCSMMeshFrustumCulling = true;
@@ -1488,7 +1500,7 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
-    static constexpr bool s_useIBL = false;
+    static constexpr bool s_isIBLEnabled = false;
     static constexpr bool s_drawInstAABBs = false;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_useCSMMeshFrustumCulling = true;
@@ -3039,7 +3051,7 @@ static void CreateGeomDrawCmdGenDescriptorSetLayout()
 }
 
 
-static void CreateZPassDescriptorSetLayout()
+static void CreateDepthDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
 
@@ -3047,7 +3059,7 @@ static void CreateZPassDescriptorSetLayout()
     createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3318,7 +3330,7 @@ static void CreateDescriptorSetLayouts()
     CreateGeomBatchingDescriptorSetLayout();
     CreateGeomDrawCmdGenDescriptorSetLayout();
     
-    CreateZPassDescriptorSetLayout();
+    CreateDepthDescriptorSetLayout();
     
     CreateHZBGenDescriptorSetLayout();
     
@@ -3428,305 +3440,247 @@ static void CreateDescriptors()
 }
 
 
-static void CreateGeomCullingPipelineLayout()
+static void CreatePSOLayout(PassID passID, DescSetLayoutID descSetLayoutID, std::span<const VkPushConstantRange> pushConstRanges = {})
 {
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_GeomCullPushConst) };
-
     const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
     layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_CULLING);
+    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(descSetLayoutID);
 
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_CULLING);
+    vkn::PSOLayout& layout = GetPSOLayout(passID);
     
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
+    layout.Create(&s_vkDevice, layoutPtrs, pushConstRanges);
+    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[passID]);
 }
 
 
-static void CreateGeomBatchingPipelineLayout()
+static void CreatePSOLayout(PassID passID, DescSetLayoutID descSetLayoutID, const VkPushConstantRange& pushConstRange)
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_BATCHING);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_BATCHING);
-    
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
+    CreatePSOLayout(passID, descSetLayoutID, std::span(&pushConstRange, 1));
 }
 
 
-static void CreateGeomDrawCmdGenPipelineLayout()
+static void CreateGeomCullingPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN);
-    
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
+    CreatePSOLayout(PASS_ID_GEOM_CULLING, DESC_SET_LAYOUT_ID_GEOM_CULLING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomCullPushConst)
+    });
 }
 
 
-static void CreateZPassPipelineLayout()
+static void CreateGeomBatchingPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEPTH);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_ZPassPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DEPTH);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DEPTH]);
+    CreatePSOLayout(PASS_ID_GEOM_BATCHING, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
 }
 
 
-static void CreateHZBGenPipelineLayout()
+static void CreateGeomDrawCmdGenPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_HZB_GEN);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_HzbGenPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_HZB_GEN);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
+    CreatePSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN, DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
 }
 
 
-static void CreateGBufferPipelineLayout()
+static void CreateDepthPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GBUFFER);
-    
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_GBufferPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_GBUFFER);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_GBUFFER]);
+    CreatePSOLayout(PASS_ID_DEPTH, DESC_SET_LAYOUT_ID_DEPTH, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_DepthPushConst)
+    });
 }
 
 
-static void CreateDeferredLightingPipelineLayout()
+static void CreateHZBGenPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DEFERRED_LIGHTING);
-
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
+    CreatePSOLayout(PASS_ID_HZB_GEN, DESC_SET_LAYOUT_ID_HZB_GEN, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_HzbGenPushConst)
+    });
 }
 
 
-static void CreatePostProcessingPipelineLayout()
+static void CreateGBufferPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_POST_PROCESSING);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_POST_PROCESSING);
-
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
+    CreatePSOLayout(PASS_ID_GBUFFER, DESC_SET_LAYOUT_ID_GBUFFER, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GBufferPushConst)
+    });
 }
 
 
-static void CreateBackbufferPassPipelineLayout()
+static void CreateDeferredLightingPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BACKBUFFER);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_BACKBUFFER);
-
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
+    CreatePSOLayout(PASS_ID_DEFERRED_LIGHTING, DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING);
 }
 
 
-static void CreateSkyboxPipelineLayout()
+static void CreatePostProcessingPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_SKYBOX);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_SKYBOX);
-
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_SKYBOX]);
+    CreatePSOLayout(PASS_ID_POST_PROCESSING, DESC_SET_LAYOUT_ID_POST_PROCESSING);
 }
 
 
-static void CreateIrradianceMapGenPipelineLayout()
+static void CreateBackbufferPassPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_IrradianceMapPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_IRRADIANCE_MAP_GEN);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
+    CreatePSOLayout(PASS_ID_BACKBUFFER, DESC_SET_LAYOUT_ID_BACKBUFFER);
 }
 
 
-static void CreatePrefilteredEnvMapGenPipelineLayout()
+static void CreateSkyboxPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GPU_PrefilteredEnvMapPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN);
-    
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
+    CreatePSOLayout(PASS_ID_SKYBOX, DESC_SET_LAYOUT_ID_SKYBOX);
 }
 
 
-static void CreateBRDFIntegrationLUTGenPipelineLayout()
+static void CreateIrradianceMapGenPSOLayout()
 {
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BRDF_LUT_GEN);
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_BRDF_LUT_GEN);
-
-    layout.Create(&s_vkDevice, layoutPtrs);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
+    CreatePSOLayout(PASS_ID_IRRADIANCE_MAP_GEN, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_IrradianceMapPushConst)
+    });
 }
 
 
-static void CreateDbgDrawPrimitivesPipelineLayout()
+static void CreatePrefilteredEnvMapGenPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN, DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_PrefilteredEnvMapPushConst)
+    });
+}
+
+
+static void CreateBRDFIntegrationLUTGenPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_BRDF_LUT_GEN, DESC_SET_LAYOUT_ID_BRDF_LUT_GEN);
+}
+
+
+static void CreateDbgDrawPrimitivesPSOLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgPrimPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_DRAW_PRIMITIVES);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
+    CreatePSOLayout(PASS_ID_DBG_DRAW_PRIMITIVES, DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_DbgPrimPushConst)
+    });
 #endif
 }
 
 
-static void CreateDbgRTViewPipelineLayout()
+static void CreateDbgRTViewPSOLayout()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    const vkn::DescriptorSetLayout* layoutPtrs[DESC_SET_TOTAL_COUNT] = {};
-    layoutPtrs[DESC_SET_PER_FRAME] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
-    layoutPtrs[DESC_SET_PER_DRAW] = &GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_RT_VIEW);
-
-    VkPushConstantRange pushConstRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPU_DbgRTViewPushConst) };
-
-    vkn::PSOLayout& layout = GetPSOLayout(PASS_ID_DBG_RT_VIEW);
-
-    layout.Create(&s_vkDevice, layoutPtrs, std::span(&pushConstRange, 1));
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
+    CreatePSOLayout(PASS_ID_DBG_RT_VIEW, DESC_SET_LAYOUT_ID_DBG_RT_VIEW, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_DbgRTViewPushConst)
+    });
 #endif
 }
 
 
-static void CreateGeomCullingPipeline(const fs::path& csPath)
+template<typename... Args>
+static vkn::Shader CreateShader(const fs::path& shaderPath, VkShaderStageFlagBits stage, std::string_view nameFmt, Args&&... args)
 {
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
+    if (!LoadShaderSpirVCode(shaderPath, s_shaderCodeBuffer)) {
+        CORE_ASSERT_FAIL("Failed to load shader: %s", shaderPath.string().c_str());
     }
     
     vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
+    shader.Create(&s_vkDevice, stage, s_shaderCodeBuffer);
+    s_vkDevice.SetObjDebugName(shader, nameFmt.data(), std::forward<Args>(args)...);
 
-    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_CULLING);
+    return shader;
+}
+
+
+static vkn::Shader CreateComputeShader(const fs::path& shaderPath, PassID passID)
+{
+    return CreateShader(shaderPath, VK_SHADER_STAGE_COMPUTE_BIT, "%s_COMPUTE_SHADER", PASS_DBG_NAME[passID]);
+}
+
+
+static vkn::Shader CreateVertexShader(const fs::path& shaderPath, PassID passID)
+{
+    return CreateShader(shaderPath, VK_SHADER_STAGE_VERTEX_BIT, "%s_VERTEX_SHADER", PASS_DBG_NAME[passID]);
+}
+
+
+static vkn::Shader CreatePixelShader(const fs::path& shaderPath, PassID passID)
+{
+    return CreateShader(shaderPath, VK_SHADER_STAGE_FRAGMENT_BIT, "%s_PIXEL_SHADER", PASS_DBG_NAME[passID]);
+}
+
+
+static void CreateComputePSO(const fs::path& shaderPath, PassID passID)
+{    
+    vkn::Shader shader = CreateComputeShader(shaderPath, passID);
+
+    vkn::PSO& pso = GetPSO(passID);
 
     pso = s_computePSOBuilder.Reset()
         .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
         .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_GEOM_CULLING))
+        .SetLayout(GetPSOLayout(passID))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_CULLING]);
+    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[passID]);
 }
 
 
-static void CreateGeomBatchingPipeline(const fs::path& csPath)
+static void CreateHZBGenPSO(const fs::path& shaderPath)
 {
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCHING);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_GEOM_BATCHING))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_BATCHING]);
+    CreateComputePSO(shaderPath, PASS_ID_HZB_GEN);
 }
 
 
-static void CreateGeomDrawCmdGenPipeline(const fs::path& csPath)
+static void CreateGeomCullingPSO(const fs::path& shaderPath)
 {
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_DRAW_CMD_GEN);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GEOM_DRAW_CMD_GEN]);
+    CreateComputePSO(shaderPath, PASS_ID_GEOM_CULLING);
 }
 
 
-static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateGeomBatchingPSO(const fs::path& shaderPath)
 {
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DEPTH]);
+    CreateComputePSO(shaderPath, PASS_ID_GEOM_BATCHING);
+}
 
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DEPTH]);
 
+static void CreateGeomDrawCmdGenPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_GEOM_DRAW_CMD_GEN);
+}
+
+
+static void CreateIrradianceMapGenPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_IRRADIANCE_MAP_GEN);
+}
+
+
+static void CreatePrefilteredEnvMapGenPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_PREFILT_ENV_MAP_GEN);
+}
+
+
+static void CreateBRDFIntegrationLUTGenPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_BRDF_LUT_GEN);
+}
+
+
+static void CreateDepthPSO(const fs::path& vsPath, const fs::path& psPath)
+{
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_DEPTH);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_DEPTH);
+    
     vkn::PSO& pso = GetPSO(PASS_ID_DEPTH);
 
     s_graphicsPSOBuilder.Reset()
@@ -3752,54 +3706,19 @@ static void CreateZPassPipeline(const fs::path& vsPath, const fs::path& psPath)
         #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT
         #endif
-        })        
+        })
         .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
     
     s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DEPTH]);
 }
+    
 
-
-static void CreateHZBGenPipeline(const fs::path& csPath)
+static void CreateGBufferRenderPSO(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_HZB_GEN);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_HZB_GEN))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_HZB_GEN]);
-}
-    
-
-static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& psPath)
-{
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_GBUFFER]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_GBUFFER]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_GBUFFER);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_GBUFFER);
 
     vkn::PSO& pso = GetPSO(PASS_ID_GBUFFER);
 
@@ -3835,23 +3754,10 @@ static void CreateGBufferRenderPipeline(const fs::path& vsPath, const fs::path& 
 }
 
 
-static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateDeferredLightingPSO(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_DEFERRED_LIGHTING);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_DEFERRED_LIGHTING);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DEFERRED_LIGHTING);
 
@@ -3874,23 +3780,10 @@ static void CreateDeferredLightingPipeline(const fs::path& vsPath, const fs::pat
 }
 
 
-static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreatePostProcessingPSO(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_POST_PROCESSING);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_POST_PROCESSING);
 
     vkn::PSO& pso = GetPSO(PASS_ID_POST_PROCESSING);
 
@@ -3913,23 +3806,10 @@ static void CreatePostProcessingPipeline(const fs::path& vsPath, const fs::path&
 }
 
 
-static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateBackbufferPassPSO(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_BACKBUFFER);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_BACKBUFFER);
 
     vkn::PSO& pso = GetPSO(PASS_ID_BACKBUFFER);
 
@@ -3952,23 +3832,10 @@ static void CreateBackbufferPassPipeline(const fs::path& vsPath, const fs::path&
 }
 
 
-static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateSkyboxPSO(const fs::path& vsPath, const fs::path& psPath)
 {
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_SKYBOX]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_SKYBOX]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_SKYBOX);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_SKYBOX);
 
     vkn::PSO& pso = GetPSO(PASS_ID_SKYBOX);
 
@@ -3998,90 +3865,11 @@ static void CreateSkyboxPipeline(const fs::path& vsPath, const fs::path& psPath)
 }
 
 
-static void CreateIrradianceMapGenPipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_IRRADIANCE_MAP_GEN);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_IRRADIANCE_MAP_GEN))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_IRRADIANCE_MAP_GEN]);
-}
-
-
-static void CreatePrefilteredEnvMapGenPipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_PREFILT_ENV_MAP_GEN);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_PREFILT_ENV_MAP_GEN))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_PREFILT_ENV_MAP_GEN]);
-}
-
-
-static void CreateBRDFIntegrationLUTGenPipeline(const fs::path& csPath)
-{
-    if (!LoadShaderSpirVCode(csPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", csPath.string().c_str());
-    }
-    
-    vkn::Shader shader;
-    shader.Create(&s_vkDevice, VK_SHADER_STAGE_COMPUTE_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, "%s_COMPUTE_SHADER", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
-
-    vkn::PSO& pso = GetPSO(PASS_ID_BRDF_LUT_GEN);
-
-    pso = s_computePSOBuilder.Reset()
-        .SetFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-        .SetShader(shader)
-        .SetLayout(GetPSOLayout(PASS_ID_BRDF_LUT_GEN))
-        .Build();
-
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_BRDF_LUT_GEN]);
-}
-
-
-static void CreateDbgDrawPrimitivesPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateDbgDrawPrimitivesPSO(const fs::path& vsPath, const fs::path& psPath)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_DBG_DRAW_PRIMITIVES);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_DBG_DRAW_PRIMITIVES);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DBG_DRAW_PRIMITIVES);
 
@@ -4117,24 +3905,11 @@ static void CreateDbgDrawPrimitivesPipeline(const fs::path& vsPath, const fs::pa
 }
 
 
-static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPath)
+static void CreateDbgRTViewPSO(const fs::path& vsPath, const fs::path& psPath)
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    if (!LoadShaderSpirVCode(vsPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", vsPath.string().c_str());
-    }
-    
-    vkn::Shader vsShader;
-    vsShader.Create(&s_vkDevice, VK_SHADER_STAGE_VERTEX_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(vsShader, "%s_VERTEX_SHADER", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
-
-    if (!LoadShaderSpirVCode(psPath, s_shaderCodeBuffer)) {
-        VK_ASSERT_FAIL("Failed to load shader: %s", psPath.string().c_str());
-    }
-    
-    vkn::Shader psShader;
-    psShader.Create(&s_vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(psShader, "%s_FRAGMENT_SHADER", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
+    vkn::Shader vsShader = CreateVertexShader(vsPath, PASS_ID_DBG_RT_VIEW);
+    vkn::Shader psShader = CreatePixelShader(psPath, PASS_ID_DBG_RT_VIEW);
 
     vkn::PSO& pso = GetPSO(PASS_ID_DBG_RT_VIEW);
 
@@ -4160,78 +3935,78 @@ static void CreateDbgRTViewPipeline(const fs::path& vsPath, const fs::path& psPa
 
 static void CreatePipelines()
 {
-    CreateGeomCullingPipelineLayout();
-    CreateGeomBatchingPipelineLayout();
-    CreateGeomDrawCmdGenPipelineLayout();
+    CreateGeomCullingPSOLayout();
+    CreateGeomBatchingPSOLayout();
+    CreateGeomDrawCmdGenPSOLayout();
 
-    CreateZPassPipelineLayout();
+    CreateDepthPSOLayout();
     
-    CreateHZBGenPipelineLayout();
+    CreateHZBGenPSOLayout();
     
-    CreateGBufferPipelineLayout();
+    CreateGBufferPSOLayout();
     
-    CreateDeferredLightingPipelineLayout();
+    CreateDeferredLightingPSOLayout();
     
-    CreatePostProcessingPipelineLayout();
+    CreatePostProcessingPSOLayout();
     
-    CreateBackbufferPassPipelineLayout();
+    CreateBackbufferPassPSOLayout();
     
-    CreateSkyboxPipelineLayout();
+    CreateSkyboxPSOLayout();
     
-    CreateIrradianceMapGenPipelineLayout();
-    CreatePrefilteredEnvMapGenPipelineLayout();
-    CreateBRDFIntegrationLUTGenPipelineLayout();
+    CreateIrradianceMapGenPSOLayout();
+    CreatePrefilteredEnvMapGenPSOLayout();
+    CreateBRDFIntegrationLUTGenPSOLayout();
     
-    CreateDbgDrawPrimitivesPipelineLayout();
-    CreateDbgRTViewPipelineLayout();
+    CreateDbgDrawPrimitivesPSOLayout();
+    CreateDbgRTViewPSOLayout();
 
 
-    CreateGeomCullingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/geom_culling.cs.spv"));
-    CreateGeomBatchingPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/geom_batching.cs.spv"));
-    CreateGeomDrawCmdGenPipeline(RND_SHADER_SPIRV_FULL_PATH("geom/geom_draw_cmd_gen.cs.spv"));
+    CreateGeomCullingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_culling.cs.spv"));
+    CreateGeomBatchingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_batching.cs.spv"));
+    CreateGeomDrawCmdGenPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_draw_cmd_gen.cs.spv"));
     
-    CreateZPassPipeline(
-        RND_SHADER_SPIRV_FULL_PATH("zpass/zpass.vs.spv"),
-        RND_SHADER_SPIRV_FULL_PATH("zpass/zpass.ps.spv")
+    CreateDepthPSO(
+        RND_SHADER_SPIRV_FULL_PATH("depth/depth.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("depth/depth.ps.spv")
     );
     
-    CreateHZBGenPipeline(RND_SHADER_SPIRV_FULL_PATH("hzb/hzb.cs.spv"));
+    CreateHZBGenPSO(RND_SHADER_SPIRV_FULL_PATH("hzb/hzb.cs.spv"));
     
-    CreateGBufferRenderPipeline(
+    CreateGBufferRenderPSO(
         RND_SHADER_SPIRV_FULL_PATH("gbuffer/gbuffer.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("gbuffer/gbuffer.ps.spv")
     );
     
-    CreateDeferredLightingPipeline(
+    CreateDeferredLightingPSO(
         RND_SHADER_SPIRV_FULL_PATH("deferred_lighting/deferred_lighting.vs.spv"), 
         RND_SHADER_SPIRV_FULL_PATH("deferred_lighting/deferred_lighting.ps.spv")
     );
     
-    CreatePostProcessingPipeline(
+    CreatePostProcessingPSO(
         RND_SHADER_SPIRV_FULL_PATH("post_processing/post_processing.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("post_processing/post_processing.ps.spv")
     );
     
-    CreateBackbufferPassPipeline(
+    CreateBackbufferPassPSO(
         RND_SHADER_SPIRV_FULL_PATH("backbuffer/backbuffer.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("backbuffer/backbuffer.ps.spv")
     );
     
-    CreateSkyboxPipeline(
+    CreateSkyboxPSO(
         RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.ps.spv")
     );
     
-    CreateIrradianceMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/irradiance_map_gen.cs.spv"));
-    CreatePrefilteredEnvMapGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/prefiltered_env_map_gen.cs.spv"));
-    CreateBRDFIntegrationLUTGenPipeline(RND_SHADER_SPIRV_FULL_PATH("IBL/brdf_integration_gen.cs.spv"));
+    CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/irradiance_map_gen.cs.spv"));
+    CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/prefiltered_env_map_gen.cs.spv"));
+    CreateBRDFIntegrationLUTGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/brdf_integration_gen.cs.spv"));
     
-    CreateDbgDrawPrimitivesPipeline(
+    CreateDbgDrawPrimitivesPSO(
         RND_SHADER_SPIRV_FULL_PATH("dbg_primitives/dbg_primitives.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("dbg_primitives/dbg_primitives.ps.spv")
     );
 
-    CreateDbgRTViewPipeline(
+    CreateDbgRTViewPSO(
         RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.ps.spv")
     );
@@ -5423,37 +5198,23 @@ void UpdateGPUCommonConstBuffer()
     const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
     const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
 
-    constBuff.mainCamViewMatr = viewMatrix;
-    constBuff.mainCamProjMatr = projMatrix;
-    constBuff.mainCamViewProjMatr = viewProjMatrix;
-
-    constBuff.mainCamInvViewMatr = glm::inverse(viewMatrix);
-    constBuff.mainCamInvProjMatr = glm::inverse(projMatrix);
-    constBuff.mainCamInvViewProjMatr = glm::inverse(viewProjMatrix);
-
-    const math::Frustum& camFrustum = s_mainCamera.GetFrustum();
-
-    const GPU_Frustum gpuFrustum = CopyCPUFrustumToGPU(camFrustum);
-
-    constBuff.mainCamFrustum = gpuFrustum;
-
-    if (s_cullingTestMode) {
-        constBuff.cullingFrustum = CopyCPUFrustumToGPU(s_fixedCullCamera.GetFrustum());
-        constBuff.cullingViewProjMatr = s_fixedCullCamera.GetViewProjMatrix();
-        constBuff.cullingViewProjMatrPrev = s_fixedCullCamera.GetViewProjMatrixPrev();
-    } else {
-        constBuff.cullingFrustum = gpuFrustum;
-        constBuff.cullingViewProjMatr = viewProjMatrix;
-        constBuff.cullingViewProjMatrPrev = viewProjMatrixPrev;
-    }
+    constBuff.mainCam.frustum = CopyCPUFrustumToGPU(s_mainCamera.GetFrustum());
     
+    constBuff.mainCam.viewMatr = viewMatrix;
+    constBuff.mainCam.projMatr = projMatrix;
+    constBuff.mainCam.viewProjMatr = viewProjMatrix;
+
+    constBuff.mainCam.invViewMatr = glm::inverse(viewMatrix);
+    constBuff.mainCam.invProjMatr = glm::inverse(projMatrix);
+    constBuff.mainCam.invViewProjMatr = glm::inverse(viewProjMatrix);
+    
+    constBuff.mainCam.wPos = s_mainCamera.GetPosition();
+
+    constBuff.mainCam.zNear = s_mainCamera.GetZNear();
+    constBuff.mainCam.zFar = s_mainCamera.GetZFar();
+
     constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
     constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
-
-    constBuff.mainCamZNear = s_mainCamera.GetZNear();
-    constBuff.mainCamZFar = s_mainCamera.GetZFar();
-    
-    constBuff.mainCamWPos = s_mainCamera.GetPosition();
 
     constBuff.sunLightDir = SUN_LIGHT_DIR;
     constBuff.sunLightColor = glm::packUnorm4x8(ONEF4);
@@ -5498,23 +5259,20 @@ void UpdateGPUDbgConstBuffer()
 
     GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
-    uint32_t flags_0 = 0;
-
-    const bool csmPcssEnabled = s_isCSMEnabled && s_isCSMPCSSEnabled;
-
-    flags_0 |= s_useIBL                                            ? (1u << 0u) : 0u;
-    flags_0 |= s_isCSMEnabled                                      ? (1u << 3u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMVisualizationEnabled       ? (1u << 4u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMCascadeBlendEnabled        ? (1u << 5u) : 0u;
-    flags_0 |= s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled  ? (1u << 6u) : 0u;
-    flags_0 |= csmPcssEnabled                                      ? (1u << 7u) : 0u;
-    flags_0 |= csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled ? (1u << 8u) : 0u;
-
     constBuff.forcedGeomLOD = s_forcedGeomLOD;
-    constBuff.flags_0 = flags_0;
     constBuff.rtViewType = s_dbgOutputRTType;
     constBuff.tonemapPreset = s_tonemappingPreset;
     constBuff.csmPCFPreset = s_csmPCFPreset;
+
+    const bool csmPcssEnabled = s_isCSMEnabled && s_isCSMPCSSEnabled;
+
+    constBuff.enableIBL = s_isIBLEnabled;
+    constBuff.enableCSM = s_isCSMEnabled;
+    constBuff.enableCsmVisualization = s_isCSMEnabled && s_isCSMVisualizationEnabled;
+    constBuff.enableCsmCascadeBlend = s_isCSMEnabled && s_isCSMCascadeBlendEnabled;
+    constBuff.enableCsmFilterRandOffsets = s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled;
+    constBuff.enableCsmPCSS = csmPcssEnabled;
+    constBuff.enableCsmPCSSRandRotation = csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -6456,10 +6214,10 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
         });
 
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
-            vkn::PushDescriptor::StorageBuffer(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
+            vkn::PushDescriptor::StorageBuffer(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
         );
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_ZPassPushConst {
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_DepthPushConst {
             .akillPass = isAKillPass,
         });
 
@@ -6561,10 +6319,10 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
         });
 
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
-            vkn::PushDescriptor::StorageBuffer(ZPASS_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue])
+            vkn::PushDescriptor::StorageBuffer(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_csmSortedVisGeomIDQueueBuffers[cascade][queue])
         );        
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_ZPassPushConst {
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_DepthPushConst {
            .cascade = cascade,
            .csmPass = true,
            .akillPass = isAKillPass
@@ -7067,7 +6825,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         pushConsts.depthZNear = s_dbgDepthOutputRTZNear;
         pushConsts.depthZFar = s_dbgDepthOutputRTZFar;
 
-        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);
     cmdBuffer.CmdEndRendering();
@@ -7520,9 +7278,9 @@ namespace DbgUI
                 }
 
                 if (ImGui::TreeNodeEx("Image Based Lighting")) {
-                    ImGui::Checkbox("##UseIBL", &s_useIBL);
+                    ImGui::Checkbox("##UseIBL", &s_isIBLEnabled);
                     ImGui::SameLine(); 
-                    ImGui::TextColored(s_useIBL ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                    ImGui::TextColored(s_isIBLEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
                     ImGui::TreePop();
                 }

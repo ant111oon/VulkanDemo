@@ -227,6 +227,8 @@ struct GPU_GeomSortKey
     private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
     private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
 
+    private static const uint GEOM_SORT_KEY_TOTAL_BITS = 64;
+
     private uint2 key;
 };
 

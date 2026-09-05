@@ -118,6 +118,26 @@ enum GPU_CommonCmpSamplerID
 };
 
 
+struct GPU_CommonCameraData
+{
+    GPU_Frustum frustum;
+
+    float4x4 viewMatr;
+    float4x4 projMatr;
+    float4x4 viewProjMatr;
+
+    float4x4 invViewMatr;
+    float4x4 invProjMatr;
+    float4x4 invViewProjMatr;
+
+    float3 wPos;
+    float zNear;
+    
+    float3 padding;
+    float zFar;
+};
+
+
 struct GPU_CommonCSMPcssData
 {
     float lightAngularSlope;
@@ -157,44 +177,69 @@ struct GPU_CommonCSMData
 
 struct GPU_CommonCBData
 {
-    GPU_Frustum mainCamFrustum;
-    GPU_Frustum cullingFrustum; // In most cases is the same as mainCamFrustum but can differ if culling debug mode is enabled
-
-    float4x4 mainCamViewMatr;
-    float4x4 mainCamProjMatr;
-    float4x4 mainCamViewProjMatr;
-
-    float4x4 mainCamInvViewMatr;
-    float4x4 mainCamInvProjMatr;
-    float4x4 mainCamInvViewProjMatr;
-
-    float4x4 cullingViewProjMatrPrev;
-    float4x4 cullingViewProjMatr; // In most cases is the same as mainCamViewProjMatr but can differ if culling debug mode is enabled
-
-    uint2 screenSize;
-    float mainCamZNear;
-    float mainCamZFar;
-
-    float3 mainCamWPos;
-    uint flags;
+    GPU_CommonCameraData mainCam;
+    GPU_CommonCSMData csmData;
 
     float3 sunLightDir;
     uint sunLightColor;
 
-    GPU_CommonCSMData csmData;
+    uint2 screenSize;
+    uint flags;
+    uint padding;
 };
 
 
 struct GPU_CommonDbgCBData
 {
-    int  forcedGeomLOD;
-    uint flags_0;
+    property bool isIBLEnabled
+    {
+        get { return (bool)enableIBL; }
+    }
+
+    property bool isCsmEnabled
+    {
+        get { return (bool)enableCSM; }
+    }
+
+    property bool isCsmVisualizatioEnabled
+    {
+        get { return (bool)enableCsmVisualization; }
+    }
+
+    property bool isCsmCascadeBlendEnabled
+    {
+        get { return (bool)enableCsmCascadeBlend; }
+    }
+
+    property bool isCsmFilterRandOffsetsEnabled
+    {
+        get { return (bool)enableCsmFilterRandOffsets; }
+    }
+
+    property bool isCsmPCSSEnabled
+    {
+        get { return (bool)enableCsmPCSS; }
+    }
+
+    property bool isCsmPCSSRandRotationEnabled
+    {
+        get { return (bool)enableCsmPCSSRandRotation; }
+    }
 
     GPU_DbgRTViewType rtViewType;
     GPU_DbgTonemapPreset tonemapPreset;
-
-    private uint3 padding_0;
     GPU_DbgCsmPCFPreset csmPCFPreset;
+    int forcedGeomLOD;
+    
+    private uint3 padding;
+    private uint enableIBL : 1;
+    private uint enableCSM : 1;
+    private uint enableCsmVisualization : 1;
+    private uint enableCsmCascadeBlend : 1;
+    private uint enableCsmFilterRandOffsets : 1;
+    private uint enableCsmPCSS : 1;
+    private uint enableCsmPCSSRandRotation : 1;
+    private uint padding_1 : 25;
 };
 
 #endif

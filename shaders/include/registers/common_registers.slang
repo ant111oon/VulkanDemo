@@ -36,15 +36,13 @@
 #define GET_COMMON_CMP_SAMPLER(SMP_IDX) COMMON_CMP_SAMPLERS[(uint)(SMP_IDX)]
 
 
-#define COMMON_DBG_USE_IBL                                  DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 0, false)
-// 1 - free
-// 2 - free
-#define COMMON_DBG_IS_CSM_ENABLED                           DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 3, true)
-#define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 4, false)
-#define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 5, true)
-#define COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED     DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 6, false)
-#define COMMON_DBG_IS_CSM_PCSS_ENABLED                      DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 7, true)
-#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED             DBG_BIT_VALUE(COMMON_DBG_CB.flags_0, 8, false)
+#define COMMON_DBG_IS_IBL_ENABLED                           DBG_VALUE(COMMON_DBG_CB.isIBLEnabled, false)
+#define COMMON_DBG_IS_CSM_ENABLED                           DBG_VALUE(COMMON_DBG_CB.isCsmEnabled, true)
+#define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmVisualizatioEnabled, false)
+#define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmCascadeBlendEnabled, true)
+#define COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmFilterRandOffsetsEnabled, false)
+#define COMMON_DBG_IS_CSM_PCSS_ENABLED                      DBG_VALUE(COMMON_DBG_CB.isCsmPCSSEnabled, true)
+#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmPCSSRandRotationEnabled, false)
 
 #define COMMON_DBG_FORCED_GEOM_LOD                          DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
 #define COMMON_DBG_RT_VIEW_TYPE                             DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)
@@ -52,23 +50,19 @@
 #define COMMON_DBG_CSM_PCF_PRESET                           DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
 
 
-#define COMMON_MAIN_CAM_WPOS                        COMMON_CB.mainCamWPos
-#define COMMON_MAIN_CAM_Z_NEAR                      COMMON_CB.mainCamZNear
-#define COMMON_MAIN_CAM_Z_FAR                       COMMON_CB.mainCamZFar
-#define COMMON_MAIN_CAM_FRUSTUM                     COMMON_CB.mainCamFrustum
-#define COMMON_MAIN_CAM_VIEW_MATRIX                 COMMON_CB.mainCamViewMatr
-#define COMMON_MAIN_CAM_PROJ_MATRIX                 COMMON_CB.mainCamProjMatr
-#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX            COMMON_CB.mainCamViewProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_MATRIX             COMMON_CB.mainCamInvViewMatr
-#define COMMON_MAIN_CAM_INV_PROJ_MATRIX             COMMON_CB.mainCamInvProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX        COMMON_CB.mainCamInvViewProjMatr
+#define COMMON_MAIN_CAM_WPOS                        COMMON_CB.mainCam.wPos
+#define COMMON_MAIN_CAM_Z_NEAR                      COMMON_CB.mainCam.zNear
+#define COMMON_MAIN_CAM_Z_FAR                       COMMON_CB.mainCam.zFar
+#define COMMON_MAIN_CAM_FRUSTUM                     COMMON_CB.mainCam.frustum
+#define COMMON_MAIN_CAM_VIEW_MATRIX                 COMMON_CB.mainCam.viewMatr
+#define COMMON_MAIN_CAM_PROJ_MATRIX                 COMMON_CB.mainCam.projMatr
+#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX            COMMON_CB.mainCam.viewProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_MATRIX             COMMON_CB.mainCam.invViewMatr
+#define COMMON_MAIN_CAM_INV_PROJ_MATRIX             COMMON_CB.mainCam.invProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX        COMMON_CB.mainCam.invViewProjMatr
 
 #define COMMON_SCREEN_SIZE                          COMMON_CB.screenSize
 #define COMMON_INV_SCREEN_SIZE                      rcp(COMMON_SCREEN_SIZE_F)
-
-#define COMMON_CULLING_FRUSTUM                      COMMON_CB.cullingFrustum
-#define COMMON_CULLING_VIEW_PROJ_MATRIX             COMMON_CB.cullingViewProjMatr
-#define COMMON_CULLING_VIEW_PROJ_MATRIX_PREV        COMMON_CB.cullingViewProjMatrPrev
 
 #define COMMON_SUN_LIGHT_DIRECTION                  COMMON_CB.sunLightDir
 #define COMMON_SUN_LIGHT_COLOR                      unpackUnorm4x8ToFloat(COMMON_CB.sunLightColor)

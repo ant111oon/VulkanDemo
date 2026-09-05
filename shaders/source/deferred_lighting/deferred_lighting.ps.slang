@@ -150,7 +150,7 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 
 float3 ProcessIBL(in GPU_GBuffer gbuffer, in float3 V, in float3 F0)
 {
-    if (!COMMON_DBG_USE_IBL) {
+    if (!COMMON_DBG_IS_IBL_ENABLED) {
         return gbuffer.albedo * gbuffer.ao * 0.015f;
     }
 
@@ -497,10 +497,10 @@ float CalcCsmFilteredShadow(in float viewZ, in float bias, in float3 texCoord)
                 shadow += CalcCsmGridPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_GRID_HALF_SIZE);
                 break;
             case GPU_DbgCsmPCFPreset::POISSON_DISK:
-                shadow = CalcCsmPoissonPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED);
+                shadow = CalcCsmPoissonPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED);
                 break;
             case GPU_DbgCsmPCFPreset::VOGEL_DISK:
-                shadow = CalcCsmVogelPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RANDOM_OFFSETS_ENABLED);
+                shadow = CalcCsmVogelPCF(cmpSmp, texCoord, zReceiver, COMMON_CSM_FILTER_DISK_RADIUS, COMMON_CSM_FILTER_DISK_SAMPLE_COUNT, COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED);
                 break;
             default:
                 shadow = 1.f;

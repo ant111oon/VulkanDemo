@@ -1,22 +1,22 @@
-#ifndef ZPASS_VS_IN_H
-#define ZPASS_VS_IN_H
+#ifndef DEPTH_VS_IN_H
+#define DEPTH_VS_IN_H
 
 #include "registers/common_registers.slang"
-#include "registers/zpass_registers.slang"
+#include "registers/depth_registers.slang"
 
 #include "common/geom_stream_incl.slang"
 
 
-struct GPU_ZPassInput
+struct GPU_DepthInput
 {
     float3 position;
     float2 uv;
 };
 
 
-GPU_ZPassInput PrepareZPassVSInputData(uint vertID, bool fetchUV = true)
+GPU_DepthInput PrepareDepthVSInputData(uint vertID, bool fetchUV = true)
 {
-    GPU_ZPassInput data = (GPU_ZPassInput)0;
+    GPU_DepthInput data = (GPU_DepthInput)0;
 
     data.position = GeomStreamLoadPosition(vertID);
 

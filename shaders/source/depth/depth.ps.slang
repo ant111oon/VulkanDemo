@@ -1,21 +1,21 @@
-#include "pass/zpass/vsout.slang"
+#include "pass/depth/vsout.slang"
 
-#include "registers/zpass_registers.slang"
+#include "registers/depth_registers.slang"
 
 #include "common/gbuffer_incl.slang"
 
 
-struct GPU_ZPassPsOutput
+struct GPU_DepthPsOutput
 {
 };
 
 
 [shader("fragment")]
-GPU_ZPassPsOutput main(GPU_ZPassVsOutput input)
+GPU_DepthPsOutput main(GPU_DepthVsOutput input)
 {
-    GPU_ZPassPsOutput result = (GPU_ZPassPsOutput)0;
+    GPU_DepthPsOutput result = (GPU_DepthPsOutput)0;
 
-    if (ZPASS_IS_AKILL_PASS) {
+    if (DEPTH_IS_AKILL_PASS) {
         const GPU_GeomMaterial material = COMMON_MATERIALS[COMMON_INST_BUFFER[input.flatData.instID].materialID];
         const float alpha = SampleGBufferSurfaceAlbedo(material, GPU_CommonSamplerID::LINEAR_REPEAT, input.data.uv).a;
 
