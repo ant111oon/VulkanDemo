@@ -36,6 +36,7 @@ enum GPU_DbgRTViewType
     BRDF_LUT,
     SKYBOX,
     CSM_DEPTH,
+    CSM_HZB,
 
     COUNT,
 };

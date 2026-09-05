@@ -38,7 +38,6 @@ struct GPU_DbgRTViewPushConst
 [vk::binding(9, DESC_SET_PER_DRAW)] TextureCube DBG_RT_VIEW_SKYBOX;
 
 [vk::binding(10, DESC_SET_PER_DRAW)] Texture2DArray DBG_RT_VIEW_CSM;
-
-[vk::binding(11, DESC_SET_PER_DRAW)] Texture2D DBG_RT_VIEW_COLOR_16F;
+[vk::binding(11, DESC_SET_PER_DRAW)] Texture2D      DBG_RT_VIEW_CSM_HZB;
 
 #endif

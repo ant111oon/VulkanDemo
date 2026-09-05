@@ -18,14 +18,17 @@ void DepthView(out float4 color, in uint2 pixCoord)
 }
 
 
-void HZBView(out float4 color, in uint2 pixCoord, in uint mip)
+void HZBView(Texture2D hzb, out float4 color, in uint2 pixCoord, in uint mip, bool needLinearize)
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
 
-    const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_COMMON_HZB, GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE), uv, mip).r;
-    const float linearDepth = LinearizeDepth01(depth, DBG_RT_DEPTH_Z_NEAR, DBG_RT_DEPTH_Z_FAR);
+    float depth = SAMPLE_TEX_LEVEL(hzb, GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE), uv, mip).r;
 
-    color = float4(FLOAT3(linearDepth), 1.f);
+    if (needLinearize) {
+        depth = LinearizeDepth01(depth, DBG_RT_DEPTH_Z_NEAR, DBG_RT_DEPTH_Z_FAR);
+    }
+
+    color = float4(FLOAT3(depth), 1.f);
 }
 
 
@@ -148,7 +151,7 @@ GPU_DbgRTViewPsOutput main(GPU_DbgRTViewVsOutput input, uint2 pixCoord : SV_Posi
             DepthView(result.color, pixCoord);
             break;
         case GPU_DbgRTViewType::COMMON_HZB:
-            HZBView(result.color, pixCoord, DBG_RT_VIEW_MIP);
+            HZBView(DBG_RT_VIEW_COMMON_HZB, result.color, pixCoord, DBG_RT_VIEW_MIP, true);
             break;
         case GPU_DbgRTViewType::GBUFFER_ALBEDO:
             GBufferAlbedoView(result.color, pixCoord);
@@ -182,6 +185,9 @@ GPU_DbgRTViewPsOutput main(GPU_DbgRTViewVsOutput input, uint2 pixCoord : SV_Posi
             break;
         case GPU_DbgRTViewType::CSM_DEPTH:
             CSMView(result.color, pixCoord, DBG_RT_CSM_CASCADE_IDX);
+            break;
+        case GPU_DbgRTViewType::CSM_HZB:
+            HZBView(DBG_RT_VIEW_CSM_HZB, result.color, pixCoord, DBG_RT_VIEW_MIP, false);
             break;
     }
 
