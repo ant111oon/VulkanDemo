@@ -45,7 +45,7 @@ bool HZB_Visibility(in GPU_SBox sbox, Texture2D HZB)
         mip = levelLower;
     }
 
-    SamplerState hzbSampler = GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE);
+    SamplerState hzbSampler = GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_EDGE);
 
     float4 samples = ZEROF4;
     samples.x = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerBL(), mip).x;

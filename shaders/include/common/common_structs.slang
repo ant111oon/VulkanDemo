@@ -64,7 +64,7 @@ enum GPU_DbgCsmPCFPreset
 };
 
 
-enum GPU_CommonSamplerID
+enum GPU_SamplerID
 {
     NEAREST_REPEAT,
     NEAREST_MIRRORED_REPEAT,
@@ -106,7 +106,7 @@ enum GPU_CommonSamplerID
 };
 
 
-enum GPU_CommonCmpSamplerID
+enum GPU_CmpSamplerID
 {
     LINEAR_CLAMP_TO_BORDER_LESS,
     LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,

@@ -11,8 +11,8 @@
 #include "common/common_geom.slang"
 
 
-[vk::binding(0, DESC_SET_PER_FRAME)] SamplerState           COMMON_SAMPLERS[GPU_CommonSamplerID::COUNT];
-[vk::binding(1, DESC_SET_PER_FRAME)] SamplerComparisonState COMMON_CMP_SAMPLERS[GPU_CommonCmpSamplerID::COUNT];
+[vk::binding(0, DESC_SET_PER_FRAME)] SamplerState           COMMON_SAMPLERS[GPU_SamplerID::COUNT];
+[vk::binding(1, DESC_SET_PER_FRAME)] SamplerComparisonState COMMON_CMP_SAMPLERS[GPU_CmpSamplerID::COUNT];
 
 // 2 - free
 
@@ -32,8 +32,8 @@
 [vk::binding(12, DESC_SET_PER_FRAME)] Texture2D COMMON_HZB;
 
 
-#define GET_COMMON_SAMPLER(SMP_IDX)     COMMON_SAMPLERS[(uint)(SMP_IDX)]
-#define GET_COMMON_CMP_SAMPLER(SMP_IDX) COMMON_CMP_SAMPLERS[(uint)(SMP_IDX)]
+#define GET_COMMON_SMP(SMP_IDX)     COMMON_SAMPLERS[(uint)(SMP_IDX)]
+#define GET_COMMON_CMP_SMP(SMP_IDX) COMMON_CMP_SAMPLERS[(uint)(SMP_IDX)]
 
 
 #define COMMON_DBG_IS_IBL_ENABLED                           DBG_VALUE(COMMON_DBG_CB.isIBLEnabled, false)

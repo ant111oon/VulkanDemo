@@ -17,7 +17,7 @@ GPU_DepthPsOutput main(GPU_DepthVsOutput input)
 
     if (DEPTH_IS_AKILL_PASS) {
         const GPU_GeomMaterial material = COMMON_MATERIALS[COMMON_INST_BUFFER[input.flatData.instID].materialID];
-        const float alpha = SampleGBufferSurfaceAlbedo(material, GPU_CommonSamplerID::LINEAR_REPEAT, input.data.uv).a;
+        const float alpha = SampleGBufferSurfaceAlbedo(material, GPU_SamplerID::LINEAR_REPEAT, input.data.uv).a;
 
         if (alpha < material.alphaRef) {
             discard;

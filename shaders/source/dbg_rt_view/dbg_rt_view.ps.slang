@@ -22,7 +22,7 @@ void HZBView(Texture2D hzb, out float4 color, in uint2 pixCoord, in uint mip, bo
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
 
-    float depth = SAMPLE_TEX_LEVEL(hzb, GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE), uv, mip).r;
+    float depth = SAMPLE_TEX_LEVEL(hzb, GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_EDGE), uv, mip).r;
 
     if (needLinearize) {
         depth = LinearizeDepth01(depth, DBG_RT_DEPTH_Z_NEAR, DBG_RT_DEPTH_Z_FAR);
@@ -83,7 +83,7 @@ void GBufferEmissiveView(out float4 color, in uint2 pixCoord)
 void BRDF_LUTView(out float4 color, in uint2 pixCoord)
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
-    const float2 brdf = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_BRDF_LUT, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), uv, 0).rg;
+    const float2 brdf = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_BRDF_LUT, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), uv, 0).rg;
 
     color = float4(brdf, 0.f, 1.f);
 }
@@ -94,7 +94,7 @@ void IrradianceMapView(out float4 color, in uint2 pixCoord, in uint face, in uin
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
     const float3 dir = UVFaceToDir(uv, face);
 
-    const float3 irr = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_IRRADIANCE_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
+    const float3 irr = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_IRRADIANCE_MAP, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
 
     color = float4(irr, 1.f);
 }
@@ -105,7 +105,7 @@ void PrefiltEnvMapView(out float4 color, in uint2 pixCoord, in uint face, in uin
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
     const float3 dir = UVFaceToDir(uv, face);
 
-    const float3 env = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
+    const float3 env = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_PREFILTERED_ENV_MAP, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
 
     color = float4(env, 1.f);
 }
@@ -116,7 +116,7 @@ void SkyboxView(out float4 color, in uint2 pixCoord, in uint face, in uint mip)
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
     const float3 dir = UVFaceToDir(uv, face);
 
-    const float3 skybox = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_SKYBOX, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
+    const float3 skybox = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_SKYBOX, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), dir, mip).rgb;
 
     color = float4(skybox, 1.f);
 }
@@ -127,7 +127,7 @@ void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
     const uint index = clamp(cascade, 0, COMMON_CSM_CASCADE_COUNT - 1);
 
-    const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_CSM, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), float3(uv, index), 0).r;
+    const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_CSM, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), float3(uv, index), 0).r;
 
     color = float4(FLOAT3(depth), 1.f);
 }

@@ -23,7 +23,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
     const float2 uv = ((float2)DTid + 0.5f) / (float2)dstMipSize;
 
-    const float4 samples = GATHER_RED_TEX(HZB_SRC_MIP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_EDGE), uv);
+    const float4 samples = GATHER_RED_TEX(HZB_SRC_MIP, GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_EDGE), uv);
     const float depth = HZB_GET_FAREST_DEPTH(samples);
 
     HZB_DST_MIP_UAV[DTid] = depth;

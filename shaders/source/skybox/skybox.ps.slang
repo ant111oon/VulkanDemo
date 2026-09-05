@@ -15,7 +15,7 @@ GPU_SkyboxPsOutput main(GPU_SkyboxVsOutput input)
 {
     GPU_SkyboxPsOutput result = (GPU_SkyboxPsOutput)0;
 
-    result.color = SAMPLE_TEX_LEVEL(SKYBOX_TEXTURE, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), input.data.uvw, 0);
+    result.color = SAMPLE_TEX_LEVEL(SKYBOX_TEXTURE, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), input.data.uvw, 0);
 
     return result;
 }

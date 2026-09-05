@@ -129,7 +129,7 @@ float3 ProcessLight(in GPU_GBuffer gbuffer, in float3 V, in float3 lightDir, in 
 
 float3 GetIndirectDiffuse(in float3 albedo, in float3 normal)
 {
-    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
+    return albedo * SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_IRRADIANCE_MAP, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), normal, 0).rgb;
 }
 
 
@@ -138,13 +138,13 @@ float3 GetIndirectPrefiltColor(in float3 viewDir, in float3 normal, in float rou
     const float3 reflectDir = reflect(-viewDir, normal);
     const float mip = roughness * float(COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), reflectDir, mip).rgb;
 }
 
 
 float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 {
-    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
+    return SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_BRDF_LUT, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), float2(NdotV, roughness), 0).rg;
 }
 
 
@@ -240,7 +240,7 @@ GPU_CsmCascadeBlendData GetCsmCascadeBlendData(in float viewZ, in uint currCasca
 
 float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiver)
 {
-    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SAMPLER(GPU_CommonSamplerID::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
+    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
 
 #ifdef ENV_REVERSED_Z
     return zBlocker < zReceiver ? 1.f : 0.f;
@@ -397,7 +397,7 @@ GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in 
     float avgBlocker = 0.f;
     uint blockerCount = 0;
 
-    const SamplerState smp = GET_COMMON_SAMPLER(GPU_CommonSamplerID::NEAREST_CLAMP_TO_BORDER);
+    const SamplerState smp = GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_BORDER);
     const uint sampleCount = COMMON_CSM_PCSS_SEARCH_SAMPLES_COUNT;
 
     for (uint i = 0; i < sampleCount; ++i) {
@@ -477,10 +477,10 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
 float CalcCsmFilteredShadow(in float viewZ, in float bias, in float3 texCoord)
 {
 #ifdef ENV_REVERSED_Z
-    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(GPU_CommonCmpSamplerID::LINEAR_CLAMP_TO_BORDER_GREATER);
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SMP(GPU_CmpSamplerID::LINEAR_CLAMP_TO_BORDER_GREATER);
     const float zReceiver = viewZ + bias;
 #else
-    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SAMPLER(GPU_CommonCmpSamplerID::LINEAR_CLAMP_TO_BORDER_LESS);
+    const SamplerComparisonState cmpSmp = GET_COMMON_CMP_SMP(GPU_CmpSamplerID::LINEAR_CLAMP_TO_BORDER_LESS);
     const float zReceiver = viewZ - bias;
 #endif
 
