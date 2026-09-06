@@ -489,6 +489,7 @@ struct GPU_GeomCullPushConst
     static constexpr uint32_t HZB_MIPS_BITS_COUNT = 4;
 
     GPU_Frustum frustum;
+    float4x4 viewMatr;
     float4x4 viewProjMatrPrev;
 
     uint hzbSizeXMip0 : 12;
@@ -500,6 +501,8 @@ struct GPU_GeomCullPushConst
 
     uint padding : 2;
 };
+
+static_assert(sizeof(GPU_GeomCullPushConst) <= 256u);
 
 
 struct GPU_DepthPushConst
@@ -744,6 +747,8 @@ enum PassID : uint32_t
     PASS_ID_GEOM_CULLING,
     PASS_ID_GEOM_BATCHING,
     PASS_ID_GEOM_DRAW_CMD_GEN,
+
+    PASS_ID_GEOM_CULLING_NEW,
     
     PASS_ID_DEPTH,
     
@@ -777,6 +782,8 @@ static constexpr const char* PASS_DBG_NAME[] = {
     "GEOM_BATCHING",
     "GEOM_DRAW_CMD_GEN",
     
+    "GEOM_CULLING_NEW",
+
     "DEPTH",
     
     "HZB_GEN",
@@ -858,6 +865,9 @@ static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT = 4;
+static constexpr size_t GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_BATCH_VIS_INST_ID_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -1334,6 +1344,17 @@ static vkn::Buffer s_commonMeshBuffer;
 static vkn::Buffer s_commonMaterialBuffer;
 static vkn::Buffer s_commonInstBuffer;
 
+
+static vkn::Texture                  s_HZB;
+static vkn::TextureView              s_HZBView;
+static std::vector<vkn::TextureView> s_HZBMipViews;
+
+static std::array<vkn::Texture, CSM_CASCADE_COUNT>                  s_csmHZBs;
+static std::array<vkn::TextureView, CSM_CASCADE_COUNT>              s_csmHZBViews;
+static std::array<std::vector<vkn::TextureView>, CSM_CASCADE_COUNT> s_csmHZBMipViews;
+
+
+#pragma region OLD CULLING SYSTEM DATA
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueBuffer;
 static std::array<vkn::Buffer, GEOM_QUEUE_COUNT> s_visGeomIDQueueSizeBuffer;
 
@@ -1356,14 +1377,18 @@ static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, CSM_CASCADE_COUNT> 
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, CSM_CASCADE_COUNT> s_csmSortedVisGeomIDQueueSizeBuffers;
 
 static std::array<std::array<vkn::Buffer, GEOM_QUEUE_COUNT>, CSM_CASCADE_COUNT> s_csmGeomDrawCmdQueueBuffers;
+#pragma endregion
 
-static vkn::Texture                                           s_csmRT;
-static vkn::TextureView                                       s_csmRTViewArray;
-static std::array<vkn::TextureView, CSM_CASCADE_COUNT> s_csmRTViews;
 
-static std::array<vkn::Texture, CSM_CASCADE_COUNT>                  s_csmHZBs;
-static std::array<vkn::TextureView, CSM_CASCADE_COUNT>              s_csmHZBViews;
-static std::array<std::vector<vkn::TextureView>, CSM_CASCADE_COUNT> s_csmHZBMipViews;
+#pragma region NEW CULLING SYSTEM DATA
+static vkn::Buffer s_geomCullVisInstSortKeysBuffer;
+static vkn::Buffer s_geomCullVisInstIDsBuffer;
+static vkn::Buffer s_geomCullVisInstCounterBuffer;
+
+static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstSortKeysBuffer;
+static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstIDsBuffer;
+static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstCounterBuffer;
+#pragma endregion
 
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
@@ -1423,9 +1448,9 @@ static vkn::TextureView s_colorRTView8U;
 static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
 
-static vkn::Texture                  s_HZB;
-static vkn::TextureView              s_HZBView;
-static std::vector<vkn::TextureView> s_HZBMipViews;
+static vkn::Texture                                    s_csmRT;
+static vkn::TextureView                                s_csmRTViewArray;
+static std::array<vkn::TextureView, CSM_CASCADE_COUNT> s_csmRTViews;
 
 static vkn::ComputePSOBuilder  s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
@@ -2894,49 +2919,28 @@ static void CreateIBLResources()
 static void CreateDbgDrawResources()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    {
-        s_dbgLineDataCPU.reserve(MAX_DBG_LINE_COUNT);
+    s_dbgLineDataCPU.reserve(MAX_DBG_LINE_COUNT);
     
-        vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    
-        s_dbgLineDataGPU.Create(&s_vkDevice, MAX_DBG_LINE_COUNT * sizeof(GPU_DbgLineData), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
-        s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
-    }
+    s_dbgLineDataGPU.CreateStorageBuffer<GPU_DbgLineData>(&s_vkDevice, MAX_DBG_LINE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
 
-    {
-        s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE_UI);
 
-        vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    
-        s_dbgLineVertexDataGPU.Create(&s_vkDevice, DBG_LINE_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
-        s_vkDevice.SetObjDebugName(s_dbgLineVertexDataGPU, "DBG_DRAW_LINE_VERT_BUFFER");
-    }
+    s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE_UI);
 
-    {
-        s_dbgTriangleDataCPU.reserve(MAX_DBG_TRIANGLE_COUNT);
+    s_dbgLineVertexDataGPU.CreateStorageBuffer(&s_vkDevice, DBG_LINE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    s_vkDevice.SetObjDebugName(s_dbgLineVertexDataGPU, "DBG_DRAW_LINE_VERT_BUFFER");
     
-        vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    
-        s_dbgTriangleDataGPU.Create(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT * sizeof(GPU_DbgTriangleData), VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
-        s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
-    }
 
-    {
-        s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI);
+    s_dbgTriangleDataCPU.reserve(MAX_DBG_TRIANGLE_COUNT);
 
-        vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    s_dbgTriangleDataGPU.CreateStorageBuffer<GPU_DbgTriangleData>(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
     
-        s_dbgTriangleVertexDataGPU.Create(&s_vkDevice, DBG_TRIANGLE_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, allocInfo);
-        s_vkDevice.SetObjDebugName(s_dbgTriangleVertexDataGPU, "DBG_DRAW_TRIANGLE_VERT_BUFFER");
-    }
+
+    s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI);
+
+    s_dbgTriangleVertexDataGPU.CreateStorageBuffer(&s_vkDevice, DBG_TRIANGLE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    s_vkDevice.SetObjDebugName(s_dbgTriangleVertexDataGPU, "DBG_DRAW_TRIANGLE_VERT_BUFFER");
 #endif
 }
 
@@ -3015,6 +3019,9 @@ static void CreateGeomCullingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, GEOM_QUEUE_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3492,6 +3499,16 @@ static void CreateGeomCullingPSOLayout()
 }
 
 
+static void CreateGeomCullingNewPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_GEOM_CULLING_NEW, DESC_SET_LAYOUT_ID_GEOM_CULLING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomCullPushConst)
+    });
+}
+
+
 static void CreateGeomBatchingPSOLayout()
 {
     CreatePSOLayout(PASS_ID_GEOM_BATCHING, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
@@ -3666,6 +3683,12 @@ static void CreateHZBGenPSO(const fs::path& shaderPath)
 static void CreateGeomCullingPSO(const fs::path& shaderPath)
 {
     CreateComputePSO(shaderPath, PASS_ID_GEOM_CULLING);
+}
+
+
+static void CreateGeomCullingNewPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_GEOM_CULLING_NEW);
 }
 
 
@@ -3963,6 +3986,8 @@ static void CreatePipelines()
     CreateGeomBatchingPSOLayout();
     CreateGeomDrawCmdGenPSOLayout();
 
+    CreateGeomCullingNewPSOLayout();
+
     CreateDepthPSOLayout();
     
     CreateHZBGenPSOLayout();
@@ -3988,6 +4013,8 @@ static void CreatePipelines()
     CreateGeomCullingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_culling.cs.spv"));
     CreateGeomBatchingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_batching.cs.spv"));
     CreateGeomDrawCmdGenPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_draw_cmd_gen.cs.spv"));
+
+    CreateGeomCullingNewPSO(RND_SHADER_SPIRV_FULL_PATH("geom/culling/geom_culling.cs.spv"));
     
     CreateDepthPSO(
         RND_SHADER_SPIRV_FULL_PATH("depth/depth.vs.spv"),
@@ -4045,62 +4072,36 @@ static void CreateGeomCullingAndInstancingResources()
 
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
-        s_visGeomIDQueueBuffer[queue].Create(
-            &s_vkDevice, 
-            s_cpuInstData.size() * sizeof(glm::uint), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-            allocInfo
-        );
+        s_visGeomIDQueueBuffer[queue].CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
         s_vkDevice.SetObjDebugName(s_visGeomIDQueueBuffer[queue], "%s_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
-        s_geomBatchQueueBuffer[queue].Create(
-            &s_vkDevice, 
-            s_cpuInstData.size() * sizeof(GPU_GeomBatch), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-            allocInfo
-        );
+        s_geomBatchQueueBuffer[queue].CreateStorageBuffer<GPU_GeomBatch>(&s_vkDevice, s_cpuInstData.size());
         s_vkDevice.SetObjDebugName(s_geomBatchQueueBuffer[queue], "%s_BATCH_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_sortedVisGeomIDQueueBuffer[queue].Create(
-            &s_vkDevice, 
-            s_cpuInstData.size() * sizeof(glm::uint), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
-            allocInfo
-        );
+        s_sortedVisGeomIDQueueBuffer[queue].CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
         s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffer[queue], "%s_SORTED_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_geomDrawCmdQueueBuffer[queue].Create(
-            &s_vkDevice,
-            s_cpuInstData.size() * sizeof(GPU_CmdDrawIndexedIndirect),
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-            allocInfo
-        );
+        s_geomDrawCmdQueueBuffer[queue].CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(
+            &s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
         s_vkDevice.SetObjDebugName(s_geomDrawCmdQueueBuffer[queue], "%s_DRAW_CMD_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
-        s_visGeomIDQueueSizeBuffer[queue].Create(
-            &s_vkDevice,
-            sizeof(glm::uint), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-            allocInfo
-        );
+        s_visGeomIDQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
+            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
         s_vkDevice.SetObjDebugName(s_visGeomIDQueueSizeBuffer[queue], "%s_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_geomBatchQueueSizeBuffer[queue].Create(
-            &s_vkDevice,
-            sizeof(glm::uint), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-            allocInfo
-        );
+        s_geomBatchQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
+            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
         s_vkDevice.SetObjDebugName(s_geomBatchQueueSizeBuffer[queue], "%s_BATCH_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_sortedVisGeomIDQueueSizeBuffer[queue].Create(
-            &s_vkDevice,
-            sizeof(glm::uint), 
-            VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
-            allocInfo
-        );
+        s_sortedVisGeomIDQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
+            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
         s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueSizeBuffer[queue], "%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
     }
+
+
+    s_geomCullVisInstSortKeysBuffer.CreateStorageBuffer<GPU_GeomSortKey>(&s_vkDevice, s_cpuInstData.size());
+    s_geomCullVisInstIDsBuffer.CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
+    s_geomCullVisInstCounterBuffer.CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
 }
 
 
@@ -4933,37 +4934,31 @@ static void UploadGPUMeshData()
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 
-    const size_t meshDataBufferSize = s_cpuMeshData.size() * sizeof(GPU_Mesh);
+    
+    s_commonMeshBuffer.CreateStorageBuffer<GPU_Mesh>(&s_vkDevice, s_cpuMeshData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
+    s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
+
+    const size_t meshDataBufferSize = s_commonMeshBuffer.GetMemorySize();
     CORE_ASSERT(meshDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pMeshBufferData = s_commonStagingBuffer.Map();
     memcpy(pMeshBufferData, s_cpuMeshData.data(), meshDataBufferSize);
     s_commonStagingBuffer.Unmap();
 
-    vkn::AllocationInfo meshInfosBufAllocInfo = {};
-    meshInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    meshInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    
-    s_commonMeshBuffer.Create(&s_vkDevice, meshDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, meshInfosBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
-
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMeshBuffer, meshDataBufferSize);
     });
 
-    const size_t meshLODDataBufferSize = s_cpuMeshLODData.size() * sizeof(GPU_MeshLOD);
+
+    s_commonMeshLODBuffer.CreateStorageBuffer<GPU_MeshLOD>(&s_vkDevice, s_cpuMeshLODData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
+    s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
+
+    const size_t meshLODDataBufferSize = s_commonMeshLODBuffer.GetMemorySize();
     CORE_ASSERT(meshLODDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pMeshLODBufferData = s_commonStagingBuffer.Map();
     memcpy(pMeshLODBufferData, s_cpuMeshLODData.data(), meshLODDataBufferSize);
     s_commonStagingBuffer.Unmap();
-
-    vkn::AllocationInfo meshLODInfosBufAllocInfo = {};
-    meshLODInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    meshLODInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    
-    s_commonMeshLODBuffer.Create(&s_vkDevice, meshLODDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, meshLODInfosBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMeshLODBuffer, meshLODDataBufferSize);
@@ -5080,19 +5075,15 @@ static void UploadGPUMaterialData()
 
     eng::Timer timer;
 
-    const size_t mtlDataBufferSize = s_cpuMaterialData.size() * sizeof(GPU_GeomMaterial);
+    s_commonMaterialBuffer.CreateStorageBuffer<GPU_GeomMaterial>(&s_vkDevice, s_cpuMaterialData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
+    s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
+
+    const size_t mtlDataBufferSize = s_commonMaterialBuffer.GetMemorySize();
     CORE_ASSERT(mtlDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
     void* pData = s_commonStagingBuffer.Map();
     memcpy(pData, s_cpuMaterialData.data(), mtlDataBufferSize);
     s_commonStagingBuffer.Unmap();
-
-    vkn::AllocationInfo mtlBufAllocInfo = {};
-    mtlBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    mtlBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    s_commonMaterialBuffer.Create(&s_vkDevice, mtlDataBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, mtlBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonMaterialBuffer, mtlDataBufferSize);
@@ -5108,21 +5099,15 @@ static void UploadGPUInstData()
 
     eng::Timer timer;
 
-    const size_t instBufferSize = s_cpuInstData.size() * sizeof(GPU_GeomInst);
+    s_commonInstBuffer.CreateStorageBuffer<GPU_GeomInst>(&s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
+    s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
+
+    const size_t instBufferSize = s_commonInstBuffer.GetMemorySize();
     CORE_ASSERT(instBufferSize <= s_commonStagingBuffer.GetMemorySize());
 
-    {
-        void* pData = s_commonStagingBuffer.Map();
-        memcpy(pData, s_cpuInstData.data(), instBufferSize);
-        s_commonStagingBuffer.Unmap();
-    }
-
-    vkn::AllocationInfo instInfosBufAllocInfo = {};
-    instInfosBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
-    instInfosBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-    s_commonInstBuffer.Create(&s_vkDevice, instBufferSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, instInfosBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
+    void* pData = s_commonStagingBuffer.Map();
+    memcpy(pData, s_cpuInstData.data(), instBufferSize);
+    s_commonStagingBuffer.Unmap();
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_commonInstBuffer, instBufferSize);
@@ -5197,7 +5182,7 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    s_commonConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(GPU_CommonCBData));
+    s_commonConstBuffer.CreateConstBuffer<GPU_CommonCBData>(&s_vkDevice);
     s_vkDevice.SetObjDebugName(s_commonConstBuffer, "COMMON_CB");
 }
 
@@ -5205,7 +5190,7 @@ static void CreateCommonConstBuffer()
 static void CreateCommonDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    s_commonDbgConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(GPU_CommonDbgCBData));
+    s_commonDbgConstBuffer.CreateConstBuffer<GPU_CommonDbgCBData>(&s_vkDevice);
     s_vkDevice.SetObjDebugName(s_commonDbgConstBuffer, "COMMON_DBG_CB");
 #endif
 }
@@ -5213,7 +5198,7 @@ static void CreateCommonDbgConstBuffer()
 
 static void CreateDeferredLightingConstBuffer()
 {
-    s_deferredLightingConstBuffer.CreateConstBuffer(&s_vkDevice, sizeof(GPU_LightingData));
+    s_deferredLightingConstBuffer.CreateConstBuffer<GPU_LightingData>(&s_vkDevice);
     s_vkDevice.SetObjDebugName(s_deferredLightingConstBuffer, "DEFERRED_LIGHTING_CB");
 }
 
@@ -5724,9 +5709,9 @@ static void HZBGeneratePass(
 }
 
 
-static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
+static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Vis_ID_Buffer_Pass";
+    static constexpr const char* passName = "Geom_Culling_Pass";
     static constexpr uint32_t passColor = 0xff6a6a;
 
     ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
@@ -5775,6 +5760,72 @@ static void GeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
     GPU_GeomCullPushConst pushConst = {};
 
     pushConst.frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
+    pushConst.viewMatr = cam.GetViewMatrix();
+    pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
+
+    pushConst.hzbSizeXMip0 = s_HZB.GetSizeX();
+    CORE_ASSERT(pushConst.hzbSizeXMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_X_MIP_0_BITS_COUNT));
+    
+    pushConst.hzbSizeYMip0 = s_HZB.GetSizeY();
+    CORE_ASSERT(pushConst.hzbSizeYMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_Y_MIP_0_BITS_COUNT));
+    
+    pushConst.hzbMipsCount = s_HZB.GetMipCount();
+    CORE_ASSERT(pushConst.hzbMipsCount < (1u << GPU_GeomCullPushConst::HZB_MIPS_BITS_COUNT));
+
+    pushConst.frustumCullingEnabled = s_useMeshCulling && s_useMeshFrustumCulling;
+    pushConst.hzbCullingEnabled = s_useMeshCulling && s_useMeshHZBCulling;
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConst);
+
+    cmdBuffer.CmdDispatch(ceil(s_cpuInstData.size() / (float)GEOM_CULL_CS_GROUP_SIZE), 1, 1);
+}
+
+
+static void GeomCullingNewPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "Geom_Culling_New_Pass";
+    static constexpr uint32_t passColor = 0xff6a6a;
+
+    ENG_PROFILE_SCOPED_MARKER_C(passColor, passName);
+    ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
+
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    barriers.AddBufferBarrier(s_geomCullVisInstSortKeysBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullVisInstIDsBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    barriers.AddBufferBarrier(s_geomCullVisInstCounterBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+
+    barriers.AddTextureBarrier(
+        s_HZB, 
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+        VK_IMAGE_ASPECT_COLOR_BIT);
+
+    barriers.Push();
+
+    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_CULLING_NEW);
+
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::SampledTexture(GEOM_CULL_HZB_DESCRIPTOR_SLOT, 0, s_HZBView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisInstSortKeysBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisInstIDsBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT, 0, s_geomCullVisInstCounterBuffer),
+    });
+
+    const eng::Camera& cam = s_cullingTestMode ? s_fixedCullCamera : s_mainCamera;
+    
+    GPU_GeomCullPushConst pushConst = {};
+
+    pushConst.frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
+    pushConst.viewMatr = cam.GetViewMatrix();
     pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
 
     pushConst.hzbSizeXMip0 = s_HZB.GetSizeX();
@@ -5895,7 +5946,7 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
+static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
 {
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
@@ -5966,9 +6017,9 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
 }
 
 
-static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
+static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "CSM_Geom_Vis_ID_Buffer_Pass";
+    static constexpr const char* passName = "Geom_Culling_Pass_CSM";
     static constexpr uint32_t passColor = 0xff6a6a;
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
@@ -5978,7 +6029,7 @@ static void CSMGeomVisIDBufferPass(vkn::CmdBuffer& cmdBuffer)
         ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, "%s_Cascade_%u", passName, cascade);
         ENG_PROFILE_GPU_SCOPED_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u", passName, cascade);
 
-        CSMGeomVisIDBufferPass(cmdBuffer, cascade);
+        CSMGeomCullingPass(cmdBuffer, cascade);
     }
 }
 
@@ -6089,9 +6140,9 @@ static void CSMGeometryDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void MainCamGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
+static void MainCamGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_Pass_MainCam";
+    static constexpr const char* passName = "Prepare_Geom_Pass_MainCam";
     static constexpr uint32_t passColor = 0x1e90ff;
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
@@ -6099,29 +6150,37 @@ static void MainCamGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
+    barriers.AddBufferBarrier(s_geomCullVisInstCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        barriers.AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-        barriers.AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-        barriers.AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        barriers
+            .AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     }
 
     barriers.Push();
 
+    cmdBuffer.CmdFillBuffer(s_geomCullVisInstCounterBuffer, 0);
+
     for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        cmdBuffer.CmdFillBuffer(s_visGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
-        cmdBuffer.CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
-        cmdBuffer.CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0, 0, sizeof(glm::uint));
+        cmdBuffer
+            .CmdFillBuffer(s_visGeomIDQueueSizeBuffer[queue], 0)
+            .CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0)
+            .CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0);
     }
 
-    GeomVisIDBufferPass(cmdBuffer);
+    GeomCullingPass(cmdBuffer);
+    GeomCullingNewPass(cmdBuffer);
+
     GeomBatchingPass(cmdBuffer);
     GeomDrawCmdGenPass(cmdBuffer);
 }
 
 
-static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
+static void CSMGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_Pass_CSM";
+    static constexpr const char* passName = "Prepare_Geom_Pass_CSM";
     static constexpr uint32_t passColor = 0x1e90ff;
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
@@ -6159,7 +6218,7 @@ static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
         }
     }
 
-    CSMGeomVisIDBufferPass(cmdBuffer);
+    CSMGeomCullingPass(cmdBuffer);
     CSMVisGeometryBatchingPass(cmdBuffer);
     CSMGeometryDrawCmdGenPass(cmdBuffer);
 }
@@ -6194,16 +6253,16 @@ static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
+static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_Pass";
+    static constexpr const char* passName = "Prepare_Geom_Pass";
     static constexpr uint32_t passColor = 0x1e90ff;
 
     ENG_PROFILE_SCOPED_MARKER_C_FMT(passColor, passName);
     ENG_PROFILE_GPU_SCOPED_MARKER_C(cmdBuffer, passColor, passName);
 
-    MainCamGeomCullingPass(cmdBuffer);
-    CSMGeomCullingPass(cmdBuffer);
+    MainCamGeomPreparingPass(cmdBuffer);
+    CSMGeomPreparingPass(cmdBuffer);
 }
 
 
@@ -6934,17 +6993,31 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         VK_IMAGE_ASPECT_DEPTH_BIT);  
 
     if (lineInstCount > 0) {
-        barriers.AddBufferBarrier(s_dbgLineDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_2_SHADER_READ_BIT);
-        barriers.AddBufferBarrier(s_dbgLineVertexDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
-            VK_ACCESS_2_SHADER_READ_BIT);
+        barriers.AddBufferBarrier(
+            s_dbgLineDataGPU,
+            VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT
+        );
+
+        barriers.AddBufferBarrier(
+            s_dbgLineVertexDataGPU, 
+            VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT
+        );
     }
     
     if (triInstCount > 0) {
-        barriers.AddBufferBarrier(s_dbgTriangleDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_2_SHADER_READ_BIT);
-        barriers.AddBufferBarrier(s_dbgTriangleVertexDataGPU, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
-            VK_ACCESS_2_SHADER_READ_BIT);
+        barriers.AddBufferBarrier(
+            s_dbgTriangleDataGPU, 
+            VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT
+        );
+
+        barriers.AddBufferBarrier(
+            s_dbgTriangleVertexDataGPU, 
+            VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+            VK_ACCESS_2_SHADER_READ_BIT
+        );
     }
         
     barriers.Push();
@@ -7626,7 +7699,7 @@ static void RenderScene()
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
         RegenerateHZBs(cmdBuffer);
-        GeomCullingPass(cmdBuffer);
+        PrepareGeomPass(cmdBuffer);
 
         GeomDepthPass(cmdBuffer);
 

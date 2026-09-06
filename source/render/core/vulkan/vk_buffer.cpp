@@ -112,19 +112,18 @@ namespace vkn
         m_pDevice = info.pDevice;
         m_size = info.size;
 
-        if ((info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0) {
-            m_state.set(BIT_IS_DESCRIPTOR_BUFFER, true);
-        }
-
-        if ((info.usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
-            m_state.set(BIT_IS_CONSTANT_BUFFER, true);
-        } else if ((info.usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) != 0) {
-            m_state.set(BIT_IS_STORAGE_BUFFER, true);
-        } else if ((info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0) {
-            m_state.set(BIT_IS_INDEX_BUFFER, true);
-        } else {
-            VK_ASSERT_MSG(m_state.test(BIT_IS_DESCRIPTOR_BUFFER), "Invalid buffer usage type");
-        }
+        m_state.set(BIT_IS_DESCRIPTOR_BUFFER, (info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0);
+        m_state.set(BIT_IS_CONSTANT_BUFFER, (info.usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0);
+        m_state.set(BIT_IS_STORAGE_BUFFER, (info.usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) != 0);
+        m_state.set(BIT_IS_INDEX_BUFFER, (info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0);
+        
+        static constexpr std::bitset<BIT_COUNT> mask(
+            (1u << BIT_IS_STORAGE_BUFFER) |
+            (1u << BIT_IS_CONSTANT_BUFFER) |
+            (1u << BIT_IS_DESCRIPTOR_BUFFER) |
+            (1u << BIT_IS_INDEX_BUFFER)
+        ); 
+        VK_ASSERT_MSG((m_state & mask).count() == 1, "GPU buffers can't have several usage types");
 
         if ((info.pAllocInfo->flags & VMA_ALLOCATION_CREATE_MAPPED_BIT) != 0) {
             m_state.set(BIT_IS_PERSISTENTLY_MAPPED, true);
@@ -134,13 +133,13 @@ namespace vkn
     }
         
 
-    Buffer& Buffer::CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags)
+    Buffer& Buffer::CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags, VmaAllocationCreateFlags extraAllocFlags)
     {
         static constexpr size_t alignment = 4 * sizeof(float);
-        VK_ASSERT_MSG(size % alignment == 0, "Size of constant buffer must me multiple of %zu", alignment);
+        VK_ASSERT_MSG(size > 0 && (size % alignment == 0), "Size of constant buffer must be greater than 0 and multiple of %zu", alignment);
 
         vkn::AllocationInfo allocInfo = {};
-        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | extraAllocFlags;
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
         const VkBufferUsageFlags2 usage = 
@@ -152,7 +151,19 @@ namespace vkn
         return Create(pDevice, size, usage, allocInfo);
     }
 
-    
+
+    Buffer& Buffer::CreateStorageBuffer(Device *pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags, VmaAllocationCreateFlags extraAllocFlags)
+    {
+        vkn::AllocationInfo allocInfo = {};
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT | extraAllocFlags;
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+        const VkBufferUsageFlags2 usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | extraUsageFlags;
+
+        return Create(pDevice, size, usage, allocInfo);
+    }
+
+
     Buffer& Buffer::Destroy()
     {
         if (!IsCreated()) {
@@ -185,8 +196,8 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
 
-        size = size == VK_WHOLE_SIZE ? GetMemorySize() : size;
-        VK_ASSERT(offset + size <= GetMemorySize());
+        size = size == VK_WHOLE_SIZE ? m_size - offset : size;
+        VK_ASSERT(size <= m_size - offset);
 
         if (IsPersistentlyMapped()) {
             return (void*)((uint8_t*)(m_allocInfo.pMappedData) + offset);

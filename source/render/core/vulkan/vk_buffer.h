@@ -41,7 +41,21 @@ namespace vkn
         Buffer& Create(const BufferCreateInfo& info);
         Buffer& Create(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
         
-        Buffer& CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags = 0);
+        Buffer& CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u);
+
+        template<typename T>
+        Buffer& CreateConstBuffer(Device* pDevice, uint32_t elemCount = 1u, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u)
+        {
+            return CreateConstBuffer(pDevice, sizeof(T) * elemCount, extraUsageFlags, extraAllocFlags);
+        }
+
+        Buffer& CreateStorageBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u);
+
+        template<typename T>
+        Buffer& CreateStorageBuffer(Device* pDevice, uint32_t elemCount, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u)
+        {
+            return CreateStorageBuffer(pDevice, sizeof(T) * elemCount, extraUsageFlags, extraAllocFlags);
+        }
 
         Buffer& Destroy();
 
