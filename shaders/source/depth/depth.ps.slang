@@ -2,7 +2,7 @@
 
 #include "registers/depth_registers.slang"
 
-#include "common/gbuffer_incl.slang"
+#include "common/common_gbuffer.slang"
 
 
 struct GPU_DepthPsOutput

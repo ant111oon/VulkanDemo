@@ -5,17 +5,12 @@
 #include "common/math/bits.slang"
 
 
-static const uint COMMON_MAX_GEOM_LOD_COUNT = 6;
-
 static const uint  COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT = 10;
 static const float COMMON_PREFILTERED_ENV_MAP_MIP_ROUGHNESS_DELTA = 1.f / (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1);
 
 static const uint2 COMMON_IRRADIANCE_MAP_SIZE = UINT2(32);
 static const uint2 COMMON_PREFILTERED_ENV_MAP_SIZE = UINT2(uint(1) << (COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT - 1));
 static const uint2 COMMON_BRDF_INTEGRATION_LUT_SIZE = uint2(512);
-
-static const uint COMMON_CSM_CASCADE_COUNT = 3;
-static const uint COMMON_CSM_CASCADE_BOUNDS_COUNT = COMMON_CSM_CASCADE_COUNT + 1;
 
 static const uint COMMON_HZB_MAX_MIP_COUNT = 12; // Corresponds to 4K resolution
 
@@ -138,50 +133,9 @@ struct GPU_CommonCameraData
 };
 
 
-struct GPU_CommonCSMPcssData
-{
-    float lightAngularSlope;
-    float maxSearchRadiusTexels;
-    float maxFilterRadiusTexels;
-    float minFilterRadiusTexels;
-
-    float searchRadiusScale;
-    float filterRadiusScale;
-    uint  searchSamplesCount;
-    uint  filterSamplesCount;
-};
-
-
-struct GPU_CommonCSMData
-{
-    GPU_Frustum viewFrustums[COMMON_CSM_CASCADE_COUNT];
-    float4x4 viewMatrices[COMMON_CSM_CASCADE_COUNT];
-    float4x4 viewProjMatrices[COMMON_CSM_CASCADE_COUNT];
-    
-    float4 cascadeDistances;
-    float4 cascadeZNear;
-    float4 cascadeZFar;
-    float4 cascadeWorldUnitsPerPixel;
-
-    float cascadeBlendThresholdCoef;
-    uint  filterDiskSampleCount;
-    float filterDiskRadius;
-    uint  filterGridHalfSize;
-
-    uint2 texSize;
-    uint2 padding;
-
-    GPU_CommonCSMPcssData pcssData;
-};
-
-
 struct GPU_CommonCBData
 {
     GPU_CommonCameraData mainCam;
-    GPU_CommonCSMData csmData;
-
-    float3 sunLightDir;
-    uint sunLightColor;
 
     uint2 screenSize;
     uint flags;

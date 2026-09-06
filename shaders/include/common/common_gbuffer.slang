@@ -1,12 +1,12 @@
-#ifndef GBUFFER_INCL_H
-#define GBUFFER_INCL_H
+#ifndef COMMON_GBUFFER_H
+#define COMMON_GBUFFER_H
 
 #include "registers/common_registers.slang"
 
 #include "common/math/color_space.slang"
 
 
-struct GBUFFER_SURFACE
+struct GPU_GBufferSurface
 {
     float4 albedo;
     float metalness;
@@ -84,9 +84,9 @@ void SampleGBufferSurfaceMetRoughAO(in GPU_GeomMaterial mtl, in GPU_SamplerID sm
 }
 
 
-GBUFFER_SURFACE SampleGBufferSurface(in GPU_GeomMaterial material, in float3x3 TBN, in float2 uv)
+GPU_GBufferSurface SampleGBufferSurface(in GPU_GeomMaterial material, in float3x3 TBN, in float2 uv)
 {
-    GBUFFER_SURFACE surf = (GBUFFER_SURFACE)0;
+    GPU_GBufferSurface surf = (GPU_GBufferSurface)0;
 
     const GPU_SamplerID smpIdx = GPU_SamplerID::ANISO_2X_LINEAR_REPEAT;
 

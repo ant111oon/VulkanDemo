@@ -1,5 +1,5 @@
-#ifndef GEOM_STREAM_INCL_H
-#define GEOM_STREAM_INCL_H
+#ifndef COMMON_GEOM_STREAM_H
+#define COMMON_GEOM_STREAM_H
 
 #include "registers/common_registers.slang"
 

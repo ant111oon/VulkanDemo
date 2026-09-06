@@ -35,19 +35,20 @@
 #define GET_COMMON_SMP(SMP_IDX)     COMMON_SAMPLERS[(uint)(SMP_IDX)]
 #define GET_COMMON_CMP_SMP(SMP_IDX) COMMON_CMP_SAMPLERS[(uint)(SMP_IDX)]
 
+#define COMMON_INST_COUNT COMMON_INST_BUFFER.getCount()
 
-#define COMMON_DBG_IS_IBL_ENABLED                           DBG_VALUE(COMMON_DBG_CB.isIBLEnabled, false)
-#define COMMON_DBG_IS_CSM_ENABLED                           DBG_VALUE(COMMON_DBG_CB.isCsmEnabled, true)
-#define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmVisualizatioEnabled, false)
-#define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmCascadeBlendEnabled, true)
-#define COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmFilterRandOffsetsEnabled, false)
-#define COMMON_DBG_IS_CSM_PCSS_ENABLED                      DBG_VALUE(COMMON_DBG_CB.isCsmPCSSEnabled, true)
-#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED             DBG_VALUE(COMMON_DBG_CB.isCsmPCSSRandRotationEnabled, false)
+#define COMMON_DBG_IS_IBL_ENABLED                     DBG_VALUE(COMMON_DBG_CB.isIBLEnabled, false)
+#define COMMON_DBG_IS_CSM_ENABLED                     DBG_VALUE(COMMON_DBG_CB.isCsmEnabled, true)
+#define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmVisualizatioEnabled, false)
+#define COMMON_DBG_IS_CSM_CASCADE_BLEND_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmCascadeBlendEnabled, true)
+#define COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED DBG_VALUE(COMMON_DBG_CB.isCsmFilterRandOffsetsEnabled, false)
+#define COMMON_DBG_IS_CSM_PCSS_ENABLED                DBG_VALUE(COMMON_DBG_CB.isCsmPCSSEnabled, true)
+#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmPCSSRandRotationEnabled, false)
 
-#define COMMON_DBG_FORCED_GEOM_LOD                          DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
-#define COMMON_DBG_RT_VIEW_TYPE                             DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)
-#define COMMON_DBG_TONEMAP_PRESET                           DBG_VALUE(COMMON_DBG_CB.tonemapPreset, GPU_DbgTonemapPreset::ACES)
-#define COMMON_DBG_CSM_PCF_PRESET                           DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
+#define COMMON_DBG_FORCED_GEOM_LOD                    DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
+#define COMMON_DBG_RT_VIEW_TYPE                       DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)
+#define COMMON_DBG_TONEMAP_PRESET                     DBG_VALUE(COMMON_DBG_CB.tonemapPreset, GPU_DbgTonemapPreset::ACES)
+#define COMMON_DBG_CSM_PCF_PRESET                     DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
 
 
 #define COMMON_MAIN_CAM_WPOS                        COMMON_CB.mainCam.wPos
@@ -63,38 +64,5 @@
 
 #define COMMON_SCREEN_SIZE                          COMMON_CB.screenSize
 #define COMMON_INV_SCREEN_SIZE                      rcp(COMMON_SCREEN_SIZE_F)
-
-#define COMMON_SUN_LIGHT_DIRECTION                  COMMON_CB.sunLightDir
-#define COMMON_SUN_LIGHT_COLOR                      unpackUnorm4x8ToFloat(COMMON_CB.sunLightColor)
-
-#define COMMON_CSM_DATA                                       COMMON_CB.csmData
-#define COMMON_CSM_VIEW_FRUSTUM(CASCADE_IDX)                  COMMON_CSM_DATA.viewFrustums[CASCADE_IDX]
-#define COMMON_CSM_VIEW_MATRIX(CASCADE_IDX)                   COMMON_CSM_DATA.viewMatrices[CASCADE_IDX]
-#define COMMON_CSM_VIEW_PROJ_MATRIX(CASCADE_IDX)              COMMON_CSM_DATA.viewProjMatrices[CASCADE_IDX]
-#define COMMON_CSM_CASCADE_DISTANCE(CASCADE_IDX)              COMMON_CSM_DATA.cascadeDistances[CASCADE_IDX]
-#define COMMON_CSM_CASCADE_BOUNDS(CASCADE_IDX)                float2((CASCADE_IDX) == 0 ? 0.f : COMMON_CSM_CASCADE_DISTANCE((CASCADE_IDX) - 1), COMMON_CSM_CASCADE_DISTANCE(CASCADE_IDX))
-#define COMMON_CSM_CASCADE_Z_NEAR(CASCADE_IDX)                COMMON_CSM_DATA.cascadeZNear[CASCADE_IDX]
-#define COMMON_CSM_CASCADE_Z_FAR(CASCADE_IDX)                 COMMON_CSM_DATA.cascadeZFar[CASCADE_IDX]
-#define COMMON_CSM_CASCADE_WORLD_UNITS_PER_TEXEL(CASCADE_IDX) COMMON_CSM_DATA.cascadeWorldUnitsPerPixel[CASCADE_IDX]
-#define COMMON_CSM_CASCADE_BLEND_THRESHOLD_COEF               COMMON_CSM_DATA.cascadeBlendThresholdCoef
-#define COMMON_CSM_FILTER_DISK_SAMPLE_COUNT                   COMMON_CSM_DATA.filterDiskSampleCount
-#define COMMON_CSM_FILTER_DISK_RADIUS                         COMMON_CSM_DATA.filterDiskRadius
-#define COMMON_CSM_FILTER_GRID_HALF_SIZE                      COMMON_CSM_DATA.filterGridHalfSize
-#define COMMON_CSM_TEX_SIZE                                   COMMON_CSM_DATA.texSize
-#define COMMON_CSM_INV_TEX_SIZE                               (ONEF2 / COMMON_CSM_TEX_SIZE)
-
-#define COMMON_CSM_PCSS_DATA                         COMMON_CSM_DATA.pcssData
-#define COMMON_CSM_PCSS_LIGHT_ANGULAR_SLOPE          COMMON_CSM_PCSS_DATA.lightAngularSlope
-#define COMMON_CSM_PCSS_MAX_SEARCH_RADIUS_TEXELS     COMMON_CSM_PCSS_DATA.maxSearchRadiusTexels
-#define COMMON_CSM_PCSS_MAX_FILTER_RADIUS_TEXELS     COMMON_CSM_PCSS_DATA.maxFilterRadiusTexels
-#define COMMON_CSM_PCSS_MIN_FILTER_RADIUS_TEXELS     COMMON_CSM_PCSS_DATA.minFilterRadiusTexels
-#define COMMON_CSM_PCSS_SEARCH_RADIUS_SCALE          COMMON_CSM_PCSS_DATA.searchRadiusScale
-#define COMMON_CSM_PCSS_FILTER_RADIUS_SCALE          COMMON_CSM_PCSS_DATA.filterRadiusScale
-#define COMMON_CSM_PCSS_SEARCH_SAMPLES_COUNT         COMMON_CSM_PCSS_DATA.searchSamplesCount
-#define COMMON_CSM_PCSS_FILTER_SAMPLES_COUNT         COMMON_CSM_PCSS_DATA.filterSamplesCount
-
-
-#define COMMON_INST_COUNT COMMON_INST_BUFFER.getCount()
-
 
 #endif

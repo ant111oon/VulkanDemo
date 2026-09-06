@@ -14,7 +14,7 @@ GPU_DbgPrimVsOutput main(uint vertID : SV_VertexID, uint instID : SV_VulkanInsta
     GPU_DbgPrimVsOutput result = (GPU_DbgPrimVsOutput)0;
 
     result.data.color = inputData.color;
-    result.hpos = mul(COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(inputData.wPos, 1.f));
+    result.hpos = mul(DBG_PRIM_VIEW_PROJ_MATR, float4(inputData.wPos, 1.f));
 
     return result; 
 }

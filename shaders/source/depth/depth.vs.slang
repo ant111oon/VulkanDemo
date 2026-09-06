@@ -20,7 +20,7 @@ GPU_DepthVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInst
 
     result.flatData.instID = instID;
 
-    result.hpos = mul(DEPTH_IS_CSM_PASS ? COMMON_CSM_VIEW_PROJ_MATRIX(DEPTH_CSM_CASCADE) : COMMON_MAIN_CAM_VIEW_PROJ_MATRIX, float4(wpos, 1.f)); 
+    result.hpos = mul(DEPTH_VIEW_PROJ_MATR, float4(wpos, 1.f)); 
 
     return result; 
 }

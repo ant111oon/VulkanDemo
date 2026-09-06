@@ -5,6 +5,7 @@
 
 #include "common/math/common.slang"
 #include "common/tonemapping.slang"
+#include "common/common_lighting.slang"
 
 #include "pass/dbg_rt_view/vsout.slang"
 
@@ -125,7 +126,7 @@ void SkyboxView(out float4 color, in uint2 pixCoord, in uint face, in uint mip)
 void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
-    const uint index = clamp(cascade, 0, COMMON_CSM_CASCADE_COUNT - 1);
+    const uint index = clamp(cascade, 0, CSM_CASCADE_COUNT - 1);
 
     const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_CSM, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), float3(uv, index), 0).r;
 

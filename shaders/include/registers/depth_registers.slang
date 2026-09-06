@@ -7,27 +7,21 @@
 
 struct GPU_DepthPushConst
 {
-    uint cascade;
-
-    property bool isCsmPass
-    {
-        get { return (bool)csmPass; }
-    }
-
     property bool isAKillPass
     {
         get { return (bool)akillPass; }
     }
 
-    private uint csmPass : 1;
+    float4x4 viewProjMatr;
+
     private uint akillPass : 1;
+    private uint padding : 31;
 };
 
 [[vk::push_constant]] GPU_DepthPushConst DEPTH_CONST;
 
-#define DEPTH_IS_AKILL_PASS DEPTH_CONST.isAKillPass
-#define DEPTH_IS_CSM_PASS   DEPTH_CONST.isCsmPass
-#define DEPTH_CSM_CASCADE   DEPTH_CONST.cascade
+#define DEPTH_VIEW_PROJ_MATR DEPTH_CONST.viewProjMatr
+#define DEPTH_IS_AKILL_PASS  DEPTH_CONST.isAKillPass
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> DEPTH_INST_ID_QUEUE;

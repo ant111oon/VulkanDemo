@@ -29,12 +29,15 @@ struct GPU_DbgPrimPushConst
         get { return (bool)linePass; }
     }
 
+    float4x4 viewProjMatr;
+
     private uint linePass : 1;
     private uint padding : 31;
 };
 
 [[vk::push_constant]] GPU_DbgPrimPushConst DBG_PRIM_CONST;
 
+#define DBG_PRIM_VIEW_PROJ_MATR DBG_PRIM_CONST.viewProjMatr
 #define DBG_PRIM_IS_LINE_PASS   DBG_PRIM_CONST.isLinePass
 
 

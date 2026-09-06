@@ -1,4 +1,4 @@
-#include "common/gbuffer_incl.slang"
+#include "common/common_gbuffer.slang"
 
 #include "pass/gbuffer/vsout.slang"
 
@@ -25,7 +25,7 @@ GPU_GBufferPsOutput main(GPU_GBufferVsOutput input)
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
     const float3x3 TBN = CalcTBN(input.data.tangent, input.data.lnorm);
-    GBUFFER_SURFACE surf = SampleGBufferSurface(material, TBN, input.data.uv);
+    GPU_GBufferSurface surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
     const float3 wnorm = normalize(mul(inst.matrWCS, float4(surf.lnorm, 0.f)).xyz);
 

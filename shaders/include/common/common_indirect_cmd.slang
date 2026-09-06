@@ -1,5 +1,5 @@
-#ifndef COMMON_INDIRECT_H
-#define COMMON_INDIRECT_H
+#ifndef COMMON_INDIRECT_CMD_H
+#define COMMON_INDIRECT_CMD_H
 
 
 struct GPU_CmdDrawIndexedIndirect

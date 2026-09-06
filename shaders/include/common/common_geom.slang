@@ -5,6 +5,8 @@
 #include "common/math/geom_primitives.slang"
 
 
+static const uint GEOM_MAX_LOD_COUNT = 6;
+
 static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
 static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
 static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;

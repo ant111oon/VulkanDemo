@@ -1,7 +1,7 @@
 #include "registers/geom_draw_cmd_gen_registers.slang"
 #include "registers/common_registers.slang"
 
-#include "common/common_indirect.slang"
+#include "common/common_indirect_cmd.slang"
 
 
 void WriteDrawCmd(RWStructuredBuffer<uint> buffer, in uint index, in GPU_CmdDrawIndexedIndirect cmd)

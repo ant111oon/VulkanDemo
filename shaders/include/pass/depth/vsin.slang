@@ -4,7 +4,7 @@
 #include "registers/common_registers.slang"
 #include "registers/depth_registers.slang"
 
-#include "common/geom_stream_incl.slang"
+#include "common/common_geom_stream.slang"
 
 
 struct GPU_DepthInput
