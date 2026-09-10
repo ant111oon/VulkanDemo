@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "log.h"
 
-#include "core/engine/profiler/cpu_profiler.h"
+#include "core/engine/profiler/profiler.h"
 
 
 namespace eng
@@ -69,16 +69,16 @@ namespace eng
             
             switch (level) {
                 case LogLevel::TRACE:
-                    ENG_PROFILE_LOG_C(0xffffff, profilerMsgBuffer);
+                    TM_LOG_C(0xffffff, profilerMsgBuffer);
                     break;
                 case LogLevel::INFO:
-                    ENG_PROFILE_LOG_C(0x00ff00, profilerMsgBuffer);
+                    TM_LOG_C(0x00ff00, profilerMsgBuffer);
                     break;
                 case LogLevel::WARN:
-                    ENG_PROFILE_LOG_C(0xffff00, profilerMsgBuffer);
+                    TM_LOG_C(0xffff00, profilerMsgBuffer);
                     break;
                 case LogLevel::ERROR:
-                    ENG_PROFILE_LOG_C(0xff0000, profilerMsgBuffer);
+                    TM_LOG_C(0xff0000, profilerMsgBuffer);
                     break;
             }
         #endif

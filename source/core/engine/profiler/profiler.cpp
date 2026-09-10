@@ -1,23 +1,23 @@
 #include "pch.h"
 
-#include "vk_profiler.h"
-
-#ifdef ENG_PROFILING_ENABLED
+#include "profiler.h"
 
 
-namespace vkn
+#if defined(ENG_PROFILING_ENABLED)
+
+namespace eng
 {
     static PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabel = nullptr;
     static PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabel = nullptr;
 
 
-    Profiler::~Profiler()
+    GpuProfiler::~GpuProfiler()
     {
         Destroy();
     }
 
 
-    Profiler& Profiler::Create(Device* pDevice)
+    GpuProfiler& GpuProfiler::Create(vkn::Device* pDevice)
     {
         if (IsCreated()) {
             CORE_LOG_WARN("Recreation of Vulkan profiler");
@@ -28,13 +28,13 @@ namespace vkn
 
         m_pDevice = pDevice;
 
-        CmdPoolCreateInfo cmdPoolCreateInfo = {};
+        vkn::CmdPoolCreateInfo cmdPoolCreateInfo = {};
         cmdPoolCreateInfo.pDevice = m_pDevice;
         cmdPoolCreateInfo.queueFamilyIndex = m_pDevice->GetQueue().GetFamilyIndex();
         cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         cmdPoolCreateInfo.size = 1;
 
-        Instance& inst = m_pDevice->GetPhysDevice().GetInstance();
+        vkn::Instance& inst = m_pDevice->GetPhysDevice().GetInstance();
 
         if (vkCmdBeginDebugUtilsLabel == nullptr) {
             vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)inst.GetProcAddr("vkCmdBeginDebugUtilsLabelEXT");
@@ -62,7 +62,7 @@ namespace vkn
     }
 
 
-    Profiler& Profiler::Destroy()
+    GpuProfiler& GpuProfiler::Destroy()
     {
         if (!IsCreated()) {
             return *this;
@@ -80,14 +80,14 @@ namespace vkn
     }
 
 
-    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName) const
+    const GpuProfiler& GpuProfiler::BeginCmdGroup(vkn::CmdBuffer& cmd, std::string_view groupName) const
     {
         BeginCmdGroup(cmd, groupName, 0x7f7f7f);
         return *this;
     }
 
 
-    const Profiler& Profiler::BeginCmdGroup(CmdBuffer& cmd, std::string_view groupName, uint32_t color) const
+    const GpuProfiler& GpuProfiler::BeginCmdGroup(vkn::CmdBuffer& cmd, std::string_view groupName, uint32_t color) const
     {
         CORE_ASSERT(IsCreated());
 
@@ -107,7 +107,7 @@ namespace vkn
     }
 
 
-    const Profiler& Profiler::EndCmdGroup(CmdBuffer& cmd) const
+    const GpuProfiler& GpuProfiler::EndCmdGroup(vkn::CmdBuffer& cmd) const
     {
         CORE_ASSERT(IsCreated());
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to end GPU marker scope within not started command buffer: %s", cmd.GetDebugName().data());
@@ -118,40 +118,52 @@ namespace vkn
     }
 
 
-    const Profiler& Profiler::CollectCmdStats(CmdBuffer& cmd) const
+    const GpuProfiler& GpuProfiler::CollectCmdStats(vkn::CmdBuffer& cmd) const
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to collect tracy GPU timings within not started/ended command buffer: %s", cmd.GetDebugName().data());
-        TracyVkCollect(GetProfiler().GetTracyContext(), cmd.Get());
+        TracyVkCollect(GetGpuProfiler().GetTracyCtx(), cmd.Get());
 
         return *this;
     }
 
 
-    TracyVkCtx Profiler::GetTracyContext() const
+    TracyVkCtx GpuProfiler::GetTracyCtx() const
     {
         CORE_ASSERT(IsCreated());
         return m_context;
     }
 
 
-    bool Profiler::IsCreated() const
+    bool GpuProfiler::IsCreated() const
     {
         return m_context != nullptr;
     }
     
 
-    GpuMarker::GpuMarker(CmdBuffer& cmd, std::string_view name, uint32_t color)
+    GpuMarker::GpuMarker(vkn::CmdBuffer& cmd, std::string_view name, uint32_t color)
         : m_cmdBuf(cmd)
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName().data());
-        vkn::GetProfiler().BeginCmdGroup(m_cmdBuf, name, color);
+        GetGpuProfiler().BeginCmdGroup(m_cmdBuf, name, color);
     }
 
 
     GpuMarker::~GpuMarker()
     {
-        vkn::GetProfiler().EndCmdGroup(m_cmdBuf);
+        GetGpuProfiler().EndCmdGroup(m_cmdBuf);
+    }
+
+
+    GpuProfiler& GetGpuProfiler()
+    {
+        static GpuProfiler profiler;
+        return profiler;
+    }
+
+    
+    void SetName(tracy::ScopedZone& marker, std::string_view name)
+    {
+        ZoneNameV(marker, name.data(), name.size());
     }
 }
-
 #endif
