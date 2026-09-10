@@ -112,4 +112,11 @@ namespace math
     {
         return std::bit_width(size);
     }
+
+
+    constexpr uint32_t CeilDiv(uint32_t value, uint32_t divisor) noexcept
+    {
+        MATH_ASSERT(divisor != 0);
+        return (value + divisor - 1) / divisor;
+    }
 }

@@ -1,23 +1,23 @@
 #include "registers/common_registers.slang"
-#include "registers/geom_culling_registers.slang"
+#include "registers/geom_cull_registers.slang"
 
 #include "common/math/frustum_culling.slang"
 
 
-#define HZB_CULLING_HZB_MIP_0_SIZE       GEOM_CULLING_HZB_MIP_0_SIZE
-#define HZB_CULLING_HZB_MIPS_COUNT       GEOM_CULLING_HZB_MIPS_COUNT
-#define HZB_CULLING_VIEW_PROJ_MATR_PREV  GEOM_CULLING_VIEW_PROJ_MATR_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULLING_FRUSTUM.GetNearPlane()
+#define HZB_CULLING_HZB_MIP_0_SIZE       GEOM_CULL_HZB_MIP_0_SIZE
+#define HZB_CULLING_HZB_MIPS_COUNT       GEOM_CULL_HZB_MIPS_COUNT
+#define HZB_CULLING_VIEW_PROJ_MATR_PREV  GEOM_CULL_VIEW_PROJ_MATR_PREV
+#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULL_FRUSTUM.GetNearPlane()
 #include "common/math/hzb_culling.slang"
 
 
 bool GeomCullingVisibility(in GPU_AABB aabb)
 {
-    if (GEOM_CULLING_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULLING_FRUSTUM, aabb)) {
+    if (GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULL_FRUSTUM, aabb)) {
         return false;
     }
 
-    if (GEOM_CULLING_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB)) {
+    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB)) {
         return false;
     }
 

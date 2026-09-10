@@ -1,22 +1,22 @@
 #include "registers/common_registers.slang"
-#include "registers/geom_culling_registers.slang"
+#include "registers/geom_cull_registers.slang"
 
 #include "common/math/frustum_culling.slang"
 
-#define HZB_CULLING_HZB_MIP_0_SIZE       GEOM_CULLING_HZB_MIP_0_SIZE
-#define HZB_CULLING_HZB_MIPS_COUNT       GEOM_CULLING_HZB_MIPS_COUNT
-#define HZB_CULLING_VIEW_PROJ_MATR_PREV  GEOM_CULLING_VIEW_PROJ_MATR_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULLING_FRUSTUM.GetNearPlane()
+#define HZB_CULLING_HZB_MIP_0_SIZE       GEOM_CULL_HZB_MIP_0_SIZE
+#define HZB_CULLING_HZB_MIPS_COUNT       GEOM_CULL_HZB_MIPS_COUNT
+#define HZB_CULLING_VIEW_PROJ_MATR_PREV  GEOM_CULL_VIEW_PROJ_MATR_PREV
+#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULL_FRUSTUM.GetNearPlane()
 #include "common/math/hzb_culling.slang"
 
 
 bool GeomCullVisibility(in GPU_AABB aabb)
 {
-    if (GEOM_CULLING_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULLING_FRUSTUM, aabb)) {
+    if (GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULL_FRUSTUM, aabb)) {
         return false;
     }
 
-    if (GEOM_CULLING_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB)) {
+    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB)) {
         return false;
     }
 
@@ -26,7 +26,7 @@ bool GeomCullVisibility(in GPU_AABB aabb)
 
 GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst)
 {
-    const float depth = -mul(GEOM_CULLING_VIEW_MATR, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
+    const float depth = -mul(GEOM_CULL_VIEW_MATR, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
 
     uint lodID;
 
@@ -83,7 +83,7 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
     GroupMemoryBarrierWithGroupSync();
 
     if (GI == 0 && GROUP_CULL_VIS_INST_COUNTER > 0) { ;
-        InterlockedAdd(GEOM_CULL_VIS_INST_COUNTER_UAV[0], GROUP_CULL_VIS_INST_COUNTER, GROUP_CULL_VIS_INST_OFFSET);
+        InterlockedAdd(GEOM_CULL_VIS_INST_COUNTER[0], GROUP_CULL_VIS_INST_COUNTER, GROUP_CULL_VIS_INST_OFFSET);
     }
 
     GroupMemoryBarrierWithGroupSync();
@@ -91,7 +91,7 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
     if (isVisible) {
         const uint index = GROUP_CULL_VIS_INST_OFFSET + groupLocalIndex;
 
-        GEOM_CULL_VIS_INST_SORT_KEYS_UAV[index] = sortKey;
-        GEOM_CULL_VIS_INST_IDS_UAV[index] = instID;
+        GEOM_CULL_VIS_INST_SORT_KEYS[index] = sortKey;
+        GEOM_CULL_VIS_INST_IDS[index] = instID;
     }
 }

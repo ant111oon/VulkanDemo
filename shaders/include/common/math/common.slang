@@ -222,7 +222,7 @@ float3 WPosToNDC(in float3 wpos, in float4x4 viewProjMatr)
 
 uint CeilDiv(in uint value, in uint divisor)
 {
-    return (uint)ceil((float)value / float(divisor));
+    return (value + divisor - 1) / divisor;
 }
 
 #endif

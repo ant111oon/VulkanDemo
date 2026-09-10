@@ -5,11 +5,23 @@
 #include "common/math/geom_primitives.slang"
 
 
-static const uint GEOM_MAX_LOD_COUNT = 6;
-
 static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
+static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
 static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
 static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
+
+
+static const uint GEOM_SORT_RADIX_BITS = 4u;
+static const uint GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
+static const uint GEOM_SORT_PASS_COUNT = GPU_GeomSortKey::GEOM_SORT_KEY_TOTAL_BITS / GEOM_SORT_RADIX_BITS;
+
+static const uint GEOM_SORT_RADIX_MASK_WORD_BITS = 32;
+static const uint GEOM_SORT_RADIX_MASK_WORD_COUNT = GEOM_SORT_CS_GROUP_SIZE / GEOM_SORT_RADIX_MASK_WORD_BITS;
+
+static const uint GEOM_SORT_RADIX_MASK_COUNT = GEOM_SORT_RADIX_BUCKET_COUNT * GEOM_SORT_RADIX_MASK_WORD_COUNT;
+
+
+static const uint GEOM_MAX_LOD_COUNT = 6;
 
 
 enum GPU_GeomStreamID : uint
@@ -217,6 +229,8 @@ struct GPU_GeomSortKey
         get { return SortableUintToFloat(key.x); }
     }
 
+    static const uint GEOM_SORT_KEY_TOTAL_BITS = 64;
+
     private static const uint GEOM_SORT_LOD_OFFSET = 0;
     private static const uint GEOM_SORT_LOD_BITS = 3;
 
@@ -228,8 +242,6 @@ struct GPU_GeomSortKey
 
     private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
     private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
-
-    private static const uint GEOM_SORT_KEY_TOTAL_BITS = 64;
 
     private uint2 key;
 };
