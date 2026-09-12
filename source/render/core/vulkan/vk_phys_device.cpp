@@ -26,6 +26,13 @@ namespace vkn
     }
 
 
+    PhysicalDevice &PhysicalDevice::Inst()
+    {
+        static PhysicalDevice device;
+        return device;
+    }
+
+
     PhysicalDevice::~PhysicalDevice()
     {
         Destroy();

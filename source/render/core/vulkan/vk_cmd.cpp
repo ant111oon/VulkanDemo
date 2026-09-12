@@ -1279,7 +1279,9 @@ namespace vkn
 
         VK_ASSERT(pOwnerPool && pOwnerPool->IsCreated());
 
-        VkDevice vkDevice = pOwnerPool->GetDevice().Get();
+        Device* pDevice = &pOwnerPool->GetDevice();
+
+        VkDevice vkDevice = pDevice->Get();
         VkCommandPool vkCmdPool = pOwnerPool->Get();
 
         VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
@@ -1288,7 +1290,7 @@ namespace vkn
         cmdBufferAllocInfo.level = level;
         cmdBufferAllocInfo.commandBufferCount = 1;
 
-        Base::Create([vkDevice, &cmdBufferAllocInfo](VkCommandBuffer& cmdBuffer) {
+        Base::Create(pDevice, [vkDevice, &cmdBufferAllocInfo](VkCommandBuffer& cmdBuffer) {
             VK_CHECK(vkAllocateCommandBuffers(vkDevice, &cmdBufferAllocInfo, &cmdBuffer));
             return cmdBuffer != VK_NULL_HANDLE;
         });
@@ -1374,8 +1376,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pDevice, pool.m_pDevice);
-
         std::swap(m_allocatedBuffers, pool.m_allocatedBuffers);
         std::swap(m_freeIds, pool.m_freeIds);
 
@@ -1402,14 +1402,12 @@ namespace vkn
         cmdPoolCreateInfo.flags = info.flags;
         cmdPoolCreateInfo.queueFamilyIndex = info.queueFamilyIndex;
 
-        Base::Create([vkDevice, &cmdPoolCreateInfo](VkCommandPool& pool) {
+        Base::Create(info.pDevice, [vkDevice, &cmdPoolCreateInfo](VkCommandPool& pool) {
             VK_CHECK(vkCreateCommandPool(vkDevice, &cmdPoolCreateInfo, nullptr, &pool));
             return pool != VK_NULL_HANDLE;
         });
 
         VK_ASSERT(IsCreated());
-
-        m_pDevice = info.pDevice;
 
         m_allocatedBuffers.reserve(info.size);
         m_freeIds.reserve(info.size);
@@ -1428,11 +1426,9 @@ namespace vkn
         m_allocatedBuffers.shrink_to_fit();        
         m_freeIds = {};
 
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkCommandPool& pool) {
+        Base::Destroy([vkDevice = GetDevice().Get()](VkCommandPool& pool) {
             vkDestroyCommandPool(vkDevice, pool, nullptr);
         });
-
-        m_pDevice = nullptr;
 
         return *this;
     }
@@ -1441,7 +1437,7 @@ namespace vkn
     CmdPool& CmdPool::Reset(VkCommandPoolResetFlags flags)
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkResetCommandPool(m_pDevice->Get(), Get(), flags));
+        VK_CHECK(vkResetCommandPool(GetDevice().Get(), Get(), flags));
 
         return *this;
     }
@@ -1477,13 +1473,6 @@ namespace vkn
         FreeCmdBufferID(ID);
 
         return *this;
-    }
-
-
-    Device& CmdPool::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 

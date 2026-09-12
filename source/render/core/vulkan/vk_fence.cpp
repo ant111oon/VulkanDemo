@@ -39,8 +39,6 @@ namespace vkn
         if (IsCreated()) {
             Destroy();
         }
-
-        std::swap(m_pDevice, fence.m_pDevice);
         
         Base::operator=(std::move(fence));
 
@@ -55,20 +53,20 @@ namespace vkn
             Destroy();
         }
 
-        VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+        Device* pDevice = info.pDevice;
+
+        VK_ASSERT(pDevice && pDevice->IsCreated());
 
         VkFenceCreateInfo fenceCreateInfo = {};
         fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceCreateInfo.flags = info.flags;
 
-        Base::Create([vkDevice = info.pDevice->Get(), &fenceCreateInfo](VkFence& fence) {
+        Base::Create(pDevice, [vkDevice = pDevice->Get(), &fenceCreateInfo](VkFence& fence) {
             VK_CHECK(vkCreateFence(vkDevice, &fenceCreateInfo, nullptr, &fence));
             return fence != VK_NULL_HANDLE;
         });
 
         VK_ASSERT(IsCreated());
-
-        m_pDevice = info.pDevice;
 
         return *this;
     }
@@ -90,11 +88,9 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkFence& fence) {
-            vkDestroyFence(vkDevice, fence, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkFence& fence) {
+            vkDestroyFence(device, fence, nullptr);
         });
-
-        m_pDevice = nullptr;
 
         return *this;
     }
@@ -103,7 +99,7 @@ namespace vkn
     Fence& Fence::Reset()
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkResetFences(m_pDevice->Get(), 1, &Get()));
+        VK_CHECK(vkResetFences(GetDevice().Get(), 1, &Get()));
         
         return *this;
     }
@@ -112,7 +108,7 @@ namespace vkn
     Fence& Fence::WaitFor(uint64_t timeout)
     {
         VK_ASSERT(IsCreated());
-        VK_CHECK(vkWaitForFences(m_pDevice->Get(), 1, &Get(), VK_TRUE, timeout));
+        VK_CHECK(vkWaitForFences(GetDevice().Get(), 1, &Get(), VK_TRUE, timeout));
     
         return *this;
     }
@@ -121,7 +117,7 @@ namespace vkn
     VkResult Fence::GetStatus() const
     {
         VK_ASSERT(IsCreated());
-        return vkGetFenceStatus(m_pDevice->Get(), Get());
+        return vkGetFenceStatus(GetDevice().Get(), Get());
     }
 
 
@@ -129,12 +125,5 @@ namespace vkn
     {
         status = GetStatus();
         return *this;
-    }
-    
-
-    Device& Fence::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 }

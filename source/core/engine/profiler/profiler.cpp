@@ -44,12 +44,11 @@ namespace eng
             vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)inst.GetProcAddr("vkCmdEndDebugUtilsLabelEXT");
         }
 
-        m_cmdPool.Create(cmdPoolCreateInfo);
+        m_cmdPool.Create(cmdPoolCreateInfo).SetDebugName( "PROFILER_CMD_POOL");
         CORE_ASSERT(m_cmdPool.IsCreated());
-        pDevice->SetObjDebugName(m_cmdPool, "PROFILER_CMD_POOL");
 
         m_pCmdBuffer = m_cmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        pDevice->SetObjDebugName(*m_pCmdBuffer, "PROFILER_CMD_BUFFER");
+        m_pCmdBuffer->SetDebugName("PROFILER_CMD_BUFFER");
 
         m_context = TracyVkContext(m_pDevice->GetPhysDevice().Get(), m_pDevice->Get(), m_pDevice->GetQueue().Get(), m_pCmdBuffer->Get());
 

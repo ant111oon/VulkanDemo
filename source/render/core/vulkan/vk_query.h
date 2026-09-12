@@ -17,11 +17,8 @@ namespace vkn
     };
 
 
-    class QueryPool : public Handle<VkQueryPool>
+    class QueryPool final : public DeviceResource<VkQueryPool>
     {
-    public:
-        using Base = Handle<VkQueryPool>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(QueryPool);
 
@@ -58,11 +55,11 @@ namespace vkn
 
         bool IsQueryIndexValid(uint32_t queryIndex) const;
 
-        Device& GetDevice() const;
-
         size_t GetQueryCount() const;
 
     private:
+        using Base = DeviceResource<VkQueryPool>;
+        
         Device* m_pDevice = nullptr;
         size_t m_queryCount = 0;
     };

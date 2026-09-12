@@ -39,8 +39,6 @@ namespace vkn
         if (IsCreated()) {
             Destroy();
         }
-
-        std::swap(m_pDevice, semaphore.m_pDevice);
         
         Base::operator=(std::move(semaphore));
 
@@ -55,20 +53,20 @@ namespace vkn
             Destroy();
         }
 
-        VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+        Device* pDevice = info.pDevice;
+
+        VK_ASSERT(pDevice && pDevice->IsCreated());
 
         VkSemaphoreCreateInfo semaphoreCreateInfo = {};
         semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         semaphoreCreateInfo.flags = info.flags;
 
-        Base::Create([vkDevice = info.pDevice->Get(), &semaphoreCreateInfo](VkSemaphore& semaphore) {
+        Base::Create(pDevice, [vkDevice = pDevice->Get(), &semaphoreCreateInfo](VkSemaphore& semaphore) {
             VK_CHECK(vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, &semaphore));
             return semaphore != VK_NULL_HANDLE;
         });
         
         VK_ASSERT(IsCreated());
-
-        m_pDevice = info.pDevice;
 
         return *this;
     }
@@ -90,19 +88,10 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([device = m_pDevice->Get()](VkSemaphore& semaphore) {
+        Base::Destroy([device = GetDevice().Get()](VkSemaphore& semaphore) {
             vkDestroySemaphore(device, semaphore, nullptr);
         });
 
-        m_pDevice = nullptr;
-
         return *this;
-    }
-
-
-    Device& Semaphore::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 }

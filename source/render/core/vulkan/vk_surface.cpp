@@ -5,6 +5,13 @@
 
 namespace vkn
 {
+    Surface& Surface::Inst()
+    {
+        static Surface surface;
+        return surface;
+    }
+
+
     Surface::~Surface()
     {
         Destroy();

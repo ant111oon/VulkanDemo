@@ -5,11 +5,8 @@
 
 namespace vkn
 {
-    class Shader : public Handle<VkShaderModule>
+    class Shader final : public DeviceResource<VkShaderModule>
     {
-    public:
-        using Base = Handle<VkShaderModule>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Shader);
 
@@ -24,8 +21,6 @@ namespace vkn
         Shader& Create(Device* pDevice, VkShaderStageFlagBits stage, std::span<const uint8_t> spirv, std::string_view entryName = "main");
         Shader& Destroy();
 
-        Device& GetDevice() const;
-
         const VkShaderStageFlagBits& GetStage() const;
 
         const std::string_view GetEntryName() const;
@@ -35,7 +30,7 @@ namespace vkn
         bool IsComputeShader() const;
 
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkShaderModule>;
 
         VkShaderStageFlagBits m_stage = {};
 
@@ -52,11 +47,8 @@ namespace vkn
     };
 
 
-    class PSOLayout : public Handle<VkPipelineLayout>
+    class PSOLayout final : public DeviceResource<VkPipelineLayout>
     {
-    public:
-        using Base = Handle<VkPipelineLayout>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PSOLayout);
 
@@ -73,20 +65,15 @@ namespace vkn
         PSOLayout& Create(Device* pDevice, std::span<const DescriptorSetLayout*> setLayouts, std::span<const VkPushConstantRange> pushConstantRanges = {}, VkPipelineLayoutCreateFlags flags = 0);
         PSOLayout& Destroy();
 
-        Device& GetDevice() const;
-
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkPipelineLayout>;
     };
 
 
-    class PSO : public Handle<VkPipeline>
+    class PSO final : public DeviceResource<VkPipeline>
     {
         friend class GraphicsPSOBuilder;
         friend class ComputePSOBuilder;
-
-    public:
-        using Base = Handle<VkPipeline>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PSO);
@@ -99,25 +86,25 @@ namespace vkn
 
         PSO& Destroy();
 
-        Device& GetDevice() const;
-
         PSOLayout& GetLayout() const;
 
         VkPipelineBindPoint GetBindPoint() const;
 
-        bool IsRasterization() const;
+        bool IsRender() const;
         bool IsCompute() const;
 
     private:
         enum StateBits
         {
-            BIT_IS_RASTERIZATION_PSO,
+            BIT_IS_RENDER_PSO,
             BIT_IS_COMPUTE_PSO,
             BIT_COUNT,
         };
 
         using State = std::bitset<BIT_COUNT>;
+        using Base = DeviceResource<VkPipeline>;
 
+    private:
         PSO(PSOLayout* pLayout, VkPipeline pso, State state);
 
         PSO& Create(PSOLayout* pLayout, VkPipeline pso, State state);
@@ -129,7 +116,7 @@ namespace vkn
     };
 
 
-    class GraphicsPSOBuilder
+    class GraphicsPSOBuilder final
     {
     public:
         GraphicsPSOBuilder() { Reset(); }
@@ -215,7 +202,7 @@ namespace vkn
     };
 
 
-    class ComputePSOBuilder
+    class ComputePSOBuilder final
     {
     public:
         ComputePSOBuilder() { Reset(); }

@@ -275,12 +275,9 @@ namespace vkn
     };
 
 
-    class CmdBuffer : public Handle<VkCommandBuffer>
+    class CmdBuffer final : public DeviceResource<VkCommandBuffer>
     {
         friend class CmdPool;
-
-    public:
-        using Base = Handle<VkCommandBuffer>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(CmdBuffer);
@@ -382,6 +379,7 @@ namespace vkn
             FLAG_COUNT,
         };
 
+        using Base = DeviceResource<VkCommandBuffer>;
         using ID = uint16_t;
 
     private:
@@ -440,11 +438,8 @@ namespace vkn
     };
 
 
-    class CmdPool : public Handle<VkCommandPool>
+    class CmdPool final : public DeviceResource<VkCommandPool>
     {
-    public:
-        using Base = Handle<VkCommandPool>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(CmdPool);
 
@@ -464,18 +459,15 @@ namespace vkn
         CmdBuffer* AllocCmdBuffer(VkCommandBufferLevel level);
         CmdPool& FreeCmdBuffer(CmdBuffer& cmdBuffer);
 
-        Device& GetDevice() const;
-
     private:
         using BufferID = CmdBuffer::ID;
+        using Base = DeviceResource<VkCommandPool>;
 
     private:
         BufferID AllocCmdBufferID();
         void FreeCmdBufferID(BufferID id);
 
     private:
-        Device* m_pDevice = nullptr;
-
         std::vector<CmdBuffer> m_allocatedBuffers;
         std::vector<BufferID> m_freeIds;
     };

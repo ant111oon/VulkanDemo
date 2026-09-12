@@ -12,11 +12,8 @@ namespace vkn
     };
 
 
-    class Semaphore : public Handle<VkSemaphore>
+    class Semaphore final : public DeviceResource<VkSemaphore>
     {
-    public:
-        using Base = Handle<VkSemaphore>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Semaphore);
 
@@ -34,9 +31,7 @@ namespace vkn
 
         Semaphore& Destroy();
 
-        Device& GetDevice() const;
-
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkSemaphore>;
     };
 }

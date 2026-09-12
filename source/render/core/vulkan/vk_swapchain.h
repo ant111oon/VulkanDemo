@@ -9,13 +9,10 @@
 namespace vkn
 {
     // Swapchain texture wrapper
-    class SCTexture : public Handle<VkImage>
+    class SCTexture final : public DeviceResource<VkImage>
     {
         friend class CmdBuffer;
         friend class Swapchain;
-
-    public:
-        using Base = Handle<VkImage>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(SCTexture);
@@ -23,8 +20,6 @@ namespace vkn
 
         SCTexture() = default;
         ~SCTexture();
-
-        Device& GetDevice() const;
 
         VkImageType GetType() const;
         VkFormat GetFormat() const;
@@ -42,7 +37,7 @@ namespace vkn
         TextureAccessTracker& GetAccessTracker();
 
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkImage>;
 
         VkImageType m_type = {};
         VkExtent2D m_extent = {};
@@ -53,12 +48,9 @@ namespace vkn
 
 
     // Swapchain texture view wrapper
-    class SCTextureView : public Handle<VkImageView>
+    class SCTextureView final : public DeviceResource<VkImageView>
     {
         friend class Swapchain;
-
-    public:
-        using Base = Handle<VkImageView>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(SCTextureView);
@@ -67,7 +59,6 @@ namespace vkn
         SCTextureView() = default;
         ~SCTextureView();
 
-        Device& GetDevice() const;
         const SCTexture& GetOwner() const;
 
         VkFormat GetFormat() const;
@@ -82,6 +73,8 @@ namespace vkn
         SCTextureView& Destroy();
 
     private:
+        using Base = DeviceResource<VkImageView>;
+
         const SCTexture* m_pOwner = nullptr;
 
         VkImageViewType         m_type = {};
@@ -111,12 +104,10 @@ namespace vkn
     };
 
 
-    class Swapchain : public Handle<VkSwapchainKHR>
+    class Swapchain final : public DeviceResource<VkSwapchainKHR>
     {
-        friend Swapchain& GetSwapchain();
-
     public:
-        using Base = Handle<VkSwapchainKHR>;
+        static Swapchain& Inst();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Swapchain);
@@ -130,7 +121,6 @@ namespace vkn
         Swapchain& Recreate(const SwapchainCreateInfo& info, bool& succeded);
         Swapchain& Resize(uint32_t width, uint32_t height, bool& succeded);
 
-        Device& GetDevice() const;
         Surface& GetSurface() const;
 
         SCTexture& GetTexture(size_t idx);
@@ -155,7 +145,8 @@ namespace vkn
         static constexpr size_t MAX_TEXTURE_COUNT = 4;
 
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkSwapchainKHR>;
+
         Surface* m_pSurface = nullptr;
 
         std::array<SCTexture, MAX_TEXTURE_COUNT> m_textures;
@@ -173,11 +164,4 @@ namespace vkn
         VkCompositeAlphaFlagBitsKHR   m_compositeAlpha = {};
         VkPresentModeKHR              m_presentMode = {};
     };
-
-
-    ENG_FORCE_INLINE Swapchain& GetSwapchain()
-    {
-        static Swapchain swapchain;
-        return swapchain;
-    }
 }

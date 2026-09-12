@@ -26,9 +26,10 @@ namespace vkn
     };
 
 
-    class Allocator
+    class Allocator final
     {
-        friend Allocator& GetAllocator();
+    public:
+        static Allocator& Inst();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Allocator);
@@ -52,11 +53,4 @@ namespace vkn
 
         VmaAllocator m_allocator = VK_NULL_HANDLE;
     };
-
-
-    ENG_FORCE_INLINE Allocator& GetAllocator()
-    {
-        static Allocator allocator;
-        return allocator;
-    }
 }

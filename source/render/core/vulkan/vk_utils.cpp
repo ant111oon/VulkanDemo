@@ -12,7 +12,7 @@ namespace vkn::utils
         static PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName = nullptr;
 
         if (!vkSetDebugUtilsObjectName) {
-            vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)GetInstance().GetProcAddr("vkSetDebugUtilsObjectNameEXT");
+            vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)Instance::Inst().GetProcAddr("vkSetDebugUtilsObjectNameEXT");
         }
 
         VkDebugUtilsObjectNameInfoEXT dbgUtilsObjNameInfo = {};

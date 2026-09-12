@@ -97,16 +97,5 @@ namespace vkn::utils
 
     void SetHandleGPUName(Device& device, uint64_t handle, VkObjectType type, std::string_view name);
 
-    template <typename Handle, typename... Args>
-    inline void SetHandleGPUName(Device& device, Handle& handle, std::string_view fmt, Args&&... args)
-    {
-    #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
-        char name[256] = { '\0' };
-        sprintf_s(name, fmt.data(), std::forward<Args>(args)...);
-
-        SetHandleGPUName(device, (uint64_t)handle.Get(), GetObjectType<typename Handle::Type>(), name);
-    #endif
-    }
-
     VkImageViewType ImageTypeToViewType(VkImageType type);
 }

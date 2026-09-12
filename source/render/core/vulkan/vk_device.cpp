@@ -141,13 +141,6 @@ namespace vkn
     }
 
 
-    Device& Queue::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pOwner;
-    }
-
-
     uint32_t Queue::GetFamilyIndex() const
     {
         VK_ASSERT(IsCreated());
@@ -177,7 +170,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pOwner, queue.m_pOwner);
         std::swap(m_familyIndex, queue.m_familyIndex);
         std::swap(m_presentSemaphoreCache, queue.m_presentSemaphoreCache);
         std::swap(m_cmdBuffCache, queue.m_cmdBuffCache);
@@ -200,10 +192,9 @@ namespace vkn
         VK_ASSERT(pOwner);
         VK_ASSERT(queue != VK_NULL_HANDLE);
 
-        m_pOwner = pOwner;
         m_familyIndex = familyIndex;
 
-        Base::Create([vkQueue = queue](VkQueue& queue) {
+        Base::Create(pOwner, [vkQueue = queue](VkQueue& queue) {
             queue = vkQueue;
             return queue != VK_NULL_HANDLE;
         });
@@ -221,7 +212,6 @@ namespace vkn
         }
 
         m_familyIndex = UINT32_MAX;
-        m_pOwner = nullptr;
         m_presentSemaphoreCache = {};
         m_cmdBuffCache = {};
         m_waitSemaphoreCache = {};
@@ -232,6 +222,13 @@ namespace vkn
         });
 
         return *this;
+    }
+
+
+    Device& Device::Inst()
+    {
+        static Device device;
+        return device;
     }
 
 
@@ -334,9 +331,8 @@ namespace vkn
         
         VkQueue queue = VK_NULL_HANDLE;
         vkGetDeviceQueue(Get(), queueFamilyIndex, 0, &queue);
-        m_queue.Create(this, queue, queueFamilyIndex);
-
-        m_queue.SetDebugName("DEVICE_GFX_CMP_TRANSFER_QUEUE");
+        
+        m_queue.Create(this, queue, queueFamilyIndex).SetDebugName("DEVICE_QUEUE(GFX/COMPUTE/TRANSFER)");
 
         return *this;
     }

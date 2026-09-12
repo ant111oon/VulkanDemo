@@ -6,6 +6,12 @@
 
 namespace vkn
 {
+    Allocator& Allocator::Inst()
+    {
+        static Allocator allocator;
+        return allocator;
+    }
+
     Allocator::~Allocator()
     {
         Destroy();

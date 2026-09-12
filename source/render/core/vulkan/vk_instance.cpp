@@ -94,6 +94,13 @@ namespace vkn
     }
 
 
+    Instance& Instance::Inst()
+    {
+        static Instance instance;
+        return instance;
+    }
+    
+
     Instance::~Instance()
     {
         Destroy();

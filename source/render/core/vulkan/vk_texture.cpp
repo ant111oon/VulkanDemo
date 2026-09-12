@@ -6,13 +6,6 @@
 
 namespace vkn
 {
-    Device& TextureView::GetDevice() const
-    {
-        VK_ASSERT(IsValid());
-        return m_pOwner->GetDevice();
-    }
-
-
     TextureView::TextureView(const TextureViewCreateInfo& info)
     {
         Create(info);
@@ -86,8 +79,8 @@ namespace vkn
         imageViewCreateInfo.components = info.components;
         imageViewCreateInfo.subresourceRange = subresourceRange;
 
-        Base::Create([vkDevice = pOwner->GetDevice().Get(), &imageViewCreateInfo](VkImageView& view) {
-            VK_CHECK(vkCreateImageView(vkDevice, &imageViewCreateInfo, nullptr, &view));
+        Base::Create(&pOwner->GetDevice(), [pOwner, &imageViewCreateInfo](VkImageView& view) {
+            VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &view));
             return view != VK_NULL_HANDLE;
         });
 
@@ -127,8 +120,8 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([vkDevice = GetDevice().Get()](VkImageView& view) {
-            vkDestroyImageView(vkDevice, view, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkImageView& view) {
+            vkDestroyImageView(device, view, nullptr);
         });
 
         m_pOwner = nullptr;
@@ -244,8 +237,6 @@ namespace vkn
 
         std::swap(m_accessTracker, image.m_accessTracker);
 
-        std::swap(m_pDevice, image.m_pDevice);
-
         Base::operator=(std::move(image));
 
         return *this;
@@ -263,7 +254,7 @@ namespace vkn
         VK_ASSERT(info.pAllocInfo);
         VK_ASSERT(info.mipLevels >= 1);
         VK_ASSERT(info.arrayLayers >= 1);
-        VK_ASSERT(GetAllocator().IsCreated());
+        VK_ASSERT(Allocator::Inst().IsCreated());
 
         VkDevice vkDevice = info.pDevice->Get();
 
@@ -287,15 +278,13 @@ namespace vkn
         allocCI.usage = info.pAllocInfo->usage;
         allocCI.flags = info.pAllocInfo->flags;
 
-        Base::Create([&ci, &allocCI, &allocation = m_allocation, &allocInfo = m_allocInfo](VkImage& dstImage) {
-            VK_CHECK(vmaCreateImage(GetAllocator().Get(), &ci, &allocCI, &dstImage, &allocation, &allocInfo));
+        Base::Create(info.pDevice, [&ci, &allocCI, &allocation = m_allocation, &allocInfo = m_allocInfo](VkImage& dstImage) {
+            VK_CHECK(vmaCreateImage(Allocator::Inst().Get(), &ci, &allocCI, &dstImage, &allocation, &allocInfo));
             return dstImage != VK_NULL_HANDLE;
         });
         
         VK_ASSERT_MSG(IsCreated(), "Failed to create Vulkan texture");
         VK_ASSERT_MSG(m_allocation != VK_NULL_HANDLE, "Failed to allocate Vulkan texture memory");
-
-        m_pDevice = info.pDevice;
 
         m_type = info.type;
         m_extent = info.extent;
@@ -316,13 +305,11 @@ namespace vkn
         }
 
         Base::Destroy([&allocation = m_allocation](VkImage& image) {
-            vmaDestroyImage(GetAllocator().Get(), image, allocation);
+            vmaDestroyImage(Allocator::Inst().Get(), image, allocation);
             allocation = VK_NULL_HANDLE;
         });
 
         m_allocInfo = {};
-
-        m_pDevice = nullptr;
 
         m_type = {};
         m_extent = {};
@@ -411,13 +398,6 @@ namespace vkn
             default:
                 return false;
         }
-    }
-
-
-    Device& Texture::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 
@@ -515,8 +495,6 @@ namespace vkn
         if (IsCreated()) {
             Destroy();
         }
-        
-        std::swap(m_pDevice, sampler.m_pDevice);
 
         Base::operator=(std::move(sampler));
 
@@ -552,14 +530,12 @@ namespace vkn
         createInfo.borderColor = info.borderColor;
         createInfo.unnormalizedCoordinates = info.unnormalizedCoordinates;
 
-        Base::Create([vkDevice = info.pDevice->Get(), &createInfo](VkSampler& sampler) {
+        Base::Create(info.pDevice, [vkDevice = info.pDevice->Get(), &createInfo](VkSampler& sampler) {
             VK_CHECK(vkCreateSampler(vkDevice, &createInfo, nullptr, &sampler));
             return sampler != VK_NULL_HANDLE;
         });
 
         VK_ASSERT_MSG(IsCreated(), "Failed to create Vulkan sampler");
-
-        m_pDevice = info.pDevice;
 
         return *this;
     }
@@ -571,19 +547,10 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkSampler& sampler) {
-            vkDestroySampler(vkDevice, sampler, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkSampler& sampler) {
+            vkDestroySampler(device, sampler, nullptr);
         });
 
-        m_pDevice = nullptr;
-
         return *this;
-    }
-
-
-    Device& Sampler::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 }

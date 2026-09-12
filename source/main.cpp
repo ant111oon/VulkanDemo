@@ -1315,15 +1315,15 @@ private:
 
 static std::unique_ptr<eng::Window> s_pWnd = nullptr;
 
-static vkn::Instance& s_vkInstance = vkn::GetInstance();
-static vkn::Surface& s_vkSurface = vkn::GetSurface();
+static vkn::Instance& s_vkInstance = vkn::Instance::Inst();
+static vkn::Surface& s_vkSurface = vkn::Surface::Inst();
 
-static vkn::PhysicalDevice& s_vkPhysDevice = vkn::GetPhysicalDevice();
-static vkn::Device& s_vkDevice = vkn::GetDevice();
+static vkn::PhysicalDevice& s_vkPhysDevice = vkn::PhysicalDevice::Inst();
+static vkn::Device& s_vkDevice = vkn::Device::Inst();
 
-static vkn::Allocator& s_vkAllocator = vkn::GetAllocator();
+static vkn::Allocator& s_vkAllocator = vkn::Allocator::Inst();
 
-static vkn::Swapchain& s_vkSwapchain = vkn::GetSwapchain();
+static vkn::Swapchain& s_vkSwapchain = vkn::Swapchain::Inst();
 
 static vkn::CmdPool s_commonCmdPool;
 
@@ -2087,7 +2087,7 @@ static void CreateVkSwapchain()
     swapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
     bool succeded;
-    s_vkSwapchain.Create(swapchainCreateInfo, succeded);
+    s_vkSwapchain.Create(swapchainCreateInfo, succeded).SetDebugName("COMMON_SWAPCHAIN");
 
     CORE_ASSERT(succeded && s_vkSwapchain.IsCreated());
 }
@@ -2100,8 +2100,8 @@ static void CreateVkMemoryAllocator()
     // RenderDoc doesn't work with buffer device address if you use VMA :(
     vkAllocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-    s_vkAllocator.Create(vkAllocatorCreateInfo);
-    CORE_ASSERT(s_vkAllocator.IsCreated());
+    vkn::Allocator::Inst().Create(vkAllocatorCreateInfo);
+    CORE_ASSERT(vkn::Allocator::Inst().IsCreated());
 }
 
 
@@ -2113,17 +2113,16 @@ static void CreateCommonCmdPool()
     cmdPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     cmdPoolCreateInfo.size = 2;
     
-    s_commonCmdPool.Create(cmdPoolCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonCmdPool, "COMMON_CMD_POOL");
+    s_commonCmdPool.Create(cmdPoolCreateInfo).SetDebugName("COMMON_CMD_POOL");
 }
 
 
 static void CreateImmediateSubmitObjects()
 {
     s_pImmediateSubmitCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_vkDevice.SetObjDebugName(*s_pImmediateSubmitCmdBuffer, "IMMEDIATE_CMD_BUFFER");
+    s_pImmediateSubmitCmdBuffer->SetDebugName("IMMEDIATE_CMD_BUFFER");
 
-    s_immediateSubmitFinishedFence.Create(&s_vkDevice);
+    s_immediateSubmitFinishedFence.Create(&s_vkDevice).SetDebugName("IMMEDIATE_SUBMIT_FINISH_FENCE");
 }
 
 
@@ -2220,10 +2219,6 @@ static void CreateVkPhysAndLogicalDevices()
 
     s_vkDevice.Create(deviceCreateInfo);
     CORE_ASSERT(s_vkDevice.IsCreated());
-
-    s_vkDevice.SetObjDebugName(s_vkInstance, "VK_INSTANCE");
-    s_vkDevice.SetObjDebugName(s_vkPhysDevice, "VK_PHYS_DEVICE");
-    s_vkDevice.SetObjDebugName(s_vkDevice, "VK_DEVICE");
 }
 
 
@@ -2239,8 +2234,7 @@ static void CreateCommonStagingBuffer()
     stagingBufCreateInfo.usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT;
     stagingBufCreateInfo.pAllocInfo = &stagingBufAllocInfo;
 
-    s_commonStagingBuffer.Create(stagingBufCreateInfo);
-    s_vkDevice.SetObjDebugName(s_commonStagingBuffer, "COMMON_STAGING_BUFFER");
+    s_commonStagingBuffer.Create(stagingBufCreateInfo).SetDebugName("COMMON_STAGING_BUFFER");
 }
 
 
@@ -2278,11 +2272,8 @@ static void CreateGBufferRTs()
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    gbuffRT0.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(gbuffRT0, "COMMON_GBUFFER_0");
-
-    gbuffRT0View.Create(gbuffRT0, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(gbuffRT0View, "COMMON_GBUFFER_0_VIEW");
+    gbuffRT0.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_0");
+    gbuffRT0View.Create(gbuffRT0, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_0_VIEW");
 
 
     vkn::Texture& gbuffRT1 = s_gbufferRTs[1];
@@ -2291,11 +2282,8 @@ static void CreateGBufferRTs()
     rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    gbuffRT1.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(gbuffRT1, "COMMON_GBUFFER_1");
-
-    gbuffRT1View.Create(gbuffRT1, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(gbuffRT1View, "COMMON_GBUFFER_1_VIEW");
+    gbuffRT1.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_1");
+    gbuffRT1View.Create(gbuffRT1, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_1_VIEW");
 
 
     vkn::Texture& gbuffRT2 = s_gbufferRTs[2];
@@ -2304,11 +2292,8 @@ static void CreateGBufferRTs()
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    gbuffRT2.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(gbuffRT2, "COMMON_GBUFFER_2");
-
-    gbuffRT2View.Create(gbuffRT2, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(gbuffRT2View, "COMMON_GBUFFER_2_VIEW");
+    gbuffRT2.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_2");
+    gbuffRT2View.Create(gbuffRT2, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_2_VIEW");
 
 
     vkn::Texture& gbuffRT3 = s_gbufferRTs[3];
@@ -2317,11 +2302,8 @@ static void CreateGBufferRTs()
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    gbuffRT3.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(gbuffRT3, "COMMON_GBUFFER_3");
-
-    gbuffRT3View.Create(gbuffRT3, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(gbuffRT3View, "COMMON_GBUFFER_3_VIEW");
+    gbuffRT3.Create(rtCreateInfo).SetDebugName("COMMON_GBUFFER_3");
+    gbuffRT3View.Create(gbuffRT3, mapping, subresourceRange).SetDebugName("COMMON_GBUFFER_3_VIEW");
 }
 
 
@@ -2355,21 +2337,15 @@ static void CreateColorRTs()
     rtCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    s_colorRT8U.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(s_colorRT8U, "COMMON_COLOR_RT_U8");
-
-    s_colorRTView8U.Create(s_colorRT8U, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(s_colorRTView8U, "COMMON_COLOR_RT_VIEW_U8");
+    s_colorRT8U.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT_U8");
+    s_colorRTView8U.Create(s_colorRT8U, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT_VIEW_U8");
 
 
     rtCreateInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    s_colorRT16F.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(s_colorRT16F, "COMMON_COLOR_RT_16F");
-
-    s_colorRTView16F.Create(s_colorRT16F, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(s_colorRTView16F, "COMMON_COLOR_RT_VIEW_16F");
+    s_colorRT16F.Create(rtCreateInfo).SetDebugName("COMMON_COLOR_RT_16F");
+    s_colorRTView16F.Create(s_colorRT16F, mapping, subresourceRange).SetDebugName("COMMON_COLOR_RT_VIEW_16F");
 
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
@@ -2419,11 +2395,8 @@ static void CreateDepthRT()
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
         VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    s_depthRT.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(s_depthRT, "COMMON_DEPTH_RT");
-    
-    s_depthRTView.Create(s_depthRT, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(s_depthRTView, "COMMON_DEPTH_RT_VIEW");
+    s_depthRT.Create(rtCreateInfo).SetDebugName("COMMON_DEPTH_RT");    
+    s_depthRTView.Create(s_depthRT, mapping, subresourceRange).SetDebugName("COMMON_DEPTH_RT_VIEW");
 
 
     vkn::TextureViewCreateInfo depthColorViewCreateInfo = {};
@@ -2437,8 +2410,7 @@ static void CreateDepthRT()
     depthColorViewCreateInfo.subresourceRange.baseArrayLayer = 0;
     depthColorViewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_depthRTColorView.Create(depthColorViewCreateInfo);
-    s_vkDevice.SetObjDebugName(s_depthRTColorView, "COMMON_DEPTH_RT_COLOR_VIEW");
+    s_depthRTColorView.Create(depthColorViewCreateInfo).SetDebugName("COMMON_DEPTH_RT_COLOR_VIEW");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         cmdBuffer
@@ -2505,8 +2477,7 @@ static void CreateHZB(
         VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     rtCreateInfo.mipLevels = mipsCount;
 
-    hzb.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(hzb, name);
+    hzb.Create(rtCreateInfo).SetDebugName(name);
 
     VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
@@ -2517,8 +2488,7 @@ static void CreateHZB(
     subresourceRange.baseArrayLayer = 0;
     subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    hzbView.Create(hzb, mapping, subresourceRange);
-    s_vkDevice.SetObjDebugName(hzbView, "%s_VIEW", name.data());
+    hzbView.Create(hzb, mapping, subresourceRange).SetDebugName("%s_VIEW", name.data());
     
     hzbMipViews.resize(mipsCount);
 
@@ -2527,8 +2497,7 @@ static void CreateHZB(
     for (uint32_t mip = 0; mip < mipsCount; ++mip) {
         subresourceRange.baseMipLevel = mip;
 
-        hzbMipViews[mip].Create(hzb, mapping, subresourceRange);
-        s_vkDevice.SetObjDebugName(hzbMipViews[mip], "%s_MIP_VIEW_%u", name.data(), mip);
+        hzbMipViews[mip].Create(hzb, mapping, subresourceRange).SetDebugName("%s_MIP_VIEW_%u", name, mip);
     }
 }
 
@@ -2691,8 +2660,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     createInfo.pAllocInfo = &allocInfo;
 
-    s_skyboxTexture.Create(createInfo);
-    s_vkDevice.SetObjDebugName(s_skyboxTexture, "COMMON_SKY_BOX");
+    s_skyboxTexture.Create(createInfo).SetDebugName("COMMON_SKY_BOX");
     
     vkn::TextureViewCreateInfo viewCreateInfo = {};
     viewCreateInfo.pOwner = &s_skyboxTexture;
@@ -2705,8 +2673,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
     viewCreateInfo.subresourceRange.baseArrayLayer = 0;
     viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_skyboxTextureView.Create(viewCreateInfo);
-    s_vkDevice.SetObjDebugName(s_skyboxTextureView, "COMMON_SKY_BOX_VIEW");
+    s_skyboxTextureView.Create(viewCreateInfo).SetDebugName("COMMON_SKY_BOX_VIEW");
 
     for (size_t i = 0; i < CUBEMAP_FACE_COUNT; ++i) {
         const TextureLoadData& loadData = faceLoadDatas[i];
@@ -2763,18 +2730,15 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
 static void CreateSyncObjects()
 {
-    const size_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
+    const uint32_t swapchainImageCount = s_vkSwapchain.GetTextureCount();
 
     s_renderFinishedSemaphores.resize(swapchainImageCount);
-    for (size_t i = 0; i < swapchainImageCount; ++i) {
-        s_renderFinishedSemaphores[i].Create(&s_vkDevice);
-        s_vkDevice.SetObjDebugName(s_renderFinishedSemaphores[i], "RND_FINISH_SEMAPHORE_%zu", i);
+    for (uint32_t i = 0; i < swapchainImageCount; ++i) {
+        s_renderFinishedSemaphores[i].Create(&s_vkDevice).SetDebugName("RND_FINISH_SEMAPHORE_%u", i);
     }
-    s_presentFinishedSemaphore.Create(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_presentFinishedSemaphore, "PRESENT_FINISH_SEMAPHORE");
+    s_presentFinishedSemaphore.Create(&s_vkDevice).SetDebugName("PRESENT_FINISH_SEMAPHORE");
 
-    s_renderFinishedFence.Create(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_renderFinishedFence, "RND_FINISH_FENCE");
+    s_renderFinishedFence.Create(&s_vkDevice).SetDebugName("RND_FINISH_FENCE");
 }
 
 
@@ -2799,8 +2763,7 @@ static void CreateIBLResources()
         createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         createInfo.pAllocInfo = &allocInfo;
     
-        s_irradianceMapTexture.Create(createInfo);
-        s_vkDevice.SetObjDebugName(s_irradianceMapTexture, "COMMON_IRRADIANCE_MAP");
+        s_irradianceMapTexture.Create(createInfo).SetDebugName("COMMON_IRRADIANCE_MAP");
     }
 
     {
@@ -2818,8 +2781,7 @@ static void CreateIBLResources()
         createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         createInfo.pAllocInfo = &allocInfo;
         
-        s_prefilteredEnvMapTexture.Create(createInfo);
-        s_vkDevice.SetObjDebugName(s_prefilteredEnvMapTexture, "COMMON_PREFILTERED_ENV_MAP");
+        s_prefilteredEnvMapTexture.Create(createInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP");
     }
 
     {
@@ -2836,8 +2798,7 @@ static void CreateIBLResources()
         createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         createInfo.pAllocInfo = &allocInfo;
 
-        s_brdfLUTTexture.Create(createInfo);
-        s_vkDevice.SetObjDebugName(s_brdfLUTTexture, "COMMON_BRDF_LUT");
+        s_brdfLUTTexture.Create(createInfo).SetDebugName("COMMON_BRDF_LUT");
     }
 
     {
@@ -2852,8 +2813,7 @@ static void CreateIBLResources()
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
         viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     
-        s_irradianceMapTextureView.Create(viewCreateInfo);
-        s_vkDevice.SetObjDebugName(s_irradianceMapTextureView, "COMMON_IRRADIANCE_MAP_VIEW");
+        s_irradianceMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW");
     }
 
     {
@@ -2868,8 +2828,7 @@ static void CreateIBLResources()
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
         viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
         
-        s_irradianceMapTextureViewRW.Create(viewCreateInfo);
-        s_vkDevice.SetObjDebugName(s_irradianceMapTextureViewRW, "COMMON_IRRADIANCE_MAP_VIEW_RW");
+        s_irradianceMapTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_IRRADIANCE_MAP_VIEW_RW");
     }
 
     {
@@ -2884,8 +2843,7 @@ static void CreateIBLResources()
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
         viewCreateInfo.subresourceRange.layerCount = CUBEMAP_FACE_COUNT;
         
-        s_prefilteredEnvMapTextureView.Create(viewCreateInfo);
-        s_vkDevice.SetObjDebugName(s_prefilteredEnvMapTextureView, "COMMON_PREFILTERED_ENV_MAP_VIEW");
+        s_prefilteredEnvMapTextureView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW");
     }
     
     {
@@ -2896,17 +2854,16 @@ static void CreateIBLResources()
         viewCreateInfo.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         viewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        for (size_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
+        for (uint32_t mip = 0; mip < COMMON_PREFILTERED_ENV_MAP_MIPS_COUNT; ++mip) {
             viewCreateInfo.subresourceRange.baseMipLevel = mip;
             viewCreateInfo.subresourceRange.levelCount = 1;
 
-            for (size_t layer = 0; layer < CUBEMAP_FACE_COUNT; ++layer) {
+            for (uint32_t layer = 0; layer < CUBEMAP_FACE_COUNT; ++layer) {
                 viewCreateInfo.subresourceRange.baseArrayLayer = layer;
                 viewCreateInfo.subresourceRange.layerCount = 1;
 
                 vkn::TextureView& mipView = s_prefilteredEnvMapTextureViewRWs[mip][layer];
-                mipView.Create(viewCreateInfo);
-                s_vkDevice.SetObjDebugName(mipView, "COMMON_PREFILTERED_ENV_MAP_VIEW_RW_LAYER_%zu_MIP_%zu", layer, mip);
+                mipView.Create(viewCreateInfo).SetDebugName("COMMON_PREFILTERED_ENV_MAP_VIEW_RW_LAYER_%u_MIP_%u", layer, mip);
             }
         }
     }
@@ -2923,8 +2880,7 @@ static void CreateIBLResources()
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
         viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
         
-        s_brdfLUTTextureView.Create(viewCreateInfo);
-        s_vkDevice.SetObjDebugName(s_brdfLUTTextureView, "COMMON_BRDF_LUT_VIEW");
+        s_brdfLUTTextureView.Create(viewCreateInfo).SetDebugName("COMMON_BRDF_LUT_VIEW");
     }
 
     {
@@ -2939,8 +2895,7 @@ static void CreateIBLResources()
         viewCreateInfo.subresourceRange.baseArrayLayer = 0;
         viewCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
         
-        s_brdfLUTTextureViewRW.Create(viewCreateInfo);
-        s_vkDevice.SetObjDebugName(s_brdfLUTTextureViewRW, "COMMON_BRDF_LUT_VIEW_RW");
+        s_brdfLUTTextureViewRW.Create(viewCreateInfo).SetDebugName("COMMON_BRDF_LUT_VIEW_RW");
     }
 }
 
@@ -2949,27 +2904,27 @@ static void CreateDbgDrawResources()
 {
 #ifdef ENG_DEBUG_DRAW_ENABLED
     s_dbgLineDataCPU.reserve(MAX_DBG_LINE_COUNT);
-    
-    s_dbgLineDataGPU.CreateStorageBuffer<GPU_DbgLineData>(&s_vkDevice, MAX_DBG_LINE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    s_vkDevice.SetObjDebugName(s_dbgLineDataGPU, "DBG_DRAW_LINE_DATA_BUFFER");
+    s_dbgLineDataGPU
+        .CreateStorageBuffer<GPU_DbgLineData>(&s_vkDevice, MAX_DBG_LINE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)
+        .SetDebugName("DBG_DRAW_LINE_DATA_BUFFER");
 
 
     s_dbgLineVertexDataCPU.reserve(DBG_LINE_VERTEX_BUFFER_SIZE_UI);
-
-    s_dbgLineVertexDataGPU.CreateStorageBuffer(&s_vkDevice, DBG_LINE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    s_vkDevice.SetObjDebugName(s_dbgLineVertexDataGPU, "DBG_DRAW_LINE_VERT_BUFFER");
+    s_dbgLineVertexDataGPU
+        .CreateStorageBuffer(&s_vkDevice, DBG_LINE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)
+        .SetDebugName("DBG_DRAW_LINE_VERT_BUFFER");
     
 
     s_dbgTriangleDataCPU.reserve(MAX_DBG_TRIANGLE_COUNT);
-
-    s_dbgTriangleDataGPU.CreateStorageBuffer<GPU_DbgTriangleData>(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    s_vkDevice.SetObjDebugName(s_dbgTriangleDataGPU, "DBG_DRAW_TRIANGLE_DATA_BUFFER");
+    s_dbgTriangleDataGPU
+        .CreateStorageBuffer<GPU_DbgTriangleData>(&s_vkDevice, MAX_DBG_TRIANGLE_COUNT, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)
+        .SetDebugName("DBG_DRAW_TRIANGLE_DATA_BUFFER");
     
 
     s_dbgTriangleVertexDataCPU.reserve(DBG_TRIANGLE_VERTEX_BUFFER_SIZE_UI);
-
-    s_dbgTriangleVertexDataGPU.CreateStorageBuffer(&s_vkDevice, DBG_TRIANGLE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    s_vkDevice.SetObjDebugName(s_dbgTriangleVertexDataGPU, "DBG_DRAW_TRIANGLE_VERT_BUFFER");
+    s_dbgTriangleVertexDataGPU
+        .CreateStorageBuffer(&s_vkDevice, DBG_TRIANGLE_VERTEX_BUFFER_SIZE, 0u, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)
+        .SetDebugName("DBG_DRAW_TRIANGLE_VERT_BUFFER");
 #endif
 }
 
@@ -3032,8 +2987,7 @@ static void CreateCommonDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_COMMON]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_COMMON]);
 }
 
 
@@ -3057,8 +3011,7 @@ static void CreateGeomCullingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_CULLING);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_CULLING]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_CULLING]);
 }
 
 
@@ -3083,8 +3036,7 @@ static void CreateGeomSortingNewDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW]);
 }
 
 
@@ -3108,8 +3060,7 @@ static void CreateGeomBatchingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_BATCHING);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_BATCHING]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_BATCHING]);
 }
 
 
@@ -3130,8 +3081,7 @@ static void CreateGeomDrawCmdGenDescriptorSetLayout()
     
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN]);
 }
 
 
@@ -3150,8 +3100,7 @@ static void CreateDepthDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEPTH);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEPTH]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEPTH]);
 }
 
 
@@ -3171,8 +3120,7 @@ static void CreateHZBGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_HZB_GEN);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_HZB_GEN]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_HZB_GEN]);
 }
 
 
@@ -3191,8 +3139,7 @@ static void CreateGBufferDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GBUFFER);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GBUFFER]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GBUFFER]);
 }
 
 
@@ -3220,8 +3167,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING]);
 }
 
 
@@ -3240,8 +3186,7 @@ static void CreatePostProcessingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_POST_PROCESSING);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_POST_PROCESSING]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_POST_PROCESSING]);
 }
 
 
@@ -3260,8 +3205,7 @@ static void CreateBackbufferPassDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BACKBUFFER);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BACKBUFFER]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BACKBUFFER]);
 }
 
 
@@ -3280,8 +3224,7 @@ static void CreateSkyboxDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_SKYBOX);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_SKYBOX]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_SKYBOX]);
 }
 
 
@@ -3301,8 +3244,7 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN]);
 }
 
 
@@ -3324,8 +3266,7 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN]);
 }
 
 
@@ -3344,8 +3285,7 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BRDF_LUT_GEN);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BRDF_LUT_GEN]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BRDF_LUT_GEN]);
 }
 
 
@@ -3368,8 +3308,7 @@ static void CreateDbgDrawPrimitivesDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES]);
 #endif
 }
 
@@ -3401,8 +3340,7 @@ static void CreateDbgRTViewDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_RT_VIEW);
 
-    layout.Create(createInfo);
-    s_vkDevice.SetObjDebugName(layout, DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_RT_VIEW]);
+    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_RT_VIEW]);
 #endif
 }
 
@@ -3535,8 +3473,7 @@ static void CreatePSOLayout(PassID passID, DescSetLayoutID descSetLayoutID, std:
 
     vkn::PSOLayout& layout = GetPSOLayout(passID);
     
-    layout.Create(&s_vkDevice, layoutPtrs, pushConstRanges);
-    s_vkDevice.SetObjDebugName(layout, "%s_PSO_LAYOUT", PASS_DBG_NAME[passID]);
+    layout.Create(&s_vkDevice, layoutPtrs, pushConstRanges).SetDebugName("%s_PSO_LAYOUT", PASS_DBG_NAME[passID]);
 }
 
 
@@ -3720,8 +3657,7 @@ static vkn::Shader CreateShader(const fs::path& shaderPath, VkShaderStageFlagBit
     }
     
     vkn::Shader shader;
-    shader.Create(&s_vkDevice, stage, s_shaderCodeBuffer);
-    s_vkDevice.SetObjDebugName(shader, nameFmt.data(), std::forward<Args>(args)...);
+    shader.Create(&s_vkDevice, stage, s_shaderCodeBuffer).SetDebugName(nameFmt.data(), std::forward<Args>(args)...);
 
     return shader;
 }
@@ -3757,7 +3693,7 @@ static void CreateComputePSO(const fs::path& shaderPath, PassID passID)
         .SetLayout(GetPSOLayout(passID))
         .Build();
 
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[passID]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[passID]);
 }
 
 
@@ -3861,8 +3797,7 @@ static void CreateDepthPSO(const fs::path& vsPath, const fs::path& psPath)
         .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DEPTH]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_DEPTH]);
 }
     
 
@@ -3900,8 +3835,7 @@ static void CreateGBufferRenderPSO(const fs::path& vsPath, const fs::path& psPat
     s_graphicsPSOBuilder.SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_GBUFFER]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_GBUFFER]);
 }
 
 
@@ -3926,8 +3860,7 @@ static void CreateDeferredLightingPSO(const fs::path& vsPath, const fs::path& ps
         .AddColorAttachment(s_colorRT16F.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_DEFERRED_LIGHTING]);
 }
 
 
@@ -3952,8 +3885,7 @@ static void CreatePostProcessingPSO(const fs::path& vsPath, const fs::path& psPa
         .AddColorAttachment(s_colorRT8U.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_POST_PROCESSING]);
 }
 
 
@@ -3978,8 +3910,7 @@ static void CreateBackbufferPassPSO(const fs::path& vsPath, const fs::path& psPa
         .AddColorAttachment(s_vkSwapchain.GetTextureFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_BACKBUFFER]);
 }
 
 
@@ -4011,8 +3942,7 @@ static void CreateSkyboxPSO(const fs::path& vsPath, const fs::path& psPath)
         .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_SKYBOX]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_SKYBOX]);
 }
 
 
@@ -4051,8 +3981,7 @@ static void CreateDbgDrawPrimitivesPSO(const fs::path& vsPath, const fs::path& p
         .SetDepthAttachment(s_depthRT.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_DRAW_PRIMITIVES]);
 #endif
 }
 
@@ -4079,8 +4008,7 @@ static void CreateDbgRTViewPSO(const fs::path& vsPath, const fs::path& psPath)
         .AddColorAttachment(s_colorRT8U.GetFormat());
     
     pso = s_graphicsPSOBuilder.Build();
-    
-    s_vkDevice.SetObjDebugName(pso, "%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
+    pso.SetDebugName("%s_PSO", PASS_DBG_NAME[PASS_ID_DBG_RT_VIEW]);
 #endif
 }
 
@@ -4184,50 +4112,58 @@ static void CreateGeomCullingAndInstancingResources()
 
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
-        s_visGeomIDQueueBuffer[queue].CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
-        s_vkDevice.SetObjDebugName(s_visGeomIDQueueBuffer[queue], "%s_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_visGeomIDQueueBuffer[queue]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .SetDebugName("%s_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
-        s_geomBatchQueueBuffer[queue].CreateStorageBuffer<GPU_GeomBatch>(&s_vkDevice, s_cpuInstData.size());
-        s_vkDevice.SetObjDebugName(s_geomBatchQueueBuffer[queue], "%s_BATCH_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_geomBatchQueueBuffer[queue]
+            .CreateStorageBuffer<GPU_GeomBatch>(&s_vkDevice, s_cpuInstData.size())
+            .SetDebugName("%s_BATCH_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_sortedVisGeomIDQueueBuffer[queue].CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
-        s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueBuffer[queue], "%s_SORTED_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_sortedVisGeomIDQueueBuffer[queue]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .SetDebugName("%s_SORTED_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_geomDrawCmdQueueBuffer[queue].CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(
-            &s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
-        s_vkDevice.SetObjDebugName(s_geomDrawCmdQueueBuffer[queue], "%s_DRAW_CMD_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_geomDrawCmdQueueBuffer[queue]
+            .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
+            .SetDebugName("%s_DRAW_CMD_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
-        s_visGeomIDQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
-            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
-        s_vkDevice.SetObjDebugName(s_visGeomIDQueueSizeBuffer[queue], "%s_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_visGeomIDQueueSizeBuffer[queue]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
+            .SetDebugName("%s_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        
+        s_geomBatchQueueSizeBuffer[queue]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
+            .SetDebugName("%s_BATCH_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
-        s_geomBatchQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
-            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
-        s_vkDevice.SetObjDebugName(s_geomBatchQueueSizeBuffer[queue], "%s_BATCH_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
-
-        s_sortedVisGeomIDQueueSizeBuffer[queue].CreateStorageBuffer<glm::uint>(
-            &s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT);
-        s_vkDevice.SetObjDebugName(s_sortedVisGeomIDQueueSizeBuffer[queue], "%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
+        s_sortedVisGeomIDQueueSizeBuffer[queue]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
+            .SetDebugName("%s_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
     }
 
 
     for (uint32_t i = 0; i < s_geomCullVisInstSortKeysPingPongBuffers.size(); ++i) {
-        s_geomCullVisInstSortKeysPingPongBuffers[i].CreateStorageBuffer<GPU_GeomSortKey>(&s_vkDevice, s_cpuInstData.size());
-        s_vkDevice.SetObjDebugName(s_geomCullVisInstSortKeysPingPongBuffers[i], "GEOM_VIS_INST_SORT_KEYS_BUFFER_%u", i);
+        s_geomCullVisInstSortKeysPingPongBuffers[i]
+            .CreateStorageBuffer<GPU_GeomSortKey>(&s_vkDevice, s_cpuInstData.size())
+            .SetDebugName("GEOM_VIS_INST_SORT_KEYS_BUFFER_%u", i);
     
-        s_geomCullVisInstIDsPingPongBuffers[i].CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size());
-        s_vkDevice.SetObjDebugName(s_geomCullVisInstIDsPingPongBuffers[i], "GEOM_VIS_INST_IDS_BUFFER_%u", i);
+        s_geomCullVisInstIDsPingPongBuffers[i]
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .SetDebugName("GEOM_VIS_INST_IDS_BUFFER_{}", i);
     }
     
-    s_geomCullVisInstCounterBuffer.CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
-    s_vkDevice.SetObjDebugName(s_geomCullVisInstCounterBuffer, "GEOM_CULL_VIS_INST_COUNTER_BUFFER");
-
+    s_geomCullVisInstCounterBuffer
+        .CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT) 
+        .SetDebugName("GEOM_CULL_VIS_INST_COUNTER_BUFFER");
+    
     const uint32_t totalBucketCount = math::CeilDiv(s_cpuInstData.size(), GEOM_SORT_CS_GROUP_SIZE) * GEOM_SORT_RADIX_BUCKET_COUNT;
-    s_geomSortGroupOffsetsBuffer.CreateStorageBuffer<glm::uint>(&s_vkDevice, totalBucketCount);
-    s_vkDevice.SetObjDebugName(s_geomSortGroupOffsetsBuffer, "GEOM_SORT_BUCKET_OFFSETS_BUFFER");
-
-    s_geomSortBucketBasesBuffer.CreateStorageBuffer<glm::uint>(&s_vkDevice, GEOM_SORT_RADIX_BUCKET_COUNT);
-    s_vkDevice.SetObjDebugName(s_geomSortBucketBasesBuffer, "GEOM_SORT_BUCKET_BASES_BUFFER");
+    s_geomSortGroupOffsetsBuffer
+        .CreateStorageBuffer<glm::uint>(&s_vkDevice, totalBucketCount)
+        .SetDebugName("GEOM_SORT_BUCKET_OFFSETS_BUFFER");
+    
+    s_geomSortBucketBasesBuffer
+        .CreateStorageBuffer<glm::uint>(&s_vkDevice, GEOM_SORT_RADIX_BUCKET_COUNT)
+        .SetDebugName("GEOM_SORT_BUCKET_BASES_BUFFER");
 }
 
 
@@ -4247,56 +4183,49 @@ static void CreateCSMResources()
                 s_cpuInstData.size() * sizeof(glm::uint), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmVisGeomIDQueueBuffers[cascade][queue], "%s_CSM_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            ).SetDebugName("%s_CSM_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
             
             s_csmGeomBatchQueueBuffers[cascade][queue].Create(
                 &s_vkDevice, 
                 s_cpuInstData.size() * sizeof(GPU_GeomBatch), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmGeomBatchQueueBuffers[cascade][queue], "%s_CSM_BATCH_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
-
+            ).SetDebugName("%s_CSM_BATCH_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            
             s_csmSortedVisGeomIDQueueBuffers[cascade][queue].Create(
                 &s_vkDevice, 
                 s_cpuInstData.size() * sizeof(glm::uint), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT, 
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmSortedVisGeomIDQueueBuffers[cascade][queue], "%s_CSM_SORTED_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
-
+            ).SetDebugName("%s_CSM_SORTED_VIS_INST_ID_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            
             s_csmGeomDrawCmdQueueBuffers[cascade][queue].Create(
                 &s_vkDevice,
                 s_cpuInstData.size() * sizeof(GPU_CmdDrawIndexedIndirect),
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmGeomDrawCmdQueueBuffers[cascade][queue], "%s_CSM_DRAW_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            ).SetDebugName("%s_CSM_DRAW_CMD_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
             
             s_csmVisGeomIDQueueSizeBuffers[cascade][queue].Create(
                 &s_vkDevice,
                 sizeof(glm::uint), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], "%s_CSM_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
-
+            ).SetDebugName("%s_CSM_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            
             s_csmGeomBatchQueueSizeBuffers[cascade][queue].Create(
                 &s_vkDevice,
                 sizeof(glm::uint), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmGeomBatchQueueSizeBuffers[cascade][queue], "%s_CSM_BATCH_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
-
+            ).SetDebugName("%s_CSM_BATCH_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            
             s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue].Create(
                 &s_vkDevice,
                 sizeof(glm::uint), 
                 VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT,
                 allocInfo
-            );
-            s_vkDevice.SetObjDebugName(s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], "%s_CSM_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
+            ).SetDebugName("%s_CSM_SORTED_VIS_INST_ID_QUEUE_SIZE_BUFFER_%zu", GEOM_QUEUE_DBG_NAMES[queue], cascade);
         }
     }
 
@@ -4314,8 +4243,7 @@ static void CreateCSMResources()
     rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     rtCreateInfo.pAllocInfo = &allocInfo;
 
-    s_csmRT.Create(rtCreateInfo);
-    s_vkDevice.SetObjDebugName(s_csmRT, "CSM_DEPTH_RT");
+    s_csmRT.Create(rtCreateInfo).SetDebugName("CSM_DEPTH_RT");
 
     VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
@@ -4327,8 +4255,9 @@ static void CreateCSMResources()
         subresourceRange.baseArrayLayer = cascade;
         subresourceRange.layerCount = 1;
 
-        s_csmRTViews[cascade].Create(s_csmRT, mapping, subresourceRange);
-        s_vkDevice.SetObjDebugName(s_csmRTViews[cascade], "CSM_DEPTH_RT_VIEW_%zu", cascade);
+        s_csmRTViews[cascade]
+            .Create(s_csmRT, mapping, subresourceRange)
+            .SetDebugName("CSM_DEPTH_RT_VIEW_%zu", cascade);
     }
 
     vkn::TextureViewCreateInfo csmRTViewArrayCreateInfo = {};
@@ -4342,8 +4271,7 @@ static void CreateCSMResources()
     csmRTViewArrayCreateInfo.subresourceRange.baseArrayLayer = 0;
     csmRTViewArrayCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_csmRTViewArray.Create(csmRTViewArrayCreateInfo);
-    s_vkDevice.SetObjDebugName(s_csmRTViewArray, "CSM_DEPTH_RT_VIEW_ARRAY");
+    s_csmRTViewArray.Create(csmRTViewArrayCreateInfo).SetDebugName("CSM_DEPTH_RT_VIEW_ARRAY");
 }
 
 
@@ -4497,8 +4425,7 @@ static void CreateCommonSamplers()
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
 
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
-        s_commonSamplers[i].Create(samplerCreateInfo[i]);
-        s_vkDevice.SetObjDebugName(s_commonSamplers[i], COMMON_SAMPLERS_DBG_NAMES[i]);
+        s_commonSamplers[i].Create(samplerCreateInfo[i]).SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
     }
 }
 
@@ -4536,8 +4463,7 @@ static void CreateCommonSMSamplers()
     samplerCreateInfo[CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL].compareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
 
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
-        s_commonCmpSamplers[i].Create(samplerCreateInfo[i]);
-        s_vkDevice.SetObjDebugName(s_commonCmpSamplers[i], COMMON_CMP_SAMPLERS_DBG_NAMES[i]);
+        s_commonCmpSamplers[i].Create(samplerCreateInfo[i]).SetDebugName(COMMON_CMP_SAMPLERS_DBG_NAMES[i]);
     }
 }
 
@@ -5023,8 +4949,9 @@ static void UploadGPUGeomStream(GPU_GeomStreamID ID)
     streamBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     streamBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    s_geomStreamBuffers[ID].Create(&s_vkDevice, gpuStreamSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, streamBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_geomStreamBuffers[ID], "COMMON_GEOM_STREAM_%s", COMMON_GEOM_STREAM_DBG_NAMES[ID]);
+    s_geomStreamBuffers[ID]
+        .Create(&s_vkDevice, gpuStreamSize, VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, streamBufAllocInfo)
+        .SetDebugName("COMMON_GEOM_STREAM_%s", COMMON_GEOM_STREAM_DBG_NAMES[ID]);
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomStreamBuffers[ID], gpuStreamSize); 
@@ -5053,16 +4980,18 @@ static void UploadGPUMeshData()
     idxBufAllocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     idxBufAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-    s_geomIndexBuffer.Create(&s_vkDevice, gpuIndexBufferSize, VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, idxBufAllocInfo);
-    s_vkDevice.SetObjDebugName(s_geomIndexBuffer, "COMMON_IB");
+    s_geomIndexBuffer
+        .Create(&s_vkDevice, gpuIndexBufferSize, VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, idxBufAllocInfo)
+        .SetDebugName("COMMON_IB");
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer){
         cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, s_geomIndexBuffer, gpuIndexBufferSize);    
     });
 
     
-    s_commonMeshBuffer.CreateStorageBuffer<GPU_Mesh>(&s_vkDevice, s_cpuMeshData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
-    s_vkDevice.SetObjDebugName(s_commonMeshBuffer, "COMMON_MESH_BUFFER");
+    s_commonMeshBuffer
+        .CreateStorageBuffer<GPU_Mesh>(&s_vkDevice, s_cpuMeshData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("COMMON_MESH_BUFFER");
 
     const size_t meshDataBufferSize = s_commonMeshBuffer.GetMemorySize();
     CORE_ASSERT(meshDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
@@ -5076,8 +5005,9 @@ static void UploadGPUMeshData()
     });
 
 
-    s_commonMeshLODBuffer.CreateStorageBuffer<GPU_MeshLOD>(&s_vkDevice, s_cpuMeshLODData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
-    s_vkDevice.SetObjDebugName(s_commonMeshLODBuffer, "COMMON_MESH_LOD_BUFFER");
+    s_commonMeshLODBuffer
+        .CreateStorageBuffer<GPU_MeshLOD>(&s_vkDevice, s_cpuMeshLODData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("COMMON_MESH_LOD_BUFFER");
 
     const size_t meshLODDataBufferSize = s_commonMeshLODBuffer.GetMemorySize();
     CORE_ASSERT(meshLODDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
@@ -5136,8 +5066,7 @@ static void UploadGPUTextureData()
         imageCreateInfo.pAllocInfo = &imageAllocInfo;
 
         vkn::Texture& sceneImage = s_commonMaterialTextures[textureIdx];
-        sceneImage.Create(imageCreateInfo);
-        s_vkDevice.SetObjDebugName(sceneImage, "COMMON_MTL_TEXTURE_%zu", textureIdx);
+        sceneImage.Create(imageCreateInfo).SetDebugName("COMMON_MTL_TEXTURE_%zu", textureIdx);
 
         VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
         
@@ -5150,8 +5079,7 @@ static void UploadGPUTextureData()
 
         vkn::TextureView& sceneImageView = s_commonMaterialTextureViews[textureIdx];
 
-        sceneImageView.Create(sceneImage, mapping, subresourceRange);
-        s_vkDevice.SetObjDebugName(sceneImageView, "COMMON_MTL_TEXTURE_VIEW_%zu", textureIdx);
+        sceneImageView.Create(sceneImage, mapping, subresourceRange).SetDebugName("COMMON_MTL_TEXTURE_VIEW_%zu", textureIdx);
 
         ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
             vkn::Texture& texture = s_commonMaterialTextures[textureIdx];
@@ -5201,8 +5129,9 @@ static void UploadGPUMaterialData()
 
     eng::Timer timer;
 
-    s_commonMaterialBuffer.CreateStorageBuffer<GPU_GeomMaterial>(&s_vkDevice, s_cpuMaterialData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
-    s_vkDevice.SetObjDebugName(s_commonMaterialBuffer, "COMMON_MATERIAL_DATA");
+    s_commonMaterialBuffer
+        .CreateStorageBuffer<GPU_GeomMaterial>(&s_vkDevice, s_cpuMaterialData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("COMMON_MATERIAL_DATA");
 
     const size_t mtlDataBufferSize = s_commonMaterialBuffer.GetMemorySize();
     CORE_ASSERT(mtlDataBufferSize <= s_commonStagingBuffer.GetMemorySize());
@@ -5225,8 +5154,9 @@ static void UploadGPUInstData()
 
     eng::Timer timer;
 
-    s_commonInstBuffer.CreateStorageBuffer<GPU_GeomInst>(&s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT);
-    s_vkDevice.SetObjDebugName(s_commonInstBuffer, "COMMON_INSTANCE_BUFFER");
+    s_commonInstBuffer
+        .CreateStorageBuffer<GPU_GeomInst>(&s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("COMMON_INSTANCE_BUFFER");
 
     const size_t instBufferSize = s_commonInstBuffer.GetMemorySize();
     CORE_ASSERT(instBufferSize <= s_commonStagingBuffer.GetMemorySize());
@@ -5308,24 +5238,21 @@ static void LoadScene(const fs::path& filepath)
 
 static void CreateCommonConstBuffer()
 {
-    s_commonConstBuffer.CreateConstBuffer<GPU_CommonCBData>(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_commonConstBuffer, "COMMON_CB");
+    s_commonConstBuffer.CreateConstBuffer<GPU_CommonCBData>(&s_vkDevice, 1).SetDebugName("COMMON_CB");
 }
 
 
 static void CreateCommonDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    s_commonDbgConstBuffer.CreateConstBuffer<GPU_CommonDbgCBData>(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_commonDbgConstBuffer, "COMMON_DBG_CB");
+    s_commonDbgConstBuffer.CreateConstBuffer<GPU_CommonDbgCBData>(&s_vkDevice, 1).SetDebugName("COMMON_DBG_CB");
 #endif
 }
 
 
 static void CreateDeferredLightingConstBuffer()
 {
-    s_deferredLightingConstBuffer.CreateConstBuffer<GPU_LightingData>(&s_vkDevice);
-    s_vkDevice.SetObjDebugName(s_deferredLightingConstBuffer, "DEFERRED_LIGHTING_CB");
+    s_deferredLightingConstBuffer.CreateConstBuffer<GPU_LightingData>(&s_vkDevice, 1).SetDebugName("DEFERRED_LIGHTING_CB");
 }
 
 
@@ -7438,7 +7365,7 @@ namespace DbgUI
 
             if (ImGui::CollapsingHeader("Memory")) {
                 VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
-                vmaGetHeapBudgets(vkn::GetAllocator().Get(), budgets);
+                vmaGetHeapBudgets(vkn::Allocator::Inst().Get(), budgets);
 
                 for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
                     const VmaBudget& budget = budgets[i];
@@ -8275,7 +8202,7 @@ int main(int argc, char* argv[])
     CreateSyncObjects();
     
     s_pRenderCmdBuffer = s_commonCmdPool.AllocCmdBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    s_vkDevice.SetObjDebugName(*s_pRenderCmdBuffer, "RND_CMD_BUFFER");
+    s_pRenderCmdBuffer->SetDebugName("RND_CMD_BUFFER");
 
     UploadGPUResources();
     CreateIBLResources();

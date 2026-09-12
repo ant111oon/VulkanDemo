@@ -32,12 +32,10 @@ namespace vkn
     };
 
 
-    class Instance : public Handle<VkInstance>
+    class Instance final : public Handle<VkInstance>
     {
-        friend Instance& GetInstance();
-
     public:
-        using Base = Handle<VkInstance>;
+        static Instance& Inst();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Instance);
@@ -60,14 +58,10 @@ namespace vkn
         Instance() = default;
 
     private:
+        using Base = Handle<VkInstance>;
+
+    private:
         VkDebugUtilsMessengerEXT m_dbgMessenger = VK_NULL_HANDLE;
         uint32_t m_apiVersion = UINT32_MAX;
     };
-
-
-    ENG_FORCE_INLINE Instance& GetInstance()
-    {
-        static Instance instance;
-        return instance;
-    }
 }

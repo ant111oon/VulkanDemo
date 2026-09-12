@@ -12,11 +12,8 @@ namespace vkn
     };
 
 
-    class Fence : public Handle<VkFence>
+    class Fence final : public DeviceResource<VkFence>
     {
-    public:
-        using Base = Handle<VkFence>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Fence);
 
@@ -40,9 +37,7 @@ namespace vkn
         VkResult GetStatus() const;
         const Fence& GetStatus(VkResult& status) const;
 
-        Device& GetDevice() const;
-
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkFence>;
     };
 }

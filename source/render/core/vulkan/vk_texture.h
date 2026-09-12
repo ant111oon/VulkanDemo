@@ -22,7 +22,7 @@ namespace vkn
     };
 
 
-    class TextureView : public Handle<VkImageView>
+    class TextureView final : public DeviceResource<VkImageView>
     {
     public:
         struct SubresourceRange
@@ -32,8 +32,6 @@ namespace vkn
             uint8_t baseArrayLayer = 0;
             uint8_t layerCount = 0;
         };
-
-        using Base = Handle<VkImageView>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(TextureView);
@@ -53,7 +51,6 @@ namespace vkn
 
         bool CheckLayoutConsistency() const;
 
-        Device& GetDevice() const;
         const Texture& GetOwner() const;
 
         VkImageViewType GetType() const;
@@ -69,6 +66,8 @@ namespace vkn
         bool IsValid() const;
 
     private:
+        using Base = DeviceResource<VkImageView>;
+
         const Texture* m_pOwner = nullptr;
 
         VkImageViewType m_type = {};
@@ -96,15 +95,12 @@ namespace vkn
     };
 
 
-    class Texture : public Handle<VkImage>
+    class Texture final : public DeviceResource<VkImage>
     {
         friend class CmdBuffer;
         friend class DescriptorBuffer;
 
         struct AccessState;
-
-    public:
-        using Base = Handle<VkImage>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Texture);
@@ -130,8 +126,6 @@ namespace vkn
         bool IsStencil() const;
         bool IsDepthStencil() const;
 
-        Device& GetDevice() const;
-
         VkDeviceMemory GetMemory() const;
         VkDeviceSize GetMemorySize() const;
 
@@ -153,7 +147,7 @@ namespace vkn
         TextureAccessTracker& GetAccessTracker();
         
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkImage>;
         
         VmaAllocation     m_allocation = VK_NULL_HANDLE;
         VmaAllocationInfo m_allocInfo = {};
@@ -192,11 +186,8 @@ namespace vkn
     };
 
 
-    class Sampler : public Handle<VkSampler>
+    class Sampler final : public DeviceResource<VkSampler>
     {
-    public:
-        using Base = Handle<VkSampler>;
-
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Sampler);
 
@@ -211,9 +202,7 @@ namespace vkn
         Sampler& Create(const SamplerCreateInfo& info);
         Sampler& Destroy();
 
-        Device& GetDevice() const;
-
     private:
-        Device* m_pDevice = nullptr;
+        using Base = DeviceResource<VkSampler>;
     };
 }

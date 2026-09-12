@@ -12,12 +12,10 @@ namespace vkn
     };
 
 
-    class Surface : public Handle<VkSurfaceKHR>
+    class Surface final : public Handle<VkSurfaceKHR>
     {
-        friend Surface& GetSurface();
-
     public:
-        using Base = Handle<VkSurfaceKHR>;
+        static Surface& Inst();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Surface);
@@ -32,13 +30,8 @@ namespace vkn
         Surface() = default;
 
     private:
+        using Base = Handle<VkSurfaceKHR>;
+
         Instance* m_pInstance = nullptr;
     };
-
-
-    ENG_FORCE_INLINE Surface& GetSurface()
-    {
-        static Surface surface;
-        return surface;
-    }
 }

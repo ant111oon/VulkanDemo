@@ -49,7 +49,9 @@ namespace vkn
             Destroy();
         }
 
-        VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
+        Device* pDevice = info.pDevice;
+
+        VK_ASSERT(pDevice && pDevice->IsCreated());
 
         VkQueryPoolCreateInfo queryPoolCreateInfo = {};
         queryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
@@ -58,14 +60,14 @@ namespace vkn
         queryPoolCreateInfo.queryCount = info.queryCount;
         queryPoolCreateInfo.pipelineStatistics = info.pipelineStatistics;
 
-        Base::Create([vkDevice = info.pDevice->Get(), &queryPoolCreateInfo](VkQueryPool& pool) {
+        Base::Create(pDevice, [vkDevice = pDevice->Get(), &queryPoolCreateInfo](VkQueryPool& pool) {
             VK_CHECK(vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, nullptr, &pool));
             return pool != VK_NULL_HANDLE;
         });
         
         VK_ASSERT(IsCreated());
 
-        m_pDevice = info.pDevice;
+        m_pDevice = pDevice;
         m_queryCount = info.queryCount;
 
         return *this;
@@ -109,13 +111,6 @@ namespace vkn
     bool QueryPool::IsQueryIndexValid(uint32_t queryIndex) const
     {
         return IsCreated() ? queryIndex < m_queryCount : false;
-    }
-
-
-    Device& QueryPool::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 

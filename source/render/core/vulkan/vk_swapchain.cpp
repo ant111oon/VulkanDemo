@@ -136,14 +136,13 @@ namespace vkn
         VK_ASSERT(pDevice && pDevice->IsCreated());
         VK_ASSERT(image != VK_NULL_HANDLE);
 
-        Base::Create([vkImage = image](VkImage& dstImage) {
+        Base::Create(pDevice, [vkImage = image](VkImage& dstImage) {
             dstImage = vkImage;
             return dstImage != VK_NULL_HANDLE;
         });
 
         VK_ASSERT(IsCreated());
 
-        m_pDevice = pDevice;
         m_type = type;
         m_extent = extent;
         m_format = format;
@@ -160,7 +159,6 @@ namespace vkn
             return *this;
         }
 
-        m_pDevice = nullptr;
         m_type = {};
         m_extent = {};
         m_format = {};
@@ -186,13 +184,6 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         return m_accessTracker;
-    }
-
-
-    Device& SCTexture::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 
@@ -270,13 +261,6 @@ namespace vkn
     }
 
 
-    Device& SCTextureView::GetDevice() const
-    {
-        VK_ASSERT(IsValid());
-        return m_pOwner->GetDevice();
-    }
-
-
     bool SCTextureView::IsValid() const
     {
         return IsCreated() && m_pOwner->IsCreated();
@@ -302,8 +286,8 @@ namespace vkn
         imageViewCreateInfo.components = mapping;
         imageViewCreateInfo.subresourceRange = subresourceRange;
 
-        Base::Create([vkDevice = pOwner->GetDevice().Get(), &imageViewCreateInfo](VkImageView& view) {
-            VK_CHECK(vkCreateImageView(vkDevice, &imageViewCreateInfo, nullptr, &view));
+        Base::Create(&pOwner->GetDevice(), [pOwner, &imageViewCreateInfo](VkImageView& view) {
+            VK_CHECK(vkCreateImageView(pOwner->GetDevice().Get(), &imageViewCreateInfo, nullptr, &view));
             return view != VK_NULL_HANDLE;
         });
 
@@ -326,8 +310,8 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([vkDevice = GetDevice().Get()](VkImageView& view) {
-            vkDestroyImageView(vkDevice, view, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkImageView& view) {
+            vkDestroyImageView(device, view, nullptr);
         });
 
         m_pOwner = nullptr;
@@ -337,6 +321,13 @@ namespace vkn
         m_subresourceRange = {};
 
         return *this;
+    }
+
+
+    Swapchain &Swapchain::Inst()
+    {
+        static Swapchain swapchain;
+        return swapchain;
     }
 
 
@@ -367,11 +358,10 @@ namespace vkn
         DestroyTextureViews();
         DestroyTextures();
 
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkSwapchainKHR& swapchain) {
-            vkDestroySwapchainKHR(vkDevice, swapchain, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkSwapchainKHR& swapchain) {
+            vkDestroySwapchainKHR(device, swapchain, nullptr);
         });
 
-        m_pDevice = nullptr;
         m_pSurface = nullptr;
         
         m_flags = {};
@@ -424,20 +414,19 @@ namespace vkn
         }
 
         if (IsCreated()) {
-            Base::Destroy([vkDevice = GetDevice().Get()](VkSwapchainKHR& swapchain) {
-                vkDestroySwapchainKHR(vkDevice, swapchain, nullptr);
+            Base::Destroy([device = GetDevice().Get()](VkSwapchainKHR& swapchain) {
+                vkDestroySwapchainKHR(device, swapchain, nullptr);
             });
         }
 
         succeded = true;
 
-        Base::Create([newSwapchain](VkSwapchainKHR& swapchain) {
+        Base::Create(info.pDevice, [newSwapchain](VkSwapchainKHR& swapchain) {
             swapchain = newSwapchain;
             return swapchain != VK_NULL_HANDLE;
         });
 
         m_pSurface = info.pSurface;
-        m_pDevice = info.pDevice;
         m_flags = swapchainCreateInfo.flags;
         m_minImageCount = swapchainCreateInfo.minImageCount;
         m_textureFormat = swapchainCreateInfo.imageFormat;
@@ -453,6 +442,8 @@ namespace vkn
         PullTextures();
         CreateTextureViews();
 
+        SetDebugName(GetDebugName());
+
         return *this;
     }
 
@@ -466,7 +457,7 @@ namespace vkn
         }
 
         SwapchainCreateInfo createInfo = {};
-        createInfo.pDevice = m_pDevice;
+        createInfo.pDevice = &GetDevice();
         createInfo.pSurface = m_pSurface;
 
         createInfo.width = width;
@@ -483,13 +474,6 @@ namespace vkn
         createInfo.presentMode = m_presentMode;
 
         return Recreate(createInfo, succeded);
-    }
-
-
-    Device& Swapchain::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 
@@ -546,19 +530,18 @@ namespace vkn
 
     void Swapchain::PullTextures()
     {
-        VkDevice vkDevice = m_pDevice->Get();
+        VkDevice device = GetDevice().Get();
 
-        VK_ASSERT(vkDevice != VK_NULL_HANDLE);
+        VK_ASSERT(device != VK_NULL_HANDLE);
         VK_ASSERT(Get() != VK_NULL_HANDLE);
 
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, Get(), &m_currImageCount, nullptr));
+        VK_CHECK(vkGetSwapchainImagesKHR(device, Get(), &m_currImageCount, nullptr));
         
         std::vector<VkImage> images(m_currImageCount);
-        VK_CHECK(vkGetSwapchainImagesKHR(vkDevice, Get(), &m_currImageCount, images.data()));
+        VK_CHECK(vkGetSwapchainImagesKHR(device, Get(), &m_currImageCount, images.data()));
 
         for (uint32_t i = 0; i < m_currImageCount; ++i) {
-            m_textures[i].Create(m_pDevice, images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat);
-            m_pDevice->SetObjDebugName(m_textures[i], "SWAPCHAIN_TEXTURE_%u", i);
+            m_textures[i].Create(&GetDevice(), images[i], VK_IMAGE_TYPE_2D, m_textureExtent, m_textureFormat).SetDebugName("SWAPCHAIN_TEXTURE_%u", i);
         }
     }
 
@@ -585,8 +568,7 @@ namespace vkn
             subresourceRange.layerCount = 1;
             subresourceRange.levelCount = 1;
 
-            m_textureViews[i].Create(m_textures[i], components, subresourceRange);
-            GetDevice().SetObjDebugName(m_textureViews[i], "SWAPCHAIN_TEXTURE_VIEW_%u", i);
+            m_textureViews[i].Create(m_textures[i], components, subresourceRange).SetDebugName("SWAPCHAIN_TEXTURE_VIEW_%u", i);
         }
     }
 

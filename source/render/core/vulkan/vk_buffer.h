@@ -19,17 +19,15 @@ namespace vkn
     };
 
 
-    class Buffer : public Handle<VkBuffer>
+    class Buffer final : public DeviceResource<VkBuffer>
     {
         friend class CmdBuffer;
-
-    public:
-        using Base = Handle<VkBuffer>;
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(Buffer);
 
         Buffer() = default;
+        
         Buffer(const BufferCreateInfo& info);
         Buffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 usage, const AllocationInfo& allocInfo);
 
@@ -44,7 +42,7 @@ namespace vkn
         Buffer& CreateConstBuffer(Device* pDevice, VkDeviceSize size, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u);
 
         template<typename T>
-        Buffer& CreateConstBuffer(Device* pDevice, uint32_t elemCount = 1u, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u)
+        Buffer& CreateConstBuffer(Device* pDevice, uint32_t elemCount, VkBufferUsageFlags2 extraUsageFlags = 0u, VmaAllocationCreateFlags extraAllocFlags = 0u)
         {
             return CreateConstBuffer(pDevice, sizeof(T) * elemCount, extraUsageFlags, extraAllocFlags);
         }
@@ -64,8 +62,6 @@ namespace vkn
 
         Buffer& Unmap();
 
-        Device& GetDevice() const;
-
         VkDeviceMemory GetMemory() const;
         VkDeviceAddress GetDeviceAddress() const;
         VkDeviceSize GetMemorySize() const;
@@ -82,6 +78,8 @@ namespace vkn
         const BufferAccessTracker& GetAccessTracker() const;
 
     private:
+        using Base = DeviceResource<VkBuffer>;
+
         enum StateBits
         {
             BIT_IS_STORAGE_BUFFER,
@@ -94,8 +92,6 @@ namespace vkn
         };
 
     private:
-        Device* m_pDevice = nullptr;
-
         VmaAllocation m_allocation = VK_NULL_HANDLE;
         VmaAllocationInfo m_allocInfo = {};
 

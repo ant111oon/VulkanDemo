@@ -59,7 +59,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pDevice, layout.m_pDevice);
         std::swap(m_descriptors, layout.m_descriptors);
         std::swap(m_size, layout.m_size);
         std::swap(m_state, layout.m_state);
@@ -149,14 +148,12 @@ namespace vkn
 
         createInfo.pNext = &bindingFlagsCreateInfo;
 
-        Base::Create([pDevice, &createInfo](VkDescriptorSetLayout& layout) {
+        Base::Create(pDevice, [pDevice, &createInfo](VkDescriptorSetLayout& layout) {
             VK_CHECK(vkCreateDescriptorSetLayout(pDevice->Get(), &createInfo, nullptr, &layout));
             return layout != VK_NULL_HANDLE;
         });
         
         VK_ASSERT(IsCreated());
-
-        m_pDevice = pDevice;
 
         if ((flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT) != 0u) {
             VK_ASSERT_MSG(descriptorsCount <= VKN_MAX_PUSH_DESCRIPTORS_COUNT, 
@@ -191,11 +188,9 @@ namespace vkn
         }
 
 
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkDescriptorSetLayout& layout) {
-            vkDestroyDescriptorSetLayout(vkDevice, layout, nullptr);        
+        Base::Destroy([device = GetDevice().Get()](VkDescriptorSetLayout& layout) {
+            vkDestroyDescriptorSetLayout(device, layout, nullptr);        
         });
-        
-        m_pDevice = nullptr;
         
         m_size = 0;
         m_descriptors = {};
@@ -257,13 +252,6 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         return m_descriptors.size();
-    }
-
-
-    Device& DescriptorSetLayout::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 

@@ -40,8 +40,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pDevice, buffer.m_pDevice);
-
         std::swap(m_allocation, buffer.m_allocation);
         std::swap(m_allocInfo, buffer.m_allocInfo);
         
@@ -78,7 +76,7 @@ namespace vkn
         }
 
         VK_ASSERT(info.pDevice && info.pDevice->IsCreated());
-        VK_ASSERT(GetAllocator().IsCreated());
+        VK_ASSERT(Allocator::Inst().IsCreated());
         VK_ASSERT(info.pAllocInfo);
         VK_ASSERT(info.size > 0);
 
@@ -94,9 +92,9 @@ namespace vkn
         allocCI.usage = info.pAllocInfo->usage;
         allocCI.flags = info.pAllocInfo->flags;
 
-        Base::Create([&allocation = m_allocation, &ci, &allocCI, &allocInfo = m_allocInfo](VkBuffer& buffer) {
-            VK_CHECK(vmaCreateBuffer(GetAllocator().Get(), &ci, &allocCI, &buffer, &allocation, &allocInfo));
-            return buffer != VK_NULL_HANDLE && allocation != VK_NULL_HANDLE;
+        Base::Create(info.pDevice, [this, &ci, &allocCI](VkBuffer& buffer) {
+            VK_CHECK(vmaCreateBuffer(Allocator::Inst().Get(), &ci, &allocCI, &buffer, &m_allocation, &m_allocInfo));
+            return buffer != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE;
         });
 
         // vmaCreateBuffer automatically binds buffer and memory if VMA_ALLOCATION_CREATE_DONT_BIND_BIT is not provided
@@ -109,7 +107,6 @@ namespace vkn
         addressInfo.buffer = Get();
         m_deviceAddress = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
 
-        m_pDevice = info.pDevice;
         m_size = info.size;
 
         m_state.set(BIT_IS_DESCRIPTOR_BUFFER, (info.usage & VK_BUFFER_USAGE_2_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT) != 0);
@@ -178,13 +175,12 @@ namespace vkn
 
         m_accessTracker.Destroy();
 
-        m_pDevice = nullptr;
         m_state.reset();
 
-        Base::Destroy([&allocation = m_allocation](VkBuffer& buffer) {
-            vmaDestroyBuffer(GetAllocator().Get(), buffer, allocation);
+        Base::Destroy([this](VkBuffer& buffer) {
+            vmaDestroyBuffer(Allocator::Inst().Get(), buffer, m_allocation);
             
-            allocation = VK_NULL_HANDLE;
+            m_allocation = VK_NULL_HANDLE;
             buffer = VK_NULL_HANDLE;
         });
 
@@ -206,7 +202,7 @@ namespace vkn
         VK_ASSERT(!IsMapped());
     
         void* pData = nullptr;
-        VK_CHECK(vmaMapMemory(GetAllocator().Get(), m_allocation, &pData));
+        VK_CHECK(vmaMapMemory(Allocator::Inst().Get(), m_allocation, &pData));
 
         m_state.set(BIT_IS_MAPPED, pData != nullptr);
 
@@ -234,18 +230,11 @@ namespace vkn
 
         VK_ASSERT(IsMapped());
 
-        vmaUnmapMemory(GetAllocator().Get(), m_allocation);
+        vmaUnmapMemory(Allocator::Inst().Get(), m_allocation);
 
         m_state.set(BIT_IS_MAPPED, false);
 
         return *this;
-    }
-
-
-    Device& Buffer::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 

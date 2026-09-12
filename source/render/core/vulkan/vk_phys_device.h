@@ -18,12 +18,10 @@ namespace vkn
     };
 
 
-    class PhysicalDevice : public Handle<VkPhysicalDevice>
+    class PhysicalDevice final : public Handle<VkPhysicalDevice>
     {
-        friend PhysicalDevice& GetPhysicalDevice();
-
     public:
-        using Base = Handle<VkPhysicalDevice>;
+        static PhysicalDevice& Inst();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(PhysicalDevice);
@@ -52,6 +50,9 @@ namespace vkn
         PhysicalDevice() = default;
 
     private:
+        using Base = Handle<VkPhysicalDevice>;
+
+    private:
         Instance* m_pInstance = nullptr;
 
         VkPhysicalDeviceMemoryProperties m_memoryProps = {};
@@ -64,11 +65,4 @@ namespace vkn
         VkPhysicalDeviceVulkan11Features m_features11 = {};
         VkPhysicalDeviceFeatures2 m_features2 = {};
     };
-
-
-    ENG_FORCE_INLINE PhysicalDevice& GetPhysicalDevice()
-    {
-        static PhysicalDevice device;
-        return device;
-    }
 }

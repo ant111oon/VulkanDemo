@@ -35,7 +35,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pDevice, shader.m_pDevice);
         std::swap(m_stage, shader.m_stage);
         std::swap(m_entryName, shader.m_entryName);
 
@@ -68,14 +67,13 @@ namespace vkn
         shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(spirv.data());
         shaderCreateInfo.codeSize = spirv.size();
 
-        Base::Create([vkDevice = pDevice->Get(), &shaderCreateInfo](VkShaderModule& shader) {
+        Base::Create(pDevice, [vkDevice = pDevice->Get(), &shaderCreateInfo](VkShaderModule& shader) {
             VK_CHECK(vkCreateShaderModule(vkDevice, &shaderCreateInfo, nullptr, &shader));
             return shader != VK_NULL_HANDLE;
         });
 
         VK_ASSERT(IsCreated());
 
-        m_pDevice = pDevice;
         m_stage = stage;
 
         memcpy(m_entryName.data(), entryName.data(), std::min(m_entryName.size() - 1, entryName.size()));
@@ -90,23 +88,14 @@ namespace vkn
             return *this;
         }
         
-        Base::Destroy([vkDevice = m_pDevice->Get()](VkShaderModule& shader) {
-            vkDestroyShaderModule(vkDevice, shader, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkShaderModule& shader) {
+            vkDestroyShaderModule(device, shader, nullptr);
         });
         
         m_stage = {};
         m_entryName.fill(0);
-        
-        m_pDevice = nullptr;
 
         return *this;
-    }
-
-
-    Device& Shader::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 
@@ -179,8 +168,6 @@ namespace vkn
             Destroy();
         }
 
-        std::swap(m_pDevice, layout.m_pDevice);
-
         Base::operator=(std::move(layout));
 
         return *this;
@@ -227,14 +214,12 @@ namespace vkn
         createInfo.pushConstantRangeCount = pushConstantRanges.size();
         createInfo.pPushConstantRanges = pushConstantRanges.empty() ? nullptr : pushConstantRanges.data();
 
-        Base::Create([pDevice, &createInfo](VkPipelineLayout& layout) {
+        Base::Create(pDevice, [pDevice, &createInfo](VkPipelineLayout& layout) {
             VK_CHECK(vkCreatePipelineLayout(pDevice->Get(), &createInfo, nullptr, &layout));
             return layout != VK_NULL_HANDLE;
         });
 
         VK_ASSERT(IsCreated());
-
-        m_pDevice = pDevice;
 
         return *this;
     }
@@ -246,20 +231,11 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([pDevice = m_pDevice](VkPipelineLayout& layout) {
-            vkDestroyPipelineLayout(pDevice->Get(), layout, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkPipelineLayout& layout) {
+            vkDestroyPipelineLayout(device, layout, nullptr);
         });
 
-        m_pDevice = nullptr;
-
         return *this;
-    }
-
-
-    Device& PSOLayout::GetDevice() const
-    {
-        VK_ASSERT(IsCreated());
-        return *m_pDevice;
     }
 
 
@@ -278,7 +254,7 @@ namespace vkn
 
         VK_ASSERT(pLayout && pLayout->IsCreated());
         
-        Base::Create([&pso](VkPipeline& dstPSO) {
+        Base::Create(&pLayout->GetDevice(), [&pso](VkPipeline& dstPSO) {
             dstPSO = pso;
             return dstPSO != VK_NULL_HANDLE;
         });
@@ -327,8 +303,8 @@ namespace vkn
             return *this;
         }
 
-        Base::Destroy([vkDevice = GetDevice().Get()](VkPipeline& pso) {
-            vkDestroyPipeline(vkDevice, pso, nullptr);
+        Base::Destroy([device = GetDevice().Get()](VkPipeline& pso) {
+            vkDestroyPipeline(device, pso, nullptr);
         });
 
         m_pLayout = nullptr;
@@ -342,7 +318,7 @@ namespace vkn
     {
         VK_ASSERT(IsCreated());
         
-        if (IsRasterization()) {
+        if (IsRender()) {
             return VK_PIPELINE_BIND_POINT_GRAPHICS;
         } else if (IsCompute()) {
             return VK_PIPELINE_BIND_POINT_COMPUTE;
@@ -353,12 +329,6 @@ namespace vkn
     }
 
 
-    Device& PSO::GetDevice() const
-    {
-        return GetLayout().GetDevice();
-    }
-
-
     PSOLayout& PSO::GetLayout() const
     {
         VK_ASSERT(IsCreated());
@@ -366,10 +336,10 @@ namespace vkn
     }
 
 
-    bool PSO::IsRasterization() const
+    bool PSO::IsRender() const
     {
         VK_ASSERT(IsCreated());
-        return m_state.test(BIT_IS_RASTERIZATION_PSO);
+        return m_state.test(BIT_IS_RENDER_PSO);
     }
 
 
@@ -422,7 +392,6 @@ namespace vkn
 
         return *this;
     }
-
 
     GraphicsPSOBuilder& GraphicsPSOBuilder::SetFlags(VkPipelineCreateFlags flags)
     {
@@ -714,11 +683,11 @@ namespace vkn
         psoCreateInfo.layout = m_pLayout->Get();
 
         VkPipeline pso = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateGraphicsPipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &psoCreateInfo, nullptr, &pso));
+        VK_CHECK(vkCreateGraphicsPipelines(m_pLayout->GetDevice().Get(), VK_NULL_HANDLE, 1, &psoCreateInfo, nullptr, &pso));
         VK_ASSERT(pso != VK_NULL_HANDLE);
 
         PSO::State state = {};
-        state.set(PSO::StateBits::BIT_IS_RASTERIZATION_PSO);
+        state.set(PSO::StateBits::BIT_IS_RENDER_PSO);
 
         return PSO(m_pLayout, pso, state);
     }
@@ -736,7 +705,7 @@ namespace vkn
     }
 
 
-    ComputePSOBuilder& ComputePSOBuilder::SetFlags(VkPipelineCreateFlags flags)
+    ComputePSOBuilder &ComputePSOBuilder::SetFlags(VkPipelineCreateFlags flags)
     {
         m_createInfo.flags = flags;
         return *this;
@@ -773,7 +742,7 @@ namespace vkn
         CORE_ASSERT(m_pLayout && m_pLayout->IsCreated());
 
         VkPipeline pso = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateComputePipelines(GetDevice().Get(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &pso));
+        VK_CHECK(vkCreateComputePipelines(m_pLayout->GetDevice().Get(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &pso));
         VK_ASSERT(pso != VK_NULL_HANDLE);
 
         PSO::State state = {};
