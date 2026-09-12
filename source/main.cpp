@@ -1623,7 +1623,7 @@ static math::AABB GetWorldAABB(const math::AABB& aabbLCS, const glm::float4x4& w
 
 static bool IsInstFrustumVisible(const GPU_GeomInst& inst)
 {
-    TM_TRANSIENT_MARKER_C(0x9b30ff, "CPU_Is_Inst_Visible");
+    TM_TRANSIENT_MARKER_C(0x9b30ff, "IsInstFrustumVisible");
 
     const math::Frustum& frustum = s_mainCamera.GetFrustum();
 
@@ -4513,7 +4513,7 @@ static void WriteDescriptorSets()
 
 static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& mesh, size_t primIdx)
 {
-    TM_MARKER_C_FMT(0x8b008b, "Load_Scene_Mesh_Data_%s", mesh.name.c_str());
+    TM_MARKER_C_FMT(0x8b008b, "Mesh_%s_InstDataLoading", mesh.name.c_str());
 
     auto GetVertexAttribAccessor = [](const gltf::Asset& asset, const gltf::Primitive& primitive, std::string_view name) -> const gltf::Accessor*
     {
@@ -4601,7 +4601,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     cpuMesh.firstLOD = s_cpuMeshLODData.size();
 
     {
-        TM_MARKER_C_FMT(0x8b008b, "Mesh_%s_LOD_Generation", mesh.name.c_str());
+        TM_MARKER_C_FMT(0x8b008b, "Mesh_%s_LODGeneration", mesh.name.c_str());
 
         std::vector<IndexType> currLodIndices = indices;
         std::vector<IndexType> nextLodIndices(currLodIndices.size());
@@ -4686,7 +4686,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
 
 static void LoadSceneMeshData(const gltf::Asset& asset)
 {
-    TM_MARKER_C(0x8b008b, "Load_Scene_Mesh_Data");
+    TM_MARKER_C(0x8b008b, "LoadSceneMeshData");
 
     eng::Timer timer;
 
@@ -4702,7 +4702,7 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 
 static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
 {
-    TM_MARKER_C(0x8b008b, "Load_Scene_Textures_Data");
+    TM_MARKER_C(0x8b008b, "LoadSceneTexturesData");
 
     eng::Timer timer;
 
@@ -4748,7 +4748,7 @@ static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirP
 
 static void LoadSceneMaterialData(const gltf::Asset& asset)
 {
-    TM_MARKER_C(0x8b008b, "Load_Scene_Material_Data");
+    TM_MARKER_C(0x8b008b, "LoadSceneMaterialData");
 
     eng::Timer timer;
 
@@ -4835,7 +4835,7 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 
 static void LoadSceneInstData(const gltf::Asset& asset)
 {
-    TM_MARKER_C(0x8b008b, "Load_Scene_Inst_Data");
+    TM_MARKER_C(0x8b008b, "LoadSceneInstData");
 
     eng::Timer timer;
 
@@ -4961,7 +4961,7 @@ static void UploadGPUGeomStream(GPU_GeomStreamID ID)
 
 static void UploadGPUMeshData()
 {
-    TM_MARKER_C(0x8b008b, "Upload_GPU_Mesh_Data");
+    TM_MARKER_C(0x8b008b, "UploadGPUMeshData");
 
     eng::Timer timer;
 
@@ -5026,7 +5026,7 @@ static void UploadGPUMeshData()
 
 static void UploadGPUTextureData()
 {
-    TM_MARKER_C(0x8b008b, "Upload_GPU_Texture_Data");
+    TM_MARKER_C(0x8b008b, "UploadGPUTextureData");
 
     eng::Timer timer;
 
@@ -5125,7 +5125,7 @@ static void UploadGPUTextureData()
 
 static void UploadGPUMaterialData()
 {
-    TM_MARKER_C(0x8b008b, "Upload_GPU_Material_Data");
+    TM_MARKER_C(0x8b008b, "UploadGPUMaterialData");
 
     eng::Timer timer;
 
@@ -5150,7 +5150,7 @@ static void UploadGPUMaterialData()
 
 static void UploadGPUInstData()
 {
-    TM_MARKER_C(0x8b008b, "Upload_GPU_Inst_Data");
+    TM_MARKER_C(0x8b008b, "UploadGPUInstData");
 
     eng::Timer timer;
 
@@ -5191,7 +5191,7 @@ static void LoadScene(const fs::path& filepath)
 		return;
 	}
     
-    TM_MARKER_C(0x8b008b, "Load_Scene");
+    TM_MARKER_C(0x8b008b, "LoadScene");
     
     eng::Timer timer;
 
@@ -5258,7 +5258,7 @@ static void CreateDeferredLightingConstBuffer()
 
 void UpdateGPUCommonConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "Update_Common_Const_Buffer");
+    TM_MARKER_C(0x008b8b, "UpdateGPUCommonConstBuffer");
 
     GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
 
@@ -5291,7 +5291,7 @@ void UpdateGPUCommonConstBuffer()
 
 void UpdateGPUDeferredLightingConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "Update_DeferredLighting_Const_Buffer");
+    TM_MARKER_C(0x008b8b, "UpdateGPUDeferredLightingConstBuffer");
 
     GPU_LightingData& constBuff = *reinterpret_cast<GPU_LightingData*>(s_deferredLightingConstBuffer.Map());
 
@@ -5339,7 +5339,7 @@ void UpdateGPUDeferredLightingConstBuffer()
 void UpdateGPUDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    TM_MARKER_C(0x008b8b, "Update_Common_Dbg_Const_Buffer");
+    TM_MARKER_C(0x008b8b, "UpdateGPUDbgConstBuffer");
 
     GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
@@ -5387,7 +5387,7 @@ static void UpdateMainCamera()
 
 static void UpdateCSMDataCPU()
 {
-    TM_MARKER_C(0x008b8b, "Update_CSM_Data_CPU");
+    TM_MARKER_C(0x008b8b, "UpdateCSMDataCPU");
 
     auto GetCascadeSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
         float radius = 0.f;
@@ -5446,7 +5446,7 @@ static void UpdateCSMDataCPU()
 
 static void UpdateScene()
 {
-    TM_MARKER_C(0x008b8b, "Update_Scene");
+    TM_MARKER_C(0x008b8b, "UpdateScene");
 
     ClearDebugDrawData();
 
@@ -5496,7 +5496,7 @@ static void UpdateScene()
 
 static void PresentImage(uint32_t imageIndex)
 {
-    TM_MARKER_C(0xcd2990, "Present_Swapchain_Image");
+    TM_MARKER_C(0xcd2990, "PresentSwapchainImage");
 
     const VkResult presentResult = s_vkDevice.GetQueue().Present(s_vkSwapchain, imageIndex, &s_renderFinishedSemaphores[imageIndex]);
 
@@ -5510,7 +5510,7 @@ static void PresentImage(uint32_t imageIndex)
 
 static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 {
-    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_Irradiance_Map");
+    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "PrecomputeIBLIrradianceMap");
 
     eng::Timer timer;
 
@@ -5560,7 +5560,7 @@ static void PrecomputeIBLIrradianceMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 {
-    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_Prefiltered_Env_Map");
+    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "PrecomputeIBLPrefilteredEnvMap");
     eng::Timer timer;
 
     vkn::PSO& pso = GetPSO(PASS_ID_PREFILT_ENV_MAP_GEN);
@@ -5636,7 +5636,7 @@ static void PrecomputeIBLPrefilteredEnvMap(vkn::CmdBuffer& cmdBuffer)
 
 static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 {
-    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "Precompute_IBL_BRDF_Intergration_LUT");
+    TM_GPU_MARKER_C(cmdBuffer, 0xff4500, "PrecomputeIBLBRDFIntergrationLUT");
     eng::Timer timer;
 
     vkn::PSO& pso = GetPSO(PASS_ID_BRDF_LUT_GEN);
@@ -5764,7 +5764,7 @@ static void HZBGeneratePass(
 
 static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_Pass";
+    static constexpr const char* passName = "Culling";
     static constexpr uint32_t passColor = 0xff6a6a;
 
     TM_MARKER_C(passColor, passName);
@@ -5836,7 +5836,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 
 static void GeomCullingNewPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_New_Pass";
+    static constexpr const char* passName = "CullingNew";
     static constexpr uint32_t passColor = 0xff6a6a;
 
     TM_MARKER_C(passColor, passName);
@@ -5912,7 +5912,7 @@ struct GeomSortNewPassData
 
 static void GeomSortingHistogramNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortNewPassData& data)
 {
-    static constexpr const char* passName = "Geom_Sorting_Histogram_New_Pass";
+    static constexpr const char* passName = "Histogram";
     static constexpr uint32_t passColor = 0xcae1ff;
 
     TM_MARKER_C(passColor, passName);
@@ -5951,7 +5951,7 @@ static void GeomSortingHistogramNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t pass
 
 static void GeomSortingPrefixNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortNewPassData& data)
 {
-    static constexpr const char* passName = "Geom_Sorting_Prefix_New_Pass";
+    static constexpr const char* passName = "Prefix";
     static constexpr uint32_t passColor = 0xcae1ff;
 
     TM_MARKER_C(passColor, passName);
@@ -5988,7 +5988,7 @@ static void GeomSortingPrefixNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb
 
 static void GeomSortingScatterNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortNewPassData& data)
 {
-    static constexpr const char* passName = "Geom_Sorting_Scatter_New_Pass";
+    static constexpr const char* passName = "Scatter";
     static constexpr uint32_t passColor = 0xcae1ff;
 
     TM_MARKER_C(passColor, passName);
@@ -6036,7 +6036,7 @@ static void GeomSortingScatterNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNm
 
 static void GeomSortingNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortNewPassData& data)
 {
-    static constexpr const char* passName = "Geom_Sorting_New_Pass_Bits_%u-%u";
+    static constexpr const char* passName = "Bits_%u-%u";
     static constexpr uint32_t passColor = 0xcae1ff;
 
     const uint32_t bitsStart = passNmb * GEOM_SORT_RADIX_BITS;
@@ -6055,6 +6055,9 @@ static void GeomSortingNewPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, cons
 
 static void GeomSortingNewPass(vkn::CmdBuffer& cmdBuffer)
 {
+    TM_MARKER_C(0xcae1ff, "Sorting");
+    TM_GPU_MARKER_C(cmdBuffer, 0xcae1ff, "Sorting");
+
     GeomSortNewPassData data = {};
     data.groupCount = math::CeilDiv(s_cpuInstData.size(), GEOM_CULL_CS_GROUP_SIZE);
 
@@ -6115,17 +6118,24 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Batching_Pass";
+    static constexpr const char* passName = "Batching";
     static constexpr uint32_t passColor = 0xcae1ff;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        GeomBatchingPass(cmdBuffer, pair.first);
+        GeomBatchingPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        GeomBatchingPass(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 }
 
@@ -6162,17 +6172,24 @@ static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 static void GeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Draw_Cmd_Gen_Pass";
+    static constexpr const char* passName = "DrawCmdGen";
     static constexpr uint32_t passColor = 0x228b22;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        GeomDrawCmdGenPass(cmdBuffer, pair.first);
+        GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_OPAQUE);
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        GeomDrawCmdGenPass(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 }
 
@@ -6250,15 +6267,15 @@ static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade)
 
 static void CSMGeomCullingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Culling_Pass_CSM";
+    static constexpr const char* passName = "Culling";
     static constexpr uint32_t passColor = 0xff6a6a;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-        TM_MARKER_C_FMT(passColor, "%s_Cascade_%u", passName, cascade);
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u", passName, cascade);
+        TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
 
         CSMGeomCullingPass(cmdBuffer, cascade);
     }
@@ -6304,18 +6321,33 @@ static void CSMGeomBatchingPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU
 
 static void CSMVisGeometryBatchingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "CSM_Vis_Geom_Batching_Pass";
+    static constexpr const char* passName = "Batching";
     static constexpr uint32_t passColor = 0xcae1ff;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
+
         for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
     
-            CSMGeomBatchingPass(cmdBuffer, cascade, pair.first);
+            CSMGeomBatchingPass(cmdBuffer, cascade, GEOM_QUEUE_OPAQUE);
+        }
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+    
+            CSMGeomBatchingPass(cmdBuffer, cascade, GEOM_QUEUE_AKILL);
         }
     }
 }
@@ -6354,18 +6386,33 @@ static void CSMGeomDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, G
 
 static void CSMGeometryDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "CSM_Draw_Cmd_Gen_Pass";
+    static constexpr const char* passName = "DrawCmdGen";
     static constexpr uint32_t passColor = 0x228b22;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
+
         for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
     
-            CSMGeomDrawCmdGenPass(cmdBuffer, cascade, pair.first);
+            CSMGeomDrawCmdGenPass(cmdBuffer, cascade, GEOM_QUEUE_OPAQUE);
+        }
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+    
+            CSMGeomDrawCmdGenPass(cmdBuffer, cascade, GEOM_QUEUE_AKILL);
         }
     }
 }
@@ -6373,32 +6420,31 @@ static void CSMGeometryDrawCmdGenPass(vkn::CmdBuffer& cmdBuffer)
 
 static void MainCamGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Prepare_Geom_Pass_MainCam";
-    static constexpr uint32_t passColor = 0x1e90ff;
-
-    TM_MARKER_C_FMT(passColor, passName);
-    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
-
-    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
-
-    barriers.AddBufferBarrier(s_geomCullVisInstCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        barriers
-            .AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-            .AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
-            .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    }
-
-    barriers.Push();
-
-    cmdBuffer.CmdFillBuffer(s_geomCullVisInstCounterBuffer, 0);
-
-    for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-        cmdBuffer
-            .CmdFillBuffer(s_visGeomIDQueueSizeBuffer[queue], 0)
-            .CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0)
-            .CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0);
+    {
+        TM_MARKER_C(0x0, "ResetCounters");
+        TM_GPU_MARKER_C(cmdBuffer, 0x0, "ResetCounters");
+        
+        vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+    
+        barriers.AddBufferBarrier(s_geomCullVisInstCounterBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    
+        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+            barriers
+                .AddBufferBarrier(s_visGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+                .AddBufferBarrier(s_geomBatchQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+                .AddBufferBarrier(s_sortedVisGeomIDQueueSizeBuffer[queue], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        }
+    
+        barriers.Push();
+    
+        cmdBuffer.CmdFillBuffer(s_geomCullVisInstCounterBuffer, 0);
+    
+        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+            cmdBuffer
+                .CmdFillBuffer(s_visGeomIDQueueSizeBuffer[queue], 0)
+                .CmdFillBuffer(s_geomBatchQueueSizeBuffer[queue], 0)
+                .CmdFillBuffer(s_sortedVisGeomIDQueueSizeBuffer[queue], 0);
+        }
     }
 
     GeomCullingPass(cmdBuffer);
@@ -6412,42 +6458,41 @@ static void MainCamGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
 
 
 static void CSMGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
-{
-    static constexpr const char* passName = "Prepare_Geom_Pass_CSM";
-    static constexpr uint32_t passColor = 0x1e90ff;
+{    
+    {
+        TM_MARKER_C(0x0, "ResetCounters");
+        TM_GPU_MARKER_C(cmdBuffer, 0x0, "ResetCounters");
 
-    TM_MARKER_C_FMT(passColor, passName);
-    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
-    
-    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+        vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
-    for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            barriers.AddBufferBarrier(
-                s_csmVisGeomIDQueueSizeBuffers[cascade][queue], 
-                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                VK_ACCESS_2_TRANSFER_WRITE_BIT
-            );
-            barriers.AddBufferBarrier(
-                s_csmGeomBatchQueueSizeBuffers[cascade][queue], 
-                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                VK_ACCESS_2_TRANSFER_WRITE_BIT
-            );
-            barriers.AddBufferBarrier(
-                s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], 
-                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                VK_ACCESS_2_TRANSFER_WRITE_BIT
-            );
+        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+            for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+                barriers.AddBufferBarrier(
+                    s_csmVisGeomIDQueueSizeBuffers[cascade][queue], 
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT
+                );
+                barriers.AddBufferBarrier(
+                    s_csmGeomBatchQueueSizeBuffers[cascade][queue], 
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT
+                );
+                barriers.AddBufferBarrier(
+                    s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], 
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT
+                );
+            }
         }
-    }
 
-    barriers.Push();
+        barriers.Push();
 
-    for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-        for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
-            cmdBuffer.CmdFillBuffer(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
-            cmdBuffer.CmdFillBuffer(s_csmGeomBatchQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
-            cmdBuffer.CmdFillBuffer(s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
+        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+            for (uint32_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
+                cmdBuffer.CmdFillBuffer(s_csmVisGeomIDQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
+                cmdBuffer.CmdFillBuffer(s_csmGeomBatchQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
+                cmdBuffer.CmdFillBuffer(s_csmSortedVisGeomIDQueueSizeBuffers[cascade][queue], 0, 0, sizeof(glm::uint));
+            }
         }
     }
 
@@ -6459,26 +6504,26 @@ static void CSMGeomPreparingPass(vkn::CmdBuffer& cmdBuffer)
 
 static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "HZB_Gen_Pass";
+    static constexpr const char* passName = "HZBGen";
     static constexpr uint32_t passColor = 0xcccccc;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     if (!s_cullingTestMode) {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, "MainCam");
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, "MainCam");
+        TM_MARKER_C(passColor, "MainCam");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "MainCam");
 
         HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, 0, s_HZB, s_HZBMipViews);
     }
 
     {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, "CSM");
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, "CSM");
+        TM_MARKER_C(passColor, "CSM");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "CSM");
     
         for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "%s_%s_%u", passName, "CSM", cascade);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s_%u", passName, "CSM", cascade);
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
     
             HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[cascade], cascade, s_csmHZBs[cascade], s_csmHZBMipViews[cascade]);
         }
@@ -6488,14 +6533,24 @@ static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
 
 static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Prepare_Geom_Pass";
     static constexpr uint32_t passColor = 0x1e90ff;
 
-    TM_MARKER_C_FMT(passColor, passName);
-    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+    TM_MARKER_C(passColor, "PrepareGeom");
+    TM_GPU_MARKER_C(cmdBuffer, passColor, "PrepareGeom");
 
-    MainCamGeomPreparingPass(cmdBuffer);
-    CSMGeomPreparingPass(cmdBuffer);
+    {
+        TM_MARKER_C(passColor, "MainCam");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "MainCam");
+
+        MainCamGeomPreparingPass(cmdBuffer);
+    }
+
+    {
+        TM_MARKER_C(passColor, "CSM");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "CSM");
+
+        CSMGeomPreparingPass(cmdBuffer);
+    }
 }
 
 
@@ -6577,7 +6632,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Depth_Pass";
+    static constexpr const char* passName = "GeomDepth";
     static constexpr uint32_t passColor = 0x7f7f7f;
 
     TM_MARKER_C(passColor, passName);
@@ -6587,11 +6642,18 @@ void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        RenderPass_Depth(cmdBuffer, pair.first);
+        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_OPAQUE);
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        RenderPass_Depth(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -6673,7 +6735,7 @@ void RenderPass_CSM(vkn::CmdBuffer& cmdBuffer, uint32_t cascade, GPU_GeomQueue q
 
 void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Geom_Depth_Pass_CSM";
+    static constexpr const char* passName = "CSM";
     static constexpr uint32_t passColor = 0x7f7f7f;
 
     TM_MARKER_C(passColor, passName);
@@ -6683,12 +6745,27 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
+
         for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_Cascade_%u_%s", passName, cascade, pair.second);
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
     
-            RenderPass_CSM(cmdBuffer, cascade, pair.first);
+            RenderPass_CSM(cmdBuffer, cascade, GEOM_QUEUE_OPAQUE);
+        }
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+    
+            RenderPass_CSM(cmdBuffer, cascade, GEOM_QUEUE_AKILL);
         }
     }
 
@@ -6786,21 +6863,28 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "GBuffer_Pass";
+    static constexpr const char* passName = "GBuffer";
     static constexpr uint32_t passColor = 0x228b22;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    for (const auto& pair : GEOM_QUEUE_TO_NAME) {
-        TM_MARKER_C_FMT(passColor, "%s_%s", passName, pair.second);
-        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "%s_%s", passName, pair.second);
+    {
+        TM_MARKER_C(passColor, "Opaque");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        RenderPass_GBuffer(cmdBuffer, pair.first);
+        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_OPAQUE);
+    }
+
+    {
+        TM_MARKER_C(passColor, "AKill");
+        TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
+
+        RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_AKILL);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -6811,10 +6895,10 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Deferred_Lighting_Pass";
+    static constexpr const char* passName = "DeferredLighting";
     static constexpr uint32_t passColor = 0xffff00;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     UpdateGPUDeferredLightingConstBuffer();
@@ -6919,10 +7003,10 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
 
 void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Skybox_Pass";
+    static constexpr const char* passName = "Skybox";
     static constexpr uint32_t passColor = 0x7fffd4;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     cmdBuffer
@@ -6981,10 +7065,10 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
 
 void PostProcessingPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Post_Processing_Pass";
+    static constexpr const char* passName = "PostProcessing";
     static constexpr uint32_t passColor = 0x663399;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     cmdBuffer
@@ -7044,10 +7128,10 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
-    static constexpr const char* passName = "Dbg_RT_View_Render_Pass";
+    static constexpr const char* passName = "DbgRTView";
     static constexpr uint32_t passColor = 0xff0000;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::Texture* pVisTex = nullptr;
@@ -7183,10 +7267,10 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         return;
     }
 
-    static constexpr const char* passName = "Dbg_Primitives_Render_Pass";
+    static constexpr const char* passName = "DbgPrimitives";
     static constexpr uint32_t passColor = 0xff0000;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     if (lineInstCount > 0) {
@@ -7297,7 +7381,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         pushConsts.viewProjMatr = s_mainCamera.GetViewProjMatrix();
 
         if (lineInstCount > 0) {
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xee0000, "%s_Lines", passName);
+            TM_GPU_MARKER_C(cmdBuffer, 0xee0000, "Lines");
 
             pushConsts.linePass = true;
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
@@ -7308,7 +7392,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         }
 
         if (triInstCount > 0) {
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xee0000, "%s_Triangles", passName);
+            TM_GPU_MARKER_C(cmdBuffer, 0xee0000, "Triangles");
     
             pushConsts.linePass = false;
             cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, pushConsts);
@@ -7789,10 +7873,10 @@ namespace DbgUI
 
 static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Dbg_UI_Render_Pass";
+    static constexpr const char* passName = "DbgUI";
     static constexpr uint32_t passColor = 0xff0000;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     s_dbgUI.BeginFrame(s_frameTime);
@@ -7831,10 +7915,10 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 
 void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "Resolve_To_Backbuffer_Pass";
+    static constexpr const char* passName = "ResolveToBackbuffer";
     static constexpr uint32_t passColor = 0x696969;
 
-    TM_MARKER_C_FMT(passColor, passName);
+    TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
     vkn::SCTexture& scTexture = s_vkSwapchain.GetTexture(s_nextImageIdx);
@@ -7902,7 +7986,7 @@ void ResolveToBackbufferPass(vkn::CmdBuffer& cmdBuffer)
 
 static void RenderScene()
 {
-    TM_MARKER_C(0x696969, "Render_Scene");
+    TM_MARKER_C(0x696969, "RenderSceneCPU");
 
     // We have only one frame context, so make sure the previous
     // submission is completely finished before reusing its resources.
@@ -7927,7 +8011,7 @@ static void RenderScene()
 
     cmdBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     {
-        TM_GPU_MARKER_C(cmdBuffer, 0x1a1a1a, "Render_Scene_GPU");
+        TM_GPU_MARKER_C(cmdBuffer, 0x1a1a1a, "RenderSceneGPU");
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
