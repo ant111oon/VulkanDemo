@@ -22,14 +22,12 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
     const bool isValid = DTid < instCount;
 
     GPU_GeomSortKey sortKey;
-    uint instID;
 
     uint digit = 0;
     uint instMaskIndex = 0;
 
     if (isValid) {
         sortKey = GEOM_SORT_KEY_BUFFER_SRC[DTid];
-        instID = GEOM_SORT_INST_ID_BUFFER_SRC[DTid];
 
         digit = sortKey.GetDigits(GEOM_SORT_BIT_OFFSET, GEOM_SORT_RADIX_BITS);
 
@@ -63,6 +61,8 @@ void main(uint Gid : SV_GroupID, uint GI : SV_GroupIndex, uint DTid : SV_Dispatc
     const uint previousGroupsCount = GEOM_SORT_BUCKET_OFFSETS[groupBucketIndex];
 
     const uint dstIndex = bucketBase + previousGroupsCount + localRank;
+
+    const uint instID = GEOM_SORT_INST_ID_BUFFER_SRC[DTid];
 
     GEOM_SORT_KEY_BUFFER_DST[dstIndex] = sortKey;
     GEOM_SORT_INST_ID_BUFFER_DST[dstIndex] = instID;

@@ -231,14 +231,14 @@ struct GPU_GeomSortKey
 
     static const uint GEOM_SORT_KEY_TOTAL_BITS = 64;
 
-    private static const uint GEOM_SORT_LOD_OFFSET = 0;
+    private static const uint GEOM_SORT_MAT_ID_OFFSET = 0;
+    private static const uint GEOM_SORT_MAT_ID_BITS = 11;
+
+    private static const uint GEOM_SORT_LOD_OFFSET = 11;
     private static const uint GEOM_SORT_LOD_BITS = 3;
 
-    private static const uint GEOM_SORT_MESH_OFFSET = 3;
+    private static const uint GEOM_SORT_MESH_OFFSET = 14;
     private static const uint GEOM_SORT_MESH_BITS = 16;
-
-    private static const uint GEOM_SORT_MAT_ID_OFFSET = 19;
-    private static const uint GEOM_SORT_MAT_ID_BITS = 11;
 
     private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
     private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;

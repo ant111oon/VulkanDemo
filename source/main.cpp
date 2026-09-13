@@ -445,15 +445,15 @@ struct GPU_DbgTriangleData
 
 struct GPU_GeomSortKey
 {
-    static constexpr uint GEOM_SORT_LOD_OFFSET = 0;
-    static constexpr uint GEOM_SORT_LOD_BITS = 3;
-    
-    static constexpr uint GEOM_SORT_MESH_OFFSET = 3;
-    static constexpr uint GEOM_SORT_MESH_BITS = 16;
-    
-    static constexpr uint GEOM_SORT_MAT_ID_OFFSET = 19;
+    static constexpr uint GEOM_SORT_MAT_ID_OFFSET = 0;
     static constexpr uint GEOM_SORT_MAT_ID_BITS = 11;
-    
+
+    static constexpr uint GEOM_SORT_LOD_OFFSET = 11;
+    static constexpr uint GEOM_SORT_LOD_BITS = 3;
+
+    static constexpr uint GEOM_SORT_MESH_OFFSET = 14;
+    static constexpr uint GEOM_SORT_MESH_BITS = 16;
+
     static constexpr uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
     static constexpr uint GEOM_SORT_MAT_TYPE_BITS = 2;
 
@@ -4149,7 +4149,7 @@ static void CreateGeomCullingAndInstancingResources()
     
         s_geomCullVisInstIDsPingPongBuffers[i]
             .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
-            .SetDebugName("GEOM_VIS_INST_IDS_BUFFER_{}", i);
+            .SetDebugName("GEOM_VIS_INST_IDS_BUFFER_%u", i);
     }
     
     s_geomCullVisInstCounterBuffer
