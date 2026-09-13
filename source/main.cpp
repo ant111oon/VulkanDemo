@@ -4088,18 +4088,18 @@ static void CreatePipelines()
         RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.ps.spv")
     );
     
-    CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/irradiance_map_gen.cs.spv"));
-    CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/prefiltered_env_map_gen.cs.spv"));
-    CreateBRDFIntegrationLUTGenPSO(RND_SHADER_SPIRV_FULL_PATH("IBL/brdf_integration_gen.cs.spv"));
+    CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/irradiance_map_gen.cs.spv"));
+    CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/prefiltered_env_map_gen.cs.spv"));
+    CreateBRDFIntegrationLUTGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/brdf_integration_gen.cs.spv"));
     
     CreateDbgDrawPrimitivesPSO(
-        RND_SHADER_SPIRV_FULL_PATH("dbg_primitives/dbg_primitives.vs.spv"),
-        RND_SHADER_SPIRV_FULL_PATH("dbg_primitives/dbg_primitives.ps.spv")
+        RND_SHADER_SPIRV_FULL_PATH("debug/primitives/primitives.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("debug/primitives/primitives.ps.spv")
     );
 
     CreateDbgRTViewPSO(
-        RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.vs.spv"),
-        RND_SHADER_SPIRV_FULL_PATH("dbg_rt_view/dbg_rt_view.ps.spv")
+        RND_SHADER_SPIRV_FULL_PATH("debug/rt_view/rt_view.vs.spv"),
+        RND_SHADER_SPIRV_FULL_PATH("debug/rt_view/rt_view.ps.spv")
     );
 }
 
