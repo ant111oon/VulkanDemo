@@ -533,6 +533,12 @@ struct GPU_GBufferPushConst
 };
 
 
+struct GPU_PrefixSumPushConst
+{
+    uint maxElemCount;
+};
+
+
 struct GPU_IrradianceMapPushConst
 {
     uint2 envMapFaceSize;
@@ -700,6 +706,8 @@ enum DescSetLayoutID : uint32_t
     
     DESC_SET_LAYOUT_ID_BACKBUFFER,
     
+    DESC_SET_LAYOUT_ID_PREFIX_SUM,
+
     DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN,
     DESC_SET_LAYOUT_ID_BRDF_LUT_GEN,
     DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN,
@@ -714,35 +722,37 @@ enum DescSetLayoutID : uint32_t
 
 
 static constexpr const char* DESC_SET_LAYOUT_DBG_NAME[] = {
-    "DESC_SET_LAYOUT_COMMON",
+    "COMMON",
 
-    "DESC_SET_LAYOUT_GEOM_CULLING",
-    "DESC_SET_LAYOUT_GEOM_BATCHING",
-    "DESC_SET_LAYOUT_GEOM_DRAW_CMD_GEN",
+    "GEOM_CULLING",
+    "GEOM_BATCHING",
+    "GEOM_DRAW_CMD_GEN",
 
-    "DESC_SET_LAYOUT_GEOM_SORTING_NEW",
+    "GEOM_SORTING_NEW",
     
-    "DESC_SET_LAYOUT_DEPTH",
+    "DEPTH",
     
-    "DESC_SET_LAYOUT_HZB_GEN",
+    "HZB_GEN",
     
-    "DESC_SET_LAYOUT_GBUFFER",
+    "GBUFFER",
     
-    "DESC_SET_LAYOUT_DEFERRED_LIGHTING",
+    "DEFERRED_LIGHTING",
     
-    "DESC_SET_LAYOUT_SKYBOX",
+    "SKYBOX",
     
-    "DESC_SET_LAYOUT_POST_PROCESSING",
+    "POST_PROCESSING",
     
-    "DESC_SET_LAYOUT_BACKBUFFER",
+    "BACKBUFFER",
     
-    "DESC_SET_LAYOUT_IRRADIANCE_MAP_GEN",
-    "DESC_SET_LAYOUT_BRDF_LUT_GEN",
-    "DESC_SET_LAYOUT_PREFILT_ENV_MAP_GEN",
+    "PREFIX_SUM",
+
+    "IRRADIANCE_MAP_GEN",
+    "BRDF_LUT_GEN",
+    "PREFILT_ENV_MAP_GEN",
 
 #ifdef ENG_DEBUG_DRAW_ENABLED
-    "DESC_SET_LAYOUT_DBG_DRAW_PRIMITIVES",
-    "DESC_SET_LAYOUT_DBG_RT_VIEW",
+    "DBG_DRAW_PRIMITIVES",
+    "DBG_RT_VIEW",
 #endif
 };
 
@@ -774,6 +784,9 @@ enum PassID : uint32_t
     
     PASS_ID_BACKBUFFER,
     
+    PASS_ID_PREFIX_SUM_SCAN_BLOCKS,
+    PASS_ID_PREFIX_SUM_ADD_OFFSETS,
+
     PASS_ID_IRRADIANCE_MAP_GEN,
     PASS_ID_BRDF_LUT_GEN,
     PASS_ID_PREFILT_ENV_MAP_GEN,
@@ -811,6 +824,9 @@ static constexpr const char* PASS_DBG_NAME[] = {
     
     "BACKBUFFER",
     
+    "PREFIX_SUM_SCAN_BLOCKS",
+    "PREFIX_SUM_ADD_OFFSETS",
+
     "IRRADIANCE_MAP_GEN",
     "BRDF_LUT_GEN",
     "PREFILT_ENV_MAP_GEN",
@@ -925,6 +941,11 @@ static constexpr size_t BACKBUFFER_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
 static constexpr size_t SKYBOX_TEXTURE_DESCRIPTOR_SLOT = 0;
 
+static constexpr size_t PREFIX_SUM_INPUT_DESCRIPTOR_SLOT = 0;
+static constexpr size_t PREFIX_SUM_OUTPUT_DESCRIPTOR_SLOT = 1;
+static constexpr size_t PREFIX_SUM_BLOCK_SUMS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t PREFIX_SUM_BLOCK_OFFSETS_DESCRIPTOR_SLOT = 3;
+
 static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
@@ -997,6 +1018,9 @@ static constexpr uint32_t GEOM_SORT_CS_GROUP_SIZE = 256;
 static constexpr uint32_t GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
 
 static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
+
+static constexpr uint32_t PREFIX_SUM_GROUP_SIZE = 256;
+static constexpr uint32_t PREFIX_SUM_BLOCK_SIZE = PREFIX_SUM_GROUP_SIZE * 2;
 
 static constexpr uint32_t DESC_SET_PER_FRAME = 0;
 static constexpr uint32_t DESC_SET_PER_DRAW = 1;
@@ -2497,7 +2521,7 @@ static void CreateHZB(
     for (uint32_t mip = 0; mip < mipsCount; ++mip) {
         subresourceRange.baseMipLevel = mip;
 
-        hzbMipViews[mip].Create(hzb, mapping, subresourceRange).SetDebugName("%s_MIP_VIEW_%u", name, mip);
+        hzbMipViews[mip].Create(hzb, mapping, subresourceRange).SetDebugName("%s_MIP_VIEW_%u", name.data(), mip);
     }
 }
 
@@ -2987,7 +3011,7 @@ static void CreateCommonDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_COMMON);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_COMMON]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_COMMON]);
 }
 
 
@@ -3011,7 +3035,7 @@ static void CreateGeomCullingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_CULLING);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_CULLING]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_CULLING]);
 }
 
 
@@ -3036,7 +3060,7 @@ static void CreateGeomSortingNewDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_SORTING_NEW]);
 }
 
 
@@ -3060,7 +3084,7 @@ static void CreateGeomBatchingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_BATCHING);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_BATCHING]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_BATCHING]);
 }
 
 
@@ -3081,7 +3105,7 @@ static void CreateGeomDrawCmdGenDescriptorSetLayout()
     
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN]);
 }
 
 
@@ -3100,7 +3124,7 @@ static void CreateDepthDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEPTH);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEPTH]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEPTH]);
 }
 
 
@@ -3120,7 +3144,7 @@ static void CreateHZBGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_HZB_GEN);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_HZB_GEN]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_HZB_GEN]);
 }
 
 
@@ -3139,7 +3163,7 @@ static void CreateGBufferDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_GBUFFER);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GBUFFER]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_GBUFFER]);
 }
 
 
@@ -3167,7 +3191,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEFERRED_LIGHTING]);
 }
 
 
@@ -3186,7 +3210,7 @@ static void CreatePostProcessingDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_POST_PROCESSING);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_POST_PROCESSING]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_POST_PROCESSING]);
 }
 
 
@@ -3205,7 +3229,7 @@ static void CreateBackbufferPassDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BACKBUFFER);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BACKBUFFER]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BACKBUFFER]);
 }
 
 
@@ -3224,7 +3248,29 @@ static void CreateSkyboxDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_SKYBOX);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_SKYBOX]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_SKYBOX]);
+}
+
+
+static void CreatePrefixSumDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(PREFIX_SUM_INPUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFIX_SUM_OUTPUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFIX_SUM_BLOCK_SUMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(PREFIX_SUM_BLOCK_OFFSETS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_PREFIX_SUM);
+
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_PREFIX_SUM]);
 }
 
 
@@ -3244,7 +3290,7 @@ static void CreateIrradianceMapGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN]);
 }
 
 
@@ -3266,7 +3312,7 @@ static void CreatePrefilteredEnvMapGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN]);
 }
 
 
@@ -3285,7 +3331,7 @@ static void CreateBRDFIntegrationLUTGenDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_BRDF_LUT_GEN);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BRDF_LUT_GEN]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_BRDF_LUT_GEN]);
 }
 
 
@@ -3308,7 +3354,7 @@ static void CreateDbgDrawPrimitivesDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_DRAW_PRIMITIVES]);
 #endif
 }
 
@@ -3340,7 +3386,7 @@ static void CreateDbgRTViewDescriptorSetLayout()
 
     vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DBG_RT_VIEW);
 
-    layout.Create(createInfo).SetDebugName(DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_RT_VIEW]);
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DBG_RT_VIEW]);
 #endif
 }
 
@@ -3369,6 +3415,8 @@ static void CreateDescriptorSetLayouts()
     
     CreateSkyboxDescriptorSetLayout();
     
+    CreatePrefixSumDescriptorSetLayout();
+
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
     CreateBRDFIntegrationLUTGenDescriptorSetLayout();
@@ -3599,6 +3647,26 @@ static void CreateSkyboxPSOLayout()
 }
 
 
+static void CreatePrefixSumScanBlocksPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_PREFIX_SUM_SCAN_BLOCKS, DESC_SET_LAYOUT_ID_PREFIX_SUM, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_PrefixSumPushConst)
+    });
+}
+
+
+static void CreatePrefixSumAddOffsetsPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_PREFIX_SUM_ADD_OFFSETS, DESC_SET_LAYOUT_ID_PREFIX_SUM, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_PrefixSumPushConst)
+    });
+}
+
+
 static void CreateIrradianceMapGenPSOLayout()
 {
     CreatePSOLayout(PASS_ID_IRRADIANCE_MAP_GEN, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN, VkPushConstantRange {
@@ -3743,6 +3811,19 @@ static void CreateGeomDrawCmdGenPSO(const fs::path& shaderPath)
 {
     CreateComputePSO(shaderPath, PASS_ID_GEOM_DRAW_CMD_GEN);
 }
+
+
+static void CreatePrefixSumScanBlocksPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_PREFIX_SUM_SCAN_BLOCKS);
+}
+
+
+static void CreatePrefixSumAddOffsetsPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_PREFIX_SUM_ADD_OFFSETS);
+}
+
 
 
 static void CreateIrradianceMapGenPSO(const fs::path& shaderPath)
@@ -4037,6 +4118,9 @@ static void CreatePipelines()
     CreateBackbufferPassPSOLayout();
     
     CreateSkyboxPSOLayout();
+
+    CreatePrefixSumScanBlocksPSOLayout();
+    CreatePrefixSumAddOffsetsPSOLayout();
     
     CreateIrradianceMapGenPSOLayout();
     CreatePrefilteredEnvMapGenPSOLayout();
@@ -4087,6 +4171,9 @@ static void CreatePipelines()
         RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.vs.spv"),
         RND_SHADER_SPIRV_FULL_PATH("skybox/skybox.ps.spv")
     );
+
+    CreatePrefixSumScanBlocksPSO(RND_SHADER_SPIRV_FULL_PATH("utils/prefix_sum/prefix_sum_scan_blocks.cs.spv"));
+    CreatePrefixSumAddOffsetsPSO(RND_SHADER_SPIRV_FULL_PATH("utils/prefix_sum/prefix_sum_add_offsets.cs.spv"));
     
     CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/irradiance_map_gen.cs.spv"));
     CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/prefiltered_env_map_gen.cs.spv"));
@@ -4106,6 +4193,9 @@ static void CreatePipelines()
 
 static void CreateGeomCullingAndInstancingResources()
 {
+    const uint32_t maxInstCount = static_cast<uint32_t>(s_cpuInstData.size());
+    const uint32_t totalBucketCount = math::CeilDiv(maxInstCount, GEOM_SORT_CS_GROUP_SIZE) * GEOM_SORT_RADIX_BUCKET_COUNT;
+
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -4113,19 +4203,19 @@ static void CreateGeomCullingAndInstancingResources()
     for (size_t queue = 0; queue < GEOM_QUEUE_COUNT; ++queue) {
         // TODO: we can caclulate actual instance count for certain queue during scene loading and allocate buffers with that sizes
         s_visGeomIDQueueBuffer[queue]
-            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, maxInstCount)
             .SetDebugName("%s_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
         s_geomBatchQueueBuffer[queue]
-            .CreateStorageBuffer<GPU_GeomBatch>(&s_vkDevice, s_cpuInstData.size())
+            .CreateStorageBuffer<GPU_GeomBatch>(&s_vkDevice, maxInstCount)
             .SetDebugName("%s_BATCH_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
         s_sortedVisGeomIDQueueBuffer[queue]
-            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, maxInstCount)
             .SetDebugName("%s_SORTED_VIS_INST_ID_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
 
         s_geomDrawCmdQueueBuffer[queue]
-            .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, s_cpuInstData.size(), VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
+            .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, maxInstCount, VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
             .SetDebugName("%s_DRAW_CMD_BUFFER", GEOM_QUEUE_DBG_NAMES[queue]);
         
         s_visGeomIDQueueSizeBuffer[queue]
@@ -4144,11 +4234,11 @@ static void CreateGeomCullingAndInstancingResources()
 
     for (uint32_t i = 0; i < s_geomCullVisInstSortKeysPingPongBuffers.size(); ++i) {
         s_geomCullVisInstSortKeysPingPongBuffers[i]
-            .CreateStorageBuffer<GPU_GeomSortKey>(&s_vkDevice, s_cpuInstData.size())
+            .CreateStorageBuffer<GPU_GeomSortKey>(&s_vkDevice, maxInstCount)
             .SetDebugName("GEOM_VIS_INST_SORT_KEYS_BUFFER_%u", i);
     
         s_geomCullVisInstIDsPingPongBuffers[i]
-            .CreateStorageBuffer<glm::uint>(&s_vkDevice, s_cpuInstData.size())
+            .CreateStorageBuffer<glm::uint>(&s_vkDevice, maxInstCount)
             .SetDebugName("GEOM_VIS_INST_IDS_BUFFER_%u", i);
     }
     
@@ -4156,7 +4246,6 @@ static void CreateGeomCullingAndInstancingResources()
         .CreateStorageBuffer<glm::uint>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT) 
         .SetDebugName("GEOM_CULL_VIS_INST_COUNTER_BUFFER");
     
-    const uint32_t totalBucketCount = math::CeilDiv(s_cpuInstData.size(), GEOM_SORT_CS_GROUP_SIZE) * GEOM_SORT_RADIX_BUCKET_COUNT;
     s_geomSortGroupOffsetsBuffer
         .CreateStorageBuffer<glm::uint>(&s_vkDevice, totalBucketCount)
         .SetDebugName("GEOM_SORT_BUCKET_OFFSETS_BUFFER");
@@ -4255,9 +4344,7 @@ static void CreateCSMResources()
         subresourceRange.baseArrayLayer = cascade;
         subresourceRange.layerCount = 1;
 
-        s_csmRTViews[cascade]
-            .Create(s_csmRT, mapping, subresourceRange)
-            .SetDebugName("CSM_DEPTH_RT_VIEW_%zu", cascade);
+        s_csmRTViews[cascade].Create(s_csmRT, mapping, subresourceRange).SetDebugName("CSM_DEPTH_RT_VIEW_%zu", cascade);
     }
 
     vkn::TextureViewCreateInfo csmRTViewArrayCreateInfo = {};

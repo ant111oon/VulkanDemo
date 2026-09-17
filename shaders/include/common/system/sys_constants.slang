@@ -6,6 +6,19 @@ static const uint DESC_SET_PER_DRAW = 1;
 static const uint DESC_SET_TOTAL_COUNT = 2;
 
 
+// DISPATCH_THREAD_ID: [0, dispatchSize * numthreads - 1]
+#define SV_DISPATCH_THREAD_ID(NAME) uint3 NAME : SV_DispatchThreadID
+
+// GROUP_ID: [0, dispatchSize - 1]
+#define SV_GROUP_ID(NAME) uint3 NAME : SV_GroupID
+
+// GROUP_ID: [0, numthreads - 1]
+#define SV_GROUP_THREAD_ID(NAME) uint3 NAME : SV_GroupThreadID
+
+// GROUP_THREAD_INDEX: [0, numthreadsX * numthreadsY * numThreadsZ – 1]
+#define SV_GROUP_THREAD_FLAT_ID(NAME) uint NAME : SV_GroupIndex
+
+
 #define SAMPLE_TEX(TEXTURE, SAMPLER, TEXCOORDS)                                          TEXTURE.Sample(SAMPLER, TEXCOORDS)
 #define SAMPLE_TEX_LEVEL(TEXTURE, SAMPLER, TEXCOORDS, LEVEL)                             TEXTURE.SampleLevel(SAMPLER, TEXCOORDS, LEVEL)
 
