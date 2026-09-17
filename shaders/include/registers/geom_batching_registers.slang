@@ -15,4 +15,10 @@
 [vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_UAV;
 [vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV;
 
+
+[vk::binding(6, DESC_SET_PER_DRAW)] StructuredBuffer<GPU_GeomSortKey> GEOM_BATCH_SORTED_KEYS;
+[vk::binding(7, DESC_SET_PER_DRAW)] StructuredBuffer<uint>            GEOM_BATCH_SORTED_VIS_INST_COUNT;
+
+[vk::binding(8, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_START_FLAGS_UAV;
+
 #endif
