@@ -4,6 +4,7 @@
 #include "common/system/sys_constants.slang"
 #include "common/common_geom.slang"
 
+#include "common/common_indirect_cmd.slang"
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_BATCH_VIS_INST_ID_QUEUE;
@@ -25,5 +26,7 @@
 
 [vk::binding(10, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_FIRST_INST;
 [vk::binding(11, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_COUNT;
+
+[vk::binding(12, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_CmdDrawIndexedIndirect> GEOM_BATCH_DRAW_CMDS_UAV;
 
 #endif

@@ -27,7 +27,6 @@ void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
         GEOM_BATCH_FIRST_INST[prefix] = index;
     }
 
-    // The last active instance can calculate the total batch count.
     if (index == visibleCount - 1) {
         GEOM_BATCH_COUNT[0] = prefix + isBatchStart;
     }
