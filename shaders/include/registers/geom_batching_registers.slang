@@ -21,4 +21,9 @@
 
 [vk::binding(8, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_START_FLAGS_UAV;
 
+[vk::binding(9, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GEOM_BATCH_PREFIX;
+
+[vk::binding(10, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_FIRST_INST;
+[vk::binding(11, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_BATCH_COUNT;
+
 #endif

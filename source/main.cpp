@@ -764,6 +764,7 @@ enum PassID : uint32_t
     PASS_ID_GEOM_CULLING,
     PASS_ID_GEOM_BATCHING,
     PASS_ID_GEOM_BATCH_MARK_STARTS,
+    PASS_ID_GEOM_BATCH_SCATTER_STARTS,
     PASS_ID_GEOM_DRAW_CMD_GEN,
 
     PASS_ID_GEOM_CULLING_NEW,
@@ -805,6 +806,7 @@ static constexpr const char* PASS_DBG_NAME[] = {
     "GEOM_CULLING",
     "GEOM_BATCHING",
     "GEOM_BATCH_MARK_STARTS",
+    "GEOM_BATCH_SCATTER_STARTS",
     "GEOM_DRAW_CMD_GEN",
     
     "GEOM_CULLING_NEW",
@@ -917,6 +919,9 @@ static constexpr size_t GEOM_BATCH_SORTED_VIS_INST_ID_QUEUE_SIZE_UAV_DESCRIPTOR_
 static constexpr size_t GEOM_BATCH_SORTED_KEYS_DESCRIPTOR_SLOT = 6;
 static constexpr size_t GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT = 7;
 static constexpr size_t GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT = 8;
+static constexpr size_t GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT = 9;
+static constexpr size_t GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT = 10;
+static constexpr size_t GEOM_BATCH_COUNT_DESCRIPTOR_SLOT = 11;
 
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -3106,6 +3111,9 @@ static void CreateGeomBatchingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_BATCH_SORTED_KEYS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3621,6 +3629,12 @@ static void CreateGeomBatchMarkStartsPSOLayout()
 }
 
 
+static void CreateGeomBatchScatterStartsPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_GEOM_BATCH_SCATTER_STARTS, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
+}
+
+
 static void CreateGeomDrawCmdGenPSOLayout()
 {
     CreatePSOLayout(PASS_ID_GEOM_DRAW_CMD_GEN, DESC_SET_LAYOUT_ID_GEOM_DRAW_CMD_GEN);
@@ -3844,6 +3858,12 @@ static void CreateGeomBatchingPSO(const fs::path& shaderPath)
 static void CreateGeomBatchMarkStartsPSO(const fs::path& shaderPath)
 {
     CreateComputePSO(shaderPath, PASS_ID_GEOM_BATCH_MARK_STARTS);
+}
+
+
+static void CreateGeomBatchScatterStartsPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_GEOM_BATCH_SCATTER_STARTS);
 }
 
 
@@ -4139,6 +4159,7 @@ static void CreatePipelines()
     CreateGeomCullingPSOLayout();
     CreateGeomBatchingPSOLayout();
     CreateGeomBatchMarkStartsPSOLayout();
+    CreateGeomBatchScatterStartsPSOLayout();
     CreateGeomDrawCmdGenPSOLayout();
 
     CreateGeomCullingNewPSOLayout();
@@ -4174,6 +4195,7 @@ static void CreatePipelines()
     CreateGeomCullingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_culling.cs.spv"));
     CreateGeomBatchingPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_batching.cs.spv"));
     CreateGeomBatchMarkStartsPSO(RND_SHADER_SPIRV_FULL_PATH("geom/batching/geom_batch_mark_starts.cs.spv"));
+    CreateGeomBatchScatterStartsPSO(RND_SHADER_SPIRV_FULL_PATH("geom/batching/geom_batch_scatter_starts.cs.spv"));
     CreateGeomDrawCmdGenPSO(RND_SHADER_SPIRV_FULL_PATH("geom/geom_draw_cmd_gen.cs.spv"));
 
     CreateGeomCullingNewPSO(RND_SHADER_SPIRV_FULL_PATH("geom/culling/geom_cull.cs.spv"));
@@ -6445,6 +6467,44 @@ static void GeomPrefixSumPass(
 }
 
 
+static void GeomBatchScatterStartsPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "ScatterBatchStarts";
+    static constexpr uint32_t passColor = 0xcae1ff;
+
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddBufferBarrier(s_geomCullVisInstCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
+            .AddBufferBarrier(s_geomBatchStartFlagsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
+            .AddBufferBarrier(s_geomBatchPrefixBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
+            .AddBufferBarrier(s_geomDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+            .AddBufferBarrier(s_geomBatchFirstInstBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+        .Push();
+
+    vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCH_SCATTER_STARTS);
+
+    cmdBuffer.CmdBindPSO(pso);
+    
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT, 0, s_geomCullVisInstCountBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchStartFlagsBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT, 0, s_geomBatchPrefixBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, 0, s_geomDrawCmdCountBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT, 0, s_geomBatchFirstInstBuffer),
+    });
+
+    cmdBuffer.CmdDispatch(math::CeilDiv(s_cpuInstData.size(), GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
+}
+
+
 static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -6506,6 +6566,8 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
     GeomBatchMarkStartsPass(cmdBuffer);
 
     GeomPrefixSumPass(cmdBuffer, s_geomBatchStartFlagsBuffer, s_geomBatchPrefixBuffer, s_cpuInstData.size());
+
+    GeomBatchScatterStartsPass(cmdBuffer);
 }
 
 
