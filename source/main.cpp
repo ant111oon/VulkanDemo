@@ -1446,7 +1446,22 @@ static vkn::Buffer s_geomCullVisInstCountBuffer;
 static vkn::Buffer s_geomSortGroupOffsetsBuffer;
 static vkn::Buffer s_geomSortBucketBasesBuffer;
 
+struct GeomPrefixSumLevelResources
+{
+    vkn::Buffer blockSums;
+    vkn::Buffer blockOffsets;
+};
+
+static std::vector<GeomPrefixSumLevelResources> s_geomPrefixSumLevelResources;
+static uint32_t s_geomPrefixSumMaxElementCount = 0;
+
 static vkn::Buffer s_geomBatchStartFlagsBuffer;
+static vkn::Buffer s_geomBatchPrefixBuffer;
+
+static vkn::Buffer s_geomBatchFirstInstBuffer;
+static vkn::Buffer s_geomDrawCmdBuffer;
+static vkn::Buffer s_geomDrawCmdCountBuffer;
+
 
 static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstSortKeysBuffer;
 static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstIDsBuffer;
@@ -4218,9 +4233,39 @@ static void CreatePipelines()
 }
 
 
+static void CreateGeomPrefixSumResources(uint32_t maxElementCount)
+{
+    s_geomPrefixSumMaxElementCount = maxElementCount;
+
+    uint32_t elementCount = maxElementCount;
+    uint32_t level = 0;
+
+    while (true) {
+        const uint32_t blockCount = math::CeilDiv(elementCount, PREFIX_SUM_BLOCK_SIZE);
+
+        GeomPrefixSumLevelResources& resources = s_geomPrefixSumLevelResources.emplace_back();
+
+        resources.blockSums
+            .CreateStorageBuffer<uint32_t>(&s_vkDevice, blockCount)
+            .SetDebugName("GEOM_PREFIX_SUM_BLOCK_SUMS_BUFFER_LEVEL_%u", level);
+
+        resources.blockOffsets
+            .CreateStorageBuffer<uint32_t>(&s_vkDevice, blockCount)
+            .SetDebugName("GEOM_PREFIX_SUM_BLOCK_OFFSETS_BUFFER_LEVEL_%u", level);
+
+        if (blockCount <= 1) {
+            break;
+        }
+
+        elementCount = blockCount;
+        ++level;
+    }
+}
+
+
 static void CreateGeomCullingAndInstancingResources()
 {
-    const uint32_t maxInstCount = static_cast<uint32_t>(s_cpuInstData.size());
+    const uint32_t maxInstCount = s_cpuInstData.size();
     const uint32_t totalBucketCount = math::CeilDiv(maxInstCount, GEOM_SORT_CS_GROUP_SIZE) * GEOM_SORT_RADIX_BUCKET_COUNT;
 
     vkn::AllocationInfo allocInfo = {};
@@ -4284,6 +4329,26 @@ static void CreateGeomCullingAndInstancingResources()
     s_geomBatchStartFlagsBuffer
         .CreateStorageBuffer<glm::uint>(&s_vkDevice, maxInstCount)
         .SetDebugName("GEOM_BATCH_START_FLAGS_BUFFER");
+
+    s_geomBatchPrefixBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice, maxInstCount)
+        .SetDebugName("GEOM_BATCH_CMD_PREFIX_BUFFER");
+
+    s_geomBatchFirstInstBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice, maxInstCount)
+        .SetDebugName("GEOM_BATCH_CMD_FIRST_INST_BUFFER");
+
+    s_geomDrawCmdBuffer
+        .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, maxInstCount)
+        .SetDebugName("GEOM_DRAW_CMD_BUFFER");
+
+    s_geomDrawCmdCountBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice, 1)
+        .SetDebugName("GEOM_DRAW_CMD_COUNT_BUFFER");
+
+    const uint32_t prefixSumMaxElementCount = glm::max(static_cast<uint32_t>(s_cpuInstData.size()), totalBucketCount);
+        
+    CreateGeomPrefixSumResources(prefixSumMaxElementCount);
 }
 
 
@@ -6232,6 +6297,154 @@ static void GeomBatchMarkStartsPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+static void GeomPrefixSumScanBlocksPass(
+    vkn::CmdBuffer& cmdBuffer,
+    vkn::Buffer& input,
+    vkn::Buffer& output,
+    vkn::Buffer& blockSums,
+    uint32_t maxElemCount
+) {
+    static constexpr uint32_t passColor = 0xd9b3ff;
+
+    TM_MARKER_C(passColor, "PrefixSumScanBlocks");
+    TM_GPU_MARKER_C(cmdBuffer, passColor, "PrefixSumScanBlocks");
+
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    if (&input == &output) {
+        barriers.AddBufferBarrier(input, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+    } else {
+        barriers
+            .AddBufferBarrier(input, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+            .AddBufferBarrier(output, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+    }
+
+    barriers
+        .AddBufferBarrier(blockSums, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT)
+    .Push();
+
+
+    vkn::PSO& pso = GetPSO(PASS_ID_PREFIX_SUM_SCAN_BLOCKS);
+
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+        std::array {
+            vkn::PushDescriptor::StorageBuffer(PREFIX_SUM_INPUT_DESCRIPTOR_SLOT, 0, input),
+            vkn::PushDescriptor::StorageBuffer(PREFIX_SUM_OUTPUT_DESCRIPTOR_SLOT, 0, output),
+            vkn::PushDescriptor::StorageBuffer(PREFIX_SUM_BLOCK_SUMS_DESCRIPTOR_SLOT, 0, blockSums),
+        });
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_PrefixSumPushConst {
+        .maxElemCount = maxElemCount
+    });
+
+
+    const uint32_t blockCount = math::CeilDiv(maxElemCount, PREFIX_SUM_BLOCK_SIZE);
+
+    cmdBuffer.CmdDispatch(blockCount, 1, 1);
+}
+
+
+static void GeomPrefixSumAddBlockOffsetsPass(
+    vkn::CmdBuffer& cmdBuffer,
+    vkn::Buffer& output,
+    vkn::Buffer& blockOffsets,
+    uint32_t maxElemCount
+) {
+    static constexpr uint32_t passColor = 0xd9b3ff;
+
+    TM_MARKER_C(passColor, "PrefixSumAddBlockOffsets");
+    TM_GPU_MARKER_C(cmdBuffer, passColor, "PrefixSumAddBlockOffsets");
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddBufferBarrier(output, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT)
+            .AddBufferBarrier(blockOffsets, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
+        .Push();
+
+
+    vkn::PSO& pso = GetPSO(PASS_ID_PREFIX_SUM_ADD_OFFSETS);
+
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
+        std::array {
+            vkn::PushDescriptor::StorageBuffer(PREFIX_SUM_OUTPUT_DESCRIPTOR_SLOT, 0, output),
+            vkn::PushDescriptor::StorageBuffer(PREFIX_SUM_BLOCK_OFFSETS_DESCRIPTOR_SLOT, 0, blockOffsets),
+        }
+    );
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_PrefixSumPushConst {
+        .maxElemCount = maxElemCount
+    });
+
+    const uint32_t blockCount = math::CeilDiv(maxElemCount, PREFIX_SUM_BLOCK_SIZE);
+
+    cmdBuffer.CmdDispatch(blockCount, 1, 1);
+}
+
+
+static void GeomPrefixSumPassInternal(
+    vkn::CmdBuffer& cmdBuffer,
+    vkn::Buffer& input,
+    vkn::Buffer& output,
+    uint32_t elementCount,
+    uint32_t level
+) {
+    TM_MARKER_C_FMT(0xd9b3ff, "Level_%u (elems: %u)", level, elementCount);
+    TM_GPU_MARKER_C_FMT(cmdBuffer, 0xd9b3ff, "Level_%u (elems: %u)", level, elementCount);
+
+    CORE_ASSERT(elementCount > 0);
+    CORE_ASSERT(level < s_geomPrefixSumLevelResources.size());
+
+    GeomPrefixSumLevelResources& resources = s_geomPrefixSumLevelResources[level];
+
+    const uint32_t blockCount = math::CeilDiv(elementCount, PREFIX_SUM_BLOCK_SIZE);
+
+    GeomPrefixSumScanBlocksPass(cmdBuffer, input, output, resources.blockSums, elementCount);
+
+    // There is only one block, therefore its local prefix sum is already the global prefix sum.
+    if (blockCount <= 1) {
+        return;
+    }
+
+    GeomPrefixSumPassInternal(cmdBuffer, resources.blockSums, resources.blockOffsets, blockCount, level + 1);
+
+    GeomPrefixSumAddBlockOffsetsPass(cmdBuffer, output, resources.blockOffsets, elementCount);
+}
+
+
+static void GeomPrefixSumPass(
+    vkn::CmdBuffer& cmdBuffer,
+    vkn::Buffer& input,
+    vkn::Buffer& output,
+    uint32_t elementCount
+) {
+    TM_MARKER_C(0xd9b3ff, "GeomPrefixSum");
+    TM_GPU_MARKER_C(cmdBuffer, 0xd9b3ff, "GeomPrefixSum");
+
+    if (elementCount == 0) {
+        return;
+    }
+
+    CORE_ASSERT_MSG(elementCount <= s_geomPrefixSumMaxElementCount, "Geom prefix sum element count %u exceeds allocated maximum %u",
+        elementCount, s_geomPrefixSumMaxElementCount);
+
+    GeomPrefixSumPassInternal(cmdBuffer, input, output, elementCount, 0);
+}
+
+
 static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
 {
     CORE_ASSERT(queue < GEOM_QUEUE_COUNT);
@@ -6291,6 +6504,8 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer)
     }
 
     GeomBatchMarkStartsPass(cmdBuffer);
+
+    GeomPrefixSumPass(cmdBuffer, s_geomBatchStartFlagsBuffer, s_geomBatchPrefixBuffer, s_cpuInstData.size());
 }
 
 

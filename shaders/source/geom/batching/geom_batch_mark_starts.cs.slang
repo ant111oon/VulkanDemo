@@ -1,4 +1,5 @@
 #include "registers/geom_batching_registers.slang"
+#include "registers/common_registers.slang"
 
 #include "common/common_geom.slang"
 
@@ -17,9 +18,13 @@ bool IsSameBatch(in GPU_GeomSortKey a, in GPU_GeomSortKey b)
 void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
 {
     const uint instID = dispatchThreadID.x;
+
     const uint instCount = GEOM_BATCH_SORTED_VIS_INST_COUNT[0];
 
     if (instID >= instCount) {
+        if (instID < COMMON_INST_COUNT) {
+            GEOM_BATCH_START_FLAGS_UAV[instID] = 0;
+        }
         return;
     }
 
