@@ -10,7 +10,7 @@ static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
 static const uint GEOM_BATCH_CS_GROUP_SIZE = 512;
 
 
-static const uint GEOM_SORT_RADIX_BITS = 4u;
+static const uint GEOM_SORT_RADIX_BITS = 8u;
 static const uint GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
 static const uint GEOM_SORT_PASS_COUNT = GPU_GeomSortKey::GEOM_SORT_KEY_TOTAL_BITS / GEOM_SORT_RADIX_BITS;
 

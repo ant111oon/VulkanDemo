@@ -413,7 +413,8 @@ struct GPU_CsmData
     uint  filterGridHalfSize;
 
     uint2 rtSize;
-    uint2 padding;
+    float constantBiasTexels;
+    float slopeBiasTexels;
 };
 
 
@@ -992,7 +993,7 @@ static constexpr glm::uvec2 COMMON_BRDF_INTEGRATION_LUT_SIZE = glm::uvec2(512);
 
 static constexpr uint32_t COMMON_HZB_MAX_MIP_COUNT = 12;
 
-static constexpr uint32_t GEOM_SORT_RADIX_BITS = 4u;
+static constexpr uint32_t GEOM_SORT_RADIX_BITS = 8u;
 static constexpr uint32_t GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
 static constexpr uint32_t GEOM_SORT_PASS_COUNT = GPU_GeomSortKey::GEOM_SORT_KEY_TOTAL_BITS / GEOM_SORT_RADIX_BITS;
 
@@ -1528,6 +1529,8 @@ static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
+static float   s_csmConstantBiasTexels = 0.25f;
+static float   s_csmSlopeBiasTexels = 0.5f;
 
 struct CsmPcssSettings
 {
@@ -5371,6 +5374,8 @@ void UpdateGPUDeferredLightingConstBuffer()
     constBuff.csmData.filterGridHalfSize = s_csmFilterGridHalfSize;
 
     constBuff.csmData.rtSize = glm::uvec2(CSM_CASCADE_RT_SIZE);
+    constBuff.csmData.constantBiasTexels = s_csmConstantBiasTexels;
+    constBuff.csmData.slopeBiasTexels = s_csmSlopeBiasTexels;
 
     constBuff.csmData.pcssData.lightAngularSlope = glm::tan(glm::radians(s_csmPcssSettings.lightAngularRadiusDegrees));
     constBuff.csmData.pcssData.maxSearchRadiusTexels = s_csmPcssSettings.maxSearchRadiusTexels;
@@ -7437,6 +7442,13 @@ namespace DbgUI
                         ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
                         ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+
+                        if (ImGui::TreeNodeEx("Bias")) {
+                            ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                            ImGui::DragFloat("Slope (Texels)", &s_csmSlopeBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                            
+                            ImGui::TreePop();
+                        }
 
                         if (ImGui::TreeNodeEx("Geom Culling")) {
                             ImGui::Checkbox("Frustum", &s_useCSMMeshFrustumCulling);

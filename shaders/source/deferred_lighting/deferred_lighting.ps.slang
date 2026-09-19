@@ -568,9 +568,8 @@ float CalcCsmBias(in float3 wnorm, in uint cascade)
 
     const float worldUnitsPerTexel = DEFERRED_LIGHTING_CSM_CASCADE_WORLD_UNITS_PER_PIXEL(cascade);
 
-    // Tune these in texel units.
-    const float constantBiasTexels = 0.25f;
-    const float slopeBiasTexels = 0.5f;
+    const float constantBiasTexels = DEFERRED_LIGHTING_CSM_DATA.constantBiasTexels;
+    const float slopeBiasTexels = DEFERRED_LIGHTING_CSM_DATA.slopeBiasTexels;
 
     const float biasWorld = worldUnitsPerTexel * (constantBiasTexels + slopeBiasTexels * tanTheta);
 

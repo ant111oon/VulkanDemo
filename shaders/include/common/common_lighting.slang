@@ -63,7 +63,8 @@ struct GPU_CsmData
     uint  filterGridHalfSize;
 
     uint2 rtSize;
-    uint2 padding;
+    float constantBiasTexels;
+    float slopeBiasTexels;
 };
 
 
