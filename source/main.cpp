@@ -508,6 +508,12 @@ struct GPU_GeomSortPushConst
 };
 
 
+struct GPU_GeomBatchPushConst
+{
+    uint cmdWriteOffsets[GEOM_MAT_TYPE_COUNT];
+};
+
+
 struct GPU_DepthPushConst
 {
     float4x4 viewProjMatr;
@@ -923,8 +929,10 @@ static constexpr size_t GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT = 7;
 static constexpr size_t GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT = 8;
 static constexpr size_t GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT = 9;
 static constexpr size_t GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT = 10;
-static constexpr size_t GEOM_BATCH_COUNT_DESCRIPTOR_SLOT = 11;
-static constexpr size_t GEOM_BATCH_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 12;
+static constexpr size_t GEOM_MAT_TYPE_FIRST_BATCH_DESCRIPTOR_SLOT = 11;
+static constexpr size_t GEOM_BATCH_COUNT_DESCRIPTOR_SLOT = 12;
+static constexpr size_t GEOM_BATCH_DRAW_CMDS_UAV_DESCRIPTOR_SLOT = 13;
+static constexpr size_t GEOM_BATCH_DRAW_CMD_COUNTS_UAV_DESCRIPTOR_SLOT = 14;
 
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_DRAW_CMD_GEN_BATCH_QUEUE_SIZE_DESCRIPTOR_SLOT = 1;
@@ -1465,10 +1473,17 @@ static uint32_t s_geomPrefixSumMaxElementCount = 0;
 
 static vkn::Buffer s_geomBatchStartFlagsBuffer;
 static vkn::Buffer s_geomBatchPrefixBuffer;
-
 static vkn::Buffer s_geomBatchFirstInstBuffer;
+
+// Number of batches across ALL mat types.
+static vkn::Buffer s_geomBatchCountBuffer;
+
+// Global batch ID where each matType begins.
+static vkn::Buffer s_geomMatTypeFirstBatchBuffer;
+
+// Actual draw count for every matType.
+static vkn::Buffer s_geomDrawCmdCountsBuffer;
 static vkn::Buffer s_geomDrawCmdBuffer;
-static vkn::Buffer s_geomDrawCmdCountBuffer;
 
 
 static std::array<vkn::Buffer, CSM_CASCADE_COUNT> s_csmGeomCullVisInstSortKeysBuffer;
@@ -1554,6 +1569,9 @@ static std::array<float, CSM_CASCADE_COUNT> s_csmCascadeWorldUnitsPerTexel;
 static eng::Camera s_fixedCullCamera;
 
 static std::array<glm::float4x4, CSM_CASCADE_COUNT> s_fixedCamCsmInvViewProjMatr;
+
+static std::array<uint32_t, GEOM_MAT_TYPE_COUNT> s_geomPerMatTypeCounts;
+static std::array<uint32_t, GEOM_MAT_TYPE_COUNT> s_geomPerMatTypeOffsets;
 
 
 static GPU_DbgRTViewType s_dbgOutputRTType = DBG_RT_VIEW_TYPE_NONE;
@@ -3116,8 +3134,10 @@ static void CreateGeomBatchingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_MAT_TYPE_FIRST_BATCH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_BATCH_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_BATCH_DRAW_CMD_COUNTS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3623,25 +3643,41 @@ static void CreateGeomSortingScatterNewPSOLayout()
 
 static void CreateGeomBatchingPSOLayout()
 {
-    CreatePSOLayout(PASS_ID_GEOM_BATCHING, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
+    CreatePSOLayout(PASS_ID_GEOM_BATCHING, DESC_SET_LAYOUT_ID_GEOM_BATCHING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomBatchPushConst)
+    });
 }
 
 
 static void CreateGeomBatchMarkStartsPSOLayout()
 {
-    CreatePSOLayout(PASS_ID_GEOM_BATCH_MARK_STARTS, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
+    CreatePSOLayout(PASS_ID_GEOM_BATCH_MARK_STARTS, DESC_SET_LAYOUT_ID_GEOM_BATCHING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomBatchPushConst)
+    });
 }
 
 
 static void CreateGeomBatchScatterStartsPSOLayout()
 {
-    CreatePSOLayout(PASS_ID_GEOM_BATCH_SCATTER_STARTS, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
+    CreatePSOLayout(PASS_ID_GEOM_BATCH_SCATTER_STARTS, DESC_SET_LAYOUT_ID_GEOM_BATCHING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomBatchPushConst)
+    });
 }
 
 
 static void CreateGeomBatchGenerateCmdsPSOLayout()
 {
-    CreatePSOLayout(PASS_ID_GEOM_BATCH_GENERATE_CMDS, DESC_SET_LAYOUT_ID_GEOM_BATCHING);
+    CreatePSOLayout(PASS_ID_GEOM_BATCH_GENERATE_CMDS, DESC_SET_LAYOUT_ID_GEOM_BATCHING, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_GeomBatchPushConst)
+    });
 }
 
 
@@ -4378,12 +4414,20 @@ static void CreateGeomCullingAndInstancingResources()
         .CreateStorageBuffer<uint32_t>(&s_vkDevice, maxInstCount)
         .SetDebugName("GEOM_BATCH_CMD_FIRST_INST_BUFFER");
 
+    s_geomBatchCountBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("GEOM_BATCH_COUNT_BUFFER");
+
+    s_geomMatTypeFirstBatchBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice, GEOM_MAT_TYPE_COUNT, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("GEOM_MAT_TYPE_FIRST_BATCH_BUFFER");
+
     s_geomDrawCmdBuffer
-        .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, maxInstCount)
+        .CreateStorageBuffer<GPU_CmdDrawIndexedIndirect>(&s_vkDevice, maxInstCount, VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
         .SetDebugName("GEOM_DRAW_CMD_BUFFER");
 
-    s_geomDrawCmdCountBuffer
-        .CreateStorageBuffer<uint32_t>(&s_vkDevice, 1)
+    s_geomDrawCmdCountsBuffer
+        .CreateStorageBuffer<uint32_t>(&s_vkDevice,  GEOM_MAT_TYPE_COUNT, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
         .SetDebugName("GEOM_DRAW_CMD_COUNT_BUFFER");
 
     const uint32_t prefixSumMaxElementCount = glm::max(static_cast<uint32_t>(s_cpuInstData.size()), totalBucketCount);
@@ -5116,6 +5160,8 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     CORE_ASSERT_MSG(primitive.materialIndex.has_value(), "Some of mesh %s primitive doesn't have material", mesh.name.c_str());
                     inst.materialID = primitive.materialIndex.value();
 
+                    s_geomPerMatTypeCounts[s_cpuMaterialData[inst.materialID].type] += 1;
+
                     static constexpr uint32_t MAX_MATERIAL_ID = (1u << GPU_GeomSortKey::GEOM_SORT_MAT_ID_BITS) - 1;
                     CORE_ASSERT_MSG(inst.materialID <= MAX_MATERIAL_ID, "For now GPU sort key supports only material IDs less or equal to %u", MAX_MATERIAL_ID);
 
@@ -5145,17 +5191,13 @@ static void LoadSceneInstData(const gltf::Asset& asset)
         });
     }
 
+    uint32_t base = 0;
+    for (uint32_t i = 0; i < GEOM_MAT_TYPE_COUNT; ++i) {
+        s_geomPerMatTypeOffsets[i] = base;
+        base += s_geomPerMatTypeCounts[i];
+    }
+
     CORE_LOG_INFO("FastGLTF: Instance data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
-
-    timer.Reset().Start();
-
-    std::sort(s_cpuInstData.begin(), s_cpuInstData.end(), 
-        [](const GPU_GeomInst& a, const GPU_GeomInst& b) {
-            return a.meshID < b.meshID;
-        }
-    );
-
-    CORE_LOG_INFO("Instance data sorting finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -6498,8 +6540,9 @@ static void GeomBatchScatterStartsPass(vkn::CmdBuffer& cmdBuffer)
             .AddBufferBarrier(s_geomCullVisInstCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomBatchStartFlagsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomBatchPrefixBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
-            .AddBufferBarrier(s_geomDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+            .AddBufferBarrier(s_geomBatchCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
             .AddBufferBarrier(s_geomBatchFirstInstBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+            .AddBufferBarrier(s_geomMatTypeFirstBatchBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
         .Push();
 
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCH_SCATTER_STARTS);
@@ -6515,8 +6558,9 @@ static void GeomBatchScatterStartsPass(vkn::CmdBuffer& cmdBuffer)
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT, 0, s_geomCullVisInstCountBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_START_FLAGS_UAV_DESCRIPTOR_SLOT, 0, s_geomBatchStartFlagsBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_PREFIX_DESCRIPTOR_SLOT, 0, s_geomBatchPrefixBuffer),
-        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, 0, s_geomDrawCmdCountBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, 0, s_geomBatchCountBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT, 0, s_geomBatchFirstInstBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_MAT_TYPE_FIRST_BATCH_DESCRIPTOR_SLOT, 0, s_geomMatTypeFirstBatchBuffer),
     });
 
     cmdBuffer.CmdDispatch(math::CeilDiv(s_cpuInstData.size(), GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
@@ -6533,13 +6577,21 @@ static void GeomBatchGenerateCmdsPass(vkn::CmdBuffer& cmdBuffer)
 
     cmdBuffer
         .BeginBarrierList()
-            .AddBufferBarrier(s_geomDrawCmdCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
+            .AddBufferBarrier(s_geomBatchCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomBatchFirstInstBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomCullVisInstCountBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomCullVisInstSortKeysBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_commonMeshLODBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_commonMeshBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
             .AddBufferBarrier(s_geomDrawCmdBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+            .AddBufferBarrier(s_geomDrawCmdCountsBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+        .Push();
+
+    cmdBuffer.CmdFillBuffer(s_geomDrawCmdCountsBuffer, 0);
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddBufferBarrier(s_geomDrawCmdCountsBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
         .Push();
 
     vkn::PSO& pso = GetPSO(PASS_ID_GEOM_BATCH_GENERATE_CMDS);
@@ -6552,12 +6604,22 @@ static void GeomBatchGenerateCmdsPass(vkn::CmdBuffer& cmdBuffer)
     });
 
     cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
-        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, 0, s_geomDrawCmdCountBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_COUNT_DESCRIPTOR_SLOT, 0, s_geomBatchCountBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_FIRST_INST_DESCRIPTOR_SLOT, 0, s_geomBatchFirstInstBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_MAT_TYPE_FIRST_BATCH_DESCRIPTOR_SLOT, 0, s_geomMatTypeFirstBatchBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_VIS_INST_COUNT_DESCRIPTOR_SLOT, 0, s_geomCullVisInstCountBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_SORTED_KEYS_DESCRIPTOR_SLOT, 0, s_geomCullVisInstSortKeysBuffer),
         vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_DRAW_CMDS_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_BATCH_DRAW_CMD_COUNTS_UAV_DESCRIPTOR_SLOT, 0, s_geomDrawCmdCountsBuffer),
     });
+
+    GPU_GeomBatchPushConst pushConst = {};
+
+    for (uint32_t i = 0; i < GEOM_MAT_TYPE_COUNT; ++i) {
+        pushConst.cmdWriteOffsets[i] = s_geomPerMatTypeOffsets[i];
+    }
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConst);
 
     cmdBuffer.CmdDispatch(math::CeilDiv(s_cpuInstData.size(), GEOM_BATCH_CS_GROUP_SIZE), 1, 1);
 }
@@ -7051,9 +7113,19 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
     const bool isAKillPass = queue == GEOM_QUEUE_AKILL;
     const bool needClearDepth = queue == GEOM_QUEUE_OPAQUE;
 
-    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
-    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
-    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
+    // vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
+    // vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
+    // vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
+
+    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdBuffer;
+    vkn::Buffer& drawCmdCountBuffer = s_geomDrawCmdCountsBuffer;
+    vkn::Buffer& visIDBuffer = s_geomCullVisInstIDsBuffer;
+
+    const uint32_t firstCmdOffset = s_geomPerMatTypeOffsets[queue] * sizeof(GPU_CmdDrawIndexedIndirect);
+    const uint32_t cmdRangeSize = s_geomPerMatTypeCounts[queue] * sizeof(GPU_CmdDrawIndexedIndirect);
+
+    const uint32_t cmdCountOffset = queue * sizeof(glm::uint);
+    const uint32_t cmdCountRangeSize = 1 * sizeof(glm::uint);
 
     cmdBuffer
         .BeginBarrierList()
@@ -7063,8 +7135,20 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT)
-            .AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
-            .AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
+            .AddBufferBarrier(
+                drawCmdBuffer, 
+                VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, 
+                VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+                firstCmdOffset,
+                cmdRangeSize
+            )
+            .AddBufferBarrier(
+                drawCmdCountBuffer,
+                VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, 
+                VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+                cmdCountOffset,
+                cmdCountRangeSize
+            )
             .AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT)
         .Push();
 
@@ -7097,7 +7181,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
         });
 
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW,
-            vkn::PushDescriptor::StorageBuffer(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
+            vkn::PushDescriptor::StorageBuffer(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer)
         );
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_DepthPushConst {
@@ -7105,7 +7189,14 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
             .akillPass = isAKillPass,
         });
 
-        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
+        cmdBuffer.CmdDrawIndexedIndirect(
+            drawCmdBuffer, 
+            firstCmdOffset,
+            drawCmdCountBuffer,
+            cmdCountOffset, 
+            s_geomPerMatTypeCounts[queue], 
+            sizeof(GPU_CmdDrawIndexedIndirect)
+        );
     cmdBuffer.CmdEndRendering();
 
     cmdBuffer
@@ -7132,14 +7223,14 @@ void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    {
+    if (s_geomPerMatTypeCounts[GEOM_QUEUE_OPAQUE] > 0) {
         TM_MARKER_C(passColor, "Opaque");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
         RenderPass_Depth(cmdBuffer, GEOM_QUEUE_OPAQUE);
     }
 
-    {
+    if (s_geomPerMatTypeCounts[GEOM_QUEUE_AKILL] > 0) {
         TM_MARKER_C(passColor, "AKill");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
 
@@ -7289,12 +7380,33 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
-    vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
-    vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
+    // vkn::Buffer& drawCmdBuffer = s_geomDrawCmdQueueBuffer[queue];
+    // vkn::Buffer& drawCmdCountBuffer = s_geomBatchQueueSizeBuffer[queue];
+    // vkn::Buffer& visIDBuffer = s_sortedVisGeomIDQueueBuffer[queue];
+    vkn::Buffer& drawCmdBuffer = s_geomDrawCmdBuffer;
+    vkn::Buffer& drawCmdCountBuffer = s_geomDrawCmdCountsBuffer;
+    vkn::Buffer& visIDBuffer = s_geomCullVisInstIDsBuffer;
 
-    barrierList.AddBufferBarrier(drawCmdBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
-    barrierList.AddBufferBarrier(drawCmdCountBuffer, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+    const uint32_t firstCmdOffset = s_geomPerMatTypeOffsets[queue] * sizeof(GPU_CmdDrawIndexedIndirect);
+    const uint32_t cmdRangeSize = s_geomPerMatTypeCounts[queue] * sizeof(GPU_CmdDrawIndexedIndirect);
+
+    const uint32_t cmdCountOffset = queue * sizeof(glm::uint);
+    const uint32_t cmdCountRangeSize = 1 * sizeof(glm::uint);
+
+    barrierList.AddBufferBarrier(
+        drawCmdBuffer, 
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, 
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+        firstCmdOffset,
+        cmdRangeSize
+    );
+    barrierList.AddBufferBarrier(
+        drawCmdCountBuffer,
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, 
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+        cmdCountOffset,
+        cmdCountRangeSize
+    );
     barrierList.AddBufferBarrier(visIDBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
 
     barrierList.Push();    
@@ -7336,7 +7448,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
         });
         
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
-            vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, s_sortedVisGeomIDQueueBuffer[queue])
+            vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer)
         );
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
@@ -7345,8 +7457,15 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomQueue queue)
             .viewProjMatr = s_mainCamera.GetViewProjMatrix(),
             .akillPass = isAKillPass
         });
-        
-        cmdBuffer.CmdDrawIndexedIndirect(drawCmdBuffer, 0, drawCmdCountBuffer, 0, s_cpuInstData.size(), sizeof(GPU_CmdDrawIndexedIndirect));
+
+        cmdBuffer.CmdDrawIndexedIndirect(
+            drawCmdBuffer, 
+            firstCmdOffset,
+            drawCmdCountBuffer,
+            cmdCountOffset, 
+            s_geomPerMatTypeCounts[queue], 
+            sizeof(GPU_CmdDrawIndexedIndirect)
+        );
     cmdBuffer.CmdEndRendering();
 }
 
@@ -7363,14 +7482,14 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    {
+    if (s_geomPerMatTypeCounts[GEOM_QUEUE_OPAQUE] > 0) {
         TM_MARKER_C(passColor, "Opaque");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
         RenderPass_GBuffer(cmdBuffer, GEOM_QUEUE_OPAQUE);
     }
 
-    {
+    if (s_geomPerMatTypeCounts[GEOM_QUEUE_AKILL] > 0) {
         TM_MARKER_C(passColor, "AKill");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
 
@@ -8725,9 +8844,9 @@ int main(int argc, char* argv[])
     InitWindow();
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     CreateVkInstance();    

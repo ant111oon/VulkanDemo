@@ -24,7 +24,22 @@ void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
     const uint prefix = GEOM_BATCH_PREFIX[index];
 
     if (isBatchStart) {
-        GEOM_BATCH_FIRST_INST[prefix] = index;
+        const uint batchID = prefix;
+
+        GEOM_BATCH_FIRST_INST[batchID] = index;
+
+        const GPU_GeomMatType matType = GEOM_BATCH_SORTED_KEYS[index].matType;
+        bool firstBatchOfMatType = index == 0;
+
+        if (index > 0) {
+            const GPU_GeomMatType prevMatType = GEOM_BATCH_SORTED_KEYS[index - 1].matType;
+
+            firstBatchOfMatType = prevMatType != matType;
+        }
+
+        if (firstBatchOfMatType) {
+            GEOM_MAT_TYPE_FIRST_BATCH[(uint)matType] = batchID;
+        }
     }
 
     if (index == visibleCount - 1) {

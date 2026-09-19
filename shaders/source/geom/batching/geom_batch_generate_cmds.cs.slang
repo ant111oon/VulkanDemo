@@ -4,7 +4,6 @@
 #include "common/common_geom.slang"
 
 
-
 [shader("compute")]
 [numthreads(GEOM_BATCH_CS_GROUP_SIZE, 1, 1)]
 void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
@@ -31,6 +30,13 @@ void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
     const GPU_Mesh mesh = COMMON_MESH_BUFFER[key.meshID];
     const GPU_MeshLOD lod = COMMON_MESH_LOD_BUFFER[mesh.firstLOD + key.lodID];
 
+    const uint matType = (uint)key.matType;
+
+    const uint firstBatchOfMatType = GEOM_MAT_TYPE_FIRST_BATCH[matType];
+    const uint localBatchID = batchID - firstBatchOfMatType;
+
+    const uint dstCmdIndex = GEOM_BATCH_CONST.cmdWriteOffsets[matType] + localBatchID;
+
     GPU_CmdDrawIndexedIndirect cmd;
 
     cmd.indexCount    = lod.indexCount;
@@ -41,5 +47,18 @@ void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
 
     cmd.firstInstance = firstInst;
 
-    GEOM_BATCH_DRAW_CMDS_UAV[batchID] = cmd;
+    GEOM_BATCH_DRAW_CMDS_UAV[dstCmdIndex] = cmd;
+
+    bool lastBatchOfMatType = batchID == batchCount - 1;
+
+    if (!lastBatchOfMatType) {
+        const uint nextFirst = GEOM_BATCH_FIRST_INST[batchID + 1];
+        const uint nextMatType = (uint)GEOM_BATCH_SORTED_KEYS[nextFirst].matType;
+
+        lastBatchOfMatType = nextMatType != matType;
+    }
+
+    if (lastBatchOfMatType) {
+        GEOM_BATCH_DRAW_CMD_COUNTS_UAV[matType] = localBatchID + 1;
+    }
 }
