@@ -51,16 +51,16 @@ groupshared uint GROUP_CULL_VIS_INST_OFFSET;
 
 [numthreads(GEOM_CULL_CS_GROUP_SIZE, 1, 1)]
 [shader("compute")]
-void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : SV_DispatchThreadID)
+void main(SV_GROUP_THREAD_FLAT_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatchThreadID))
 {
-    if (GI == 0) {
+    if (groupThreadID == 0) {
         GROUP_CULL_VIS_INST_COUNTER = 0;
         GROUP_CULL_VIS_INST_OFFSET = 0;
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    const uint instID = DTid;
+    const uint instID = dispatchThreadID.x;
 
     GPU_GeomSortKey sortKey;
     GPU_GeomInst inst;
@@ -82,7 +82,7 @@ void main(in uint Gid : SV_GroupID, in uint GI : SV_GroupIndex, in uint DTid : S
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (GI == 0 && GROUP_CULL_VIS_INST_COUNTER > 0) { ;
+    if (groupThreadID == 0 && GROUP_CULL_VIS_INST_COUNTER > 0) { ;
         InterlockedAdd(GEOM_CULL_VIS_INST_COUNTER[0], GROUP_CULL_VIS_INST_COUNTER, GROUP_CULL_VIS_INST_OFFSET);
     }
 

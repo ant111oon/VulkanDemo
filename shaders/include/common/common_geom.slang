@@ -7,8 +7,7 @@
 
 static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
 static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
-static const uint GEOM_BATCH_CS_GROUP_SIZE = 1024;
-static const uint GEOM_DRAW_CMD_GEN_CS_GROUP_SIZE = 512;
+static const uint GEOM_BATCH_CS_GROUP_SIZE = 512;
 
 
 static const uint GEOM_SORT_RADIX_BITS = 4u;
@@ -245,27 +244,5 @@ struct GPU_GeomSortKey
 
     private uint2 key;
 };
-
-
-enum GPU_GeomQueue : uint
-{
-    OPAQUE,
-    AKILL,
-    COUNT
-};
-
-
-struct GPU_GeomBatch
-{
-    uint meshID;
-    uint lodID;
-    uint firstInst;
-    uint instCount;
-};
-
-
-#define GEOM_QUEUE_OPAQUE (uint)GPU_GeomQueue::OPAQUE
-#define GEOM_QUEUE_AKILL  (uint)GPU_GeomQueue::AKILL
-#define GEOM_QUEUE_COUNT  (uint)GPU_GeomQueue::COUNT
 
 #endif

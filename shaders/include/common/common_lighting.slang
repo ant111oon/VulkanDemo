@@ -17,9 +17,9 @@ static const uint CSM_PCSS_SEARCH_ROTATION_SALT = 0x68bc21ebu;
 static const uint CSM_PCSS_FILTER_ROTATION_SALT = 0x02e5be93u;
 
 static const float3 DBG_CSM_CASCADE_COLORS[] = {
-    float3(1.f, 0.f, 0.f),
-    float3(0.f, 1.f, 0.f),
-    float3(0.f, 0.f, 1.f),
+    float3(10.f, 0.f, 0.f),
+    float3(0.f, 10.f, 0.f),
+    float3(0.f, 0.f, 10.f),
     float3(0.004f, 0.004f, 0.004f),
 };
 

@@ -44,14 +44,11 @@ struct GPU_GeomCullPushConst
 #define GEOM_CULL_IS_HZB_CULLING_ENABLED     GEOM_CULL_CONST.isHZBCullingEnabled
 
 
-[vk::binding(0, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUES_UAV[GEOM_QUEUE_COUNT];
-[vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint> GEOM_CULL_VIS_INST_ID_QUEUE_SIZES_UAV[GEOM_QUEUE_COUNT];
+[vk::binding(0, DESC_SET_PER_DRAW)] Texture2D GEOM_CULL_HZB;
 
-[vk::binding(2, DESC_SET_PER_DRAW)] Texture2D GEOM_CULL_HZB;
+[vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_INST_SORT_KEYS;
+[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_IDS;
 
-[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_INST_SORT_KEYS;
-[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_IDS;
-
-[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_COUNTER;
+[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_COUNTER;
 
 #endif
