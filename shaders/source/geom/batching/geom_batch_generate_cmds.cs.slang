@@ -13,10 +13,6 @@ void main(SV_DISPATCH_THREAD_ID(dispatchThreadID))
     const uint batchCount = GEOM_BATCH_COUNT[0];
 
     if (batchID >= batchCount) {
-        if (batchID < COMMON_INST_COUNT) {
-            GEOM_BATCH_DRAW_CMDS_UAV[batchID] = GPU_CmdDrawIndexedIndirect(0, 0, 0, 0, 0);
-        }
-
         return;
     }
 
