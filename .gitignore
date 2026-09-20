@@ -3,8 +3,5 @@
 build
 
 assets/*
-!assets/**/Sponza/
 !assets/**/LightSponza/
-!assets/**/TestPBR/
-!assets/**/GPUOcclusionTest/
-!assets/**/ShadowTest/
+!assets/**/SkyboxTextures/

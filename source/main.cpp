@@ -1116,7 +1116,7 @@ public:
         int channels = 0;
 
         const int result = stbi_info(strPath.c_str(), &width, &height, &channels);
-        CORE_ASSERT(result == 1);
+        CORE_ASSERT_MSG(result == 1, "Failed to load texture: %s", strPath.c_str());
 
         const bool isRGB = channels == 3;
 
@@ -5250,8 +5250,12 @@ static void LoadScene(const fs::path& filepath)
 
     static constexpr gltf::Extensions requiredExtensions =
         gltf::Extensions::KHR_mesh_quantization |
+        gltf::Extensions::KHR_materials_ior |
+        gltf::Extensions::KHR_lights_punctual |
+        gltf::Extensions::KHR_materials_transmission |
         gltf::Extensions::KHR_texture_transform |
-        gltf::Extensions::KHR_materials_variants;
+        gltf::Extensions::KHR_materials_variants |
+        gltf::Extensions::KHR_materials_specular;
 
     gltf::Parser parser(requiredExtensions);
 
@@ -5898,7 +5902,7 @@ struct GeomSortPassData
 static void GeomSortingHistogramPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortPassData& data, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "Histogram";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x98f5ff;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -5937,7 +5941,7 @@ static void GeomSortingHistogramPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb
 static void GeomSortingPrefixPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortPassData& data, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "Prefix";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x87ceff;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -5974,7 +5978,7 @@ static void GeomSortingPrefixPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, c
 static void GeomSortingScatterPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const GeomSortPassData& data, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "Scatter";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x836fff;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -6038,8 +6042,8 @@ static void GeomSortingPass(vkn::CmdBuffer& cmdBuffer, uint32_t passNmb, const G
 
 static void GeomSortingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& resources)
 {
-    TM_MARKER_C(0xcae1ff, "Sorting");
-    TM_GPU_MARKER_C(cmdBuffer, 0xcae1ff, "Sorting");
+    TM_MARKER_C(0x4682b4, "Sorting");
+    TM_GPU_MARKER_C(cmdBuffer, 0x4682b4, "Sorting");
 
     GeomSortPassData data = {};
     data.groupCount = math::CeilDiv(s_cpuInstData.size(), GEOM_SORT_CS_GROUP_SIZE);
@@ -6066,7 +6070,7 @@ static void GeomSortingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& 
 static void GeomBatchMarkStartsPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "MarkBatchStarts";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x548b54;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -6250,7 +6254,7 @@ static void GeomPrefixSumPass(
 static void GeomBatchScatterStartsPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "ScatterBatchStarts";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x00ee76;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -6292,7 +6296,7 @@ static void GeomBatchScatterStartsPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCull
 static void GeomBatchGenerateCmdsPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "GenerateCmds";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x008b45;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -6344,7 +6348,7 @@ static void GeomBatchGenerateCmdsPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullR
 static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources& resources)
 {
     static constexpr const char* passName = "Batching";
-    static constexpr uint32_t passColor = 0xcae1ff;
+    static constexpr uint32_t passColor = 0x2e8b57;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
@@ -6387,26 +6391,23 @@ static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam,
 
 static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr const char* passName = "HZBGen";
-    static constexpr uint32_t passColor = 0xcccccc;
-
-    TM_MARKER_C(passColor, passName);
-    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+    TM_MARKER_C(0xcccccc, "HZBGen");
+    TM_GPU_MARKER_C(cmdBuffer, 0xcccccc, "HZBGen");
 
     if (!s_cullingTestMode) {
-        TM_MARKER_C(passColor, "MainCam");
-        TM_GPU_MARKER_C(cmdBuffer, passColor, "MainCam");
+        TM_MARKER_C(0xb3b3b3, "MainCam");
+        TM_GPU_MARKER_C(cmdBuffer, 0xb3b3b3, "MainCam");
 
         HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, 0, s_mainCamGeomCullResources.hzb, s_mainCamGeomCullResources.hzbMipViews);
     }
 
     {
-        TM_MARKER_C(passColor, "CSM");
-        TM_GPU_MARKER_C(cmdBuffer, passColor, "CSM");
+        TM_MARKER_C(0xb3b3b3, "CSM");
+        TM_GPU_MARKER_C(cmdBuffer, 0xb3b3b3, "CSM");
     
         for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+            TM_MARKER_C_FMT(0xb3b3b3, "Cascade_%u", cascade);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb3b3b3, "Cascade_%u", cascade);
     
             HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[cascade], cascade, s_csmCamsGeomCullResources[cascade].hzb, s_csmCamsGeomCullResources[cascade].hzbMipViews);
         }
@@ -6416,14 +6417,12 @@ static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
 
 static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 {
-    static constexpr uint32_t passColor = 0x1e90ff;
-
-    TM_MARKER_C(passColor, "PrepareGeom");
-    TM_GPU_MARKER_C(cmdBuffer, passColor, "PrepareGeom");
+    TM_MARKER_C(0x1e90ff, "PrepareGeom");
+    TM_GPU_MARKER_C(cmdBuffer, 0x1e90ff, "PrepareGeom");
 
     {
-        TM_MARKER_C(passColor, "MainCam");
-        TM_GPU_MARKER_C(cmdBuffer, passColor, "MainCam");
+        TM_MARKER_C(0xb0e0e6, "MainCam");
+        TM_GPU_MARKER_C(cmdBuffer, 0xb0e0e6, "MainCam");
 
         const eng::Camera& cam = s_cullingTestMode ? s_fixedCullCamera : s_mainCamera;
 
@@ -6434,15 +6433,15 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
     }
 
     {
-        TM_MARKER_C(passColor, "CSM");
-        TM_GPU_MARKER_C(cmdBuffer, passColor, "CSM");
+        TM_MARKER_C(0xb0e0e6, "CSM");
+        TM_GPU_MARKER_C(cmdBuffer, 0xb0e0e6, "CSM");
 
         const bool frustumCulling = s_useMeshCulling && s_useCSMMeshFrustumCulling;
         const bool hzbCulling = s_useMeshCulling && s_useCSMMeshHZBCulling;
 
         for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-            TM_MARKER_C_FMT(passColor, "Cascade_%u", i);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", i);
+            TM_MARKER_C_FMT(0xb0e0e6, "Cascade_%u", i);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Cascade_%u", i);
             
             GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], frustumCulling, hzbCulling);
         }
@@ -8126,11 +8125,7 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    // LoadScene(argc > 1 ? argv[1] : "../assets/Sponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/glTF/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/TestPBR/TestPBR.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    
@@ -8164,12 +8159,12 @@ int main(int argc, char* argv[])
     CreatePipelines();
 
     std::array skyBoxFaceFilepaths = {
-        fs::path("../assets/TestPBR/textures/skybox/1024/px.hdr"),
-        fs::path("../assets/TestPBR/textures/skybox/1024/nx.hdr"),
-        fs::path("../assets/TestPBR/textures/skybox/1024/py.hdr"),
-        fs::path("../assets/TestPBR/textures/skybox/1024/ny.hdr"),
-        fs::path("../assets/TestPBR/textures/skybox/1024/pz.hdr"),
-        fs::path("../assets/TestPBR/textures/skybox/1024/nz.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/px.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/nx.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/py.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/ny.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/pz.hdr"),
+        fs::path("../assets/SkyboxTextures/1024/nz.hdr"),
     };
     CreateSkybox(skyBoxFaceFilepaths);
 
