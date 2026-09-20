@@ -42,7 +42,7 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
     if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
-        const float coverage = Max(sbox.maxUV - sbox.minUV);
+        const float coverage = Max(sbox.GetDeltaUV());
         lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
     }
 
@@ -64,9 +64,14 @@ bool GeomCullVisibility(in GPU_GeomInst inst, out GPU_GeomSortKey sortKey)
         return false;
     }
 
-    GPU_SBox sbox;
+    GPU_SBox sbox = inst.aabbWCS.GetSBox(HZB_CULLING_VIEW_PROJ_MATR_PREV);
+    sbox.Saturate();
 
-    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB, sbox)) {
+    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, sbox, GEOM_CULL_HZB)) {
+        return false;
+    }
+
+    if (GEOM_CULL_IS_COVERAGE_CULLING_ENABLED && Max(sbox.GetDeltaUV()) < GEOM_CULL_COVERAGE_THRESHOLD) {
         return false;
     }
 

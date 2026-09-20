@@ -17,9 +17,16 @@ struct GPU_GeomCullPushConst
         get { return (bool)hzbCullingEnabled; }
     }
 
+    property bool isCoverageCullingEnabled
+    {
+        get { return (bool)coverageCullingEnabled; }
+    }
+
     GPU_Frustum frustum;
     float4x4 viewMatr;
     float4x4 viewProjMatrPrev;
+
+    float coverageThreshold;
 
     uint hzbSizeXMip0 : 12;
     uint hzbSizeYMip0 : 12;
@@ -27,8 +34,9 @@ struct GPU_GeomCullPushConst
     
     private uint frustumCullingEnabled : 1;
     private uint hzbCullingEnabled : 1;
+    private uint coverageCullingEnabled : 1;
 
-    private uint padding : 2;
+    private uint padding : 1;
 };
 
 [[vk::push_constant]] GPU_GeomCullPushConst GEOM_CULL_CONST;
@@ -40,8 +48,11 @@ struct GPU_GeomCullPushConst
 #define GEOM_CULL_HZB_MIPS_COUNT      GEOM_CULL_CONST.hzbMipsCount
 #define GEOM_CULL_HZB_MIP_0_SIZE      uint2(GEOM_CULL_CONST.hzbSizeXMip0, GEOM_CULL_CONST.hzbSizeYMip0)
 
-#define GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED GEOM_CULL_CONST.isFrustumCullingEnabled
-#define GEOM_CULL_IS_HZB_CULLING_ENABLED     GEOM_CULL_CONST.isHZBCullingEnabled
+#define GEOM_CULL_COVERAGE_THRESHOLD  GEOM_CULL_CONST.coverageThreshold
+
+#define GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED  GEOM_CULL_CONST.isFrustumCullingEnabled
+#define GEOM_CULL_IS_HZB_CULLING_ENABLED      GEOM_CULL_CONST.isHZBCullingEnabled
+#define GEOM_CULL_IS_COVERAGE_CULLING_ENABLED GEOM_CULL_CONST.isCoverageCullingEnabled
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D GEOM_CULL_HZB;

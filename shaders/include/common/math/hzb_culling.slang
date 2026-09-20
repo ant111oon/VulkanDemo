@@ -63,25 +63,21 @@ bool HZB_Visibility(in GPU_SBox sbox, Texture2D HZB)
 }
 
 
-bool HZB_Visibility(in GPU_AABB aabb, Texture2D HZB, out GPU_SBox sbox)
+bool HZB_Visibility(in GPU_AABB aabb, in GPU_SBox sbox, Texture2D HZB)
 {
-    sbox = GPU_SBox();
-
     if (aabb.IntersectsPlane(HZB_CULLING_VIEW_NEAR_PLANE)) {
         return true;
     }
-
-    sbox = aabb.GetSBox(HZB_CULLING_VIEW_PROJ_MATR_PREV);
-    sbox.Saturate();
-
     return HZB_Visibility(sbox, HZB);
 }
 
 
 bool HZB_Visibility(in GPU_AABB aabb, Texture2D HZB)
 {
-    GPU_SBox sbox;
-    return HZB_Visibility(aabb, HZB, sbox);
+    GPU_SBox sbox = aabb.GetSBox(HZB_CULLING_VIEW_PROJ_MATR_PREV);
+    sbox.Saturate();
+
+    return HZB_Visibility(aabb, sbox, HZB);
 }
 
 #endif

@@ -485,15 +485,20 @@ struct GPU_GeomCullPushConst
     float4x4 viewMatr;
     float4x4 viewProjMatrPrev;
 
+    float coverageThreshold;
+
     uint hzbSizeXMip0 : 12;
     uint hzbSizeYMip0 : 12;
     uint hzbMipsCount : 4;
     
     uint frustumCullingEnabled : 1;
     uint hzbCullingEnabled : 1;
+    uint coverageCullingEnabled : 1;
 
-    uint padding : 2;
+    uint padding : 1;
 };
+
+static_assert(sizeof(GPU_GeomCullPushConst) <= 256);
 
 
 struct GPU_GeomSortPushConst
@@ -1542,6 +1547,8 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
+static float   s_geomCoverageCullingThresholdPercentage = 0.1f;
+
 static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
@@ -1584,6 +1591,7 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_isCSMEnabled = true;
     static bool s_useCSMMeshFrustumCulling = true;
     static bool s_useCSMMeshHZBCulling = true;
+    static bool s_useCSMMeshCoverageCulling = true;
     static bool s_isCSMVisualizationEnabled = false;
     static bool s_isCSMCascadeBlendEnabled = true;
     static bool s_isCSMFilterRandomOffsetEnabled = false;
@@ -1606,6 +1614,7 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_isCSMEnabled = true;
     static constexpr bool s_useCSMMeshFrustumCulling = true;
     static constexpr bool s_useCSMMeshHZBCulling = true;
+    static constexpr bool s_useCSMMeshCoverageCulling = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
     static constexpr bool s_isCSMCascadeBlendEnabled = true;
     static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
@@ -5873,7 +5882,7 @@ static void HZBGeneratePass(
 }
 
 
-static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool frustumCulling = true, bool hzbCulling = true)
+static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
 {
     static constexpr const char* passName = "Culling";
     static constexpr uint32_t passColor = 0xff6a6a;
@@ -5924,6 +5933,8 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
     pushConst.viewMatr = cam.GetViewMatrix();
     pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
 
+    pushConst.coverageThreshold = s_geomCoverageCullingThresholdPercentage / 100.f;
+
     pushConst.hzbSizeXMip0 = resources.hzb.GetSizeX();
     CORE_ASSERT(pushConst.hzbSizeXMip0 < (1u << GPU_GeomCullPushConst::HZB_SIZE_X_MIP_0_BITS_COUNT));
     
@@ -5935,6 +5946,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
 
     pushConst.frustumCullingEnabled = frustumCulling;
     pushConst.hzbCullingEnabled = hzbCulling; 
+    pushConst.coverageCullingEnabled = coverageCulling; 
 
     cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, pushConst);
 
@@ -6416,7 +6428,7 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources&
 }
 
 
-static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool frustumCulling = true, bool hzbCulling = true)
+static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
 {
     {
         TM_MARKER_C(0x0, "ResetCounters");
@@ -6437,7 +6449,7 @@ static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam,
         cmdBuffer.CmdFillBuffer(resources.matTypeFirstBatchBuffer, 0);
     }
 
-    GeomCullingPass(cmdBuffer, cam, resources, frustumCulling, hzbCulling);
+    GeomCullingPass(cmdBuffer, cam, resources, coverageCulling, frustumCulling, hzbCulling);
     GeomSortingPass(cmdBuffer, resources);
     GeomBatchingPass(cmdBuffer, resources);
 }
@@ -6482,8 +6494,9 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 
         const bool frustumCulling = s_useMeshCulling && s_useMeshFrustumCulling;
         const bool hzbCulling = s_useMeshCulling && s_useMeshHZBCulling;
+        const bool coverageCulling = false;
 
-        GeomPreparingPass(cmdBuffer, cam, s_mainCamGeomCullResources, frustumCulling, hzbCulling);
+        GeomPreparingPass(cmdBuffer, cam, s_mainCamGeomCullResources, coverageCulling, frustumCulling, hzbCulling);
     }
 
     {
@@ -6492,12 +6505,13 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 
         const bool frustumCulling = s_useMeshCulling && s_useCSMMeshFrustumCulling;
         const bool hzbCulling = s_useMeshCulling && s_useCSMMeshHZBCulling;
+        const bool coverageCulling = s_useMeshCulling && s_useCSMMeshCoverageCulling;
 
         for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
             TM_MARKER_C_FMT(0xb0e0e6, "Cascade_%u", i);
             TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Cascade_%u", i);
             
-            GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], frustumCulling, hzbCulling);
+            GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], coverageCulling, frustumCulling, hzbCulling);
         }
     }
 }
@@ -7509,6 +7523,20 @@ namespace DbgUI
                         if (ImGui::TreeNodeEx("Geom Culling")) {
                             ImGui::Checkbox("Frustum", &s_useCSMMeshFrustumCulling);
                             ImGui::Checkbox("HZB", &s_useCSMMeshHZBCulling);
+                            ImGui::Checkbox("Coverage", &s_useCSMMeshCoverageCulling);
+
+                            if (s_useCSMMeshCoverageCulling && ImGui::TreeNodeEx("Coverage Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::DragFloat("RT coverage", &s_geomCoverageCullingThresholdPercentage, 0.01f, 0.01f, 100.f, "%.2f%%");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Percentage of max occupied space in one dimension by object");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::TreePop();
+                            }
+
                             ImGui::TreePop();
                         }
 
