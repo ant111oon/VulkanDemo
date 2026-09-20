@@ -22,6 +22,15 @@ static const uint GEOM_SORT_RADIX_MASK_COUNT = GEOM_SORT_RADIX_BUCKET_COUNT * GE
 
 static const uint GEOM_MAX_LOD_COUNT = 6;
 
+static const float3 GEOM_LOD_VIS_COLORS[GEOM_MAX_LOD_COUNT] = {
+    float3(0.00f, 1.00f, 0.20f), // LOD 0 - Green
+    float3(0.40f, 1.00f, 0.00f), // LOD 1 - Lime
+    float3(1.00f, 1.00f, 0.00f), // LOD 2 - Yellow
+    float3(1.00f, 0.55f, 0.00f), // LOD 3 - Orange
+    float3(1.00f, 0.10f, 0.00f), // LOD 4 - Red
+    float3(0.75f, 0.00f, 0.75f), // LOD 5 - Purple
+};
+
 
 enum GPU_GeomStreamID : uint
 {
@@ -243,6 +252,15 @@ struct GPU_GeomSortKey
     private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
 
     private uint2 key;
+};
+
+
+struct GPU_DbgCullInstData
+{
+    uint meshID : 16;
+    uint lodID : 3;
+    uint matType : 2;
+    uint padding : 11;
 };
 
 #endif

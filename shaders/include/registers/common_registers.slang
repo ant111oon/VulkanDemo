@@ -44,6 +44,7 @@
 #define COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED DBG_VALUE(COMMON_DBG_CB.isCsmFilterRandOffsetsEnabled, false)
 #define COMMON_DBG_IS_CSM_PCSS_ENABLED                DBG_VALUE(COMMON_DBG_CB.isCsmPCSSEnabled, true)
 #define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmPCSSRandRotationEnabled, false)
+#define COMMON_DBG_IS_GEOM_LOD_VISUALIZATION_ENABLED  DBG_VALUE(COMMON_DBG_CB.isGeomLODVisualizationEnabled, false)
 
 #define COMMON_DBG_FORCED_GEOM_LOD                    DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
 #define COMMON_DBG_RT_VIEW_TYPE                       DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)

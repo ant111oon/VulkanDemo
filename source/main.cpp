@@ -367,7 +367,8 @@ struct GPU_CommonDbgCBData
     uint enableCsmFilterRandOffsets : 1;
     uint enableCsmPCSS : 1;
     uint enableCsmPCSSRandRotation : 1;
-    uint padding_1 : 25;
+    uint enableGeomLODVisualization : 1;
+    uint padding_1 : 24;
 };
 
 
@@ -462,6 +463,16 @@ struct GPU_GeomSortKey
 
     uint2 key;
 };
+
+
+struct GPU_DbgCullInstData
+{
+    uint meshID : 16;
+    uint lodID : 3;
+    uint matType : 2;
+    uint padding : 11;
+};
+static_assert(sizeof(GPU_DbgCullInstData) == 4);
 
 
 struct GPU_GeomCullPushConst
@@ -880,9 +891,10 @@ static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
 static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
 static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 0;
-static constexpr size_t GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT = 1;
-static constexpr size_t GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT = 2;
-static constexpr size_t GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_VIS_INST_COUNTER_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 4;
 
 static constexpr size_t GEOM_SORT_KEY_BUFFER_SRC_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_SORT_KEY_BUFFER_DST_DESCRIPTOR_SLOT = 1;
@@ -908,6 +920,7 @@ static constexpr size_t HZB_SRC_MIP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t HZB_DST_MIP_UAV_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t DEFERRED_LIGHTING_DATA_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
@@ -1011,7 +1024,7 @@ static constexpr uint32_t DESC_SET_PER_DRAW = 1;
 static constexpr uint32_t DESC_SET_TOTAL_COUNT = 2;
 
 static constexpr float LOD_SIMPLIFICATION_COEF = 0.50f; // Means that the next LOD should has on 50% less indices than current
-static constexpr float LOD_SIMPLIFICATION_ERROR = 0.005f;
+static constexpr float LOD_SIMPLIFICATION_ERROR = 0.01f; // Means that allowed deformation is 1%
 
 
 static constexpr const char* APP_NAME = "Vulkan Demo";
@@ -1411,6 +1424,10 @@ struct CameraGeomCullResources
     vkn::Texture hzb;
     vkn::TextureView hzbView;
     std::vector<vkn::TextureView> hzbMipViews;
+
+#ifdef ENG_BUILD_DEBUG
+    vkn::Buffer dbgCullInstDataBuffer;
+#endif
 };
 
 static CameraGeomCullResources s_mainCamGeomCullResources;
@@ -1561,6 +1578,7 @@ static float s_mainCameraSpeed = 0.02f;
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
+    static bool s_isGeomLODVisualizationEnabled = false;
     static bool s_isIBLEnabled = false;
     static bool s_drawInstAABBs = false;
     static bool s_isCSMEnabled = true;
@@ -1582,6 +1600,7 @@ static float s_mainCameraSpeed = 0.02f;
     static constexpr bool s_useMeshCulling = true;
     static constexpr bool s_useMeshFrustumCulling = true;
     static constexpr bool s_useMeshHZBCulling = true;
+    static constexpr bool s_isGeomLODVisualizationEnabled = false;
     static constexpr bool s_isIBLEnabled = false;
     static constexpr bool s_drawInstAABBs = false;
     static constexpr bool s_isCSMEnabled = true;
@@ -3013,9 +3032,12 @@ static void CreateGeomCullingDescriptorSetLayout()
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GEOM_CULL_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
-        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_COUNTER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    #ifdef ENG_BUILD_DEBUG
+        vkn::DescriptorInfo::Create(GEOM_CULL_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    #endif
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -3126,6 +3148,9 @@ static void CreateGBufferDescriptorSetLayout()
 
     std::array descriptors = {
         vkn::DescriptorInfo::Create(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+    #ifdef ENG_BUILD_DEBUG
+        vkn::DescriptorInfo::Create(GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT),
+    #endif
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4254,6 +4279,12 @@ static void CreateCamGeomCullResources(CameraGeomCullResources& resources, std::
     resources.drawCmdCountsBuffer
         .CreateStorageBuffer<uint32_t>(&s_vkDevice,  GEOM_MAT_TYPE_COUNT, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT)
         .SetDebugName("%s_GEOM_DRAW_CMD_COUNT_BUFFER", camPrefix.data());
+
+#ifdef ENG_BUILD_DEBUG
+    resources.dbgCullInstDataBuffer
+        .CreateStorageBuffer<GPU_DbgCullInstData>(&s_vkDevice, maxInstCount)
+        .SetDebugName("%s_DBG_CULL_INST_BUFFER", camPrefix.data());
+#endif
 }
 
 
@@ -4685,8 +4716,8 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
             const size_t nextLodIndexCount = meshopt_simplifyWithAttributes(
                 nextLodIndices.data(),
 
-                indices.data(),
-                indices.size(),
+                currLodIndices.data(),
+                currLodIndices.size(),
 
                 &positions[0].x,
                 positions.size(),
@@ -4705,9 +4736,9 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
 
                 0,
                 nullptr
-            )
+            );
     
-            CORE_ASSERT(nextLodIndexCount <= currLodIndices.size());
+            CORE_ASSERT_MSG(nextLodIndexCount <= currLodIndices.size(), "Mesh %s: LOD %zu has more indices %zu than previous %zu", mesh.name.c_str(), i, nextLodIndexCount, currLodIndices.size());
     
             if (nextLodIndexCount == currLodIndices.size()) {
                 break;
@@ -5432,6 +5463,7 @@ void UpdateGPUDbgConstBuffer()
     constBuff.enableCsmFilterRandOffsets = s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled;
     constBuff.enableCsmPCSS = csmPcssEnabled;
     constBuff.enableCsmPCSSRandRotation = csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled;
+    constBuff.enableGeomLODVisualization = s_isGeomLODVisualizationEnabled;
 
     s_commonDbgConstBuffer.Unmap();
 #endif
@@ -5854,6 +5886,9 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
     barriers.AddBufferBarrier(resources.GetCullVisInstSortKeysBuffer(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(resources.GetCullVisInstIDsBuffer(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(resources.cullVisInstCountBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+#ifdef ENG_BUILD_DEBUG
+    barriers.AddBufferBarrier(resources.dbgCullInstDataBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
+#endif
 
     barriers.AddTextureBarrier(
         resources.hzb,
@@ -5875,9 +5910,12 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
 
     cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
         vkn::PushDescriptor::SampledTexture(GEOM_CULL_HZB_DESCRIPTOR_SLOT, 0, resources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_SORT_KEYS_UAV_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstSortKeysBuffer()),
-        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_IDS_UAV_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstIDsBuffer()),
-        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_COUNTER_UAV_DESCRIPTOR_SLOT, 0, resources.cullVisInstCountBuffer),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstSortKeysBuffer()),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstIDsBuffer()),
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_COUNTER_DESCRIPTOR_SLOT, 0, resources.cullVisInstCountBuffer),
+    #ifdef ENG_BUILD_DEBUG
+        vkn::PushDescriptor::StorageBuffer(GEOM_CULL_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, 0, resources.dbgCullInstDataBuffer),
+    #endif
     });
     
     GPU_GeomCullPushConst pushConst = {};
@@ -6738,9 +6776,12 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
             .shaderSetIdx = DESC_SET_PER_FRAME
         });
         
-        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, 
-            vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer)
-        );
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
+            vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer),
+        #ifdef ENG_BUILD_DEBUG
+            vkn::PushDescriptor::StorageBuffer(GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, 0, s_mainCamGeomCullResources.dbgCullInstDataBuffer),
+        #endif
+        });
 
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
@@ -7403,7 +7444,7 @@ namespace DbgUI
             }
             
         #ifdef ENG_BUILD_DEBUG            
-            if (ImGui::CollapsingHeader("Geom")) {
+            if (ImGui::CollapsingHeader("Geometry")) {
                 ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
                 
                 if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -7652,9 +7693,8 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Debug Vis")) {
-                ImGui::Checkbox("##DrawInstanceAABB", &s_drawInstAABBs);
-                ImGui::SameLine();
-                ImGui::TextColored(s_drawInstAABBs ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Draw Instance AABB");
+                ImGui::Checkbox("Draw Instance AABB", &s_drawInstAABBs);
+                ImGui::Checkbox("Visualize Geom LODs", &s_isGeomLODVisualizationEnabled);
 
                 if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType])) {
                     for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
@@ -8141,8 +8181,7 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    

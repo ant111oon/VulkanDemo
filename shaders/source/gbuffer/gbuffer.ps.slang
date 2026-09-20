@@ -1,6 +1,19 @@
-#include "common/common_gbuffer.slang"
-
+#include "registers/gbuffer_registers.slang"
 #include "pass/gbuffer/vsout.slang"
+
+#include "common/common_gbuffer.slang"
+#include "common/common_geom.slang"
+
+
+void GBufferDebugVis(in uint instID, inout float4 albedo)
+{
+#ifdef ENV_DEBUG
+    if (COMMON_DBG_IS_GEOM_LOD_VISUALIZATION_ENABLED) {
+        const uint lodID = GBUFFER_DBG_CULL_INST_DATA[instID].lodID;
+        albedo = float4(GEOM_LOD_VIS_COLORS[lodID], 1.f);
+    }
+#endif
+}
 
 
 struct GPU_GBufferPsOutput
@@ -28,6 +41,8 @@ GPU_GBufferPsOutput main(GPU_GBufferVsOutput input)
     GPU_GBufferSurface surf = SampleGBufferSurface(material, TBN, input.data.uv);
 
     const float3 wnorm = normalize(mul(inst.matrWCS, float4(surf.lnorm, 0.f)).xyz);
+
+    GBufferDebugVis(input.flatData.instID, surf.albedo);
 
     result.rt0 = surf.albedo;
     result.rt1 = float4(wnorm, 0.f);

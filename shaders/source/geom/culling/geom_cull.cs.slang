@@ -122,5 +122,14 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatch
 
         GEOM_CULL_VIS_INST_SORT_KEYS[index] = sortKey;
         GEOM_CULL_VIS_INST_IDS[index] = instID;
+
+    #ifdef ENV_DEBUG
+        GPU_DbgCullInstData dbgData = GPU_DbgCullInstData();
+        dbgData.meshID = sortKey.meshID;
+        dbgData.lodID = sortKey.lodID;
+        dbgData.matType = sortKey.matType;
+
+        GEOM_CULL_DBG_CULL_INST_DATA[instID] = dbgData;
+    #endif
     }
 }

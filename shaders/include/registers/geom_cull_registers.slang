@@ -51,4 +51,6 @@ struct GPU_GeomCullPushConst
 
 [vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_COUNTER;
 
+[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_DbgCullInstData> GEOM_CULL_DBG_CULL_INST_DATA;
+
 #endif

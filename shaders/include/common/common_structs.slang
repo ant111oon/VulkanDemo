@@ -180,6 +180,11 @@ struct GPU_CommonDbgCBData
         get { return (bool)enableCsmPCSSRandRotation; }
     }
 
+    property bool isGeomLODVisualizationEnabled
+    {
+        get { return (bool)enableGeomLODVisualization; }
+    }
+
     GPU_DbgRTViewType rtViewType;
     GPU_DbgTonemapPreset tonemapPreset;
     GPU_DbgCsmPCFPreset csmPCFPreset;
@@ -193,7 +198,8 @@ struct GPU_CommonDbgCBData
     private uint enableCsmFilterRandOffsets : 1;
     private uint enableCsmPCSS : 1;
     private uint enableCsmPCSSRandRotation : 1;
-    private uint padding_1 : 25;
+    private uint enableGeomLODVisualization : 1;
+    private uint padding_1 : 24;
 };
 
 #endif

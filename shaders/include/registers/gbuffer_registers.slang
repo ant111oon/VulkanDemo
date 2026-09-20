@@ -26,4 +26,6 @@ struct GPU_GBufferPushConst
 
 [vk::binding(0, DESC_SET_PER_DRAW)] StructuredBuffer<uint> GBUFFER_INST_ID_QUEUE;
 
+[vk::binding(1, DESC_SET_PER_DRAW)] StructuredBuffer<GPU_DbgCullInstData> GBUFFER_DBG_CULL_INST_DATA;
+
 #endif
