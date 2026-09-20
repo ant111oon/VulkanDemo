@@ -10,21 +10,30 @@
 #include "common/math/hzb_culling.slang"
 
 
-bool GeomCullVisibility(in GPU_AABB aabb)
+static const float GEOM_LOD_THRESHOLDS[GEOM_MAX_LOD_COUNT] =
 {
-    if (GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULL_FRUSTUM, aabb)) {
-        return false;
+    0.50f,
+    0.35f,
+    0.25f,
+    0.15f,
+    0.05f,
+    0.03f
+};
+
+
+uint GeomSelectLOD(float sizePixels, in float lodThresholds[GEOM_MAX_LOD_COUNT])
+{
+    for (uint lodID = 0; lodID < GEOM_MAX_LOD_COUNT; ++lodID) {
+        if (sizePixels >= lodThresholds[lodID]) {
+            return lodID;
+        }
     }
 
-    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB)) {
-        return false;
-    }
-
-    return true;
+    return GEOM_MAX_LOD_COUNT - 1;
 }
 
 
-GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst)
+GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
 {
     const float depth = -mul(GEOM_CULL_VIEW_MATR, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
 
@@ -33,7 +42,8 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst)
     if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
-        // Calculate fair LOD
+        // const float coverage = Max(sbox.maxUV - sbox.minUV);
+        // lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
         lodID = 0;
     }
 
@@ -42,6 +52,28 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst)
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
     return GPU_GeomSortKey(material.type, inst.materialID, inst.meshID, lodID, depth);
+}
+
+
+bool GeomCullVisibility(in GPU_GeomInst inst, out GPU_GeomSortKey sortKey)
+{
+    sortKey = GPU_GeomSortKey();
+    
+    const GPU_AABB aabb = inst.aabbWCS;
+
+    if (GEOM_CULL_IS_FRUSTUM_CULLING_ENABLED && !Frustum_Visibility(GEOM_CULL_FRUSTUM, aabb)) {
+        return false;
+    }
+
+    GPU_SBox sbox;
+
+    if (GEOM_CULL_IS_HZB_CULLING_ENABLED && !HZB_Visibility(aabb, GEOM_CULL_HZB, sbox)) {
+        return false;
+    }
+
+    sortKey = GetGeomSortKey(inst, sbox);
+
+    return true;
 }
 
 
@@ -69,14 +101,12 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatch
 
     if (instID < COMMON_INST_COUNT) {
         inst = COMMON_INST_BUFFER[instID];
-        isVisible = GeomCullVisibility(inst.aabbWCS);
+        isVisible = GeomCullVisibility(inst, sortKey);
     }
 
     uint groupLocalIndex = 0;
 
     if (isVisible) {
-        sortKey = GetGeomSortKey(inst);
-
         InterlockedAdd(GROUP_CULL_VIS_INST_COUNTER, 1, groupLocalIndex);
     }
 

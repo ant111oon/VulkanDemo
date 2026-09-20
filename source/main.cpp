@@ -4679,17 +4679,33 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
             }
     
             const size_t nextLodIndexCountTarget = (size_t)(((float)currLodIndices.size() * LOD_SIMPLIFICATION_COEF) + 2) / 3 * 3;
-    
-            const size_t nextLodIndexCount = meshopt_simplify(
-                nextLodIndices.data(), 
-                currLodIndices.data(), 
-                currLodIndices.size(), 
-                &positions[0].x, 
-                positions.size(), 
-                sizeof(glm::float3), 
-                nextLodIndexCountTarget, 
-                LOD_SIMPLIFICATION_ERROR
-            );
+
+            const float normalWeights[] = { 1.0f, 1.0f, 1.0f };
+
+            const size_t nextLodIndexCount = meshopt_simplifyWithAttributes(
+                nextLodIndices.data(),
+
+                indices.data(),
+                indices.size(),
+
+                &positions[0].x,
+                positions.size(),
+                sizeof(glm::float3),
+
+                &normals[0].x,
+                sizeof(glm::float3),
+
+                normalWeights,
+                3,
+
+                nullptr, // vertex_lock
+
+                nextLodIndexCountTarget,
+                LOD_SIMPLIFICATION_ERROR,
+
+                0,
+                nullptr
+            )
     
             CORE_ASSERT(nextLodIndexCount <= currLodIndices.size());
     
@@ -8125,7 +8141,8 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    
