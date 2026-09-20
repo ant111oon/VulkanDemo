@@ -579,20 +579,20 @@ struct GPU_DbgRTViewPushConst
 
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
     "NONE",
-    "COMMON_DEPTH",
-    "COMMON_HZB",
-    "GBUFFER_ALBEDO",
-    "GBUFFER_NORMAL",
-    "GBUFFER_ROUGHNESS",
-    "GBUFFER_METALNESS",
-    "GBUFFER_AO",
-    "GBUFFER_EMISSIVE",
-    "IRRADIANCE_MAP",
-    "PREFILTERED_ENV_MAP",
-    "BRDF_LUT",
+    "COMMON DEPTH",
+    "COMMON HZB",
+    "GBUFFER ALBEDO",
+    "GBUFFER NORMAL",
+    "GBUFFER ROUGHNESS",
+    "GBUFFER METALNESS",
+    "GBUFFER AO",
+    "GBUFFER EMISSIVE",
+    "IRRADIANCE MAP",
+    "PREFILTERED ENV MAP",
+    "BRDF LUT",
     "SKYBOX",
-    "CSM_DEPTH",
-    "CSM_HZB",
+    "CSM DEPTH",
+    "CSM HZB",
 };
 
 static_assert(DBG_RT_VIEW_TYPE_COUNT == _countof(DBG_RT_OUTPUT_NAMES));
@@ -1553,8 +1553,8 @@ static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
-static float   s_csmConstantBiasTexels = 0.25f;
-static float   s_csmSlopeBiasTexels = 0.5f;
+static float   s_csmConstantBiasTexels = 0.35f;
+static float   s_csmSlopeBiasTexels = 1.0f;
 
 struct CsmPcssSettings
 {
@@ -1579,7 +1579,7 @@ struct CsmPcssSettings
     bool randomRotationEnabled = false;
 } s_csmPcssSettings;
 
-static float s_mainCameraSpeed = 0.02f;
+static float s_mainCameraSpeed = 0.035f;
 
 #ifdef ENG_DEBUG_UI_ENABLED
     static bool s_useMeshCulling = true;
@@ -6967,6 +6967,12 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
     cmdBuffer
         .BeginBarrierList()
             .AddTextureBarrier(
+                s_skyboxTexture,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_READ_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT)
+            .AddTextureBarrier(
                 s_colorRT16F,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 
@@ -7460,9 +7466,12 @@ namespace DbgUI
         #ifdef ENG_BUILD_DEBUG            
             if (ImGui::CollapsingHeader("Geometry")) {
                 ImGui::Checkbox("Wireframe mode", &s_geomWireframeMode);
+                ImGui::Checkbox("Draw Instance AABB", &s_drawInstAABBs);
                 
                 if (ImGui::TreeNodeEx("LOD", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::SliderInt("Rorced LOD", &s_forcedGeomLOD, -1, GEOM_MAX_LOD_COUNT);
+                    ImGui::Checkbox("Visualize", &s_isGeomLODVisualizationEnabled);
+
+                    ImGui::SliderInt("Force LOD", &s_forcedGeomLOD, -1, GEOM_MAX_LOD_COUNT);
 
                     if (ImGui::IsItemHovered()) {
                         if (ImGui::BeginTooltip()) {
@@ -7479,23 +7488,19 @@ namespace DbgUI
                     ImGui::TextColored(s_useMeshCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
         
                     if (s_useMeshCulling) {
-                        if (ImGui::TreeNodeEx("Types", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
-                                ImGui::SameLine(); 
-                                ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::TreePop();
-                            }
-                            
-                            if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
-                                ImGui::SameLine(); 
-                                ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-    
-                                ImGui::TreePop();
-                            }
+                        if (ImGui::TreeNodeEx("Frustum", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##FrustumCulling", &s_useMeshFrustumCulling);
+                            ImGui::SameLine(); 
+                            ImGui::TextColored(s_useMeshFrustumCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
+                            ImGui::TreePop();
+                        }
                         
+                        if (ImGui::TreeNodeEx("HZB", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            ImGui::Checkbox("##HZBCulling", &s_useMeshHZBCulling);
+                            ImGui::SameLine(); 
+                            ImGui::TextColored(s_useMeshHZBCulling ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+
                             ImGui::TreePop();
                         }
                     }
@@ -7721,9 +7726,6 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Debug Vis")) {
-                ImGui::Checkbox("Draw Instance AABB", &s_drawInstAABBs);
-                ImGui::Checkbox("Visualize Geom LODs", &s_isGeomLODVisualizationEnabled);
-
                 if (ImGui::BeginCombo("Render Target", DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType])) {
                     for (size_t i = 0; i < _countof(DBG_RT_OUTPUT_NAMES); ++i) {
                         const bool isSelected = (DBG_RT_OUTPUT_NAMES[i] == DBG_RT_OUTPUT_NAMES[s_dbgOutputRTType]);

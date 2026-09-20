@@ -12,12 +12,12 @@
 
 static const float GEOM_LOD_THRESHOLDS[GEOM_MAX_LOD_COUNT] =
 {
-    0.50f,
-    0.35f,
-    0.25f,
-    0.15f,
+    0.40f,
+    0.30f,
+    0.20f,
+    0.10f,
     0.05f,
-    0.03f
+    0.00f
 };
 
 
