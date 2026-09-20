@@ -42,9 +42,8 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
     if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
-        // const float coverage = Max(sbox.maxUV - sbox.minUV);
-        // lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
-        lodID = 0;
+        const float coverage = Max(sbox.maxUV - sbox.minUV);
+        lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
     }
 
     lodID = clamp(lodID, 0, COMMON_MESH_BUFFER[inst.meshID].lodCount - 1);
