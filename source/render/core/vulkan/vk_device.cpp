@@ -166,10 +166,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_familyIndex, queue.m_familyIndex);
         std::swap(m_presentSemaphoreCache, queue.m_presentSemaphoreCache);
         std::swap(m_cmdBuffCache, queue.m_cmdBuffCache);

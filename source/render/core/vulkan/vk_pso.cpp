@@ -31,10 +31,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_stage, shader.m_stage);
         std::swap(m_entryName, shader.m_entryName);
 
@@ -164,10 +160,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         Base::operator=(std::move(layout));
 
         return *this;
@@ -282,10 +274,6 @@ namespace vkn
     {
         if (this == &pso) {
             return *this;
-        }
-
-        if (IsCreated()) {
-            Destroy();
         }
 
         std::swap(m_pLayout, pso.m_pLayout);

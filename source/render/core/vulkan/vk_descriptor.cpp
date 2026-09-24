@@ -55,10 +55,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_descriptors, layout.m_descriptors);
         std::swap(m_size, layout.m_size);
         std::swap(m_state, layout.m_state);
@@ -187,7 +183,6 @@ namespace vkn
             return *this;
         }
 
-
         Base::Destroy([device = GetDevice().Get()](VkDescriptorSetLayout& layout) {
             vkDestroyDescriptorSetLayout(device, layout, nullptr);        
         });
@@ -314,10 +309,6 @@ namespace vkn
     {
         if (this == &buffer) {
             return *this;
-        }
-
-        if (IsCreated()) {
-            Destroy();
         }
 
         std::swap(m_buffer, buffer.m_buffer);

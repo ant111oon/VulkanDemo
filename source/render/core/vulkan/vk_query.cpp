@@ -29,10 +29,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_pDevice, pool.m_pDevice);
         std::swap(m_queryCount, pool.m_queryCount);
 

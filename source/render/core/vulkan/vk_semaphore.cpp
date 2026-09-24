@@ -36,10 +36,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-        
         Base::operator=(std::move(semaphore));
 
         return *this; 

@@ -530,6 +530,19 @@ struct GPU_HzbGenPushConst
 };
 
 
+struct GPU_DepthReductionPushConst
+{
+    uint2 srcTexSize;
+    uint  srcBufSize;
+
+    float zNear;
+    float zFar;
+
+    uint useTexSrc : 1;
+    uint padding : 31;
+};
+
+
 struct GPU_GBufferPushConst
 {
     float4x4 viewProjMatr;
@@ -712,6 +725,8 @@ enum DescSetLayoutID : uint32_t
     
     DESC_SET_LAYOUT_ID_PREFIX_SUM,
 
+    DESC_SET_LAYOUT_ID_DEPTH_REDUCTION,
+
     DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN,
     DESC_SET_LAYOUT_ID_BRDF_LUT_GEN,
     DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN,
@@ -747,6 +762,7 @@ static constexpr const char* DESC_SET_LAYOUT_DBG_NAME[] = {
     "BACKBUFFER",
     
     "PREFIX_SUM",
+    "DEPTH_REDUCTION",
 
     "IRRADIANCE_MAP_GEN",
     "BRDF_LUT_GEN",
@@ -789,6 +805,8 @@ enum PassID : uint32_t
     
     PASS_ID_PREFIX_SUM_SCAN_BLOCKS,
     PASS_ID_PREFIX_SUM_ADD_OFFSETS,
+    
+    PASS_ID_DEPTH_REDUCTION,
 
     PASS_ID_IRRADIANCE_MAP_GEN,
     PASS_ID_BRDF_LUT_GEN,
@@ -830,6 +848,8 @@ static constexpr const char* PASS_DBG_NAME[] = {
     
     "PREFIX_SUM_SCAN_BLOCKS",
     "PREFIX_SUM_ADD_OFFSETS",
+
+    "DEPTH_REDUCTION",
 
     "IRRADIANCE_MAP_GEN",
     "BRDF_LUT_GEN",
@@ -949,6 +969,10 @@ static constexpr size_t PREFIX_SUM_OUTPUT_DESCRIPTOR_SLOT = 1;
 static constexpr size_t PREFIX_SUM_BLOCK_SUMS_DESCRIPTOR_SLOT = 2;
 static constexpr size_t PREFIX_SUM_BLOCK_OFFSETS_DESCRIPTOR_SLOT = 3;
 
+static constexpr size_t DEPTH_REDUCTION_SRC_TEX_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DEPTH_REDUCTION_SRC_BUF_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DEPTH_REDUCTION_DST_DESCRIPTOR_SLOT = 2;
+
 static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
@@ -1020,6 +1044,8 @@ static constexpr uint32_t GEOM_SORT_CS_GROUP_SIZE = 256;
 static constexpr uint32_t GEOM_BATCH_CS_GROUP_SIZE = 512;
 
 static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
+
+static constexpr uint32_t DEPTH_REDUCTION_CS_GROUP_SIZE = 256;
 
 static constexpr uint32_t PREFIX_SUM_GROUP_SIZE = 256;
 static constexpr uint32_t PREFIX_SUM_BLOCK_SIZE = PREFIX_SUM_GROUP_SIZE * 2;
@@ -1436,12 +1462,12 @@ struct CameraGeomCullResources
 };
 
 static CameraGeomCullResources s_mainCamGeomCullResources;
-// #define s_geomCullVisInstSortKeysBuffer s_geomCullVisInstSortKeysPingPongBuffers[0]
-// #define s_geomCullVisInstIDsBuffer      s_geomCullVisInstIDsPingPongBuffers[0]
 
 static std::array<CameraGeomCullResources, CSM_CASCADE_COUNT> s_csmCamsGeomCullResources;
 #pragma endregion
 
+
+static std::array<vkn::Buffer, 2> s_depthReductionBuffers;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
@@ -2536,6 +2562,25 @@ static void CreateHZB(
 }
 
 
+static void CreateDepthReductionBuffers(const vkn::Texture& depthTexture)
+{
+    const uint32_t pixCount = depthTexture.GetSizeX() * depthTexture.GetSizeY();
+    const uint32_t buffSize0 = glm::max(math::CeilDiv(pixCount, DEPTH_REDUCTION_CS_GROUP_SIZE), 1u);
+
+    s_depthReductionBuffers[0]
+        .CreateStorageBuffer<glm::float2>(&s_vkDevice, buffSize0, VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+        .SetDebugName("DEPTH_REDUCTION_PRIMARY_BUFFER");
+    
+    if (buffSize0 > 1) {
+        const uint32_t buffSize1 = math::CeilDiv(buffSize0, DEPTH_REDUCTION_CS_GROUP_SIZE);
+
+        s_depthReductionBuffers[1]
+            .CreateStorageBuffer<glm::float2>(&s_vkDevice, buffSize1, VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT)
+            .SetDebugName("DEPTH_REDUCTION_SCRATCH_BUFFER");
+    }
+}
+
+
 static void CreateDynamicRenderTargets()
 {
     CreateGBufferRTs();
@@ -2550,6 +2595,8 @@ static void CreateDynamicRenderTargets()
         s_mainCamGeomCullResources.hzbView, 
         s_mainCamGeomCullResources.hzbMipViews
     );
+
+    CreateDepthReductionBuffers(s_depthRT);
 }
 
 
@@ -2575,6 +2622,10 @@ static void DestroyDynamicRenderTargets()
     }
     s_mainCamGeomCullResources.hzbView.Destroy();
     s_mainCamGeomCullResources.hzb.Destroy();
+
+    for (vkn::Buffer& buffer : s_depthReductionBuffers) {
+        buffer.Destroy();
+    }
 }
 
 
@@ -3277,6 +3328,27 @@ static void CreatePrefixSumDescriptorSetLayout()
 }
 
 
+static void CreateDepthReductionDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(DEPTH_REDUCTION_SRC_TEX_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(DEPTH_REDUCTION_SRC_BUF_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(DEPTH_REDUCTION_DST_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_DEPTH_REDUCTION);
+
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_DEPTH_REDUCTION]);
+}
+
+
 static void CreateIrradianceMapGenDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
@@ -3417,6 +3489,7 @@ static void CreateDescriptorSetLayouts()
     CreateSkyboxDescriptorSetLayout();
     
     CreatePrefixSumDescriptorSetLayout();
+    CreateDepthReductionDescriptorSetLayout();
 
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
@@ -3676,6 +3749,16 @@ static void CreatePrefixSumAddOffsetsPSOLayout()
 }
 
 
+static void CreateDepthReductionPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_DEPTH_REDUCTION, DESC_SET_LAYOUT_ID_DEPTH_REDUCTION, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_DepthReductionPushConst)
+    });
+}
+
+
 static void CreateIrradianceMapGenPSOLayout()
 {
     CreatePSOLayout(PASS_ID_IRRADIANCE_MAP_GEN, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN, VkPushConstantRange {
@@ -3831,6 +3914,12 @@ static void CreatePrefixSumScanBlocksPSO(const fs::path& shaderPath)
 static void CreatePrefixSumAddOffsetsPSO(const fs::path& shaderPath)
 {
     CreateComputePSO(shaderPath, PASS_ID_PREFIX_SUM_ADD_OFFSETS);
+}
+
+
+static void CreateDepthReductionPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_DEPTH_REDUCTION);
 }
 
 
@@ -4130,6 +4219,8 @@ static void CreatePipelines()
 
     CreatePrefixSumScanBlocksPSOLayout();
     CreatePrefixSumAddOffsetsPSOLayout();
+
+    CreateDepthReductionPSOLayout();
     
     CreateIrradianceMapGenPSOLayout();
     CreatePrefilteredEnvMapGenPSOLayout();
@@ -4184,6 +4275,8 @@ static void CreatePipelines()
 
     CreatePrefixSumScanBlocksPSO(RND_SHADER_SPIRV_FULL_PATH("utils/prefix_sum/prefix_sum_scan_blocks.cs.spv"));
     CreatePrefixSumAddOffsetsPSO(RND_SHADER_SPIRV_FULL_PATH("utils/prefix_sum/prefix_sum_add_offsets.cs.spv"));
+
+    CreateDepthReductionPSO(RND_SHADER_SPIRV_FULL_PATH("utils/depth_reduction/depth_reduction.cs.spv"));
     
     CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/irradiance_map_gen.cs.spv"));
     CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/prefiltered_env_map_gen.cs.spv"));
@@ -5794,6 +5887,90 @@ static void PrecomputeIBLBRDFIntergrationLUT(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+static void PrevFrameDepthReductionPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "DepthReduction";
+    static constexpr uint32_t passColor = 0xff8a4fff;
+
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    vkn::PSO& pso = GetPSO(PASS_ID_DEPTH_REDUCTION);
+    
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    vkn::Buffer* pSrcBuffer = &s_depthReductionBuffers[0];
+    vkn::Buffer* pDstBuffer = &s_depthReductionBuffers[1];
+
+    cmdBuffer
+        .BeginBarrierList()
+            .AddTextureBarrier(
+                s_depthRT, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_IMAGE_ASPECT_DEPTH_BIT)
+            .AddBufferBarrier(
+                *pSrcBuffer, 
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+        .Push();
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
+        vkn::PushDescriptor::SampledTexture(DEPTH_REDUCTION_SRC_TEX_DESCRIPTOR_SLOT, 0, s_depthRTColorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+        vkn::PushDescriptor::StorageBuffer(DEPTH_REDUCTION_DST_DESCRIPTOR_SLOT, 0, *pSrcBuffer),
+    });
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_DepthReductionPushConst {
+        .srcTexSize = uint2(s_depthRT.GetSizeX(), s_depthRT.GetSizeY()),
+        .zNear = s_mainCamera.GetZNear(),
+        .zFar  = s_mainCamera.GetZFar(),
+        .useTexSrc = true
+    });
+
+    uint32_t elemCount = math::CeilDiv(s_depthRT.GetSizeX() * s_depthRT.GetSizeY(), DEPTH_REDUCTION_CS_GROUP_SIZE);
+    cmdBuffer.CmdDispatch(elemCount, 1u, 1u);
+
+    while (elemCount > 1) {
+        cmdBuffer
+            .BeginBarrierList()
+                .AddBufferBarrier(*pSrcBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
+                .AddBufferBarrier(*pDstBuffer, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+            .Push();
+
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
+            vkn::PushDescriptor::StorageBuffer(DEPTH_REDUCTION_SRC_BUF_DESCRIPTOR_SLOT, 0, *pSrcBuffer),
+            vkn::PushDescriptor::StorageBuffer(DEPTH_REDUCTION_DST_DESCRIPTOR_SLOT, 0, *pDstBuffer),
+        });
+
+        cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_DepthReductionPushConst {
+            .srcBufSize = elemCount
+        });
+        
+        elemCount = math::CeilDiv(elemCount, DEPTH_REDUCTION_CS_GROUP_SIZE);
+
+        cmdBuffer.CmdDispatch(elemCount, 1u, 1u);
+
+        std::swap(pSrcBuffer, pDstBuffer);
+    }
+
+    if (pSrcBuffer != &s_depthReductionBuffers[0]) {
+        cmdBuffer
+            .BeginBarrierList()
+                .AddBufferBarrier(*pSrcBuffer, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT)
+                .AddBufferBarrier(s_depthReductionBuffers[0], VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT)
+            .Push();
+
+        cmdBuffer.CmdCopyBuffer(*pSrcBuffer, s_depthReductionBuffers[0], sizeof(glm::float2));
+    }
+}
+
+
 static void HZBGeneratePass(
     vkn::CmdBuffer& cmdBuffer, 
     vkn::Texture& srcDepthTex, 
@@ -6455,7 +6632,7 @@ static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam,
 }
 
 
-static void RegenerateHZBs(vkn::CmdBuffer& cmdBuffer)
+static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
 {
     TM_MARKER_C(0xcccccc, "HZBGen");
     TM_GPU_MARKER_C(cmdBuffer, 0xcccccc, "HZBGen");
@@ -7992,7 +8169,9 @@ static void RenderScene()
 
         cmdBuffer.CmdBindDescriptorBuffer(s_descriptorBuffer);
 
-        RegenerateHZBs(cmdBuffer);
+        PrevFrameDepthReductionPass(cmdBuffer);
+        PrevFrameHZBGenPass(cmdBuffer);
+
         PrepareGeomPass(cmdBuffer);
 
         GeomDepthPass(cmdBuffer);
@@ -8211,7 +8390,8 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    

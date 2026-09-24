@@ -36,10 +36,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_allocation, buffer.m_allocation);
         std::swap(m_allocInfo, buffer.m_allocInfo);
         

@@ -35,10 +35,6 @@ namespace vkn
         if (this == &fence) {
             return *this;
         }
-
-        if (IsCreated()) {
-            Destroy();
-        }
         
         Base::operator=(std::move(fence));
 

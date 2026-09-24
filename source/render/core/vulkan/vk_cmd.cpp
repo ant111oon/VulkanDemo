@@ -434,10 +434,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsValid()) {
-            Free();
-        }
-
         m_barrierList.Swap(cmdBuffer.m_barrierList);
 
         std::swap(m_pOwner, cmdBuffer.m_pOwner);
@@ -1370,10 +1366,6 @@ namespace vkn
     {
         if (this == &pool) {
             return *this;
-        }
-
-        if (IsCreated()) {
-            Destroy();
         }
 
         std::swap(m_allocatedBuffers, pool.m_allocatedBuffers);

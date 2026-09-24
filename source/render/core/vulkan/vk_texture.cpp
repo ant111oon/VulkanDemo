@@ -30,10 +30,6 @@ namespace vkn
             return *this;
         }
 
-        if (IsCreated()) {
-            Destroy();
-        }
-
         std::swap(m_pOwner, view.m_pOwner);
         std::swap(m_type, view.m_type);
         std::swap(m_format, view.m_format);
@@ -220,10 +216,6 @@ namespace vkn
     {
         if (this == &image) {
             return *this;
-        }
-
-        if (IsCreated()) {
-            Destroy();
         }
         
         std::swap(m_allocation, image.m_allocation);
@@ -490,10 +482,6 @@ namespace vkn
     {
         if (this == &sampler) {
             return *this;
-        }
-
-        if (IsCreated()) {
-            Destroy();
         }
 
         Base::operator=(std::move(sampler));
