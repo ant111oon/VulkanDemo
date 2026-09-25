@@ -1,7 +1,7 @@
 #include "registers/geom_batching_registers.slang"
 #include "registers/common_registers.slang"
 
-#include "common/common_geom.slang"
+#include "common/common_geom_structs.slang"
 
 
 bool IsSameBatch(in GPU_GeomSortKey a, in GPU_GeomSortKey b)

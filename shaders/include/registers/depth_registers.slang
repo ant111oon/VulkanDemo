@@ -2,7 +2,6 @@
 #define DEPTH_REGISTERS_H
 
 #include "common_registers.slang"
-#include "common/common_geom.slang"
 
 
 struct GPU_DepthPushConst

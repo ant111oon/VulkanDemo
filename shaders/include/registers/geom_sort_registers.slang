@@ -2,7 +2,7 @@
 #define GEOM_SORT_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/common_geom.slang"
+#include "common/common_geom_structs.slang"
 
 
 struct GPU_GeomSortPushConst

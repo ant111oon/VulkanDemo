@@ -1,266 +1,109 @@
 #ifndef COMMON_GEOM_H
 #define COMMON_GEOM_H
 
-#include "common/math/bits.slang"
-#include "common/math/geom_primitives.slang"
+#include "registers/common_registers.slang"
+
+#include "common/math/color_space.slang"
 
 
-static const uint GEOM_CULL_CS_GROUP_SIZE = 1024;
-static const uint GEOM_SORT_CS_GROUP_SIZE = 256;
-static const uint GEOM_BATCH_CS_GROUP_SIZE = 512;
-
-
-static const uint GEOM_SORT_RADIX_BITS = 8u;
-static const uint GEOM_SORT_RADIX_BUCKET_COUNT = 1u << GEOM_SORT_RADIX_BITS;
-static const uint GEOM_SORT_PASS_COUNT = GPU_GeomSortKey::GEOM_SORT_KEY_TOTAL_BITS / GEOM_SORT_RADIX_BITS;
-
-static const uint GEOM_SORT_RADIX_MASK_WORD_BITS = 32;
-static const uint GEOM_SORT_RADIX_MASK_WORD_COUNT = GEOM_SORT_CS_GROUP_SIZE / GEOM_SORT_RADIX_MASK_WORD_BITS;
-
-static const uint GEOM_SORT_RADIX_MASK_COUNT = GEOM_SORT_RADIX_BUCKET_COUNT * GEOM_SORT_RADIX_MASK_WORD_COUNT;
-
-
-static const uint GEOM_MAX_LOD_COUNT = 6;
-
-static const float3 GEOM_LOD_VIS_COLORS[GEOM_MAX_LOD_COUNT] = {
-    float3(0.00f, 1.00f, 0.20f), // LOD 0 - Green
-    float3(0.40f, 1.00f, 0.00f), // LOD 1 - Lime
-    float3(1.00f, 1.00f, 0.00f), // LOD 2 - Yellow
-    float3(1.00f, 0.55f, 0.00f), // LOD 3 - Orange
-    float3(1.00f, 0.10f, 0.00f), // LOD 4 - Red
-    float3(0.75f, 0.00f, 0.75f), // LOD 5 - Purple
+struct GPU_SampledGeomMaterial
+{
+    float4 albedo;
+    float metalness;
+    float3 emissive;
+    float roughness;
+    float3 lnorm;
+    float ao;
 };
 
 
-enum GPU_GeomStreamID : uint
+float4 SampleGeomMaterialAlbedo(in GPU_GeomMaterial mtl, in float2 uv)
 {
-    POSITION,
-    NORMAL,
-    UV,
-    TANGENT,
-    COUNT
-};
+    if (mtl.albedoTexID < 0) {
+        return ONEF4;
+    }
+
+    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.albedoTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv);
+    albedo.rgb = SRGBToLinear(albedo.rgb);
+
+    albedo *= mtl.albedoMult;
+
+    return albedo;
+}
 
 
-enum GPU_GeomMatType : uint
+float3 SampleGeomMaterialEmissive(in GPU_GeomMaterial mtl, in float2 uv)
 {
-    OPAQUE,
-    AKILL,
-    COUNT
-};
+    if (mtl.emissiveTexID < 0) {
+        return ZEROF3;
+    }
+
+    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.emissiveTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv).rgb;
+    emissive = SRGBToLinear(emissive);
+
+    emissive *= mtl.emissiveMult;
+
+    return emissive;
+}
 
 
-struct GPU_GeomMaterial
+float3 SampleGeomMaterialNormal(in GPU_GeomMaterial mtl, in float2 uv, in float3x3 TBN)
 {
-    property bool isOpaque
-    {
-        get { return type == GPU_GeomMatType::OPAQUE; }
+    if (mtl.normalTexID < 0) {
+        return TBN[2];
     }
 
-    property bool isAlphaKill
-    {
-        get { return type == GPU_GeomMatType::AKILL; }
-    }
+    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.normalTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv).xyz - 1.f;
+    lnorm = normalize(lnorm * float3(FLOAT2(mtl.normalScale), 1.f));
 
-    property bool isDoubleSided
-    {
-        get { return (bool)doubleSided; }
-    }
-
-    float4 albedoMult;
-
-    float3 emissiveMult;
-    float  alphaRef;
-
-    float normalScale;
-    float metalnessScale;
-    float roughnessScale;
-    float aoCoef;
-
-    int albedoTexID;
-    int normalTexID;
-    int metalRoughTexID;
-    int aoTexID;
-
-    int emissiveTexID;
-
-    GPU_GeomMatType type;
-
-    private uint doubleSided : 1;
-    
-    private uint padding_0 : 31;
-    private uint padding_1;
-};
+    return normalize(mul(lnorm, TBN));
+}
 
 
-struct GPU_MeshLOD
+float3 SampleGeomMaterialMetRoughAO(in GPU_GeomMaterial mtl, in float2 uv)
 {
-    uint firstIndex;
-    uint indexCount;
-};
+    float3 aoMetRough = ONEF3;
 
+    SamplerState smp = GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT);
 
-struct GPU_Mesh
-{
-    property float3 minPosLCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLCS.x), unpackHalf2x16ToFloat(aabbMinMaxLCS.y).x); }
-    }
-
-    property float3 maxPosLCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxLCS.y).y, unpackHalf2x16ToFloat(aabbMinMaxLCS.z)); }
-    }
-
-    property GPU_AABB aabbLCS
-    {
-        get { return GPU_AABB(minPosLCS, maxPosLCS); }
-    }
-
-    uint firstVertex;
-    uint vertexCount;
-
-    uint firstLOD; // Index of mesh LOD 0 inside LOD buffer
-    uint lodCount;
-
-    private uint3 aabbMinMaxLCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    private uint padding;
-};
-
-
-struct GPU_GeomInst
-{
-    __init()
-    {
-        matrWCS = M3D_IDENTITY_3X4;
-        aabbMinMaxWCS = ZEROU3;
-        meshID = 0u;
-        materialID = 0u;
-    }
-
-    property float3 minPosWCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.x), unpackHalf2x16ToFloat(aabbMinMaxWCS.y).x); }
-    }
-
-    property float3 maxPosWCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.y).y, unpackHalf2x16ToFloat(aabbMinMaxWCS.z)); }
-    }
-
-    property GPU_AABB aabbWCS
-    {
-        get { return GPU_AABB(minPosWCS, maxPosWCS); }
-    }
-
-    row_major float3x4 matrWCS;
-
-    private uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint meshID : 16;
-    uint materialID : 16;
-};
-
-
-struct GPU_GeomSortKey
-{
-    __init()
-    {
-        key = ZEROU2;
-    }
-
-    __init(in GPU_GeomMatType matType, in uint matID, in uint meshID, in uint lodID, in float depth)
-    {
-        Construct(matType, matID, meshID, lodID, depth);
-    }
-
-    [mutating]
-    void Construct(in GPU_GeomMatType matType, in uint materialID, in uint meshID, in uint lodID, in float depth)
-    {
-        static_assert(GPU_GeomMatType::COUNT < (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
-
-        key = ZEROU2;
-
-        this.depth = depth;
-        this.lodID = lodID;
-        this.meshID = meshID;
-        this.materialID = materialID;
-        this.matType = matType;
-    }
-
-    uint GetDigits(in uint offset, in uint bits)
-    {
-        if (offset >= 32) {
-            return bitfieldExtract(key.y, offset - 32, bits);
+    if (mtl.metalRoughTexID == mtl.aoTexID) {
+        if (mtl.metalRoughTexID >= 0) {
+            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTexID, smp, uv).rgb;
+        }
+    } else {
+        if (mtl.aoTexID >= 0) {
+            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.aoTexID, smp, uv).r;
         }
 
-        if (offset + bits <= 32) {
-            return bitfieldExtract(key.x, offset, bits);
+        if (mtl.metalRoughTexID >= 0) {
+            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTexID, smp, uv).bg;
         }
-
-        // Digit crosses from key.x into key.y
-        const uint loBits = 32 - offset;
-        const uint hiBits = bits - loBits;
-
-        const uint lo = bitfieldExtract(key.x, offset, loBits);
-        const uint hi = bitfieldExtract(key.y, 0, hiBits);
-
-        return lo | (hi << loBits);
     }
 
-    property GPU_GeomMatType matType
-    {
-        set { key.y = bitfieldInsert(key.y, (uint)newValue, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS); }
-        get { return GPU_GeomMatType(bitfieldExtract(key.y, GEOM_SORT_MAT_TYPE_OFFSET, GEOM_SORT_MAT_TYPE_BITS)); }
-    }
+    float3 result;
+    result.r = aoMetRough.g * mtl.metalnessScale;
+    result.g = aoMetRough.b * mtl.roughnessScale;
+    result.b = lerp(1.f, aoMetRough.r, mtl.aoCoef);
 
-    property uint materialID
-    {
-        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_MAT_ID_OFFSET, GEOM_SORT_MAT_ID_BITS); }
-        get { return bitfieldExtract(key.y, GEOM_SORT_MAT_ID_OFFSET, GEOM_SORT_MAT_ID_BITS); }
-    }
-
-    property uint meshID
-    {
-        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS); }
-        get { return bitfieldExtract(key.y, GEOM_SORT_MESH_OFFSET, GEOM_SORT_MESH_BITS); }
-    }
-
-    property uint lodID
-    {
-        set { key.y = bitfieldInsert(key.y, newValue, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS); }
-        get { return bitfieldExtract(key.y, GEOM_SORT_LOD_OFFSET, GEOM_SORT_LOD_BITS); }
-    }
-
-    property float depth
-    {
-        set { key.x = FloatToSortableUint(newValue); }
-        get { return SortableUintToFloat(key.x); }
-    }
-
-    static const uint GEOM_SORT_KEY_TOTAL_BITS = 64;
-
-    private static const uint GEOM_SORT_MAT_ID_OFFSET = 0;
-    private static const uint GEOM_SORT_MAT_ID_BITS = 11;
-
-    private static const uint GEOM_SORT_LOD_OFFSET = 11;
-    private static const uint GEOM_SORT_LOD_BITS = 3;
-
-    private static const uint GEOM_SORT_MESH_OFFSET = 14;
-    private static const uint GEOM_SORT_MESH_BITS = 16;
-
-    private static const uint GEOM_SORT_MAT_TYPE_OFFSET = 30;
-    private static const uint GEOM_SORT_MAT_TYPE_BITS = 2;
-
-    private uint2 key;
-};
+    return result;
+}
 
 
-struct GPU_DbgCullInstData
+GPU_SampledGeomMaterial SampleGeomMaterial(in GPU_GeomMaterial template, in float3x3 TBN, in float2 uv)
 {
-    uint meshID : 16;
-    uint lodID : 3;
-    uint matType : 2;
-    uint padding : 11;
-};
+    GPU_SampledGeomMaterial mtl = (GPU_SampledGeomMaterial)0;
+
+    mtl.albedo = SampleGeomMaterialAlbedo(template, uv);
+    mtl.emissive = SampleGeomMaterialEmissive(template, uv);
+    mtl.lnorm = SampleGeomMaterialNormal(template, uv, TBN);
+
+    const float3 aoMetRough = SampleGeomMaterialMetRoughAO(template, uv);
+    mtl.metalness = aoMetRough.r;
+    mtl.roughness = aoMetRough.g;
+    mtl.ao = aoMetRough.b;
+
+    return mtl;
+}
+
 
 #endif

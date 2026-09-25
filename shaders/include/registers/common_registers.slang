@@ -8,7 +8,7 @@
 
 #include "common/common_dbg.slang"
 #include "common/common_structs.slang"
-#include "common/common_geom.slang"
+#include "common/common_geom_structs.slang"
 
 
 [vk::binding(0, DESC_SET_PER_FRAME)] SamplerState           COMMON_SAMPLERS[GPU_SamplerID::COUNT];

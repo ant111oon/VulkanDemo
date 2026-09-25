@@ -1,7 +1,6 @@
 #include "registers/gbuffer_registers.slang"
 #include "pass/gbuffer/vsout.slang"
 
-#include "common/common_gbuffer.slang"
 #include "common/common_geom.slang"
 
 
@@ -35,19 +34,17 @@ GPU_GBufferPsOutput main(GPU_GBufferVsOutput input)
 
     const GPU_GeomInst inst = COMMON_INST_BUFFER[input.flatData.instID];
 
-    const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
-
     const float3x3 TBN = CalcTBN(input.data.tangent, input.data.lnorm);
-    GPU_GBufferSurface surf = SampleGBufferSurface(material, TBN, input.data.uv);
+    GPU_SampledGeomMaterial mtl = SampleGeomMaterial(COMMON_MATERIALS[inst.materialID], TBN, input.data.uv);
 
-    const float3 wnorm = normalize(mul(inst.matrWCS, float4(surf.lnorm, 0.f)).xyz);
+    const float3 wnorm = normalize(mul(inst.matrWCS, float4(mtl.lnorm, 0.f)).xyz);
 
-    GBufferDebugVis(input.flatData.instID, surf.albedo);
+    GBufferDebugVis(input.flatData.instID, mtl.albedo);
 
-    result.rt0 = surf.albedo;
+    result.rt0 = mtl.albedo;
     result.rt1 = float4(wnorm, 0.f);
-    result.rt2 = float4(surf.metalness, surf.roughness, surf.ao, 0.f);
-    result.rt3 = float4(surf.emissive, 0.f);
+    result.rt2 = float4(mtl.metalness, mtl.roughness, mtl.ao, 0.f);
+    result.rt3 = float4(mtl.emissive, 0.f);
 
     return result;
 }
