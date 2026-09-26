@@ -14,6 +14,22 @@ namespace eng
     }
 
 
+    constexpr inline bool IsValidZRange(float zNear, float zFar, bool isPerspective)
+    {
+        if (isPerspective) {
+            return zNear > 0.f && zFar > zNear;
+        }
+
+        return zFar > zNear;
+    }
+
+
+    constexpr inline bool IsValidOrthoBounds(float left, float right, float bottom, float top)
+    {
+        return !math::IsEqual(left, right) && !math::IsEqual(bottom, top);
+    }
+
+
     Camera::~Camera()
     {
         Destroy();
@@ -89,9 +105,9 @@ namespace eng
     void Camera::SetZNear(float zNear) noexcept
     {
         if (!math::IsEqual(m_currState.zNear, zNear)) {
-            CORE_ASSERT_MSG(m_currState.zFar > zNear, "Can't set Z Near greater than Z Far");
-        
             m_currState.zNear = zNear;
+            CORE_ASSERT(IsValidZRange(m_currState.zNear, m_currState.zFar, IsPerspProj()));
+        
             RequestRecalcProjMatrix();
         }
     }
@@ -100,9 +116,9 @@ namespace eng
     void Camera::SetZFar(float zFar) noexcept
     {
         if (!math::IsEqual(m_currState.zFar, zFar)) {
-            CORE_ASSERT_MSG(zFar > m_currState.zNear, "Can't set Z Far less than Z Near");
-        
             m_currState.zFar = zFar;
+            CORE_ASSERT(IsValidZRange(m_currState.zNear, m_currState.zFar, IsPerspProj()));
+            
             RequestRecalcProjMatrix();
         }
     }
@@ -118,9 +134,9 @@ namespace eng
     void Camera::SetOrthoLeft(float left) noexcept
     {
         if (!math::IsEqual(m_currState.left, left)) {
-            CORE_ASSERT_MSG(m_currState.right > left, "Can't set left greater than right");
-        
             m_currState.left = left;
+            CORE_ASSERT(IsValidOrthoBounds(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top));
+        
             RequestRecalcProjMatrix();
         }
     }
@@ -129,9 +145,9 @@ namespace eng
     void Camera::SetOrthoRight(float right) noexcept
     {
         if (!math::IsEqual(m_currState.right, right)) {
-            CORE_ASSERT_MSG(right > m_currState.left, "Can't set right less than left");
-        
             m_currState.right = right;
+            CORE_ASSERT(IsValidOrthoBounds(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top));
+        
             RequestRecalcProjMatrix();
         }
     }
@@ -140,9 +156,9 @@ namespace eng
     void Camera::SetOrthoTop(float top) noexcept
     {
         if (!math::IsEqual(m_currState.top, top)) {
-            CORE_ASSERT_MSG(top > m_currState.bottom, "Can't set top less than bottom");
-        
             m_currState.top = top;
+            CORE_ASSERT(IsValidOrthoBounds(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top));
+        
             RequestRecalcProjMatrix();
         }
     }
@@ -151,9 +167,9 @@ namespace eng
     void Camera::SetOrthoBottom(float bottom) noexcept
     {
         if (!math::IsEqual(m_currState.bottom, bottom)) {
-            CORE_ASSERT_MSG(m_currState.top > bottom, "Can't set bottom greater than top");
-        
             m_currState.bottom = bottom;
+            CORE_ASSERT(IsValidOrthoBounds(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top));
+        
             RequestRecalcProjMatrix();
         }
     }

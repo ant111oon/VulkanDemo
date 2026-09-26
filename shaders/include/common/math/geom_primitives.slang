@@ -19,6 +19,25 @@ struct GPU_Plane
         this.distance = distance;
     }
 
+    __init(in float3 A, in float3 B, in float3 C)
+    {
+        Construct(A, B, C);
+    }
+
+    [mutating]
+    void Construct(in float3 A, in float3 B, in float3 C)
+    {
+        const float3 center = (A + B + C) * rcp(3.f);
+
+        this.normal = normalize(cross(B - A, C - A));
+        this.distance = -dot(normal, center);
+    }
+
+    float DistanceTo(in float3 pt)
+    {
+        return dot(normal, pt) + distance;
+    }
+
     float3 normal;
     float distance;
 };
@@ -223,18 +242,22 @@ struct GPU_AABB
 
 struct GPU_Frustum
 {
-    // Must be sync with Frustum::PlaneID in frustum.h
-    enum PlaneID
+    [mutating]
+    void Construct(in float4x4 view, in float4x4 proj)
     {
-        PLANE_LEFT,
-        PLANE_TOP,
-        PLANE_RIGHT,
-        PLANE_BOTTOM,
-        PLANE_NEAR,
-        PLANE_FAR,
+        Construct(proj * view);
+    }
 
-        PLANE_COUNT
-    };
+    [mutating]
+    void Construct(in float4x4 viewProj)
+    {
+        const float4x4 invViewProj = Inverse(viewProj);
+
+        float3 points[PointID::POINT_COUNT];
+
+        GetFrustumPointsWCS_Inv(invViewProj, points);
+        GetFrustumPlanes(points, planes);
+    }
 
     bool IsIntersect(in GPU_Sphere sphere)
     {
@@ -275,6 +298,115 @@ struct GPU_Frustum
     GPU_Plane GetBottomPlane()     { return planes[PlaneID::PLANE_BOTTOM]; }
     GPU_Plane GetNearPlane()       { return planes[PlaneID::PLANE_NEAR]; }
     GPU_Plane GetFarPlane()        { return planes[PlaneID::PLANE_FAR]; }
+
+    // Must be sync with Frustum::PlaneID in frustum.h
+    enum PlaneID
+    {
+        PLANE_LEFT,
+        PLANE_TOP,
+        PLANE_RIGHT,
+        PLANE_BOTTOM,
+        PLANE_NEAR,
+        PLANE_FAR,
+
+        PLANE_COUNT
+    };
+
+    // Must be sync with Frustum::PointID in frustum.h
+    enum PointID
+    {
+        NEAR_LEFT_BOTTOM,
+        NEAR_RIGHT_BOTTOM,
+        NEAR_RIGHT_TOP,
+        NEAR_LEFT_TOP,
+
+        FAR_LEFT_BOTTOM,
+        FAR_RIGHT_BOTTOM,
+        FAR_RIGHT_TOP,
+        FAR_LEFT_TOP,
+
+        POINT_COUNT
+    };
+
+    private static void GetFrustumPointsWCS_Inv(in float4x4 invViewProj, inout float3 outPoints[PointID::POINT_COUNT])
+    {
+    #ifdef ENV_API_VULKAN
+        static const float bottomY = 1.f;
+        static const float topY = -1.f;
+    #else
+        static const float bottomY = -1.f;
+        static const float topY = 1.f;
+    #endif
+
+    #ifdef ENV_REVERSED_Z
+        static const float zNear = 1.f;
+        static const float zFar = 0.f;
+    #else
+        static const float zNear = 0.f;
+        static const float zFar = 1.f;
+    #endif
+
+        outPoints[PointID::NEAR_LEFT_BOTTOM]  = float3(-1.f, bottomY, zNear);
+        outPoints[PointID::NEAR_RIGHT_BOTTOM] = float3( 1.f, bottomY, zNear);
+        outPoints[PointID::NEAR_RIGHT_TOP]    = float3( 1.f,    topY, zNear);
+        outPoints[PointID::NEAR_LEFT_TOP]     = float3(-1.f,    topY, zNear);
+        outPoints[PointID::FAR_LEFT_BOTTOM]   = float3(-1.f, bottomY, zFar);
+        outPoints[PointID::FAR_RIGHT_BOTTOM]  = float3( 1.f, bottomY, zFar);
+        outPoints[PointID::FAR_RIGHT_TOP]     = float3( 1.f,    topY, zFar);
+        outPoints[PointID::FAR_LEFT_TOP]      = float3(-1.f,    topY, zFar);
+
+        for (uint i = 0; i < PointID::POINT_COUNT; ++i) {
+            const float3 pt = outPoints[i];
+            const float4 temp = mul(invViewProj, float4(pt, 1.f));
+            
+            outPoints[i] = float3(temp.xyz / temp.w);
+        }
+    }
+
+    private static void GetFrustumPlanes(in float3 points[PointID::POINT_COUNT], out GPU_Plane outPlanes[PlaneID::PLANE_COUNT])
+    {
+        outPlanes[PlaneID::PLANE_LEFT]
+            .Construct(
+                points[PointID::NEAR_LEFT_BOTTOM],
+                points[PointID::FAR_LEFT_BOTTOM],
+                points[PointID::FAR_LEFT_TOP]
+            );
+
+        outPlanes[PlaneID::PLANE_RIGHT]
+            .Construct(
+                points[PointID::NEAR_RIGHT_TOP],
+                points[PointID::FAR_RIGHT_TOP],
+                points[PointID::NEAR_RIGHT_BOTTOM]
+            );
+
+        outPlanes[PlaneID::PLANE_BOTTOM]
+            .Construct(
+                points[PointID::NEAR_LEFT_BOTTOM],
+                points[PointID::NEAR_RIGHT_BOTTOM],
+                points[PointID::FAR_RIGHT_BOTTOM]
+            );
+
+        outPlanes[PlaneID::PLANE_TOP]
+            .Construct(
+                points[PointID::NEAR_RIGHT_TOP],
+                points[PointID::NEAR_LEFT_TOP],
+                points[PointID::FAR_RIGHT_TOP]
+            );
+
+        outPlanes[PlaneID::PLANE_NEAR]
+            .Construct(
+                points[PointID::NEAR_RIGHT_BOTTOM],
+                points[PointID::NEAR_LEFT_BOTTOM],
+                points[PointID::NEAR_RIGHT_TOP]
+            );
+
+        outPlanes[PlaneID::PLANE_FAR]
+            .Construct(
+                points[PointID::FAR_LEFT_BOTTOM],
+                points[PointID::FAR_RIGHT_BOTTOM],
+                points[PointID::FAR_RIGHT_TOP]
+            );
+    }
 
     private GPU_Plane planes[6];
 };

@@ -110,13 +110,8 @@ namespace vkn
         m_state.set(BIT_IS_STORAGE_BUFFER, (info.usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) != 0);
         m_state.set(BIT_IS_INDEX_BUFFER, (info.usage & VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT) != 0);
         
-        static constexpr std::bitset<BIT_COUNT> mask(
-            (1u << BIT_IS_STORAGE_BUFFER) |
-            (1u << BIT_IS_CONSTANT_BUFFER) |
-            (1u << BIT_IS_DESCRIPTOR_BUFFER) |
-            (1u << BIT_IS_INDEX_BUFFER)
-        ); 
-        VK_ASSERT_MSG((m_state & mask).count() == 1, "GPU buffers can't have several usage types");
+        VK_ASSERT_MSG((info.usage & VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT) == 0,
+            "Engine uses vertex pulling so VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT usage flag is not supported");
 
         if ((info.pAllocInfo->flags & VMA_ALLOCATION_CREATE_MAPPED_BIT) != 0) {
             m_state.set(BIT_IS_PERSISTENTLY_MAPPED, true);
