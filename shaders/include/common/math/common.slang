@@ -226,50 +226,6 @@ uint CeilDiv(in uint value, in uint divisor)
 }
 
 
-float2x2 Inverse(in float2x2 m)
-{
-    float oneOverDeterminant = rcp(m[0][0] * m[1][1] - m[1][0] * m[0][1]);
-
-    float2x2 inv = float2x2(
-        +m[1][1] * oneOverDeterminant,
-        -m[0][1] * oneOverDeterminant,
-        -m[1][0] * oneOverDeterminant,
-        +m[0][0] * oneOverDeterminant);
-
-    return inv;
-}
-
-
-float3x3 Inverse(in float3x3 m)
-{
-    float4 a = float4(m[0].xyz, 0.f);
-    float4 b = float4(m[1].xyz, 0.f);
-    float4 c = float4(m[2].xyz, 0.f);
-
-    let Cross4 = (float4 x, float4 y) => {
-        return float4(
-            x.y * y.z - y.y * x.z,
-            x.z * y.x - y.z * x.x,
-            x.x * y.y - y.x * x.y,
-            0.f);
-    };
-
-    float4 i0 = Cross4(b, c);
-    float4 i1 = Cross4(c, a);
-    float4 i2 = Cross4(a, b);
-
-    float3x3 inv;
-    inv[0] = i0.xyz;
-    inv[1] = i1.xyz;
-    inv[2] = i2.xyz;
-    inv = transpose(inv);
-
-    inv *= rcp(dot(a, Cross4(b, c)));
-
-    return inv;
-}
-
-
 float4x4 Inverse(in float4x4 m)
 {
     float coef00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];

@@ -69,6 +69,7 @@ using float4x4 = glm::float4x4;
 using float3x4 = glm::float3x4;
 using float4x3 = glm::float4x3;
 using float3x3 = glm::float3x3;
+using float2x2 = glm::float2x2;
 
 
 struct GPU_Plane
