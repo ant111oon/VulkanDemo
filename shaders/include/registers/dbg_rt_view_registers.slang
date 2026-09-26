@@ -9,7 +9,7 @@ struct GPU_DbgRTViewPushConst
 {
     uint  mip;
     uint  face;
-    uint  csmCascadeIdx;
+    uint  csmSplitIdx;
     float depthZNear;
     float depthZFar;
 };
@@ -20,7 +20,7 @@ struct GPU_DbgRTViewPushConst
 #define DBG_RT_VIEW_FACE        DBG_RT_VIEW_CONST.face
 #define DBG_RT_DEPTH_Z_NEAR     DBG_RT_VIEW_CONST.depthZNear
 #define DBG_RT_DEPTH_Z_FAR      DBG_RT_VIEW_CONST.depthZFar
-#define DBG_RT_CSM_CASCADE_IDX  DBG_RT_VIEW_CONST.csmCascadeIdx
+#define DBG_RT_CSM_SPLIT_IDX    DBG_RT_VIEW_CONST.csmSplitIdx
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D DBG_RT_VIEW_COMMON_DEPTH;

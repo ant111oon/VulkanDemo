@@ -330,10 +330,12 @@ struct GPU_CommonCameraData
     float4x4 viewMatr;
     float4x4 projMatr;
     float4x4 viewProjMatr;
+    float4x4 viewProjMatrPrev;
 
     float4x4 invViewMatr;
     float4x4 invProjMatr;
     float4x4 invViewProjMatr;
+    float4x4 invViewProjMatrPrev;
 
     float3 wPos;
     float zNear;
@@ -364,7 +366,7 @@ struct GPU_CommonDbgCBData
     uint enableIBL : 1;
     uint enableCSM : 1;
     uint enableCsmVisualization : 1;
-    uint enableCsmCascadeBlend : 1;
+    uint enableCsmSplitBlend : 1;
     uint enableCsmFilterRandOffsets : 1;
     uint enableCsmPCSS : 1;
     uint enableCsmPCSSRandRotation : 1;
@@ -373,7 +375,7 @@ struct GPU_CommonDbgCBData
 };
 
 
-static constexpr uint CSM_CASCADE_COUNT = 3;
+static constexpr uint CSM_SPLIT_COUNT = 3;
 
 
 struct GPU_PcssData
@@ -390,22 +392,19 @@ struct GPU_PcssData
 };
 
 
-struct GPU_CsmCascadeData
+struct GPU_CsmSplitData
 {
-    GPU_Frustum frustum;
-    float4x4 viewMatr;
-    float4x4 viewProjMatr;
+    GPU_CommonCameraData camData;
 
-    float zNear;
-    float zFar;
-    float distance;
-    float worldUnitsPerPixel;
+    float2 zBounds;
+    float  worldUnitsPerPixel;
+    uint   padding;
 };
 
 
 struct GPU_CsmData
 {
-    GPU_CsmCascadeData cascades[CSM_CASCADE_COUNT];
+    GPU_CsmSplitData splits[CSM_SPLIT_COUNT];
 
     GPU_PcssData pcssData;
 
@@ -585,7 +584,7 @@ struct GPU_DbgRTViewPushConst
 {
     uint  mip;
     uint  face;
-    uint  csmCascadeIdx;
+    uint  csmSplitIdx;
     float depthZNear;
     float depthZFar;
 };
@@ -1001,8 +1000,8 @@ static constexpr size_t DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT = 10;
 static constexpr size_t DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT = 11;
 
 
-static constexpr uint32_t CSM_CASCADE_RT_SIZE = 2048;
-static constexpr uint32_t CSM_CASCADE_HZB_SIZE = 1024;
+static constexpr uint32_t CSM_SPLIT_RT_SIZE = 2048;
+static constexpr uint32_t CSM_SPLIT_HZB_SIZE = 1024;
 
 static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
 
@@ -1077,12 +1076,12 @@ static constexpr float CAMERA_ZFAR = 1'000.f;
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(M3D_AXIS_X - 6.5f * M3D_AXIS_Y + M3D_AXIS_Z);
 static constexpr float SUN_DISTANCE = 100.f;
 
-static constexpr std::array CSM_CASCADE_COLORS = {
+static constexpr std::array CSM_SPLIT_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
     glm::float4(0.f, 1.f, 0.f, 0.45f),
     glm::float4(0.f, 0.f, 1.f, 0.45f),
 };
-static_assert(std::size(CSM_CASCADE_COLORS) == CSM_CASCADE_COUNT);
+static_assert(std::size(CSM_SPLIT_COLORS) == CSM_SPLIT_COUNT);
 
 
 class TextureLoadData
@@ -1460,7 +1459,7 @@ struct CameraGeomCullResources
 
 static CameraGeomCullResources s_mainCamGeomCullResources;
 
-static std::array<CameraGeomCullResources, CSM_CASCADE_COUNT> s_csmCamsGeomCullResources;
+static std::array<CameraGeomCullResources, CSM_SPLIT_COUNT> s_csmCamsGeomCullResources;
 #pragma endregion
 
 
@@ -1525,7 +1524,7 @@ static vkn::TextureView s_colorRTView16F;
 
 static vkn::Texture                                    s_csmRT;
 static vkn::TextureView                                s_csmRTViewArray;
-static std::array<vkn::TextureView, CSM_CASCADE_COUNT> s_csmRTViews;
+static std::array<vkn::TextureView, CSM_SPLIT_COUNT> s_csmRTViews;
 
 static vkn::ComputePSOBuilder  s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
@@ -1537,12 +1536,12 @@ static eng::Camera s_mainCamera;
 static glm::float3 s_mainCameraVel = ZEROF3;
 static bool s_mainCameraLoaded = false;
 
-static std::array<eng::Camera, CSM_CASCADE_COUNT> s_csmCameras;
-static std::array<float, CSM_CASCADE_COUNT> s_csmCascadeWorldUnitsPerTexel;
+static std::array<eng::Camera, CSM_SPLIT_COUNT> s_csmCameras;
+static std::array<float, CSM_SPLIT_COUNT> s_csmSplitWorldUnitsPerTexel;
 
 static eng::Camera s_fixedCullCamera;
 
-static std::array<glm::float4x4, CSM_CASCADE_COUNT> s_fixedCamCsmInvViewProjMatr;
+static std::array<glm::float4x4, CSM_SPLIT_COUNT> s_fixedCamCsmInvViewProjMatr;
 
 static std::array<uint32_t, GEOM_MAT_TYPE_COUNT> s_geomPerMatTypeCounts;
 static std::array<uint32_t, GEOM_MAT_TYPE_COUNT> s_geomPerMatTypeOffsets;
@@ -1554,7 +1553,7 @@ static float s_dbgDepthOutputRTZFar = 100.0f;
 
 static int32_t s_dbgOutputRTMip = 0;
 static int32_t s_dbgOutputRTFace = 0;
-static int32_t s_dbgOutputRTCascadeIndex = 0;
+static int32_t s_dbgOutputRTSplitIndex = 0;
 
 static uint32_t s_nextImageIdx = 0;
 
@@ -1574,9 +1573,9 @@ static float   s_geomCoverageCullingThresholdPercentage = 0.1f;
 
 static glm::float3 s_sunColor = ONEF3;
 
-static std::array<float, CSM_CASCADE_COUNT> s_csmCascadeDistances = { 15.f, 55.f, 200.f };
+static std::array<float, CSM_SPLIT_COUNT> s_csmSplitDistances = { 15.f, 55.f, 200.f };
 
-static float   s_csmCascadeBlendThresholdCoef = 5.f;
+static float   s_csmSplitBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
@@ -1620,7 +1619,7 @@ static float s_mainCameraSpeed = 0.035f;
     static bool s_useCSMMeshHZBCulling = true;
     static bool s_useCSMMeshCoverageCulling = true;
     static bool s_isCSMVisualizationEnabled = false;
-    static bool s_isCSMCascadeBlendEnabled = true;
+    static bool s_isCSMSplitBlendEnabled = true;
     static bool s_isCSMFilterRandomOffsetEnabled = false;
     static bool s_isCSMPCSSEnabled = true;
 
@@ -1643,7 +1642,7 @@ static float s_mainCameraSpeed = 0.035f;
     static constexpr bool s_useCSMMeshHZBCulling = true;
     static constexpr bool s_useCSMMeshCoverageCulling = true;
     static constexpr bool s_isCSMVisualizationEnabled = false;
-    static constexpr bool s_isCSMCascadeBlendEnabled = true;
+    static constexpr bool s_isCSMSplitBlendEnabled = true;
     static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
     static constexpr bool s_isCSMPCSSEnabled = true;
 
@@ -1978,6 +1977,32 @@ static GPU_Frustum CopyCPUFrustumToGPU(const math::Frustum& cpuFrustum)
     }
 
     return gpuFrustum;
+}
+
+
+static void FillCameraDataGPU(GPU_CommonCameraData& data, const eng::Camera& camera)
+{
+    const glm::float4x4& viewMatrix = camera.GetViewMatrix();
+    const glm::float4x4& projMatrix = camera.GetProjMatrix();
+    const glm::float4x4& viewProjMatrix = camera.GetViewProjMatrix();
+    const glm::float4x4& viewProjMatrixPrev = camera.GetViewProjMatrixPrev();
+
+    data.frustum = CopyCPUFrustumToGPU(camera.GetFrustum());
+    
+    data.viewMatr = viewMatrix;
+    data.projMatr = projMatrix;
+    data.viewProjMatr = viewProjMatrix;
+    data.viewProjMatrPrev = viewProjMatrixPrev;
+
+    data.invViewMatr = glm::inverse(viewMatrix);
+    data.invProjMatr = glm::inverse(projMatrix);
+    data.invViewProjMatr = glm::inverse(viewProjMatrix);
+    data.invViewProjMatrPrev = glm::inverse(viewProjMatrixPrev);
+    
+    data.wPos = camera.GetPosition();
+
+    data.zNear = camera.GetZNear();
+    data.zFar = camera.GetZFar();
 }
 
 
@@ -4401,11 +4426,11 @@ static void CreateCSMResources()
     rtCreateInfo.pDevice = &s_vkDevice;
     rtCreateInfo.type = VK_IMAGE_TYPE_2D;
     rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.extent = VkExtent3D{ CSM_CASCADE_RT_SIZE, CSM_CASCADE_RT_SIZE, 1u };
+    rtCreateInfo.extent = VkExtent3D{ CSM_SPLIT_RT_SIZE, CSM_SPLIT_RT_SIZE, 1u };
     rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     rtCreateInfo.flags = 0;
     rtCreateInfo.mipLevels = 1;
-    rtCreateInfo.arrayLayers = CSM_CASCADE_COUNT;
+    rtCreateInfo.arrayLayers = CSM_SPLIT_COUNT;
     rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -4415,15 +4440,15 @@ static void CreateCSMResources()
 
     VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
-    for (size_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+    for (size_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
         VkImageSubresourceRange subresourceRange = {};
         subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         subresourceRange.baseMipLevel = 0;
         subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-        subresourceRange.baseArrayLayer = cascade;
+        subresourceRange.baseArrayLayer = split;
         subresourceRange.layerCount = 1;
 
-        s_csmRTViews[cascade].Create(s_csmRT, mapping, subresourceRange).SetDebugName("CSM_DEPTH_RT_VIEW_%zu", cascade);
+        s_csmRTViews[split].Create(s_csmRT, mapping, subresourceRange).SetDebugName("CSM_DEPTH_RT_VIEW_%zu", split);
     }
 
     vkn::TextureViewCreateInfo csmRTViewArrayCreateInfo = {};
@@ -4445,7 +4470,7 @@ static void CreateGeomCullingAndInstancingResources()
 {
     CreateCamGeomCullResources(s_mainCamGeomCullResources, "MAIN_CAM");
 
-    for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
         char prefix[64] = {0};
         
         sprintf_s(prefix, "CSM_CAM_%u", i);
@@ -4453,8 +4478,8 @@ static void CreateGeomCullingAndInstancingResources()
 
         sprintf_s(prefix, "CSM_HZB_%u", i);
         CreateHZB(
-            CSM_CASCADE_HZB_SIZE, 
-            CSM_CASCADE_HZB_SIZE, 
+            CSM_SPLIT_HZB_SIZE, 
+            CSM_SPLIT_HZB_SIZE, 
             prefix, 
             s_csmCamsGeomCullResources[i].hzb, 
             s_csmCamsGeomCullResources[i].hzbView, 
@@ -5469,25 +5494,7 @@ void UpdateGPUCommonConstBuffer()
 
     GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
 
-    const glm::float4x4& viewMatrix = s_mainCamera.GetViewMatrix();
-    const glm::float4x4& projMatrix = s_mainCamera.GetProjMatrix();
-    const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
-    const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
-
-    constBuff.mainCam.frustum = CopyCPUFrustumToGPU(s_mainCamera.GetFrustum());
-    
-    constBuff.mainCam.viewMatr = viewMatrix;
-    constBuff.mainCam.projMatr = projMatrix;
-    constBuff.mainCam.viewProjMatr = viewProjMatrix;
-
-    constBuff.mainCam.invViewMatr = glm::inverse(viewMatrix);
-    constBuff.mainCam.invProjMatr = glm::inverse(projMatrix);
-    constBuff.mainCam.invViewProjMatr = glm::inverse(viewProjMatrix);
-    
-    constBuff.mainCam.wPos = s_mainCamera.GetPosition();
-
-    constBuff.mainCam.zNear = s_mainCamera.GetZNear();
-    constBuff.mainCam.zFar = s_mainCamera.GetZFar();
+    FillCameraDataGPU(constBuff.mainCam, s_mainCamera);
 
     constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
     constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
@@ -5502,32 +5509,22 @@ void UpdateGPUDeferredLightingConstBuffer()
 
     GPU_LightingData& constBuff = *reinterpret_cast<GPU_LightingData*>(s_deferredLightingConstBuffer.Map());
 
-    const glm::float4x4& viewMatrix = s_mainCamera.GetViewMatrix();
-    const glm::float4x4& projMatrix = s_mainCamera.GetProjMatrix();
-    const glm::float4x4& viewProjMatrix = s_mainCamera.GetViewProjMatrix();
-    const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
-
     constBuff.sunData.direction = SUN_LIGHT_DIR;
     constBuff.sunData.packedColor = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
 
-    for (size_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-        const eng::Camera& cam = s_csmCameras[i];
+    for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        FillCameraDataGPU(constBuff.csmData.splits[i].camData, s_csmCameras[i]);
 
-        constBuff.csmData.cascades[i].frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
-        constBuff.csmData.cascades[i].viewMatr = cam.GetViewMatrix();
-        constBuff.csmData.cascades[i].viewProjMatr = cam.GetViewProjMatrix();
-        constBuff.csmData.cascades[i].distance = s_csmCascadeDistances[i];
-        constBuff.csmData.cascades[i].zNear = cam.GetZNear();
-        constBuff.csmData.cascades[i].zFar = cam.GetZFar();
-        constBuff.csmData.cascades[i].worldUnitsPerPixel = s_csmCascadeWorldUnitsPerTexel[i];
+        constBuff.csmData.splits[i].zBounds = glm::float2(i == 0 ? CAMERA_ZNEAR : s_csmSplitDistances[i - 1], s_csmSplitDistances[i]);
+        constBuff.csmData.splits[i].worldUnitsPerPixel = s_csmSplitWorldUnitsPerTexel[i];
     }
 
-    constBuff.csmData.blendThresholdCoef = s_csmCascadeBlendThresholdCoef * 0.01f;
+    constBuff.csmData.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
     constBuff.csmData.filterDiskSampleCount = s_csmFilterDiskSampleCount;
     constBuff.csmData.filterDiskRadius = s_csmFilterDiskRadius;
     constBuff.csmData.filterGridHalfSize = s_csmFilterGridHalfSize;
 
-    constBuff.csmData.rtSize = glm::uvec2(CSM_CASCADE_RT_SIZE);
+    constBuff.csmData.rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
     constBuff.csmData.constantBiasTexels = s_csmConstantBiasTexels;
     constBuff.csmData.slopeBiasTexels = s_csmSlopeBiasTexels;
 
@@ -5562,7 +5559,7 @@ void UpdateGPUDbgConstBuffer()
     constBuff.enableIBL = s_isIBLEnabled;
     constBuff.enableCSM = s_isCSMEnabled;
     constBuff.enableCsmVisualization = s_isCSMEnabled && s_isCSMVisualizationEnabled;
-    constBuff.enableCsmCascadeBlend = s_isCSMEnabled && s_isCSMCascadeBlendEnabled;
+    constBuff.enableCsmSplitBlend = s_isCSMEnabled && s_isCSMSplitBlendEnabled;
     constBuff.enableCsmFilterRandOffsets = s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled;
     constBuff.enableCsmPCSS = csmPcssEnabled;
     constBuff.enableCsmPCSSRandRotation = csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled;
@@ -5599,7 +5596,7 @@ static void UpdateCSMDataCPU()
 {
     TM_MARKER_C(0x008b8b, "UpdateCSMDataCPU");
 
-    auto GetCascadeSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
+    auto GetSplitSphereVolumeRadius = [](std::span<const glm::float3> points, const glm::float3& center) {
         float radius = 0.f;
 
         for (const glm::float3& point : points) {
@@ -5609,29 +5606,29 @@ static void UpdateCSMDataCPU()
         return radius;
     };
 
-    eng::Camera cascadeCamera = s_mainCamera;
+    eng::Camera splitCamera = s_mainCamera;
 
     const glm::quat lightRotQuat = glm::quatLookAt(SUN_LIGHT_DIR, M3D_AXIS_Y);
     const glm::float3x3 lightRot = glm::float3x3(glm::lookAt(ZEROF3, SUN_LIGHT_DIR, M3D_AXIS_Y));
     const glm::float3x3 invLightRot = glm::inverse(lightRot);
 
-    for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-        const float zNear = i == 0 ? CAMERA_ZNEAR : s_csmCascadeDistances[i - 1];
-        const float zFar = s_csmCascadeDistances[i];
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        const float zNear = i == 0 ? CAMERA_ZNEAR : s_csmSplitDistances[i - 1];
+        const float zFar = s_csmSplitDistances[i];
 
-        cascadeCamera.SetZNearFar(zNear, zFar);
-        cascadeCamera.Update();
+        splitCamera.SetZNearFar(zNear, zFar);
+        splitCamera.Update();
 
-        const math::Frustum& cascadeFrustum = cascadeCamera.GetFrustum();
-        std::span<const glm::float3> frCorners = cascadeFrustum.GetPoints();
-        const glm::float3 frCenter = cascadeFrustum.GetCenter();
+        const math::Frustum& splitFrustum = splitCamera.GetFrustum();
+        std::span<const glm::float3> frCorners = splitFrustum.GetPoints();
+        const glm::float3 frCenter = splitFrustum.GetCenter();
 
-        const float frRadius = GetCascadeSphereVolumeRadius(frCorners, frCenter);
+        const float frRadius = GetSplitSphereVolumeRadius(frCorners, frCenter);
 
         glm::float3 lightPos = frCenter - SUN_LIGHT_DIR * frRadius;
 
         const float orthoSize = 2.f * frRadius;
-        const float texelSize = orthoSize / CSM_CASCADE_RT_SIZE;
+        const float texelSize = orthoSize / CSM_SPLIT_RT_SIZE;
 
         glm::float3 frCenterLS = lightRot * frCenter;
         frCenterLS.x = glm::round(frCenterLS.x / texelSize) * texelSize;
@@ -5649,7 +5646,7 @@ static void UpdateCSMDataCPU()
     
         csmCamera.Update();
 
-        s_csmCascadeWorldUnitsPerTexel[i] = texelSize;
+        s_csmSplitWorldUnitsPerTexel[i] = texelSize;
     }
 }
 
@@ -5696,8 +5693,8 @@ static void UpdateScene()
     }
 
     if (s_csmTestMode) {
-        for (size_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-            RenderDebugFrustumFilled(s_fixedCamCsmInvViewProjMatr[i], CSM_CASCADE_COLORS[i]);
+        for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+            RenderDebugFrustumFilled(s_fixedCamCsmInvViewProjMatr[i], CSM_SPLIT_COLORS[i]);
             RenderDebugFrustumWired(s_fixedCamCsmInvViewProjMatr[i], glm::float4(1.f));
         }
     }
@@ -6649,11 +6646,11 @@ static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(0xb3b3b3, "CSM");
         TM_GPU_MARKER_C(cmdBuffer, 0xb3b3b3, "CSM");
     
-        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(0xb3b3b3, "Cascade_%u", cascade);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb3b3b3, "Cascade_%u", cascade);
+        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+            TM_MARKER_C_FMT(0xb3b3b3, "Split_%u", split);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb3b3b3, "Split_%u", split);
     
-            HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[cascade], cascade, s_csmCamsGeomCullResources[cascade].hzb, s_csmCamsGeomCullResources[cascade].hzbMipViews);
+            HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[split], split, s_csmCamsGeomCullResources[split].hzb, s_csmCamsGeomCullResources[split].hzbMipViews);
         }
     }
 }
@@ -6685,9 +6682,9 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
         const bool hzbCulling = s_useMeshCulling && s_useCSMMeshHZBCulling;
         const bool coverageCulling = s_useMeshCulling && s_useCSMMeshCoverageCulling;
 
-        for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-            TM_MARKER_C_FMT(0xb0e0e6, "Cascade_%u", i);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Cascade_%u", i);
+        for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+            TM_MARKER_C_FMT(0xb0e0e6, "Split_%u", i);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Split_%u", i);
             
             GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], coverageCulling, frustumCulling, hzbCulling);
         }
@@ -6838,18 +6835,18 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(passColor, "Opaque");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+            TM_MARKER_C_FMT(passColor, "Split_%u", split);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Split_%u", split);
 
             RenderPass_Depth(
                 cmdBuffer, 
                 GEOM_MAT_TYPE_OPAQUE, 
-                s_csmCameras[cascade],
-                s_csmCamsGeomCullResources[cascade], 
+                s_csmCameras[split],
+                s_csmCamsGeomCullResources[split], 
                 s_csmRT,
-                cascade,
-                s_csmRTViews[cascade]
+                split,
+                s_csmRTViews[split]
             );
         }
     }
@@ -6858,18 +6855,18 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(passColor, "AKill");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
 
-        for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-            TM_MARKER_C_FMT(passColor, "Cascade_%u", cascade);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Cascade_%u", cascade);
+        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+            TM_MARKER_C_FMT(passColor, "Split_%u", split);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Split_%u", split);
     
             RenderPass_Depth(
                 cmdBuffer, 
                 GEOM_MAT_TYPE_AKILL, 
-                s_csmCameras[cascade],
-                s_csmCamsGeomCullResources[cascade], 
+                s_csmCameras[split],
+                s_csmCamsGeomCullResources[split], 
                 s_csmRT,
-                cascade,
-                s_csmRTViews[cascade]
+                split,
+                s_csmRTViews[split]
             );
         }
     }
@@ -7316,7 +7313,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             pVisTex = &s_csmRT;
             break;
         case DBG_RT_VIEW_TYPE_CSM_HZB:
-            pVisTex = &s_csmCamsGeomCullResources[s_dbgOutputRTCascadeIndex].hzb;
+            pVisTex = &s_csmCamsGeomCullResources[s_dbgOutputRTSplitIndex].hzb;
             break;
     }
 
@@ -7380,13 +7377,13 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT, 0, s_csmCamsGeomCullResources[s_dbgOutputRTCascadeIndex].hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT, 0, s_csmCamsGeomCullResources[s_dbgOutputRTSplitIndex].hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
         });
 
         GPU_DbgRTViewPushConst pushConsts = {};
         pushConsts.mip = s_dbgOutputRTMip;
         pushConsts.face = s_dbgOutputRTFace;
-        pushConsts.csmCascadeIdx = s_dbgOutputRTCascadeIndex;
+        pushConsts.csmSplitIdx = s_dbgOutputRTSplitIndex;
         pushConsts.depthZNear = s_dbgDepthOutputRTZNear;
         pushConsts.depthZFar = s_dbgDepthOutputRTZFar;
 
@@ -7568,10 +7565,10 @@ namespace DbgUI
                 ImGui::SameLine(); 
                 ImGui::TextColored(s_cullingTestMode ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, s_cullingTestMode ? "ON" : "OFF");
                 
-                ImGui::Text("Fixed CSM Cascades (F7):");
+                ImGui::Text("Fixed CSM Splits (F7):");
                 if (ImGui::IsItemHovered()) {
                     if (ImGui::BeginTooltip()) {
-                        ImGui::Text("Show cascades in moment of pressing F7");
+                        ImGui::Text("Show splits in moment of pressing F7");
                     } ImGui::EndTooltip();
                 }
                 ImGui::SameLine(); 
@@ -7700,17 +7697,17 @@ namespace DbgUI
                         ImGui::SameLine();
                         ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
-                        ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+                        ImGui::Checkbox("Visualize Splits", &s_isCSMVisualizationEnabled);
 
                         if (ImGui::TreeNodeEx("Partition")) {
-                            for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
-                                const float distMin = cascade == 0 ? CAMERA_ZNEAR  : s_csmCascadeDistances[cascade - 1];
-                                const float distMax = cascade == CSM_CASCADE_COUNT - 1 ? CAMERA_ZFAR : s_csmCascadeDistances[cascade + 1];
+                            for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+                                const float distMin = split == 0 ? CAMERA_ZNEAR  : s_csmSplitDistances[split - 1];
+                                const float distMax = split == CSM_SPLIT_COUNT - 1 ? CAMERA_ZFAR : s_csmSplitDistances[split + 1];
 
                                 char label[64] = {};
-                                sprintf_s(label, "Split Distance %u##%u", cascade, cascade);
+                                sprintf_s(label, "Split Distance %u##%u", split, split);
 
-                                ImGui::DragFloat(label, &s_csmCascadeDistances[cascade], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
+                                ImGui::DragFloat(label, &s_csmSplitDistances[split], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
                             }
                             
                             ImGui::TreePop();
@@ -7826,17 +7823,17 @@ namespace DbgUI
                             ImGui::TreePop();
                         }
 
-                        if (ImGui::TreeNodeEx("Cascade Blend")) {
-                            ImGui::Checkbox("##CSMCascadeBlendEnabled", &s_isCSMCascadeBlendEnabled);
+                        if (ImGui::TreeNodeEx("Split Blend")) {
+                            ImGui::Checkbox("##CSMSplitBlendEnabled", &s_isCSMSplitBlendEnabled);
                             ImGui::SameLine();
-                            ImGui::TextColored(s_isCSMCascadeBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                            ImGui::TextColored(s_isCSMSplitBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                             
-                            if (s_isCSMCascadeBlendEnabled) {
-                                ImGui::DragFloat("Blend Threshold Coef", &s_csmCascadeBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
+                            if (s_isCSMSplitBlendEnabled) {
+                                ImGui::DragFloat("Blend Threshold Coef", &s_csmSplitBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
                                 
                                 if (ImGui::IsItemHovered()) {
                                     if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Percentage size of cascade blending area");
+                                        ImGui::Text("Percentage size of split blending area");
                                     } ImGui::EndTooltip();
                                 }
                             }
@@ -7942,7 +7939,7 @@ namespace DbgUI
                 bool needExtraZNearFar = false;
                 bool needExtraMip = false;
                 bool needExtraFace = false;
-                bool needExtraCascadeIndex = false;
+                bool needExtraSplitIndex = false;
 
                 switch (s_dbgOutputRTType) {
                     case DBG_RT_VIEW_TYPE_NONE:
@@ -7980,15 +7977,15 @@ namespace DbgUI
                         needExtraMip = true;
                         break;
                     case DBG_RT_VIEW_TYPE_CSM_DEPTH:
-                        needExtraCascadeIndex = true;
+                        needExtraSplitIndex = true;
                         break;
                     case DBG_RT_VIEW_TYPE_CSM_HZB:
                         needExtraMip = true;
-                        needExtraCascadeIndex = true;
+                        needExtraSplitIndex = true;
                         break;
                 }
 
-                const bool needExtraParams = needExtraZNearFar || needExtraMip || needExtraFace || needExtraCascadeIndex;
+                const bool needExtraParams = needExtraZNearFar || needExtraMip || needExtraFace || needExtraSplitIndex;
 
                 if (needExtraParams && ImGui::TreeNodeEx("RT Vis Params", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (needExtraZNearFar) {
@@ -8023,8 +8020,8 @@ namespace DbgUI
                         }
                     }
 
-                    if (needExtraCascadeIndex) {
-                        ImGui::SliderInt("Cascade", &s_dbgOutputRTCascadeIndex, 0, (int32_t)CSM_CASCADE_COUNT - 1);
+                    if (needExtraSplitIndex) {
+                        ImGui::SliderInt("Split", &s_dbgOutputRTSplitIndex, 0, (int32_t)CSM_SPLIT_COUNT - 1);
                     }
 
                     ImGui::TreePop();
@@ -8349,7 +8346,7 @@ void AppProcessWndEvent(const eng::WndEvent& event)
             s_csmTestMode = !s_csmTestMode;
 
             if (s_csmTestMode) {
-                for (size_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
+                for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
                     s_fixedCamCsmInvViewProjMatr[i] = s_csmCameras[i].GetInvViewProjMatrix();
                 }
             }

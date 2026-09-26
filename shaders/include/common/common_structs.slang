@@ -120,10 +120,12 @@ struct GPU_CommonCameraData
     float4x4 viewMatr;
     float4x4 projMatr;
     float4x4 viewProjMatr;
+    float4x4 viewProjMatrPrev;
 
     float4x4 invViewMatr;
     float4x4 invProjMatr;
     float4x4 invViewProjMatr;
+    float4x4 invViewProjMatrPrev;
 
     float3 wPos;
     float zNear;
@@ -160,9 +162,9 @@ struct GPU_CommonDbgCBData
         get { return (bool)enableCsmVisualization; }
     }
 
-    property bool isCsmCascadeBlendEnabled
+    property bool isCsmSplitBlendEnabled
     {
-        get { return (bool)enableCsmCascadeBlend; }
+        get { return (bool)enableCsmSplitBlend; }
     }
 
     property bool isCsmFilterRandOffsetsEnabled
@@ -194,7 +196,7 @@ struct GPU_CommonDbgCBData
     private uint enableIBL : 1;
     private uint enableCSM : 1;
     private uint enableCsmVisualization : 1;
-    private uint enableCsmCascadeBlend : 1;
+    private uint enableCsmSplitBlend : 1;
     private uint enableCsmFilterRandOffsets : 1;
     private uint enableCsmPCSS : 1;
     private uint enableCsmPCSSRandRotation : 1;

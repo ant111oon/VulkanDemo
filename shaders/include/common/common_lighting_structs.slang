@@ -4,9 +4,11 @@
 #include "common/math/geom_primitives.slang"
 #include "brdf.slang"
 
+#include "common_structs.slang"
 
-static const uint CSM_CASCADE_COUNT = 3;
-static const uint CSM_CASCADE_BOUNDS_COUNT = CSM_CASCADE_COUNT + 1;
+
+static const uint CSM_SPLIT_COUNT = 3;
+static const uint CSM_SPLIT_BOUNDS_COUNT = CSM_SPLIT_COUNT + 1;
 
 static const float CSM_MIN_BIAS = 0.0001f;
 static const float CSM_MAX_BIAS = 0.01f;
@@ -16,7 +18,7 @@ static const float CSM_SLOPE_BIAS = 0.0005f;
 static const uint CSM_PCSS_SEARCH_ROTATION_SALT = 0x68bc21ebu;
 static const uint CSM_PCSS_FILTER_ROTATION_SALT = 0x02e5be93u;
 
-static const float3 DBG_CSM_CASCADE_COLORS[] = {
+static const float3 DBG_CSM_SPLIT_COLORS[] = {
     float3(10.f, 0.f, 0.f),
     float3(0.f, 10.f, 0.f),
     float3(0.f, 0.f, 10.f),
@@ -38,22 +40,19 @@ struct GPU_PcssData
 };
 
 
-struct GPU_CsmCascadeData
+struct GPU_CsmSplitData
 {
-    GPU_Frustum frustum;
-    float4x4 viewMatr;
-    float4x4 viewProjMatr;
+    GPU_CommonCameraData camData;
 
-    float zNear;
-    float zFar;
-    float distance;
-    float worldUnitsPerPixel;
+    float2 zBounds;
+    float  worldUnitsPerPixel;
+    uint   padding;
 };
 
 
 struct GPU_CsmData
 {
-    GPU_CsmCascadeData cascades[CSM_CASCADE_COUNT];
+    GPU_CsmSplitData splits[CSM_SPLIT_COUNT];
 
     GPU_PcssData pcssData;
 

@@ -123,10 +123,10 @@ void SkyboxView(out float4 color, in uint2 pixCoord, in uint face, in uint mip)
 }
 
 
-void CSMView(out float4 color, in uint2 pixCoord, in uint cascade)
+void CSMView(out float4 color, in uint2 pixCoord, in uint split)
 {
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
-    const uint index = clamp(cascade, 0, CSM_CASCADE_COUNT - 1);
+    const uint index = clamp(split, 0, CSM_SPLIT_COUNT - 1);
 
     const float depth = SAMPLE_TEX_LEVEL(DBG_RT_VIEW_CSM, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_EDGE), float3(uv, index), 0).r;
 
@@ -185,7 +185,7 @@ GPU_DbgRTViewPsOutput main(GPU_DbgRTViewVsOutput input, uint2 pixCoord : SV_Posi
             SkyboxView(result.color, pixCoord, DBG_RT_VIEW_FACE, DBG_RT_VIEW_MIP);
             break;
         case GPU_DbgRTViewType::CSM_DEPTH:
-            CSMView(result.color, pixCoord, DBG_RT_CSM_CASCADE_IDX);
+            CSMView(result.color, pixCoord, DBG_RT_CSM_SPLIT_IDX);
             break;
         case GPU_DbgRTViewType::CSM_HZB:
             HZBView(DBG_RT_VIEW_CSM_HZB, result.color, pixCoord, DBG_RT_VIEW_MIP, false);
