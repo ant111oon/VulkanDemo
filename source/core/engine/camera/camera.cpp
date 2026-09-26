@@ -89,7 +89,7 @@ namespace eng
     void Camera::SetZNear(float zNear) noexcept
     {
         if (!math::IsEqual(m_currState.zNear, zNear)) {
-            CORE_ASSERT_MSG(abs(m_currState.zFar - zNear) > M3D_EPS, "Can't set Z Near equal to Z Far");
+            CORE_ASSERT_MSG(m_currState.zFar > zNear, "Can't set Z Near greater than Z Far");
         
             m_currState.zNear = zNear;
             RequestRecalcProjMatrix();
@@ -100,7 +100,7 @@ namespace eng
     void Camera::SetZFar(float zFar) noexcept
     {
         if (!math::IsEqual(m_currState.zFar, zFar)) {
-            CORE_ASSERT_MSG(abs(zFar - m_currState.zNear) > M3D_EPS, "Can't set Z Far equal to Z Near");
+            CORE_ASSERT_MSG(zFar > m_currState.zNear, "Can't set Z Far less than Z Near");
         
             m_currState.zFar = zFar;
             RequestRecalcProjMatrix();
@@ -118,7 +118,7 @@ namespace eng
     void Camera::SetOrthoLeft(float left) noexcept
     {
         if (!math::IsEqual(m_currState.left, left)) {
-            CORE_ASSERT_MSG(abs(m_currState.right - left) > M3D_EPS, "Can't set left equal to right");
+            CORE_ASSERT_MSG(m_currState.right > left, "Can't set left greater than right");
         
             m_currState.left = left;
             RequestRecalcProjMatrix();
@@ -129,7 +129,7 @@ namespace eng
     void Camera::SetOrthoRight(float right) noexcept
     {
         if (!math::IsEqual(m_currState.right, right)) {
-            CORE_ASSERT_MSG(abs(right - m_currState.left) > M3D_EPS, "Can't set right equal to left");
+            CORE_ASSERT_MSG(right > m_currState.left, "Can't set right less than left");
         
             m_currState.right = right;
             RequestRecalcProjMatrix();
@@ -140,7 +140,7 @@ namespace eng
     void Camera::SetOrthoTop(float top) noexcept
     {
         if (!math::IsEqual(m_currState.top, top)) {
-            CORE_ASSERT_MSG(abs(top - m_currState.bottom) > M3D_EPS, "Can't set top equal to bottom");
+            CORE_ASSERT_MSG(top > m_currState.bottom, "Can't set top less than bottom");
         
             m_currState.top = top;
             RequestRecalcProjMatrix();
@@ -151,7 +151,7 @@ namespace eng
     void Camera::SetOrthoBottom(float bottom) noexcept
     {
         if (!math::IsEqual(m_currState.bottom, bottom)) {
-            CORE_ASSERT_MSG(abs(m_currState.top - bottom) > M3D_EPS, "Can't set bottom equal to top");
+            CORE_ASSERT_MSG(m_currState.top > bottom, "Can't set bottom greater than top");
         
             m_currState.bottom = bottom;
             RequestRecalcProjMatrix();

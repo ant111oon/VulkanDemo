@@ -3,7 +3,7 @@
 
 #include "common/system/sys_constants.slang"
 
-#include "common/common_lighting.slang"
+#include "common/common_lighting_structs.slang"
 #include "common/PCF_kernels.slang"
 
 #include "common/math/hash.slang"

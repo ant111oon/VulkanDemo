@@ -192,13 +192,13 @@ namespace eng
             float aspectRatio = 0.f;
 
             // ortho
-            float left = 0.f;
-            float right = 0.f;
-            float top = 0.f;
-            float bottom = 0.f;
+            float left = -1.f;
+            float right = 1.f;
+            float bottom = -1.f;
+            float top = 1.f;
 
-            float zNear = 0.f;
-            float zFar = 0.f;
+            float zNear = 0.01f;
+            float zFar = 1000.f;
 
             CameraFlags flags = {};
         };

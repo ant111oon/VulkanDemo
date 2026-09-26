@@ -1076,15 +1076,11 @@ static constexpr float CAMERA_ZFAR = 1'000.f;
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(M3D_AXIS_X - 6.5f * M3D_AXIS_Y + M3D_AXIS_Z);
 static constexpr float SUN_DISTANCE = 100.f;
 
-static constexpr std::array CSM_CASCADE_DISTANCES = { 15.f, 55.f, 200.f };
-
 static constexpr std::array CSM_CASCADE_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
     glm::float4(0.f, 1.f, 0.f, 0.45f),
     glm::float4(0.f, 0.f, 1.f, 0.45f),
 };
-
-static_assert(std::size(CSM_CASCADE_DISTANCES) == CSM_CASCADE_COUNT);
 static_assert(std::size(CSM_CASCADE_COLORS) == CSM_CASCADE_COUNT);
 
 
@@ -1574,6 +1570,10 @@ static bool s_geomWireframeMode = false;
 static bool s_skipRender = false;
 
 static float   s_geomCoverageCullingThresholdPercentage = 0.1f;
+
+static glm::float3 s_sunColor = ONEF3;
+
+static std::array<float, CSM_CASCADE_COUNT> s_csmCascadeDistances = { 15.f, 55.f, 200.f };
 
 static float   s_csmCascadeBlendThresholdCoef = 5.f;
 static int32_t s_csmFilterDiskSampleCount = 32;
@@ -5507,7 +5507,7 @@ void UpdateGPUDeferredLightingConstBuffer()
     const glm::float4x4& viewProjMatrixPrev = s_mainCamera.GetViewProjMatrixPrev();
 
     constBuff.sunData.direction = SUN_LIGHT_DIR;
-    constBuff.sunData.packedColor = glm::packUnorm4x8(ONEF4);
+    constBuff.sunData.packedColor = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
 
     for (size_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
         const eng::Camera& cam = s_csmCameras[i];
@@ -5515,7 +5515,7 @@ void UpdateGPUDeferredLightingConstBuffer()
         constBuff.csmData.cascades[i].frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
         constBuff.csmData.cascades[i].viewMatr = cam.GetViewMatrix();
         constBuff.csmData.cascades[i].viewProjMatr = cam.GetViewProjMatrix();
-        constBuff.csmData.cascades[i].distance = CSM_CASCADE_DISTANCES[i];
+        constBuff.csmData.cascades[i].distance = s_csmCascadeDistances[i];
         constBuff.csmData.cascades[i].zNear = cam.GetZNear();
         constBuff.csmData.cascades[i].zFar = cam.GetZFar();
         constBuff.csmData.cascades[i].worldUnitsPerPixel = s_csmCascadeWorldUnitsPerTexel[i];
@@ -5615,8 +5615,8 @@ static void UpdateCSMDataCPU()
     const glm::float3x3 invLightRot = glm::inverse(lightRot);
 
     for (uint32_t i = 0; i < CSM_CASCADE_COUNT; ++i) {
-        const float zNear = i == 0 ? 0.01f : CSM_CASCADE_DISTANCES[i - 1];
-        const float zFar = CSM_CASCADE_DISTANCES[i];
+        const float zNear = i == 0 ? CAMERA_ZNEAR : s_csmCascadeDistances[i - 1];
+        const float zFar = s_csmCascadeDistances[i];
 
         cascadeCamera.SetZNearFar(zNear, zFar);
         cascadeCamera.Update();
@@ -7687,6 +7687,12 @@ namespace DbgUI
             }
             
             if (ImGui::CollapsingHeader("Lighting")) {
+                if (ImGui::TreeNodeEx("Sun")) {
+                    ImGui::ColorEdit3("Color", &s_sunColor.x);
+                    
+                    ImGui::TreePop();
+                }
+
                 if (ImGui::TreeNodeEx("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
                         ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
@@ -7694,6 +7700,20 @@ namespace DbgUI
                         ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
                         ImGui::Checkbox("Visualize Cascades", &s_isCSMVisualizationEnabled);
+
+                        if (ImGui::TreeNodeEx("Partition")) {
+                            for (uint32_t cascade = 0; cascade < CSM_CASCADE_COUNT; ++cascade) {
+                                const float distMin = cascade == 0 ? CAMERA_ZNEAR  : s_csmCascadeDistances[cascade - 1];
+                                const float distMax = cascade == CSM_CASCADE_COUNT - 1 ? CAMERA_ZFAR : s_csmCascadeDistances[cascade + 1];
+
+                                char label[64] = {};
+                                sprintf_s(label, "Split Distance %u##%u", cascade, cascade);
+
+                                ImGui::DragFloat(label, &s_csmCascadeDistances[cascade], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
+                            }
+                            
+                            ImGui::TreePop();
+                        }
 
                         if (ImGui::TreeNodeEx("Bias")) {
                             ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");

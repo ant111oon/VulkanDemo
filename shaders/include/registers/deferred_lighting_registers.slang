@@ -2,7 +2,7 @@
 #define DEFERRED_LIGHTING_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
-#include "common/common_lighting.slang"
+#include "common/common_lighting_structs.slang"
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] ConstantBuffer<GPU_LightingData> DEFERRED_LIGHTING_DATA;

@@ -5,7 +5,7 @@
 
 #include "common/math/common.slang"
 #include "common/tonemapping.slang"
-#include "common/common_lighting.slang"
+#include "common/common_lighting_structs.slang"
 
 #include "pass/dbg_rt_view/vsout.slang"
 

@@ -1,5 +1,5 @@
-#ifndef COMMON_LIGHTING_H
-#define COMMON_LIGHTING_H
+#ifndef COMMON_LIGHTING_STRUCTS_H
+#define COMMON_LIGHTING_STRUCTS_H
 
 #include "common/math/geom_primitives.slang"
 #include "brdf.slang"
