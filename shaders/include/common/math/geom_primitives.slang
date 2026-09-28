@@ -71,98 +71,94 @@ struct GPU_SBox
 {
     __init()
     {
-        minUV = ZEROF2;
-        maxUV = ONEF2;
-
-    #ifdef ENV_REVERSED_Z
-        nearZ = 1.f;
-        farZ = 0.f;
-    #else
-        nearZ = 0.f;
-        farZ = 1.f;
-    #endif
+        BeginUpdate();
     }
 
-    __init(in float2 minUV, in float2 maxUV, in float nearZ, in float farZ)
+    __init(in float3 minXYZ, in float3 maxXYZ)
     {
-        this.minUV = minUV;
-        this.maxUV = maxUV;
-        this.nearZ = nearZ;
-        this.farZ = farZ;
+        this.minXYZ = minXYZ;
+        this.maxXYZ = maxXYZ;
     }
 
     [mutating]
     void BeginUpdate()
     {
-        minUV = ONEF2;
-        maxUV = ZEROF2;
-
-    #ifdef ENV_REVERSED_Z
-        nearZ = 0.f;
-        farZ = 1.f;
-    #else
-        nearZ = 1.f;
-        farZ = 0.f;
-    #endif
+        minXYZ = FLOAT3(M3D_FLT_MAX);
+        maxXYZ = FLOAT3(M3D_FLT_LOWEST);
     }
 
     [mutating]
-    void UpdateUV(in float2 uv)
+    void UpdateXY(in float2 xy)
     {
-        minUV = min(minUV, uv);
-        maxUV = max(maxUV, uv);
+        minXYZ.xy = min(minXYZ.xy, xy);
+        maxXYZ.xy = max(maxXYZ.xy, xy);
     }
 
     [mutating]
     void UpdateZ(in float z)
     {
-    #ifdef ENV_REVERSED_Z
-        nearZ = max(nearZ, z);
-        farZ = min(farZ, z);
-    #else
-        nearZ = min(nearZ, z);
-        farZ = max(farZ, z);
-    #endif
+        minXYZ.z = min(minXYZ.z, z);
+        maxXYZ.z = max(maxXYZ.z, z);
     }
 
     [mutating]
-    void UpdateUVZ(in float3 uvz)
+    void UpdateXYZ(in float3 xyz)
     {
-        UpdateUV(uvz.xy);
-        UpdateZ(uvz.z);
+        UpdateXY(xyz.xy);
+        UpdateZ(xyz.z);
     }
 
     [mutating]
     void Saturate()
     {
-        minUV = saturate(minUV);
-        maxUV = saturate(maxUV);
-
-        nearZ = saturate(nearZ);
-        farZ = saturate(farZ);
+        minXYZ = saturate(minXYZ);
+        maxXYZ = saturate(maxXYZ);
     }
 
-    property float minU { get { return minUV.x; } }
-    property float minV { get { return minUV.y; } }
+    property float minX { get { return minXYZ.x; } }
+    property float minY { get { return minXYZ.y; } }
 
-    property float maxU { get { return maxUV.x; } }
-    property float maxV { get { return maxUV.y; } }
+    property float maxX { get { return maxXYZ.x; } }
+    property float maxY { get { return maxXYZ.y; } }
 
-    property float deltaU { get { return maxU - minU; } }
-    property float deltaV { get { return maxV - minV; } }
-    property float deltaZ { get { return abs(farZ - nearZ); } }
+    property float minZ { get { return minXYZ.z; } }
+    property float maxZ { get { return maxXYZ.z; } }
 
-    property float2 deltaUV { get { return maxUV - minUV; } }
+    property float nearDepth {
+        get {
+        #ifdef ENV_REVERSED_Z
+            return maxZ;
+        #else
+            return minZ;
+        #endif
+        }
+    }
+    property float farDepth {
+        get {
+        #ifdef ENV_REVERSED_Z
+            return minZ;
+        #else
+            return maxZ;
+        #endif
+        }
+    }
 
-    property float2 cornerLB { get { return minUV; } }
-    property float2 cornerRB { get { return float2(maxU, minV); } }
-    property float2 cornerLU { get { return float2(minU, maxV); } }
-    property float2 cornerRU { get { return maxUV; } }
+    property float2 minXY { get { return minXYZ.xy; } }
+    property float2 maxXY { get { return maxXYZ.xy; } }
 
-    float2 minUV;
-    float  nearZ;
-    float2 maxUV;
-    float  farZ;
+    property float deltaX { get { return maxX - minX; } }
+    property float deltaY { get { return maxY - minY; } }
+    property float deltaZ { get { return abs(maxZ - minZ); } }
+
+    property float2 deltaXY { get { return maxXY - minXY; } }
+
+    property float2 cornerLB { get { return minXY; } }
+    property float2 cornerRB { get { return float2(maxX, minY); } }
+    property float2 cornerLU { get { return float2(minX, maxY); } }
+    property float2 cornerRU { get { return maxXY; } }
+
+    private float3 minXYZ;
+    private float3 maxXYZ;
 };
 
 
@@ -218,7 +214,7 @@ struct GPU_AABB
             const float3 NDC = WPosToNDC(verts[i], viewProjMatr);
             const float2 UV = NDCToUV(NDC.xy);
 
-            sbox.UpdateUV(UV);
+            sbox.UpdateXY(UV);
             sbox.UpdateZ(NDC.z);
         }
 

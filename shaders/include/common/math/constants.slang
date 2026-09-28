@@ -9,6 +9,7 @@ static const float M3D_HALF_PI = 0.5f * M3D_PI;
 
 static const float M3D_FLT_MAX = 3.40282347e+37F;
 static const float M3D_FLT_MIN = 1.17549435e-37F;
+static const float M3D_FLT_LOWEST = -M3D_FLT_MAX;
 
 static const int M3D_INT8_MIN = -128;
 static const int M3D_INT8_MAX = 127;

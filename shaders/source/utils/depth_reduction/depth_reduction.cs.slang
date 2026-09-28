@@ -32,7 +32,7 @@ void main(
     const uint localID = groupThreadFlatID;
     const uint globalID = dispatchThreadID.x;
 
-    float2 initRange = float2(M3D_FLT_MAX, M3D_FLT_MIN);
+    float2 initRange = float2(M3D_FLT_MAX, M3D_FLT_LOWEST);
 
     if (DEPTH_REDUCTION_IS_TEX_SRC) {
         const uint2 srcSize = DEPTH_REDUCTION_SRC_TEX_SIZE;

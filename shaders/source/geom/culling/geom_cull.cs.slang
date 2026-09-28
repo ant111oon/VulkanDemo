@@ -42,7 +42,7 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
     if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
-        const float coverage = Max(sbox.deltaUV);
+        const float coverage = Max(sbox.deltaXY);
         lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
     }
 
@@ -71,7 +71,7 @@ bool GeomCullVisibility(in GPU_GeomInst inst, out GPU_GeomSortKey sortKey)
         return false;
     }
 
-    if (GEOM_CULL_IS_COVERAGE_CULLING_ENABLED && Max(sbox.deltaUV) < GEOM_CULL_COVERAGE_THRESHOLD) {
+    if (GEOM_CULL_IS_COVERAGE_CULLING_ENABLED && Max(sbox.deltaXY) < GEOM_CULL_COVERAGE_THRESHOLD) {
         return false;
     }
 
