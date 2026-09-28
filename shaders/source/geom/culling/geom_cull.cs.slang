@@ -6,7 +6,7 @@
 #define HZB_CULLING_HZB_MIP_0_SIZE       GEOM_CULL_HZB_MIP_0_SIZE
 #define HZB_CULLING_HZB_MIPS_COUNT       GEOM_CULL_HZB_MIPS_COUNT
 #define HZB_CULLING_VIEW_PROJ_MATR_PREV  GEOM_CULL_VIEW_PROJ_MATR_PREV
-#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULL_FRUSTUM.GetNearPlane()
+#define HZB_CULLING_VIEW_NEAR_PLANE      GEOM_CULL_FRUSTUM.nearPlane
 #include "common/math/hzb_culling.slang"
 
 
@@ -35,14 +35,14 @@ uint GeomSelectLOD(float sizePixels, in float lodThresholds[GEOM_MAX_LOD_COUNT])
 
 GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
 {
-    const float depth = -mul(GEOM_CULL_VIEW_MATR, float4(inst.aabbWCS.GetCenter(), 1.f)).z;
+    const float depth = -mul(GEOM_CULL_VIEW_MATR, float4(inst.aabbWCS.center, 1.f)).z;
 
     uint lodID;
 
     if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
-        const float coverage = Max(sbox.GetDeltaUV());
+        const float coverage = Max(sbox.deltaUV);
         lodID = GeomSelectLOD(coverage, GEOM_LOD_THRESHOLDS);
     }
 
@@ -71,7 +71,7 @@ bool GeomCullVisibility(in GPU_GeomInst inst, out GPU_GeomSortKey sortKey)
         return false;
     }
 
-    if (GEOM_CULL_IS_COVERAGE_CULLING_ENABLED && Max(sbox.GetDeltaUV()) < GEOM_CULL_COVERAGE_THRESHOLD) {
+    if (GEOM_CULL_IS_COVERAGE_CULLING_ENABLED && Max(sbox.deltaUV) < GEOM_CULL_COVERAGE_THRESHOLD) {
         return false;
     }
 

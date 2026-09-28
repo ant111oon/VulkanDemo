@@ -2,7 +2,7 @@
 #define MATH_GEOM_PRIMITIVES_H
 
 #include "common/math/constants.slang"
-#include "common/math/common.slang"
+#include "common/math/common_matr.slang"
 
 
 struct GPU_Plane
@@ -27,7 +27,7 @@ struct GPU_Plane
     [mutating]
     void Construct(in float3 A, in float3 B, in float3 C)
     {
-        const float3 center = (A + B + C) * rcp(3.f);
+        const float3 center = (A + B + C) / 3.f;
 
         this.normal = normalize(cross(B - A, C - A));
         this.distance = -dot(normal, center);
@@ -71,76 +71,98 @@ struct GPU_SBox
 {
     __init()
     {
-        this.minUV = ZEROF2;
-        this.maxUV = ONEF2;
+        minUV = ZEROF2;
+        maxUV = ONEF2;
 
     #ifdef ENV_REVERSED_Z
-        this.closestZ = 1.f;
+        nearZ = 1.f;
+        farZ = 0.f;
     #else
-        this.closestZ = 0.f;
+        nearZ = 0.f;
+        farZ = 1.f;
     #endif
     }
 
-    __init(in float2 minUV, in float2 maxUV, in float closestZ)
+    __init(in float2 minUV, in float2 maxUV, in float nearZ, in float farZ)
     {
         this.minUV = minUV;
         this.maxUV = maxUV;
-        this.closestZ = closestZ;
+        this.nearZ = nearZ;
+        this.farZ = farZ;
     }
 
     [mutating]
     void BeginUpdate()
     {
-        this.minUV = ONEF2;
-        this.maxUV = ZEROF2;
+        minUV = ONEF2;
+        maxUV = ZEROF2;
 
     #ifdef ENV_REVERSED_Z
-        this.closestZ = 0.f;
+        nearZ = 0.f;
+        farZ = 1.f;
     #else
-        this.closestZ = 1.f;
+        nearZ = 1.f;
+        farZ = 0.f;
     #endif
     }
 
     [mutating]
-    void UpdateMinUV(in float2 newMinUV)
+    void UpdateUV(in float2 uv)
     {
-        minUV = min(minUV, newMinUV);
+        minUV = min(minUV, uv);
+        maxUV = max(maxUV, uv);
     }
 
     [mutating]
-    void UpdateMaxUV(in float2 newMaxUV)
-    {
-        maxUV = max(maxUV, newMaxUV);
-    }
-
-    [mutating]
-    void UpdateClosestZ(in float newClosestZ)
+    void UpdateZ(in float z)
     {
     #ifdef ENV_REVERSED_Z
-        closestZ = max(closestZ, newClosestZ);
+        nearZ = max(nearZ, z);
+        farZ = min(farZ, z);
     #else
-        closestZ = min(closestZ, newClosestZ);
+        nearZ = min(nearZ, z);
+        farZ = max(farZ, z);
     #endif
+    }
+
+    [mutating]
+    void UpdateUVZ(in float3 uvz)
+    {
+        UpdateUV(uvz.xy);
+        UpdateZ(uvz.z);
     }
 
     [mutating]
     void Saturate()
     {
-        this.minUV = saturate(this.minUV);
-        this.maxUV = saturate(this.maxUV);
-        this.closestZ = saturate(this.closestZ);
+        minUV = saturate(minUV);
+        maxUV = saturate(maxUV);
+
+        nearZ = saturate(nearZ);
+        farZ = saturate(farZ);
     }
 
-    float2 GetDeltaUV() { return maxUV - minUV; }
+    property float minU { get { return minUV.x; } }
+    property float minV { get { return minUV.y; } }
 
-    float2 GetCornerBL() { return minUV; }
-    float2 GetCornerBR() { return float2(maxUV.x, minUV.y); }
-    float2 GetCornerUL() { return float2(minUV.x, maxUV.y); }
-    float2 GetCornerUR() { return maxUV; }
+    property float maxU { get { return maxUV.x; } }
+    property float maxV { get { return maxUV.y; } }
+
+    property float deltaU { get { return maxU - minU; } }
+    property float deltaV { get { return maxV - minV; } }
+    property float deltaZ { get { return abs(farZ - nearZ); } }
+
+    property float2 deltaUV { get { return maxUV - minUV; } }
+
+    property float2 cornerLB { get { return minUV; } }
+    property float2 cornerRB { get { return float2(maxU, minV); } }
+    property float2 cornerLU { get { return float2(minU, maxV); } }
+    property float2 cornerRU { get { return maxUV; } }
 
     float2 minUV;
+    float  nearZ;
     float2 maxUV;
-    float closestZ;
+    float  farZ;
 };
 
 
@@ -158,38 +180,23 @@ struct GPU_AABB
         this.maxx = maxx;
     }
 
-    float3 GetCenter()
-    {
-        return (minn + maxx) * 0.5f;
-    }
-
-    float3 GetSize()
-    {
-        return maxx - minn;
-    }
-
-    float3 GetHalfSize()
-    {
-        return GetSize() * 0.5f;
-    }
-
     void GetVertices(out float3 verts[8])
     {
-        const float3 size = GetSize();
+        const float3 s = size;
 
         verts[0] = minn;
-        verts[1] = minn + float3(size.x, 0.f, 0.f);
-        verts[2] = minn + float3(0.f, size.y, 0.f);
-        verts[3] = minn + float3(0.f, 0.f, size.z);
-        verts[4] = minn + float3(size.xy, 0.f);
-        verts[5] = minn + float3(0.f, size.yz);
-        verts[6] = minn + float3(size.x, 0.f, size.z);
-        verts[7] = minn + size;
+        verts[1] = minn + float3(s.x, 0.f, 0.f);
+        verts[2] = minn + float3(0.f, s.y, 0.f);
+        verts[3] = minn + float3(0.f, 0.f, s.z);
+        verts[4] = minn + float3(s.xy, 0.f);
+        verts[5] = minn + float3(0.f, s.yz);
+        verts[6] = minn + float3(s.x, 0.f, s.z);
+        verts[7] = minn + s;
     }
 
     float DistanceTo(in float3 pt)
     {
-        const float3 q = abs(pt - GetCenter()) - GetHalfSize();
+        const float3 q = abs(pt - center) - halfSize;
 
         return length(max(q, 0.f)) + min(max(q.x, max(q.y, q.z)), 0.f);
     }
@@ -211,9 +218,8 @@ struct GPU_AABB
             const float3 NDC = WPosToNDC(verts[i], viewProjMatr);
             const float2 UV = NDCToUV(NDC.xy);
 
-            sbox.UpdateMinUV(UV);
-            sbox.UpdateMaxUV(UV);
-            sbox.UpdateClosestZ(NDC.z);
+            sbox.UpdateUV(UV);
+            sbox.UpdateZ(NDC.z);
         }
 
         return sbox;
@@ -226,13 +232,25 @@ struct GPU_AABB
 
     bool IntersectsPlane(in GPU_Plane plane)
     {
-        const float3 center = GetCenter();
-        const float3 size = GetSize();
-
-        const float projectedRadius = dot(abs(plane.normal), size);
-        const float signedDistance = dot(plane.normal, center) + plane.distance;
+        const float projectedRadius = dot(abs(plane.normal), halfSize);
+        const float signedDistance = plane.DistanceTo(center);
 
         return abs(signedDistance) <= projectedRadius;
+    }
+
+    property float3 center
+    {
+        get { return (minn + maxx) * 0.5f; }
+    }
+
+    property float3 size
+    {
+        get { return maxx - minn; }
+    }
+
+    property float3 halfSize
+    {
+        get { return size * 0.5f; }
     }
 
     float3 minn;
@@ -264,7 +282,7 @@ struct GPU_Frustum
         for (uint i = 0; i < 6; ++i) {
             GPU_Plane plane = planes[i];
 
-            if (dot(plane.normal, sphere.position) + plane.distance < -sphere.radius) {
+            if (plane.DistanceTo(sphere.position) < -sphere.radius) {
                 return false;
             }
         }
@@ -283,7 +301,7 @@ struct GPU_Frustum
                 (plane.normal.z >= 0.f) ? aabb.maxx.z : aabb.minn.z
             );
 
-            if (dot(plane.normal, p) + plane.distance < 0.f) {
+            if (plane.DistanceTo(p) < 0.f) {
                 return false;
             }
         }
@@ -292,12 +310,13 @@ struct GPU_Frustum
     }
 
     GPU_Plane GetPlane(PlaneID ID) { return planes[ID]; }
-    GPU_Plane GetLeftPlane()       { return planes[PlaneID::PLANE_LEFT]; }
-    GPU_Plane GetTopPlane()        { return planes[PlaneID::PLANE_TOP]; }
-    GPU_Plane GetRightPlane()      { return planes[PlaneID::PLANE_RIGHT]; }
-    GPU_Plane GetBottomPlane()     { return planes[PlaneID::PLANE_BOTTOM]; }
-    GPU_Plane GetNearPlane()       { return planes[PlaneID::PLANE_NEAR]; }
-    GPU_Plane GetFarPlane()        { return planes[PlaneID::PLANE_FAR]; }
+
+    property GPU_Plane leftPlane { get { return planes[PlaneID::PLANE_LEFT]; } }
+    property GPU_Plane topPlane { get { return planes[PlaneID::PLANE_TOP]; } }
+    property GPU_Plane rightPlane { get { return planes[PlaneID::PLANE_RIGHT]; } }
+    property GPU_Plane bottomPlane { get { return planes[PlaneID::PLANE_BOTTOM]; } }
+    property GPU_Plane nearPlane { get { return planes[PlaneID::PLANE_NEAR]; } }
+    property GPU_Plane farPlane { get { return planes[PlaneID::PLANE_FAR]; } }
 
     // Must be sync with Frustum::PlaneID in frustum.h
     enum PlaneID

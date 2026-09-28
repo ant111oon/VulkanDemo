@@ -31,7 +31,7 @@ bool HZB_Visibility(in GPU_SBox sbox, Texture2D HZB)
         return true;
     }
 
-    const float2 sizeInPixels = sbox.GetDeltaUV() * (float2)HZB_CULLING_HZB_MIP_0_SIZE;
+    const float2 sizeInPixels = sbox.deltaUV * (float2)HZB_CULLING_HZB_MIP_0_SIZE;
 
     float mip = clamp(ceil(log2(max(sizeInPixels.x, sizeInPixels.y))), 0.f, HZB_CULLING_HZB_MIPS_COUNT - 1);
 
@@ -48,17 +48,17 @@ bool HZB_Visibility(in GPU_SBox sbox, Texture2D HZB)
     SamplerState hzbSampler = GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_EDGE);
 
     float4 samples = ZEROF4;
-    samples.x = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerBL(), mip).x;
-    samples.y = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerBR(), mip).x;
-    samples.z = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerUL(), mip).x;
-    samples.w = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.GetCornerUR(), mip).x;
+    samples.x = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.cornerLB, mip).x;
+    samples.y = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.cornerRB, mip).x;
+    samples.z = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.cornerLU, mip).x;
+    samples.w = SAMPLE_TEX_LEVEL(HZB, hzbSampler, sbox.cornerRU, mip).x;
 
 #ifdef ENV_REVERSED_Z
     const float depth = Min(samples);
-    return sbox.closestZ >= depth;
+    return sbox.nearZ >= depth;
 #else
     const float depth = Max(samples);
-    return sbox.closestZ <= depth;
+    return sbox.nearZ <= depth;
 #endif
 }
 
