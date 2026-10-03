@@ -9,6 +9,8 @@
 #include "common/math/hash.slang"
 #include "common/math/common.slang"
 
+#include "common/common_funcs.slang"
+
 #include "pass/deferred_lighting/vsout.slang"
 
 
@@ -249,13 +251,14 @@ float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in fl
     const int sampleCount = (radius * 2 + 1) * (radius * 2 + 1);
     const float invSampleCount = rcp((float)sampleCount);
 
-    const float2 texelSize = DEFERRED_LIGHTING_CSM_INV_RT_SIZE;
+    const uint split = (uint)texCoord.z;
+    const float2 texelSize = DEFERRED_LIGHTING_CSM_SPLIT_INV_RT_SIZE(split);
 
     float shadow = 0.f;
 
     for (int y = -radius; y <= radius; ++y) {
         for (int x = -radius; x <= radius; ++x) {
-            const float3 uv = float3(texCoord.xy + float2(x, y) * texelSize, texCoord.z);
+            const float3 uv = float3(texCoord.xy + float2(x, y) * texelSize, split);
             
             shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, uv, zReceiverCmp);
         }
@@ -267,15 +270,15 @@ float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in fl
 
 float2x2 GetCsmRandRotMatr(in float3 texCoord, in uint salt)
 {
-    const uint2 textureSize = DEFERRED_LIGHTING_CSM_RT_SIZE;
+    const uint split = uint(texCoord.z);
+
+    const uint2 textureSize = DEFERRED_LIGHTING_CSM_SPLIT_RT_SIZE(split);
     const uint2 maxTexel = textureSize - ONEU2;
 
     const uint2 shadowTexel = min(
         uint2(floor(saturate(texCoord.xy) * textureSize)), 
         maxTexel
     );
-
-    const uint split = uint(texCoord.z);
 
     const float theta = Hash(uint3(shadowTexel, split ^ salt)) / float(M3D_UINT32_MAX) * M3D_2_PI;
 
@@ -293,13 +296,13 @@ float CalcCsmDiskPCF(
     in float zReceiverCmp,
     in float diskRadius,
     in uint sampleCount,
-    in bool randRotEnabled, 
+    in bool randRotEnabled,
     in IFunc<float2, uint> GetOffsetFunc
 ) {
-    const float2 radiusTexel = DEFERRED_LIGHTING_CSM_INV_RT_SIZE * diskRadius;
-    const float2x2 randRotMatr = randRotEnabled ? GetCsmRandRotMatr(texCoord, CSM_PCSS_FILTER_ROTATION_SALT) : float2x2(1.f, 0.f, 0.f, 1.f);
-
     const uint split = uint(texCoord.z);
+
+    const float2 radiusTexel = DEFERRED_LIGHTING_CSM_SPLIT_INV_RT_SIZE(split) * diskRadius;
+    const float2x2 randRotMatr = randRotEnabled ? GetCsmRandRotMatr(texCoord, CSM_PCSS_FILTER_ROTATION_SALT) : float2x2(1.f, 0.f, 0.f, 1.f);
 
     float shadow = 0.f;
     uint validSamplesCount = 0;
@@ -375,11 +378,10 @@ struct GPU_CsmPcssBlockerSearchResult
 
 GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in float zReceiverViewSpace, in float radius, in bool randRotEnabled)
 {
-    const float2 searchRadius = DEFERRED_LIGHTING_CSM_INV_RT_SIZE * radius;
-
-    const float2x2 randRotMatr = randRotEnabled ? GetCsmRandRotMatr(texCoord, CSM_PCSS_SEARCH_ROTATION_SALT) : float2x2(1.f, 0.f, 0.f, 1.f);
-
     const uint split = uint(texCoord.z);
+
+    const float2 searchRadius = DEFERRED_LIGHTING_CSM_SPLIT_INV_RT_SIZE(split) * radius;
+    const float2x2 randRotMatr = randRotEnabled ? GetCsmRandRotMatr(texCoord, CSM_PCSS_SEARCH_ROTATION_SALT) : float2x2(1.f, 0.f, 0.f, 1.f);
 
     float avgBlocker = 0.f;
     uint blockerCount = 0;
@@ -554,7 +556,7 @@ float3 GetCsmSplitColor(in uint currSplitIdx, in GPU_CsmSplitBlendData blendData
 
 float CalcCsmBias(in float3 wnorm, in uint split)
 {
-    const float NdotL = saturate(dot(wnorm, -DEFERRED_LIGHTING_SUN_DATA.direction));
+    const float NdotL = saturate(dot(wnorm, -COMMON_SUN_DATA.direction));
 
     const float sinTheta = sqrt(max(1.f - NdotL * NdotL, 0.f));
     const float tanTheta = sinTheta / max(NdotL, M3D_EPS);
@@ -619,9 +621,13 @@ float3 ComputeLighting(in int2 pixelCoord)
 {
     const int3 texCoord = int3(pixelCoord, 0);
 
-    GPU_GBuffer gbuffer = SampleGBuffer(texCoord);
-
     const float depth = LOAD_TEX(DEFERRED_LIGHTING_DEPTH, texCoord).x;
+
+    if (IsBackgroundDepth(depth)) {
+        discard;
+    }
+
+    GPU_GBuffer gbuffer = SampleGBuffer(texCoord);
 
     const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
     const float3 wpos = WPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_VIEW_MATRIX, COMMON_MAIN_CAM_INV_PROJ_MATRIX);
@@ -630,7 +636,7 @@ float3 ComputeLighting(in int2 pixelCoord)
     const float3 V = normalize(COMMON_MAIN_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);
 
-    float3 sunLightResult = ProcessLight(gbuffer, V, DEFERRED_LIGHTING_SUN_DATA.direction, DEFERRED_LIGHTING_SUN_DATA.color, F0);
+    float3 sunLightResult = ProcessLight(gbuffer, V, COMMON_SUN_DATA.direction, COMMON_SUN_DATA.color, F0);
     sunLightResult *= CalcCsmShadow(wpos, vpos, gbuffer.normal);
 
     float3 result = ProcessIBL(gbuffer, V, F0);

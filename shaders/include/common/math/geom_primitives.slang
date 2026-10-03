@@ -157,8 +157,8 @@ struct GPU_SBox
     property float2 cornerLU { get { return float2(minX, maxY); } }
     property float2 cornerRU { get { return maxXY; } }
 
-    private float3 minXYZ;
-    private float3 maxXYZ;
+    float3 minXYZ;
+    float3 maxXYZ;
 };
 
 

@@ -4,8 +4,8 @@
 #include "constants.slang"
 
 
-#define M3D_IS_ZERO(x)     IsZero(x)
-#define M3D_IS_EQUAL(l, r) M3D_IS_ZERO((l) - (r))
+#define IS_ZERO(x)     IsZero(x)
+#define IS_EQUAL(l, r) IS_ZERO((l) - (r))
 
 
 bool IsZero(in float value)

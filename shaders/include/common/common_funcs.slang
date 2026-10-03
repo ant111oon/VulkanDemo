@@ -1,6 +1,8 @@
 #ifndef COMMON_FUNCS_H
 #define COMMON_FUNCS_H
 
+#include "math/common.slang"
+
 
 float3 GetScreenQuadVertNDC(in uint vertID)
 {
@@ -30,6 +32,18 @@ float3 GetScreenQuadVertNDC(in uint vertID)
 #endif
 
     return float3(QUAD_VERTS_XY[vertID], z);
+}
+
+
+bool IsBackgroundDepth(in float depth)
+{
+#ifdef ENV_REVERSED_Z
+    static const float backgroundDepth = 0.f;
+#else
+    static const float backgroundDepth = 1.f;
+#endif
+
+    return IS_EQUAL(depth, backgroundDepth);
 }
 
 #endif

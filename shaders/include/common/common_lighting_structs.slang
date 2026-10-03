@@ -45,8 +45,10 @@ struct GPU_CsmSplitData
     GPU_CommonCameraData camData;
 
     float2 zBounds;
-    float  worldUnitsPerPixel;
-    uint   padding;
+    uint2  rtSize;
+
+    private uint3 padding;
+    float         worldUnitsPerPixel;
 };
 
 
@@ -61,29 +63,15 @@ struct GPU_CsmData
     float filterDiskRadius;
     uint  filterGridHalfSize;
 
-    uint2 rtSize;
     float constantBiasTexels;
     float slopeBiasTexels;
-};
-
-
-struct GPU_SunData
-{
-    property float3 color
-    {
-        get { return unpackUnorm4x8ToFloat(packedColor).rgb; }
-    }
-
-    float3 direction;
-    
-    private uint packedColor;
+    private uint2 padding;
 };
 
 
 struct GPU_LightingData
 {
     GPU_CsmData csmData;
-    GPU_SunData sunData;
 };
 
 

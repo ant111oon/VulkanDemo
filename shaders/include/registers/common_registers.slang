@@ -52,18 +52,22 @@
 #define COMMON_DBG_CSM_PCF_PRESET                     DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
 
 
-#define COMMON_MAIN_CAM_WPOS                        COMMON_CB.mainCam.wPos
-#define COMMON_MAIN_CAM_Z_NEAR                      COMMON_CB.mainCam.zNear
-#define COMMON_MAIN_CAM_Z_FAR                       COMMON_CB.mainCam.zFar
-#define COMMON_MAIN_CAM_FRUSTUM                     COMMON_CB.mainCam.frustum
-#define COMMON_MAIN_CAM_VIEW_MATRIX                 COMMON_CB.mainCam.viewMatr
-#define COMMON_MAIN_CAM_PROJ_MATRIX                 COMMON_CB.mainCam.projMatr
-#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX            COMMON_CB.mainCam.viewProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_MATRIX             COMMON_CB.mainCam.invViewMatr
-#define COMMON_MAIN_CAM_INV_PROJ_MATRIX             COMMON_CB.mainCam.invProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX        COMMON_CB.mainCam.invViewProjMatr
+#define COMMON_MAIN_CAM_WPOS                 COMMON_CB.mainCam.wPos
+#define COMMON_MAIN_CAM_Z_NEAR               COMMON_CB.mainCam.zNear
+#define COMMON_MAIN_CAM_Z_FAR                COMMON_CB.mainCam.zFar
+#define COMMON_MAIN_CAM_VIEW_DIR             COMMON_CB.mainCam.viewDir
+#define COMMON_MAIN_CAM_UP_DIR               COMMON_CB.mainCam.upDir
+#define COMMON_MAIN_CAM_FRUSTUM              COMMON_CB.mainCam.frustum
+#define COMMON_MAIN_CAM_VIEW_MATRIX          COMMON_CB.mainCam.viewMatr
+#define COMMON_MAIN_CAM_PROJ_MATRIX          COMMON_CB.mainCam.projMatr
+#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX     COMMON_CB.mainCam.viewProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_MATRIX      COMMON_CB.mainCam.invViewMatr
+#define COMMON_MAIN_CAM_INV_PROJ_MATRIX      COMMON_CB.mainCam.invProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX COMMON_CB.mainCam.invViewProjMatr
 
-#define COMMON_SCREEN_SIZE                          COMMON_CB.screenSize
-#define COMMON_INV_SCREEN_SIZE                      rcp(COMMON_SCREEN_SIZE_F)
+#define COMMON_SUN_DATA                      COMMON_CB.sunData
+
+#define COMMON_SCREEN_SIZE                   COMMON_CB.screenSize
+#define COMMON_INV_SCREEN_SIZE               rcp(COMMON_SCREEN_SIZE_F)
 
 #endif

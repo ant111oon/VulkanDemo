@@ -28,9 +28,21 @@ uint FloatToSortableUint(in float v)
 }
 
 
+uint3 FloatToSortableUint(in float3 v)
+{
+    return uint3(FloatToSortableUint(v.x), FloatToSortableUint(v.y), FloatToSortableUint(v.z));
+}
+
+
 uint FloatToReverseSortableUint(in float v)
 {
     return ~FloatToSortableUint(v);
+}
+
+
+uint3 FloatToReverseSortableUint(in float3 v)
+{
+    return uint3(FloatToReverseSortableUint(v.x), FloatToReverseSortableUint(v.y), FloatToReverseSortableUint(v.z));
 }
 
 
@@ -42,9 +54,21 @@ float SortableUintToFloat(in uint packed)
 }
 
 
+float3 SortableUintToFloat(in uint3 packed)
+{
+    return float3(SortableUintToFloat(packed.x), SortableUintToFloat(packed.y), SortableUintToFloat(packed.z));
+}
+
+
 float ReverseSortableUintToFloat(in uint packed)
 {
     return SortableUintToFloat(~packed);
+}
+
+
+float3 ReverseSortableUintToFloat(in uint3 packed)
+{
+    return float3(ReverseSortableUintToFloat(packed.x), ReverseSortableUintToFloat(packed.y), ReverseSortableUintToFloat(packed.z));
 }
 
 #endif

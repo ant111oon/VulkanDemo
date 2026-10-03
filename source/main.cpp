@@ -85,6 +85,13 @@ struct GPU_Frustum
 };
 
 
+struct GPU_SBox
+{
+    float3 minXYZ;
+    float3 maxXYZ;
+};
+
+
 enum GPU_GeomMatType : uint
 {
     GEOM_MAT_TYPE_OPAQUE,
@@ -323,6 +330,16 @@ enum GPU_DbgCsmPCFPreset : uint32_t
 };
 
 
+struct GPU_SunData
+{
+    float3 direction;
+    uint colorU32;
+
+    uint3 padding;
+    float distance;
+};
+
+
 struct GPU_CommonCameraData
 {
     GPU_Frustum frustum;
@@ -340,14 +357,19 @@ struct GPU_CommonCameraData
     float3 wPos;
     float zNear;
     
-    float3 padding;
+    float3 viewDir;
     float zFar;
+
+    float3 upDir;
+    uint padding;
 };
 
 
 struct GPU_CommonCBData
 {
     GPU_CommonCameraData mainCam;
+
+    GPU_SunData sunData;
 
     uint2 screenSize;
     uint flags;
@@ -397,8 +419,10 @@ struct GPU_CsmSplitData
     GPU_CommonCameraData camData;
 
     float2 zBounds;
-    float  worldUnitsPerPixel;
-    uint   padding;
+    uint2  rtSize;
+
+    uint3 padding;
+    float worldUnitsPerPixel;
 };
 
 
@@ -413,29 +437,28 @@ struct GPU_CsmData
     float filterDiskRadius;
     uint  filterGridHalfSize;
 
-    uint2 rtSize;
     float constantBiasTexels;
     float slopeBiasTexels;
-};
-
-
-struct GPU_SunData
-{
-    float3 direction;
-    uint packedColor;
+    uint2 padding;
 };
 
 
 struct GPU_LightingData
 {
     GPU_CsmData csmData;
-    GPU_SunData sunData;
 };
 
 
 struct GPU_DbgLineData
 {
     uint color;
+};
+
+
+struct GPU_SdsmSplitViewBounds
+{
+    uint3 minXYZUint;
+    uint3 maxXYZUint;
 };
 
 
@@ -540,6 +563,19 @@ struct GPU_DepthReductionPushConst
 
     uint useTexSrc : 1;
     uint padding : 31;
+};
+
+
+enum GPU_SdsmPass
+{
+    SDSM_PASS_PREPARE_SPLITS,
+    SDSM_PASS_BUILD_VIEW_BOUNDS,
+    SDSM_PASS_FILL_SPLITS_PROJ_DATA,
+};
+
+struct GPU_SdsmPushConst
+{
+    GPU_SdsmPass pass;
 };
 
 
@@ -727,6 +763,8 @@ enum DescSetLayoutID : uint32_t
 
     DESC_SET_LAYOUT_ID_DEPTH_REDUCTION,
 
+    DESC_SET_LAYOUT_ID_SDSM,
+
     DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN,
     DESC_SET_LAYOUT_ID_BRDF_LUT_GEN,
     DESC_SET_LAYOUT_ID_PREFILT_ENV_MAP_GEN,
@@ -762,7 +800,10 @@ static constexpr const char* DESC_SET_LAYOUT_DBG_NAME[] = {
     "BACKBUFFER",
     
     "PREFIX_SUM",
+
     "DEPTH_REDUCTION",
+    
+    "SDSM",
 
     "IRRADIANCE_MAP_GEN",
     "BRDF_LUT_GEN",
@@ -808,6 +849,9 @@ enum PassID : uint32_t
     
     PASS_ID_DEPTH_REDUCTION,
 
+    PASS_ID_SDSM_FILL_SLIT_DATA,
+    PASS_ID_SDSM_BUILD_SLIT_VIEW_BOUNDS,
+
     PASS_ID_IRRADIANCE_MAP_GEN,
     PASS_ID_BRDF_LUT_GEN,
     PASS_ID_PREFILT_ENV_MAP_GEN,
@@ -850,6 +894,9 @@ static constexpr const char* PASS_DBG_NAME[] = {
     "PREFIX_SUM_ADD_OFFSETS",
 
     "DEPTH_REDUCTION",
+
+    "SDSM_FILL_SLIT_DATA",
+    "SDSM_BUILD_SLIT_VIEW_BOUNDS",
 
     "IRRADIANCE_MAP_GEN",
     "BRDF_LUT_GEN",
@@ -973,6 +1020,11 @@ static constexpr size_t DEPTH_REDUCTION_SRC_TEX_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DEPTH_REDUCTION_SRC_BUF_DESCRIPTOR_SLOT = 1;
 static constexpr size_t DEPTH_REDUCTION_DST_DESCRIPTOR_SLOT = 2;
 
+static constexpr size_t SDSM_DEPTH_DESCRIPTOR_SLOT = 0;
+static constexpr size_t SDSM_VIEW_Z_RANGE_DESCRIPTOR_SLOT = 1;
+static constexpr size_t SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t SDSM_SPLITS_DESCRIPTOR_SLOT = 3;
+
 static constexpr size_t IRRADIANCE_MAP_GEN_ENV_MAP_DESCRIPTOR_SLOT = 0;
 static constexpr size_t IRRADIANCE_MAP_GEN_OUTPUT_UAV_DESCRIPTOR_SLOT = 1;
 
@@ -1046,6 +1098,8 @@ static constexpr uint32_t GEOM_BATCH_CS_GROUP_SIZE = 512;
 static constexpr uint32_t HZB_BUILD_CS_GROUP_SIZE = 16;
 
 static constexpr uint32_t DEPTH_REDUCTION_CS_GROUP_SIZE = 256;
+
+static constexpr uint32_t SDSM_FILL_SPLIT_BOUNDS_CS_GROUP_SIZE_X = 32;
 
 static constexpr uint32_t PREFIX_SUM_GROUP_SIZE = 256;
 static constexpr uint32_t PREFIX_SUM_BLOCK_SIZE = PREFIX_SUM_GROUP_SIZE * 2;
@@ -1451,6 +1505,9 @@ struct CameraGeomCullResources
     vkn::Texture hzb;
     vkn::TextureView hzbView;
     std::vector<vkn::TextureView> hzbMipViews;
+
+    vkn::Buffer sdsmSplitDataBuffer;
+    vkn::Buffer sdsmSplitViewBoundsBuffer;
 
 #ifdef ENG_BUILD_DEBUG
     vkn::Buffer dbgCullInstDataBuffer;
@@ -2003,6 +2060,9 @@ static void FillCameraDataGPU(GPU_CommonCameraData& data, const eng::Camera& cam
 
     data.zNear = camera.GetZNear();
     data.zFar = camera.GetZFar();
+
+    data.viewDir = camera.GetForwardDir();
+    data.upDir = camera.GetYDir();
 }
 
 
@@ -2270,6 +2330,7 @@ static void CreateVkPhysAndLogicalDevices()
     features12.pNext = &features13;
     
     features12.samplerMirrorClampToEdge = VK_TRUE;
+    features12.scalarBlockLayout = VK_TRUE;
     
     features12.bufferDeviceAddress = VK_TRUE;
 #ifndef ENG_BUILD_RETAIL
@@ -3375,6 +3436,28 @@ static void CreateDepthReductionDescriptorSetLayout()
 }
 
 
+static void CreateSdsmDescriptorSetLayout()
+{
+    vkn::DescriptorSetLayoutCreateInfo createInfo = {};
+
+    createInfo.pDevice = &s_vkDevice;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+
+    std::array descriptors = {
+        vkn::DescriptorInfo::Create(SDSM_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(SDSM_VIEW_Z_RANGE_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_SPLIT_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+        vkn::DescriptorInfo::Create(SDSM_SPLITS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_SPLIT_COUNT, VK_SHADER_STAGE_COMPUTE_BIT),
+    };
+
+    createInfo.descriptorInfos = descriptors;
+
+    vkn::DescriptorSetLayout& layout = GetDescriptorSetLayout(DESC_SET_LAYOUT_ID_SDSM);
+
+    layout.Create(createInfo).SetDebugName("DESC_SET_LAYOUT_%s", DESC_SET_LAYOUT_DBG_NAME[DESC_SET_LAYOUT_ID_SDSM]);
+}
+
+
 static void CreateIrradianceMapGenDescriptorSetLayout()
 {
     vkn::DescriptorSetLayoutCreateInfo createInfo = {};
@@ -3515,7 +3598,10 @@ static void CreateDescriptorSetLayouts()
     CreateSkyboxDescriptorSetLayout();
     
     CreatePrefixSumDescriptorSetLayout();
+
     CreateDepthReductionDescriptorSetLayout();
+
+    CreateSdsmDescriptorSetLayout();
 
     CreateIrradianceMapGenDescriptorSetLayout();
     CreatePrefilteredEnvMapGenDescriptorSetLayout();
@@ -3785,6 +3871,26 @@ static void CreateDepthReductionPSOLayout()
 }
 
 
+static void CreateSdsmFillSplitDataPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_SDSM_FILL_SLIT_DATA, DESC_SET_LAYOUT_ID_SDSM, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_SdsmPushConst)
+    });
+}
+
+
+static void CreateSdsmBuildSplitBoundsPSOLayout()
+{
+    CreatePSOLayout(PASS_ID_SDSM_BUILD_SLIT_VIEW_BOUNDS, DESC_SET_LAYOUT_ID_SDSM, VkPushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(GPU_SdsmPushConst)
+    });
+}
+
+
 static void CreateIrradianceMapGenPSOLayout()
 {
     CreatePSOLayout(PASS_ID_IRRADIANCE_MAP_GEN, DESC_SET_LAYOUT_ID_IRRADIANCE_MAP_GEN, VkPushConstantRange {
@@ -3946,6 +4052,18 @@ static void CreatePrefixSumAddOffsetsPSO(const fs::path& shaderPath)
 static void CreateDepthReductionPSO(const fs::path& shaderPath)
 {
     CreateComputePSO(shaderPath, PASS_ID_DEPTH_REDUCTION);
+}
+
+
+static void CreateSdsmFillSplitDataPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_SDSM_FILL_SLIT_DATA);
+}
+
+
+static void CreateSdsmBuildSplitBoundsPSO(const fs::path& shaderPath)
+{
+    CreateComputePSO(shaderPath, PASS_ID_SDSM_BUILD_SLIT_VIEW_BOUNDS);
 }
 
 
@@ -4247,6 +4365,9 @@ static void CreatePipelines()
     CreatePrefixSumAddOffsetsPSOLayout();
 
     CreateDepthReductionPSOLayout();
+
+    CreateSdsmFillSplitDataPSOLayout();
+    CreateSdsmBuildSplitBoundsPSOLayout();
     
     CreateIrradianceMapGenPSOLayout();
     CreatePrefilteredEnvMapGenPSOLayout();
@@ -4303,6 +4424,9 @@ static void CreatePipelines()
     CreatePrefixSumAddOffsetsPSO(RND_SHADER_SPIRV_FULL_PATH("utils/prefix_sum/prefix_sum_add_offsets.cs.spv"));
 
     CreateDepthReductionPSO(RND_SHADER_SPIRV_FULL_PATH("utils/depth_reduction/depth_reduction.cs.spv"));
+
+    CreateSdsmFillSplitDataPSO(RND_SHADER_SPIRV_FULL_PATH("sdsm/sdsm_fill_split_data.cs.spv"));
+    CreateSdsmBuildSplitBoundsPSO(RND_SHADER_SPIRV_FULL_PATH("sdsm/sdsm_build_split_view_bounds.cs.spv"));
     
     CreateIrradianceMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/irradiance_map_gen.cs.spv"));
     CreatePrefilteredEnvMapGenPSO(RND_SHADER_SPIRV_FULL_PATH("utils/IBL/prefiltered_env_map_gen.cs.spv"));
@@ -4485,6 +4609,14 @@ static void CreateGeomCullingAndInstancingResources()
             s_csmCamsGeomCullResources[i].hzbView, 
             s_csmCamsGeomCullResources[i].hzbMipViews
         );
+
+        s_csmCamsGeomCullResources[i].sdsmSplitDataBuffer
+            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
+            .SetDebugName("SDSM_SPLIT_DATA_BUFFER_%u", i);
+            
+        s_csmCamsGeomCullResources[i].sdsmSplitViewBoundsBuffer
+            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
+            .SetDebugName("SDSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
     }
 }
 
@@ -5496,6 +5628,10 @@ void UpdateGPUCommonConstBuffer()
 
     FillCameraDataGPU(constBuff.mainCam, s_mainCamera);
 
+    constBuff.sunData.direction = SUN_LIGHT_DIR;
+    constBuff.sunData.colorU32 = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
+    constBuff.sunData.distance = SUN_DISTANCE;
+
     constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
     constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
 
@@ -5509,14 +5645,12 @@ void UpdateGPUDeferredLightingConstBuffer()
 
     GPU_LightingData& constBuff = *reinterpret_cast<GPU_LightingData*>(s_deferredLightingConstBuffer.Map());
 
-    constBuff.sunData.direction = SUN_LIGHT_DIR;
-    constBuff.sunData.packedColor = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
-
     for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
         FillCameraDataGPU(constBuff.csmData.splits[i].camData, s_csmCameras[i]);
 
         constBuff.csmData.splits[i].zBounds = glm::float2(i == 0 ? CAMERA_ZNEAR : s_csmSplitDistances[i - 1], s_csmSplitDistances[i]);
         constBuff.csmData.splits[i].worldUnitsPerPixel = s_csmSplitWorldUnitsPerTexel[i];
+        constBuff.csmData.splits[i].rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
     }
 
     constBuff.csmData.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
@@ -5524,7 +5658,6 @@ void UpdateGPUDeferredLightingConstBuffer()
     constBuff.csmData.filterDiskRadius = s_csmFilterDiskRadius;
     constBuff.csmData.filterGridHalfSize = s_csmFilterGridHalfSize;
 
-    constBuff.csmData.rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
     constBuff.csmData.constantBiasTexels = s_csmConstantBiasTexels;
     constBuff.csmData.slopeBiasTexels = s_csmSlopeBiasTexels;
 
@@ -5966,6 +6099,169 @@ static void PrevFrameDepthReductionPass(vkn::CmdBuffer& cmdBuffer)
 
         cmdBuffer.CmdCopyBuffer(*pSrcBuffer, s_depthReductionBuffers[0], sizeof(glm::float2));
     }
+}
+
+
+static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_SdsmPass pass)
+{
+    vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
+
+    constexpr VkPipelineStageFlagBits2 stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+
+    if (pass == SDSM_PASS_BUILD_VIEW_BOUNDS) {
+        barriers.AddTextureBarrier(
+            s_depthRT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, stage, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+    }
+
+    if (pass == SDSM_PASS_PREPARE_SPLITS) {
+        barriers.AddBufferBarrier(s_depthReductionBuffers[0], stage, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    }
+
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+
+        const VkAccessFlagBits2 splitDataAccess = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+        
+        VkAccessFlagBits2 splitViewBoundsAccess = VK_ACCESS_2_SHADER_READ_BIT;
+
+        if (pass == SDSM_PASS_BUILD_VIEW_BOUNDS || pass == SDSM_PASS_PREPARE_SPLITS) {
+            splitViewBoundsAccess |= VK_ACCESS_2_SHADER_WRITE_BIT;
+        }
+
+        barriers
+            .AddBufferBarrier(res.sdsmSplitDataBuffer, stage, splitDataAccess)
+            .AddBufferBarrier(res.sdsmSplitViewBoundsBuffer, stage, splitViewBoundsAccess);
+    }
+
+    barriers.Push();
+
+    static std::vector<vkn::PushDescriptor> pushDescriptors;
+    pushDescriptors.clear();
+
+    if (pass == SDSM_PASS_BUILD_VIEW_BOUNDS) {
+        pushDescriptors.emplace_back(
+            vkn::PushDescriptor::SampledTexture(SDSM_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        );
+    }
+
+    if (pass == SDSM_PASS_PREPARE_SPLITS) {
+        pushDescriptors.emplace_back(
+            vkn::PushDescriptor::StorageBuffer(SDSM_VIEW_Z_RANGE_DESCRIPTOR_SLOT, 0, s_depthReductionBuffers[0])
+        );
+    }
+
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+
+        pushDescriptors.emplace_back(
+            vkn::PushDescriptor::StorageBuffer(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, i, res.sdsmSplitViewBoundsBuffer)
+        );
+        pushDescriptors.emplace_back(
+            vkn::PushDescriptor::StorageBuffer(SDSM_SPLITS_DESCRIPTOR_SLOT, i, res.sdsmSplitDataBuffer)
+        );        
+    }
+
+    cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, pushDescriptors);
+}
+
+
+static void SdsmPrepareSplitsPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "PrepareSplits";
+    static constexpr uint32_t passColor = 0xffb74d;
+    
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    vkn::PSO& pso = GetPSO(PASS_ID_SDSM_FILL_SLIT_DATA);
+    
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    SdsmPushResources(cmdBuffer, pso, SDSM_PASS_PREPARE_SPLITS);
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_SdsmPushConst {
+        .pass = SDSM_PASS_PREPARE_SPLITS
+    });
+
+    cmdBuffer.CmdDispatch(1u, 1u, 1u);
+}
+
+
+static void SdsmBuildSplitViewBoundsPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "BuildSplitViewBounds";
+    static constexpr uint32_t passColor = 0xffb74d;
+    
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    vkn::PSO& pso = GetPSO(PASS_ID_SDSM_BUILD_SLIT_VIEW_BOUNDS);
+    
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+    SdsmPushResources(cmdBuffer, pso, SDSM_PASS_BUILD_VIEW_BOUNDS);
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_SdsmPushConst {
+        .pass = SDSM_PASS_BUILD_VIEW_BOUNDS
+    });
+
+    cmdBuffer.CmdDispatch(
+        math::CeilDiv(s_depthRT.GetSizeX(), SDSM_FILL_SPLIT_BOUNDS_CS_GROUP_SIZE_X),
+        math::CeilDiv(s_depthRT.GetSizeY(), SDSM_FILL_SPLIT_BOUNDS_CS_GROUP_SIZE_X),
+        1u
+    );
+}
+
+
+static void SdsmFillSplitProjDataPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "FillSplitsProjData";
+    static constexpr uint32_t passColor = 0xffb74d;
+    
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    vkn::PSO& pso = GetPSO(PASS_ID_SDSM_FILL_SLIT_DATA);
+    
+    cmdBuffer.CmdBindPSO(pso);
+
+    cmdBuffer.CmdBindDescriptorBufferSets(pso, {
+        .elemIndex = GetDescriptorSetIndex(CommonDescSetDesc{}),
+        .shaderSetIdx = DESC_SET_PER_FRAME
+    });
+
+   SdsmPushResources(cmdBuffer, pso, SDSM_PASS_FILL_SPLITS_PROJ_DATA);
+
+    cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_COMPUTE_BIT, GPU_SdsmPushConst {
+        .pass = SDSM_PASS_FILL_SPLITS_PROJ_DATA
+    });
+
+    cmdBuffer.CmdDispatch(1u, 1u, 1u);
+}
+
+
+static void SdsmPass(vkn::CmdBuffer& cmdBuffer)
+{
+    static constexpr const char* passName = "SDSM";
+    static constexpr uint32_t passColor = 0xff9800;
+
+    TM_MARKER_C(passColor, passName);
+    TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+    SdsmPrepareSplitsPass(cmdBuffer);
+    SdsmBuildSplitViewBoundsPass(cmdBuffer);
+    SdsmFillSplitProjDataPass(cmdBuffer);
 }
 
 
@@ -6606,8 +6902,8 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources&
 static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
 {
     {
-        TM_MARKER_C(0x0, "ResetCounters");
-        TM_GPU_MARKER_C(cmdBuffer, 0x0, "ResetCounters");
+        TM_MARKER_C(0x000000, "ResetCounters");
+        TM_GPU_MARKER_C(cmdBuffer, 0x000000, "ResetCounters");
         
         vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
     
@@ -8190,6 +8486,8 @@ static void RenderScene()
         PrevFrameDepthReductionPass(cmdBuffer);
         PrevFrameHZBGenPass(cmdBuffer);
 
+        SdsmPass(cmdBuffer);
+
         PrepareGeomPass(cmdBuffer);
 
         GeomDepthPass(cmdBuffer);
@@ -8409,8 +8707,8 @@ int main(int argc, char* argv[])
     InitWindow();
 
     // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    

@@ -113,6 +113,21 @@ enum GPU_CmpSamplerID
 };
 
 
+struct GPU_SunData
+{
+    property float3 color
+    {
+        get { return unpackUnorm4x8ToFloat(colorU32).rgb; }
+    }
+
+    float3 direction;
+    private uint colorU32;
+
+    private uint3 padding;
+    float distance;
+};
+
+
 struct GPU_CommonCameraData
 {
     GPU_Frustum frustum;
@@ -129,9 +144,12 @@ struct GPU_CommonCameraData
 
     float3 wPos;
     float zNear;
-    
-    float3 padding;
+
+    float3 viewDir;
     float zFar;
+
+    float3 upDir;
+    private uint padding;
 };
 
 
@@ -139,9 +157,11 @@ struct GPU_CommonCBData
 {
     GPU_CommonCameraData mainCam;
 
+    GPU_SunData sunData;
+
     uint2 screenSize;
     uint flags;
-    uint padding;
+    private uint padding;
 };
 
 
