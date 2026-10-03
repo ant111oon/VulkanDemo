@@ -66,37 +66,23 @@ float4x4 LookAtRH(in float3 eye, in float3 target, in float3 up)
     float3 s = normalize(cross(f, up));
     float3 u = cross(s, f);
 
-    float4x4 result = M3D_IDENTITY_4X4;
-
-    result[0][0] = s.x;
-    result[1][0] = s.y;
-    result[2][0] = s.z;
-    result[0][1] = u.x;
-    result[1][1] = u.y;
-    result[2][1] = u.z;
-    result[0][2] =-f.x;
-    result[1][2] =-f.y;
-    result[2][2] =-f.z;
-    result[3][0] =-dot(s, eye);
-    result[3][1] =-dot(u, eye);
-    result[3][2] = dot(f, eye);
-    
-    return result;
+    return float4x4(
+        s.x, u.x, -f.x, -dot(s, eye),
+        s.y, u.y, -f.y, -dot(u, eye),
+        s.z, u.z, -f.z,  dot(f, eye),
+        0.f, 0.f,  0.f,  1.f
+    );
 }
 
 
 float4x4 OrthoRH_ZO(in float left, in float right, in float bottom, in float top, in float zNear, in float zFar)
 {
-    float4x4 result = M3D_IDENTITY_4X4;
-
-    result[0][0] = 2.f / (right - left);
-    result[1][1] = 2.f / (top - bottom);
-    result[2][2] = -rcp(zFar - zNear);
-    result[3][0] = -(right + left) / (right - left);
-    result[3][1] = -(top + bottom) / (top - bottom);
-    result[3][2] = -zNear / (zFar - zNear);
-
-    return result;
+    return float4x4(
+        2.f / (right - left), 0.f, 0.f, -(right + left) / (right - left),
+        0.f, 2.f / (top - bottom), 0.f, -(top + bottom) / (top - bottom),
+        0.f, 0.f, -rcp(zFar - zNear), -zNear / (zFar - zNear),
+        0.f, 0.f,  0.f,  1.f
+    );
 }
 
 
@@ -104,15 +90,12 @@ float4x4 PerspectiveRH_ZO(in float fovy, in float aspect, in float zNear, in flo
 {
     const float tanHalfFovy = tan(fovy * 0.5f);
 
-    float4x4 result = float4x4(0.f);
-
-    result[0][0] = rcp(aspect * tanHalfFovy);
-    result[1][1] = rcp(tanHalfFovy);
-    result[2][2] = zFar / (zNear - zFar);
-    result[2][3] = -1.f;
-    result[3][2] = -(zFar * zNear) / (zFar - zNear);
-
-    return result;
+    return float4x4(
+        rcp(aspect * tanHalfFovy), 0.f, 0.f, 0.f,
+        0.f, rcp(tanHalfFovy), 0.f, 0.f,
+        0.f, 0.f, zFar / (zNear - zFar), -1.f,
+        0.f, 0.f, -(zFar * zNear) / (zFar - zNear), 0.f
+    );
 }
 
 #endif

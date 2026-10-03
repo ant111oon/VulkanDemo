@@ -504,10 +504,6 @@ struct GPU_GeomCullPushConst
     static constexpr uint32_t HZB_SIZE_Y_MIP_0_BITS_COUNT = 12;
     static constexpr uint32_t HZB_MIPS_BITS_COUNT = 4;
 
-    GPU_Frustum frustum;
-    float4x4 viewMatr;
-    float4x4 viewProjMatrPrev;
-
     float coverageThreshold;
 
     uint hzbSizeXMip0 : 12;
@@ -576,6 +572,9 @@ enum GPU_SdsmPass
 struct GPU_SdsmPushConst
 {
     GPU_SdsmPass pass;
+
+    float4x4 view;
+    float4x4 invView;
 };
 
 
@@ -962,11 +961,12 @@ static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 10;
 static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
 static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
 
-static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 0;
-static constexpr size_t GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT = 1;
-static constexpr size_t GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT = 2;
-static constexpr size_t GEOM_CULL_VIS_INST_COUNTER_DESCRIPTOR_SLOT = 3;
-static constexpr size_t GEOM_CULL_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 4;
+static constexpr size_t GEOM_CULL_CAM_DATA_DESCRIPTOR_SLOT = 0;
+static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 1;
+static constexpr size_t GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT = 2;
+static constexpr size_t GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT = 3;
+static constexpr size_t GEOM_CULL_VIS_INST_COUNTER_DESCRIPTOR_SLOT = 4;
+static constexpr size_t GEOM_CULL_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 5;
 
 static constexpr size_t GEOM_SORT_KEY_BUFFER_SRC_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_SORT_KEY_BUFFER_DST_DESCRIPTOR_SLOT = 1;
@@ -995,15 +995,16 @@ static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 1;
 
 static constexpr size_t DEFERRED_LIGHTING_DATA_DESCRIPTOR_SLOT = 0;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
-static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
-static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
-static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
-static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 8;
-static constexpr size_t DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT = 9;
+static constexpr size_t DEFERRED_LIGHTING_SPLIT_DATA_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 3;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 4;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 5;
+static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 6;
+static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 7;
+static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 8;
+static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 9;
+static constexpr size_t DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT = 10;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
 
@@ -1128,7 +1129,7 @@ static constexpr float CAMERA_ZNEAR = 0.01f;
 static constexpr float CAMERA_ZFAR = 1'000.f;
 
 static const glm::float3 SUN_LIGHT_DIR = glm::normalize(M3D_AXIS_X - 6.5f * M3D_AXIS_Y + M3D_AXIS_Z);
-static constexpr float SUN_DISTANCE = 100.f;
+static constexpr float SUN_DISTANCE = 500.f;
 
 static constexpr std::array CSM_SPLIT_COLORS = {
     glm::float4(1.f, 0.f, 0.f, 0.45f),
@@ -1506,9 +1507,6 @@ struct CameraGeomCullResources
     vkn::TextureView hzbView;
     std::vector<vkn::TextureView> hzbMipViews;
 
-    vkn::Buffer sdsmSplitDataBuffer;
-    vkn::Buffer sdsmSplitViewBoundsBuffer;
-
 #ifdef ENG_BUILD_DEBUG
     vkn::Buffer dbgCullInstDataBuffer;
 #endif
@@ -1520,7 +1518,20 @@ static std::array<CameraGeomCullResources, CSM_SPLIT_COUNT> s_csmCamsGeomCullRes
 #pragma endregion
 
 
+#pragma region SDSM DATA
 static std::array<vkn::Buffer, 2> s_depthReductionBuffers;
+
+struct SdsmCameraResources
+{
+    vkn::Buffer splitDataBuffer;
+    vkn::Buffer splitViewBoundsBuffer;
+};
+
+static std::array<SdsmCameraResources, CSM_SPLIT_COUNT> s_sdsmResources;
+
+#pragma endregion
+
+static vkn::Buffer s_mainCamConstBuffer;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
@@ -3178,6 +3189,7 @@ static void CreateGeomCullingDescriptorSetLayout()
     createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
+        vkn::DescriptorInfo::Create(GEOM_CULL_CAM_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
         vkn::DescriptorInfo::Create(GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT),
@@ -3326,6 +3338,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_SPLIT_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, CSM_SPLIT_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4540,6 +4553,54 @@ static void CreateCamGeomCullResources(CameraGeomCullResources& resources, std::
 }
 
 
+static void CreateGeomCullingAndInstancingResources()
+{
+    CreateCamGeomCullResources(s_mainCamGeomCullResources, "MAIN_CAM");
+
+    s_mainCamConstBuffer.CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1);
+
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        char prefix[64] = {0};
+        
+        sprintf_s(prefix, "CSM_CAM_%u", i);
+        CreateCamGeomCullResources(s_csmCamsGeomCullResources[i], prefix);
+
+        sprintf_s(prefix, "CSM_HZB_%u", i);
+        CreateHZB(
+            CSM_SPLIT_HZB_SIZE, 
+            CSM_SPLIT_HZB_SIZE, 
+            prefix, 
+            s_csmCamsGeomCullResources[i].hzb, 
+            s_csmCamsGeomCullResources[i].hzbView, 
+            s_csmCamsGeomCullResources[i].hzbMipViews
+        );
+    }
+}
+
+
+static void CreateCamSDSMResources(SdsmCameraResources& resources, std::string_view camPrefix)
+{
+    resources.splitDataBuffer
+        .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1, VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT)
+        .SetDebugName("%s_SDSM_SPLIT_DATA_BUFFER", camPrefix.data());
+        
+    resources.splitViewBoundsBuffer
+        .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
+        .SetDebugName("%s_SDSM_SPLIT_VIEW_BOUNDS_BUFFER", camPrefix.data());
+}
+
+
+static void CreateSDSMResources()
+{
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        char prefix[64] = {0};
+        
+        sprintf_s(prefix, "CSM_CAM_%u", i);
+        CreateCamSDSMResources(s_sdsmResources[i], prefix);
+    }
+}
+
+
 static void CreateCSMResources()
 {
     vkn::AllocationInfo allocInfo = {};
@@ -4587,37 +4648,8 @@ static void CreateCSMResources()
     csmRTViewArrayCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     s_csmRTViewArray.Create(csmRTViewArrayCreateInfo).SetDebugName("CSM_DEPTH_RT_VIEW_ARRAY");
-}
 
-
-static void CreateGeomCullingAndInstancingResources()
-{
-    CreateCamGeomCullResources(s_mainCamGeomCullResources, "MAIN_CAM");
-
-    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        char prefix[64] = {0};
-        
-        sprintf_s(prefix, "CSM_CAM_%u", i);
-        CreateCamGeomCullResources(s_csmCamsGeomCullResources[i], prefix);
-
-        sprintf_s(prefix, "CSM_HZB_%u", i);
-        CreateHZB(
-            CSM_SPLIT_HZB_SIZE, 
-            CSM_SPLIT_HZB_SIZE, 
-            prefix, 
-            s_csmCamsGeomCullResources[i].hzb, 
-            s_csmCamsGeomCullResources[i].hzbView, 
-            s_csmCamsGeomCullResources[i].hzbMipViews
-        );
-
-        s_csmCamsGeomCullResources[i].sdsmSplitDataBuffer
-            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
-            .SetDebugName("SDSM_SPLIT_DATA_BUFFER_%u", i);
-            
-        s_csmCamsGeomCullResources[i].sdsmSplitViewBoundsBuffer
-            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
-            .SetDebugName("SDSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
-    }
+    CreateSDSMResources();
 }
 
 
@@ -6119,7 +6151,7 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
     }
 
     for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+        SdsmCameraResources& res = s_sdsmResources[i];
 
         const VkAccessFlagBits2 splitDataAccess = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
         
@@ -6130,8 +6162,8 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
         }
 
         barriers
-            .AddBufferBarrier(res.sdsmSplitDataBuffer, stage, splitDataAccess)
-            .AddBufferBarrier(res.sdsmSplitViewBoundsBuffer, stage, splitViewBoundsAccess);
+            .AddBufferBarrier(res.splitDataBuffer, stage, splitDataAccess)
+            .AddBufferBarrier(res.splitViewBoundsBuffer, stage, splitViewBoundsAccess);
     }
 
     barriers.Push();
@@ -6152,14 +6184,10 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
     }
 
     for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+        SdsmCameraResources& res = s_sdsmResources[i];
 
-        pushDescriptors.emplace_back(
-            vkn::PushDescriptor::StorageBuffer(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, i, res.sdsmSplitViewBoundsBuffer)
-        );
-        pushDescriptors.emplace_back(
-            vkn::PushDescriptor::StorageBuffer(SDSM_SPLITS_DESCRIPTOR_SLOT, i, res.sdsmSplitDataBuffer)
-        );        
+        pushDescriptors.emplace_back(vkn::PushDescriptor::StorageBuffer(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, i, res.splitViewBoundsBuffer));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::StorageBuffer(SDSM_SPLITS_DESCRIPTOR_SLOT, i, res.splitDataBuffer));
     }
 
     cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, pushDescriptors);
@@ -6353,7 +6381,7 @@ static void HZBGeneratePass(
 }
 
 
-static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
+static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, vkn::Buffer& camData, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
 {
     static constexpr const char* passName = "Culling";
     static constexpr uint32_t passColor = 0xff6a6a;
@@ -6363,6 +6391,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
 
     vkn::BarrierList& barriers = cmdBuffer.BeginBarrierList();
 
+    barriers.AddBufferBarrier(camData, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_UNIFORM_READ_BIT, offsetof(GPU_CsmSplitData, camData), sizeof(GPU_CommonCameraData));
     barriers.AddBufferBarrier(resources.GetCullVisInstSortKeysBuffer(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(resources.GetCullVisInstIDsBuffer(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
     barriers.AddBufferBarrier(resources.cullVisInstCountBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
@@ -6389,6 +6418,7 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
     });
 
     cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
+        vkn::PushDescriptor::ConstantBuffer(GEOM_CULL_CAM_DATA_DESCRIPTOR_SLOT, 0, camData),
         vkn::PushDescriptor::SampledTexture(GEOM_CULL_HZB_DESCRIPTOR_SLOT, 0, resources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
         vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_SORT_KEYS_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstSortKeysBuffer()),
         vkn::PushDescriptor::StorageBuffer(GEOM_CULL_VIS_INST_IDS_DESCRIPTOR_SLOT, 0, resources.GetCullVisInstIDsBuffer()),
@@ -6399,10 +6429,6 @@ static void GeomCullingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, C
     });
     
     GPU_GeomCullPushConst pushConst = {};
-
-    pushConst.frustum = CopyCPUFrustumToGPU(cam.GetFrustum());
-    pushConst.viewMatr = cam.GetViewMatrix();
-    pushConst.viewProjMatrPrev = cam.GetViewProjMatrixPrev();
 
     pushConst.coverageThreshold = s_geomCoverageCullingThresholdPercentage / 100.f;
 
@@ -6899,7 +6925,7 @@ static void GeomBatchingPass(vkn::CmdBuffer& cmdBuffer, CameraGeomCullResources&
 }
 
 
-static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
+static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, vkn::Buffer& camData, CameraGeomCullResources& resources, bool coverageCulling, bool frustumCulling, bool hzbCulling)
 {
     {
         TM_MARKER_C(0x000000, "ResetCounters");
@@ -6920,7 +6946,7 @@ static void GeomPreparingPass(vkn::CmdBuffer& cmdBuffer, const eng::Camera& cam,
         cmdBuffer.CmdFillBuffer(resources.matTypeFirstBatchBuffer, 0);
     }
 
-    GeomCullingPass(cmdBuffer, cam, resources, coverageCulling, frustumCulling, hzbCulling);
+    GeomCullingPass(cmdBuffer, camData, resources, coverageCulling, frustumCulling, hzbCulling);
     GeomSortingPass(cmdBuffer, resources);
     GeomBatchingPass(cmdBuffer, resources);
 }
@@ -6967,7 +6993,11 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
         const bool hzbCulling = s_useMeshCulling && s_useMeshHZBCulling;
         const bool coverageCulling = false;
 
-        GeomPreparingPass(cmdBuffer, cam, s_mainCamGeomCullResources, coverageCulling, frustumCulling, hzbCulling);
+        GPU_CommonCameraData& camData = *static_cast<GPU_CommonCameraData*>(s_mainCamConstBuffer.Map());
+        FillCameraDataGPU(camData, cam);
+        s_mainCamConstBuffer.Unmap();
+
+        GeomPreparingPass(cmdBuffer, s_mainCamConstBuffer, s_mainCamGeomCullResources, coverageCulling, frustumCulling, hzbCulling);
     }
 
     {
@@ -6982,7 +7012,7 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(0xb0e0e6, "Split_%u", i);
             TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Split_%u", i);
             
-            GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], coverageCulling, frustumCulling, hzbCulling);
+            GeomPreparingPass(cmdBuffer, s_sdsmResources[i].splitDataBuffer, s_csmCamsGeomCullResources[i], coverageCulling, frustumCulling, hzbCulling);
         }
     }
 }
@@ -7382,6 +7412,10 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT);
 
+    barrierList.AddBufferBarrier(s_sdsmResources[0].splitDataBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    barrierList.AddBufferBarrier(s_sdsmResources[1].splitDataBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    barrierList.AddBufferBarrier(s_sdsmResources[2].splitDataBuffer, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+
     barrierList.Push();
     
     const VkExtent2D extent = VkExtent2D { s_colorRT16F.GetSizeX(), s_colorRT16F.GetSizeY() };
@@ -7420,6 +7454,9 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
             vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::StorageBuffer(DEFERRED_LIGHTING_SPLIT_DATA_DESCRIPTOR_SLOT, 0, s_sdsmResources[0].splitDataBuffer),
+            vkn::PushDescriptor::StorageBuffer(DEFERRED_LIGHTING_SPLIT_DATA_DESCRIPTOR_SLOT, 1, s_sdsmResources[1].splitDataBuffer),
+            vkn::PushDescriptor::StorageBuffer(DEFERRED_LIGHTING_SPLIT_DATA_DESCRIPTOR_SLOT, 2, s_sdsmResources[2].splitDataBuffer),
         });
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);
@@ -8706,8 +8743,8 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
 
     CreateVkInstance();    

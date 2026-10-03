@@ -2,7 +2,9 @@
 #define GEOM_CULL_REGISTERS_H
 
 #include "common/system/sys_constants.slang"
+
 #include "common/common_geom_structs.slang"
+#include "common/common_structs.slang"
 
 
 struct GPU_GeomCullPushConst
@@ -22,10 +24,6 @@ struct GPU_GeomCullPushConst
         get { return (bool)coverageCullingEnabled; }
     }
 
-    GPU_Frustum frustum;
-    float4x4 viewMatr;
-    float4x4 viewProjMatrPrev;
-
     float coverageThreshold;
 
     uint hzbSizeXMip0 : 12;
@@ -42,9 +40,10 @@ struct GPU_GeomCullPushConst
 [[vk::push_constant]] GPU_GeomCullPushConst GEOM_CULL_CONST;
 
 
-#define GEOM_CULL_FRUSTUM             GEOM_CULL_CONST.frustum
-#define GEOM_CULL_VIEW_MATR           GEOM_CULL_CONST.viewMatr
-#define GEOM_CULL_VIEW_PROJ_MATR_PREV GEOM_CULL_CONST.viewProjMatrPrev
+#define GEOM_CULL_FRUSTUM             GEOM_CULL_CAM_DATA.frustum
+#define GEOM_CULL_VIEW_MATR           GEOM_CULL_CAM_DATA.viewMatr
+#define GEOM_CULL_VIEW_PROJ_MATR_PREV GEOM_CULL_CAM_DATA.viewProjMatrPrev
+
 #define GEOM_CULL_HZB_MIPS_COUNT      GEOM_CULL_CONST.hzbMipsCount
 #define GEOM_CULL_HZB_MIP_0_SIZE      uint2(GEOM_CULL_CONST.hzbSizeXMip0, GEOM_CULL_CONST.hzbSizeYMip0)
 
@@ -55,13 +54,15 @@ struct GPU_GeomCullPushConst
 #define GEOM_CULL_IS_COVERAGE_CULLING_ENABLED GEOM_CULL_CONST.isCoverageCullingEnabled
 
 
-[vk::binding(0, DESC_SET_PER_DRAW)] Texture2D GEOM_CULL_HZB;
+[vk::binding(0, DESC_SET_PER_DRAW)] ConstantBuffer<GPU_CommonCameraData> GEOM_CULL_CAM_DATA;
 
-[vk::binding(1, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_INST_SORT_KEYS;
-[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_IDS;
+[vk::binding(1, DESC_SET_PER_DRAW)] Texture2D GEOM_CULL_HZB;
 
-[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_COUNTER;
+[vk::binding(2, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_GeomSortKey> GEOM_CULL_VIS_INST_SORT_KEYS;
+[vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_IDS;
 
-[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_DbgCullInstData> GEOM_CULL_DBG_CULL_INST_DATA;
+[vk::binding(4, DESC_SET_PER_DRAW)] RWStructuredBuffer<uint>            GEOM_CULL_VIS_INST_COUNTER;
+
+[vk::binding(5, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_DbgCullInstData> GEOM_CULL_DBG_CULL_INST_DATA;
 
 #endif
