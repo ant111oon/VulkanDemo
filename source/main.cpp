@@ -1451,7 +1451,6 @@ static std::array<vkn::PSO,       PASS_ID_COUNT> s_PSOs;
 static std::array<vkn::Buffer, COMMON_GEOM_STREAM_COUNT> s_geomStreamBuffers;
 static vkn::Buffer s_geomIndexBuffer;
 
-static vkn::Buffer s_commonMainCamDataConstBuffer;
 static vkn::Buffer s_commonConstBuffer;
 static vkn::Buffer s_commonDbgConstBuffer;
 
@@ -1503,19 +1502,30 @@ struct CameraGeomCullResources
     vkn::TextureView hzbView;
     std::vector<vkn::TextureView> hzbMipViews;
 
-    vkn::Buffer sdsmSplitDataBuffer;
-    vkn::Buffer sdsmSplitViewBoundsBuffer;
-
 #ifdef ENG_BUILD_DEBUG
     vkn::Buffer dbgCullInstDataBuffer;
 #endif
 };
-
-static CameraGeomCullResources s_mainCamGeomCullResources;
-
-static std::array<CameraGeomCullResources, CSM_SPLIT_COUNT> s_csmCamsGeomCullResources;
 #pragma endregion
 
+struct MainCamResources
+{
+    CameraGeomCullResources cullResources;
+
+    vkn::Buffer camDataBuffer;
+};
+
+struct CSMCamResources
+{
+    CameraGeomCullResources cullResources;
+
+    vkn::Buffer splitDataBuffer;
+    vkn::Buffer splitViewBoundsBuffer;
+};
+
+
+static MainCamResources                             s_mainCamResources;
+static std::array<CSMCamResources, CSM_SPLIT_COUNT> s_csmCamsResources;
 
 static std::array<vkn::Buffer, 2> s_depthReductionBuffers;
 
@@ -1576,8 +1586,8 @@ static vkn::TextureView s_colorRTView8U;
 static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
 
-static vkn::Texture                                    s_csmRT;
-static vkn::TextureView                                s_csmRTViewArray;
+static vkn::Texture                                  s_csmRT;
+static vkn::TextureView                              s_csmRTViewArray;
 static std::array<vkn::TextureView, CSM_SPLIT_COUNT> s_csmRTViews;
 
 static vkn::ComputePSOBuilder  s_computePSOBuilder;
@@ -2675,9 +2685,9 @@ static void CreateDynamicRenderTargets()
         s_pWnd->GetWidth(),
         s_pWnd->GetHeight(),
         "COMMON_HZB", 
-        s_mainCamGeomCullResources.hzb, 
-        s_mainCamGeomCullResources.hzbView, 
-        s_mainCamGeomCullResources.hzbMipViews
+        s_mainCamResources.cullResources.hzb, 
+        s_mainCamResources.cullResources.hzbView, 
+        s_mainCamResources.cullResources.hzbMipViews
     );
 
     CreateDepthReductionBuffers(s_depthRT);
@@ -2701,11 +2711,11 @@ static void DestroyDynamicRenderTargets()
     s_colorRTView8U.Destroy();
     s_colorRT8U.Destroy();
 
-    for (vkn::TextureView& mip : s_mainCamGeomCullResources.hzbMipViews) {
+    for (vkn::TextureView& mip : s_mainCamResources.cullResources.hzbMipViews) {
         mip.Destroy();
     }
-    s_mainCamGeomCullResources.hzbView.Destroy();
-    s_mainCamGeomCullResources.hzb.Destroy();
+    s_mainCamResources.cullResources.hzbView.Destroy();
+    s_mainCamResources.cullResources.hzb.Destroy();
 
     for (vkn::Buffer& buffer : s_depthReductionBuffers) {
         buffer.Destroy();
@@ -4538,6 +4548,47 @@ static void CreateCamGeomCullResources(CameraGeomCullResources& resources, std::
 }
 
 
+static void CreateMainCameraData()
+{
+    CreateCamGeomCullResources(s_mainCamResources.cullResources, "MAIN_CAM");
+
+    s_mainCamResources.camDataBuffer
+        .CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1)
+        .SetDebugName("MAIN_CAM_DATA_CB");
+}
+
+
+static void CreateCSMCamerasData()
+{
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        char prefix[64] = {0};
+
+        CameraGeomCullResources& cullRes = s_csmCamsResources[i].cullResources;
+        
+        sprintf_s(prefix, "CSM_CAM_%u", i);
+        CreateCamGeomCullResources(cullRes, prefix);
+
+        sprintf_s(prefix, "CSM_HZB_%u", i);
+        CreateHZB(CSM_SPLIT_HZB_SIZE, CSM_SPLIT_HZB_SIZE, prefix, cullRes.hzb, cullRes.hzbView, cullRes.hzbMipViews);
+
+        s_csmCamsResources[i].splitDataBuffer
+            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
+            .SetDebugName("CSM_SPLIT_DATA_BUFFER_%u", i);
+            
+        s_csmCamsResources[i].splitViewBoundsBuffer
+            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
+            .SetDebugName("CSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
+    }
+}
+
+
+static void CreateCamerasData()
+{
+    CreateMainCameraData();
+    CreateCSMCamerasData();
+}
+
+
 static void CreateCSMResources()
 {
     vkn::AllocationInfo allocInfo = {};
@@ -4585,37 +4636,6 @@ static void CreateCSMResources()
     csmRTViewArrayCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
     s_csmRTViewArray.Create(csmRTViewArrayCreateInfo).SetDebugName("CSM_DEPTH_RT_VIEW_ARRAY");
-}
-
-
-static void CreateGeomCullingAndInstancingResources()
-{
-    CreateCamGeomCullResources(s_mainCamGeomCullResources, "MAIN_CAM");
-
-    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        char prefix[64] = {0};
-        
-        sprintf_s(prefix, "CSM_CAM_%u", i);
-        CreateCamGeomCullResources(s_csmCamsGeomCullResources[i], prefix);
-
-        sprintf_s(prefix, "CSM_HZB_%u", i);
-        CreateHZB(
-            CSM_SPLIT_HZB_SIZE, 
-            CSM_SPLIT_HZB_SIZE, 
-            prefix, 
-            s_csmCamsGeomCullResources[i].hzb, 
-            s_csmCamsGeomCullResources[i].hzbView, 
-            s_csmCamsGeomCullResources[i].hzbMipViews
-        );
-
-        s_csmCamsGeomCullResources[i].sdsmSplitDataBuffer
-            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
-            .SetDebugName("SDSM_SPLIT_DATA_BUFFER_%u", i);
-            
-        s_csmCamsGeomCullResources[i].sdsmSplitViewBoundsBuffer
-            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
-            .SetDebugName("SDSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
-    }
 }
 
 
@@ -4828,7 +4848,7 @@ static void WriteCommonDescriptorSet()
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
 #endif
 
-    s_descriptorBuffer.WriteDescriptor(setID, COMMON_NAIN_CAM_DATA_CB_DESCRIPTOR_SLOT, 0, s_commonMainCamDataConstBuffer);
+    s_descriptorBuffer.WriteDescriptor(setID, COMMON_NAIN_CAM_DATA_CB_DESCRIPTOR_SLOT, 0, s_mainCamResources.camDataBuffer);
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
@@ -4846,7 +4866,7 @@ static void WriteCommonDescriptorSet()
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
 
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    s_descriptorBuffer.WriteDescriptor(setID, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_mainCamGeomCullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    s_descriptorBuffer.WriteDescriptor(setID, COMMON_HZB_DESCRIPTOR_SLOT, 0, s_mainCamResources.cullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 
@@ -5599,20 +5619,10 @@ static void LoadScene(const fs::path& filepath)
 }
 
 
-static void CreateMainCamConstBuffer()
-{
-    s_commonMainCamDataConstBuffer.CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1).SetDebugName("COMMON_MAIN_CAM_DATA_CB");
-}
-
-
-static void CreateCommonConstBuffer()
+static void CreateCommonConstBuffers()
 {
     s_commonConstBuffer.CreateConstBuffer<GPU_CommonCBData>(&s_vkDevice, 1).SetDebugName("COMMON_CB");
-}
 
-
-static void CreateCommonDbgConstBuffer()
-{
 #ifdef ENG_BUILD_DEBUG
     s_commonDbgConstBuffer.CreateConstBuffer<GPU_CommonDbgCBData>(&s_vkDevice, 1).SetDebugName("COMMON_DBG_CB");
 #endif
@@ -5646,11 +5656,11 @@ static void UpdateMainCamConstBuffer()
 {
     TM_MARKER_C(0x008b8b, "UpdateMainCamConstBuffer");
 
-    GPU_CommonCameraData& constBuff = *reinterpret_cast<GPU_CommonCameraData*>(s_commonMainCamDataConstBuffer.Map());
+    GPU_CommonCameraData& constBuff = *reinterpret_cast<GPU_CommonCameraData*>(s_mainCamResources.camDataBuffer.Map());
 
     FillCameraDataGPU(constBuff, s_mainCamera);
 
-    s_commonMainCamDataConstBuffer.Unmap();
+    s_mainCamResources.camDataBuffer.Unmap();
 }
 
 
@@ -6134,7 +6144,7 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
     }
 
     for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+        CSMCamResources& res = s_csmCamsResources[i];
 
         const VkAccessFlagBits2 splitDataAccess = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
         
@@ -6145,8 +6155,8 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
         }
 
         barriers
-            .AddBufferBarrier(res.sdsmSplitDataBuffer, stage, splitDataAccess)
-            .AddBufferBarrier(res.sdsmSplitViewBoundsBuffer, stage, splitViewBoundsAccess);
+            .AddBufferBarrier(res.splitDataBuffer, stage, splitDataAccess)
+            .AddBufferBarrier(res.splitViewBoundsBuffer, stage, splitViewBoundsAccess);
     }
 
     barriers.Push();
@@ -6167,14 +6177,10 @@ static void SdsmPushResources(vkn::CmdBuffer& cmdBuffer, vkn::PSO& pso, GPU_Sdsm
     }
 
     for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        CameraGeomCullResources& res = s_csmCamsGeomCullResources[i];
+        CSMCamResources& res = s_csmCamsResources[i];
 
-        pushDescriptors.emplace_back(
-            vkn::PushDescriptor::StorageBuffer(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, i, res.sdsmSplitViewBoundsBuffer)
-        );
-        pushDescriptors.emplace_back(
-            vkn::PushDescriptor::StorageBuffer(SDSM_SPLITS_DESCRIPTOR_SLOT, i, res.sdsmSplitDataBuffer)
-        );        
+        pushDescriptors.emplace_back(vkn::PushDescriptor::StorageBuffer(SDSM_SPLIT_VIEW_BOUNDS_DESCRIPTOR_SLOT, i, res.splitViewBoundsBuffer));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::StorageBuffer(SDSM_SPLITS_DESCRIPTOR_SLOT, i, res.splitDataBuffer));        
     }
 
     cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, pushDescriptors);
@@ -6950,7 +6956,7 @@ static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(0xb3b3b3, "MainCam");
         TM_GPU_MARKER_C(cmdBuffer, 0xb3b3b3, "MainCam");
 
-        HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, 0, s_mainCamGeomCullResources.hzb, s_mainCamGeomCullResources.hzbMipViews);
+        HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, 0, s_mainCamResources.cullResources.hzb, s_mainCamResources.cullResources.hzbMipViews);
     }
 
     {
@@ -6961,7 +6967,10 @@ static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(0xb3b3b3, "Split_%u", split);
             TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb3b3b3, "Split_%u", split);
     
-            HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[split], split, s_csmCamsGeomCullResources[split].hzb, s_csmCamsGeomCullResources[split].hzbMipViews);
+            HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[split], split, 
+                s_csmCamsResources[split].cullResources.hzb, 
+                s_csmCamsResources[split].cullResources.hzbMipViews
+            );
         }
     }
 }
@@ -6982,7 +6991,7 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
         const bool hzbCulling = s_useMeshCulling && s_useMeshHZBCulling;
         const bool coverageCulling = false;
 
-        GeomPreparingPass(cmdBuffer, cam, s_mainCamGeomCullResources, coverageCulling, frustumCulling, hzbCulling);
+        GeomPreparingPass(cmdBuffer, cam, s_mainCamResources.cullResources, coverageCulling, frustumCulling, hzbCulling);
     }
 
     {
@@ -6997,7 +7006,7 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(0xb0e0e6, "Split_%u", i);
             TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb0e0e6, "Split_%u", i);
             
-            GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsGeomCullResources[i], coverageCulling, frustumCulling, hzbCulling);
+            GeomPreparingPass(cmdBuffer, s_csmCameras[i], s_csmCamsResources[i].cullResources, coverageCulling, frustumCulling, hzbCulling);
         }
     }
 }
@@ -7114,14 +7123,14 @@ void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(passColor, "Opaque");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_mainCamera, s_mainCamGeomCullResources, s_depthRT, 0, s_depthRTView);
+        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, 0, s_depthRTView);
     }
 
     if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_AKILL] > 0) {
         TM_MARKER_C(passColor, "AKill");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
 
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_mainCamera, s_mainCamGeomCullResources, s_depthRT, 0, s_depthRTView);
+        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, 0, s_depthRTView);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -7154,7 +7163,7 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
                 cmdBuffer, 
                 GEOM_MAT_TYPE_OPAQUE, 
                 s_csmCameras[split],
-                s_csmCamsGeomCullResources[split], 
+                s_csmCamsResources[split].cullResources, 
                 s_csmRT,
                 split,
                 s_csmRTViews[split]
@@ -7174,7 +7183,7 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
                 cmdBuffer, 
                 GEOM_MAT_TYPE_AKILL, 
                 s_csmCameras[split],
-                s_csmCamsGeomCullResources[split], 
+                s_csmCamsResources[split].cullResources, 
                 s_csmRT,
                 split,
                 s_csmRTViews[split]
@@ -7212,9 +7221,9 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    vkn::Buffer& drawCmdBuffer = s_mainCamGeomCullResources.drawCmdBuffer;
-    vkn::Buffer& drawCmdCountBuffer = s_mainCamGeomCullResources.drawCmdCountsBuffer;
-    vkn::Buffer& visIDBuffer = s_mainCamGeomCullResources.GetCullVisInstIDsBuffer();
+    vkn::Buffer& drawCmdBuffer = s_mainCamResources.cullResources.drawCmdBuffer;
+    vkn::Buffer& drawCmdCountBuffer = s_mainCamResources.cullResources.drawCmdCountsBuffer;
+    vkn::Buffer& visIDBuffer = s_mainCamResources.cullResources.GetCullVisInstIDsBuffer();
 
     const uint32_t firstCmdOffset = s_geomPerMatTypeOffsets[matType] * sizeof(GPU_CmdDrawIndexedIndirect);
     const uint32_t cmdRangeSize = s_geomPerMatTypeCounts[matType] * sizeof(GPU_CmdDrawIndexedIndirect);
@@ -7279,7 +7288,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array {
             vkn::PushDescriptor::StorageBuffer(GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer),
         #ifdef ENG_BUILD_DEBUG
-            vkn::PushDescriptor::StorageBuffer(GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, 0, s_mainCamGeomCullResources.dbgCullInstDataBuffer),
+            vkn::PushDescriptor::StorageBuffer(GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT, 0, s_mainCamResources.cullResources.dbgCullInstDataBuffer),
         #endif
         });
 
@@ -7588,7 +7597,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             pVisTex = &s_depthRT;
             break;
         case DBG_RT_VIEW_TYPE_COMMON_HZB:
-            pVisTex = &s_mainCamGeomCullResources.hzb;
+            pVisTex = &s_mainCamResources.cullResources.hzb;
             break;
         case DBG_RT_VIEW_TYPE_GBUFFER_ALBEDO:
             pVisTex = &s_gbufferRTs[0];
@@ -7624,7 +7633,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             pVisTex = &s_csmRT;
             break;
         case DBG_RT_VIEW_TYPE_CSM_HZB:
-            pVisTex = &s_csmCamsGeomCullResources[s_dbgOutputRTSplitIndex].hzb;
+            pVisTex = &s_csmCamsResources[s_dbgOutputRTSplitIndex].cullResources.hzb;
             break;
     }
 
@@ -7678,7 +7687,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
         
         cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COMMON_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTColorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, 0, s_mainCamGeomCullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_COMMON_HZB_DESCRIPTOR_SLOT, 0, s_mainCamResources.cullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
@@ -7688,7 +7697,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT, 0, s_csmCamsGeomCullResources[s_dbgOutputRTSplitIndex].hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT, 0, s_csmCamsResources[s_dbgOutputRTSplitIndex].cullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
         });
 
         GPU_DbgRTViewPushConst pushConsts = {};
@@ -8748,10 +8757,8 @@ int main(int argc, char* argv[])
 
     CreateCommonSamplers();
     CreateCommonSMSamplers();
-    CreateMainCamConstBuffer();
-    CreateCommonConstBuffer();
-    CreateCommonDbgConstBuffer();
-    CreateGeomCullingAndInstancingResources();
+    CreateCommonConstBuffers();
+    CreateCamerasData();
     CreateCSMResources();
     CreateDeferredLightingConstBuffer();
     CreateDbgDrawResources();
