@@ -1521,6 +1521,9 @@ struct CSMCamResources
 
     vkn::Buffer splitDataBuffer;
     vkn::Buffer splitViewBoundsBuffer;
+
+    vkn::Texture     rt;
+    vkn::TextureView rtView;
 };
 
 
@@ -1585,10 +1588,6 @@ static vkn::TextureView s_colorRTView8U;
 
 static vkn::Texture     s_colorRT16F;
 static vkn::TextureView s_colorRTView16F;
-
-static vkn::Texture                                  s_csmRT;
-static vkn::TextureView                              s_csmRTViewArray;
-static std::array<vkn::TextureView, CSM_SPLIT_COUNT> s_csmRTViews;
 
 static vkn::ComputePSOBuilder  s_computePSOBuilder;
 static vkn::GraphicsPSOBuilder s_graphicsPSOBuilder;
@@ -3333,7 +3332,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, CSM_SPLIT_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
     createInfo.descriptorInfos = descriptors;
@@ -4560,37 +4559,6 @@ static void CreateMainCameraData()
 
 static void CreateCSMCamerasData()
 {
-    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-        char prefix[64] = {0};
-
-        CameraGeomCullResources& cullRes = s_csmCamsResources[i].cullResources;
-        
-        sprintf_s(prefix, "CSM_CAM_%u", i);
-        CreateCamGeomCullResources(cullRes, prefix);
-
-        sprintf_s(prefix, "CSM_HZB_%u", i);
-        CreateHZB(CSM_SPLIT_HZB_SIZE, CSM_SPLIT_HZB_SIZE, prefix, cullRes.hzb, cullRes.hzbView, cullRes.hzbMipViews);
-
-        s_csmCamsResources[i].splitDataBuffer
-            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
-            .SetDebugName("CSM_SPLIT_DATA_BUFFER_%u", i);
-            
-        s_csmCamsResources[i].splitViewBoundsBuffer
-            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
-            .SetDebugName("CSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
-    }
-}
-
-
-static void CreateCamerasData()
-{
-    CreateMainCameraData();
-    CreateCSMCamerasData();
-}
-
-
-static void CreateCSMResources()
-{
     vkn::AllocationInfo allocInfo = {};
     allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -4599,43 +4567,56 @@ static void CreateCSMResources()
     rtCreateInfo.pDevice = &s_vkDevice;
     rtCreateInfo.type = VK_IMAGE_TYPE_2D;
     rtCreateInfo.format = VK_FORMAT_D32_SFLOAT;
-    rtCreateInfo.extent = VkExtent3D{ CSM_SPLIT_RT_SIZE, CSM_SPLIT_RT_SIZE, 1u };
     rtCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     rtCreateInfo.flags = 0;
     rtCreateInfo.mipLevels = 1;
-    rtCreateInfo.arrayLayers = CSM_SPLIT_COUNT;
+    rtCreateInfo.arrayLayers = 1;
     rtCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     rtCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     rtCreateInfo.pAllocInfo = &allocInfo;
 
-    s_csmRT.Create(rtCreateInfo).SetDebugName("CSM_DEPTH_RT");
-
     VkComponentMapping mapping = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 
-    for (size_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+    for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
+        char prefix[64] = {0};
+
+        CSMCamResources& camRes = s_csmCamsResources[i];
+        CameraGeomCullResources& cullRes = camRes.cullResources;
+        
+        sprintf_s(prefix, "CSM_CAM_%u", i);
+        CreateCamGeomCullResources(cullRes, prefix);
+
+        sprintf_s(prefix, "CSM_HZB_%u", i);
+        CreateHZB(CSM_SPLIT_HZB_SIZE, CSM_SPLIT_HZB_SIZE, prefix, cullRes.hzb, cullRes.hzbView, cullRes.hzbMipViews);
+
+        camRes.splitDataBuffer
+            .CreateStorageBuffer<GPU_CsmSplitData>(&s_vkDevice, 1)
+            .SetDebugName("CSM_SPLIT_DATA_BUFFER_%u", i);
+            
+        camRes.splitViewBoundsBuffer
+            .CreateStorageBuffer<GPU_SdsmSplitViewBounds>(&s_vkDevice, 1)
+            .SetDebugName("CSM_SPLIT_VIEW_BOUNDS_BUFFER_%u", i);
+
+        rtCreateInfo.extent = VkExtent3D{ CSM_SPLIT_RT_SIZE, CSM_SPLIT_RT_SIZE, 1u };
+        camRes.rt.Create(rtCreateInfo).SetDebugName("CSM_RT_%u", i);
+
         VkImageSubresourceRange subresourceRange = {};
         subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         subresourceRange.baseMipLevel = 0;
         subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-        subresourceRange.baseArrayLayer = split;
+        subresourceRange.baseArrayLayer = 0;
         subresourceRange.layerCount = 1;
 
-        s_csmRTViews[split].Create(s_csmRT, mapping, subresourceRange).SetDebugName("CSM_DEPTH_RT_VIEW_%zu", split);
+        camRes.rtView.Create(camRes.rt, mapping, subresourceRange).SetDebugName("CSM_RT_VIEW_%u", i);
     }
+}
 
-    vkn::TextureViewCreateInfo csmRTViewArrayCreateInfo = {};
-    csmRTViewArrayCreateInfo.pOwner = &s_csmRT;
-    csmRTViewArrayCreateInfo.type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    csmRTViewArrayCreateInfo.format = s_csmRT.GetFormat();
-    csmRTViewArrayCreateInfo.components = mapping;
-    csmRTViewArrayCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    csmRTViewArrayCreateInfo.subresourceRange.baseMipLevel = 0;
-    csmRTViewArrayCreateInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-    csmRTViewArrayCreateInfo.subresourceRange.baseArrayLayer = 0;
-    csmRTViewArrayCreateInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    s_csmRTViewArray.Create(csmRTViewArrayCreateInfo).SetDebugName("CSM_DEPTH_RT_VIEW_ARRAY");
+static void CreateCamerasData()
+{
+    CreateMainCameraData();
+    CreateCSMCamerasData();
 }
 
 
@@ -6289,8 +6270,7 @@ static void SdsmPass(vkn::CmdBuffer& cmdBuffer)
 static void HZBGeneratePass(
     vkn::CmdBuffer& cmdBuffer, 
     vkn::Texture& srcDepthTex, 
-    vkn::TextureView& srcDepthTexView, 
-    uint32_t srcLayer,
+    vkn::TextureView& srcDepthTexView,
     vkn::Texture& hzb,
     std::span<vkn::TextureView> hzbMipViews
 ) {
@@ -6303,16 +6283,14 @@ static void HZBGeneratePass(
         .shaderSetIdx = DESC_SET_PER_FRAME
     });
 
-    glm::uvec2 srcMipSize = glm::uvec2(hzb.GetSizeX(), hzb.GetSizeY());
-    glm::uvec2 dstMipSize = srcMipSize;
+    glm::uvec2 srcMipSize = glm::uvec2(srcDepthTex.GetSizeX(), srcDepthTex.GetSizeY());
+    glm::uvec2 dstMipSize = glm::uvec2(hzb.GetSizeX(), hzb.GetSizeY());
 
     for (uint32_t mip = 0; mip < hzb.GetMipCount(); ++mip) {
         vkn::Texture& srcTex = mip == 0 ? srcDepthTex : hzb;
         vkn::Texture& dstTex = hzb;
         const uint32_t srcMip = mip == 0 ? 0 : mip - 1;
         const uint32_t dstMip = mip == 0 ? 0 : mip;
-
-        const uint32_t srcArrayLayer = mip == 0 ? srcLayer : 0;
 
         vkn::TextureView& srcMipView = mip == 0 ? srcDepthTexView : hzbMipViews[mip - 1];
         vkn::TextureView& dstMipView = hzbMipViews[mip];
@@ -6327,7 +6305,7 @@ static void HZBGeneratePass(
                     mip == 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT, 
                     srcMip,
                     1, 
-                    srcArrayLayer,
+                    0,
                     1)
                 .AddTextureBarrier(
                     dstTex,
@@ -6956,7 +6934,7 @@ static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(0xb3b3b3, "MainCam");
         TM_GPU_MARKER_C(cmdBuffer, 0xb3b3b3, "MainCam");
 
-        HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, 0, s_mainCamResources.cullResources.hzb, s_mainCamResources.cullResources.hzbMipViews);
+        HZBGeneratePass(cmdBuffer, s_depthRT, s_depthRTView, s_mainCamResources.cullResources.hzb, s_mainCamResources.cullResources.hzbMipViews);
     }
 
     {
@@ -6967,10 +6945,9 @@ static void PrevFrameHZBGenPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(0xb3b3b3, "Split_%u", split);
             TM_GPU_MARKER_C_FMT(cmdBuffer, 0xb3b3b3, "Split_%u", split);
     
-            HZBGeneratePass(cmdBuffer, s_csmRT, s_csmRTViews[split], split, 
-                s_csmCamsResources[split].cullResources.hzb, 
-                s_csmCamsResources[split].cullResources.hzbMipViews
-            );
+            CSMCamResources& res = s_csmCamsResources[split];
+
+            HZBGeneratePass(cmdBuffer, res.rt, res.rtView, res.cullResources.hzb, res.cullResources.hzbMipViews);
         }
     }
 }
@@ -7012,7 +6989,7 @@ static void PrepareGeomPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
-void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, const eng::Camera& cam, CameraGeomCullResources& resources, vkn::Texture& depthRT, uint32_t layer, vkn::TextureView& depthRTView)
+void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, const eng::Camera& cam, CameraGeomCullResources& resources, vkn::Texture& depthRT, vkn::TextureView& depthRTView)
 {
     CORE_ASSERT(matType < GEOM_MAT_TYPE_COUNT);
     
@@ -7039,7 +7016,7 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, const 
                 VK_IMAGE_ASPECT_DEPTH_BIT,
                 0,
                 1,
-                layer,
+                0,
                 1)
             .AddBufferBarrier(
                 drawCmdBuffer, 
@@ -7123,14 +7100,14 @@ void GeomDepthPass(vkn::CmdBuffer& cmdBuffer)
         TM_MARKER_C(passColor, "Opaque");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "Opaque");
 
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, 0, s_depthRTView);
+        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, s_depthRTView);
     }
 
     if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_AKILL] > 0) {
         TM_MARKER_C(passColor, "AKill");
         TM_GPU_MARKER_C(cmdBuffer, passColor, "AKill");
 
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, 0, s_depthRTView);
+        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_mainCamera, s_mainCamResources.cullResources, s_depthRT, s_depthRTView);
     }
 
 #ifdef ENG_BUILD_DEBUG
@@ -7159,15 +7136,9 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(passColor, "Split_%u", split);
             TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Split_%u", split);
 
-            RenderPass_Depth(
-                cmdBuffer, 
-                GEOM_MAT_TYPE_OPAQUE, 
-                s_csmCameras[split],
-                s_csmCamsResources[split].cullResources, 
-                s_csmRT,
-                split,
-                s_csmRTViews[split]
-            );
+            CSMCamResources& res = s_csmCamsResources[split];
+
+            RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_csmCameras[split], res.cullResources, res.rt, res.rtView);
         }
     }
 
@@ -7179,15 +7150,9 @@ void CSMRenderPass(vkn::CmdBuffer& cmdBuffer)
             TM_MARKER_C_FMT(passColor, "Split_%u", split);
             TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Split_%u", split);
     
-            RenderPass_Depth(
-                cmdBuffer, 
-                GEOM_MAT_TYPE_AKILL, 
-                s_csmCameras[split],
-                s_csmCamsResources[split].cullResources, 
-                s_csmRT,
-                split,
-                s_csmRTViews[split]
-            );
+            CSMCamResources& res = s_csmCamsResources[split];
+
+            RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_csmCameras[split], res.cullResources, res.rt, res.rtView);
         }
     }
 
@@ -7377,13 +7342,6 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);
-        
-    barrierList.AddTextureBarrier(
-        s_csmRT,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        VK_ACCESS_2_SHADER_READ_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT);
 
     barrierList.AddTextureBarrier(
         s_irradianceMapTexture,
@@ -7405,6 +7363,16 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT);
+
+    for (CSMCamResources& res : s_csmCamsResources) {
+        barrierList.AddTextureBarrier(
+            res.rt,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_2_SHADER_READ_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT
+        );
+    }
 
     barrierList.Push();
     
@@ -7433,18 +7401,26 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
             .shaderSetIdx = DESC_SET_PER_FRAME
         });
 
-        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, std::array{
-            vkn::PushDescriptor::ConstantBuffer(DEFERRED_LIGHTING_DATA_DESCRIPTOR_SLOT, 0, s_deferredLightingConstBuffer),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-        });
+        static std::vector<vkn::PushDescriptor> pushDescriptors;
+        pushDescriptors.clear();
+
+        pushDescriptors.emplace_back(vkn::PushDescriptor::ConstantBuffer(DEFERRED_LIGHTING_DATA_DESCRIPTOR_SLOT, 0, s_deferredLightingConstBuffer));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[3], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT, 0, s_depthRTView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT, 0, s_irradianceMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+            CSMCamResources& res = s_csmCamsResources[split];
+
+            pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT, split, res.rtView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+        }
+
+        cmdBuffer.CmdPushDescriptors(pso, DESC_SET_PER_DRAW, pushDescriptors);
 
         cmdBuffer.CmdDraw(6, 1, 0, 0);
     cmdBuffer.CmdEndRendering();
@@ -7630,7 +7606,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             pVisTex = &s_skyboxTexture;
             break;
         case DBG_RT_VIEW_TYPE_CSM_DEPTH:
-            pVisTex = &s_csmRT;
+            pVisTex = &s_csmCamsResources[s_dbgOutputRTSplitIndex].rt;
             break;
         case DBG_RT_VIEW_TYPE_CSM_HZB:
             pVisTex = &s_csmCamsResources[s_dbgOutputRTSplitIndex].cullResources.hzb;
@@ -7639,7 +7615,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
 
     VkImageAspectFlagBits aspect;
 
-    if (pVisTex == &s_depthRT || pVisTex == &s_csmRT) {
+    if (pVisTex == &s_depthRT || pVisTex == &s_csmCamsResources[s_dbgOutputRTSplitIndex].rt) {
         aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
     } else {
         aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -7696,7 +7672,7 @@ static void DbgRTViewPass(vkn::CmdBuffer& cmdBuffer)
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT, 0, s_prefilteredEnvMapTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_BRDF_LUT_DESCRIPTOR_SLOT, 0, s_brdfLUTTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_SKYBOX_DESCRIPTOR_SLOT, 0, s_skyboxTextureView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmRTViewArray, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+            vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_DESCRIPTOR_SLOT, 0, s_csmCamsResources[s_dbgOutputRTSplitIndex].rtView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
             vkn::PushDescriptor::SampledTexture(DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT, 0, s_csmCamsResources[s_dbgOutputRTSplitIndex].cullResources.hzbView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
         });
 
@@ -8759,7 +8735,6 @@ int main(int argc, char* argv[])
     CreateCommonSMSamplers();
     CreateCommonConstBuffers();
     CreateCamerasData();
-    CreateCSMResources();
     CreateDeferredLightingConstBuffer();
     CreateDbgDrawResources();
     CreateDescriptors();

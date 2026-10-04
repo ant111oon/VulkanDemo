@@ -229,7 +229,8 @@ GPU_CsmSplitBlendData GetCsmSplitBlendData(in float viewZ, in uint split)
 
 float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiverCmp)
 {
-    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord, 0).r;
+    const uint split = (uint)texCoord.z;
+    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM[split], GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord.xy, 0).r;
 
 #ifdef ENV_REVERSED_Z
     return zBlocker < zReceiverCmp ? 1.f : 0.f;
@@ -241,9 +242,11 @@ float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiverCmp)
 
 float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in float zReceiverCmp, in uint halfGridSize)
 {
+    const uint split = (uint)texCoord.z;
+
     [branch]
     if (halfGridSize == 0) {
-        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, texCoord, zReceiverCmp);
+        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], cmpSmp, texCoord.xy, zReceiverCmp);
     }
 
     const int radius = halfGridSize;
@@ -251,16 +254,15 @@ float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in fl
     const int sampleCount = (radius * 2 + 1) * (radius * 2 + 1);
     const float invSampleCount = rcp((float)sampleCount);
 
-    const uint split = (uint)texCoord.z;
     const float2 texelSize = DEFERRED_LIGHTING_CSM_SPLIT_INV_RT_SIZE(split);
 
     float shadow = 0.f;
 
     for (int y = -radius; y <= radius; ++y) {
         for (int x = -radius; x <= radius; ++x) {
-            const float3 uv = float3(texCoord.xy + float2(x, y) * texelSize, split);
-            
-            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, cmpSmp, uv, zReceiverCmp);
+            const float2 uv = texCoord.xy + float2(x, y) * texelSize;
+
+            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], cmpSmp, uv, zReceiverCmp);
         }
     }
 
@@ -322,7 +324,7 @@ float CalcCsmDiskPCF(
             continue;
         }
 
-        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, smSmp, float3(uv, split), zReceiverCmp);
+        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, uv, zReceiverCmp);
         ++validSamplesCount;
     }
 
@@ -406,7 +408,7 @@ GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in 
             continue;
         }
 
-        const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM, smp, float3(uv, split), 0).r;
+        const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM[split], smp, uv, 0).r;
         const float zBlockerViewSpace = OrthoDepthToViewDepth(zBlocker, zNear, zFar);
 
         if (zBlockerViewSpace < zReceiverViewSpace) {
@@ -460,7 +462,7 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
 
     // Very small penumbras do not justify running a full sample filter.
     if (filterRadiusTexels < DEFERRED_LIGHTING_CSM_PCSS_DATA.minFilterRadiusTexels) {
-        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM, smSmp, texCoord, zReceiverCmp);
+        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, texCoord.xy, zReceiverCmp);
     }
 
     return CalcCsmVogelPCF(
