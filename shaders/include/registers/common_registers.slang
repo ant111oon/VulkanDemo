@@ -14,7 +14,7 @@
 [vk::binding(0, DESC_SET_PER_FRAME)] SamplerState           COMMON_SAMPLERS[GPU_SamplerID::COUNT];
 [vk::binding(1, DESC_SET_PER_FRAME)] SamplerComparisonState COMMON_CMP_SAMPLERS[GPU_CmpSamplerID::COUNT];
 
-// 2 - free
+[vk::binding(2, DESC_SET_PER_FRAME)] ConstantBuffer<GPU_CommonCameraData> COMMON_NAIN_CAM_DATA_CB;
 
 [vk::binding(3, DESC_SET_PER_FRAME)] ConstantBuffer<GPU_CommonCBData>    COMMON_CB;
 [vk::binding(4, DESC_SET_PER_FRAME)] ConstantBuffer<GPU_CommonDbgCBData> COMMON_DBG_CB;
@@ -52,18 +52,18 @@
 #define COMMON_DBG_CSM_PCF_PRESET                     DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
 
 
-#define COMMON_MAIN_CAM_WPOS                 COMMON_CB.mainCam.wPos
-#define COMMON_MAIN_CAM_Z_NEAR               COMMON_CB.mainCam.zNear
-#define COMMON_MAIN_CAM_Z_FAR                COMMON_CB.mainCam.zFar
-#define COMMON_MAIN_CAM_VIEW_DIR             COMMON_CB.mainCam.viewDir
-#define COMMON_MAIN_CAM_UP_DIR               COMMON_CB.mainCam.upDir
-#define COMMON_MAIN_CAM_FRUSTUM              COMMON_CB.mainCam.frustum
-#define COMMON_MAIN_CAM_VIEW_MATRIX          COMMON_CB.mainCam.viewMatr
-#define COMMON_MAIN_CAM_PROJ_MATRIX          COMMON_CB.mainCam.projMatr
-#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX     COMMON_CB.mainCam.viewProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_MATRIX      COMMON_CB.mainCam.invViewMatr
-#define COMMON_MAIN_CAM_INV_PROJ_MATRIX      COMMON_CB.mainCam.invProjMatr
-#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX COMMON_CB.mainCam.invViewProjMatr
+#define COMMON_MAIN_CAM_WPOS                 COMMON_NAIN_CAM_DATA_CB.wPos
+#define COMMON_MAIN_CAM_Z_NEAR               COMMON_NAIN_CAM_DATA_CB.zNear
+#define COMMON_MAIN_CAM_Z_FAR                COMMON_NAIN_CAM_DATA_CB.zFar
+#define COMMON_MAIN_CAM_VIEW_DIR             COMMON_NAIN_CAM_DATA_CB.viewDir
+#define COMMON_MAIN_CAM_UP_DIR               COMMON_NAIN_CAM_DATA_CB.upDir
+#define COMMON_MAIN_CAM_FRUSTUM              COMMON_NAIN_CAM_DATA_CB.frustum
+#define COMMON_MAIN_CAM_VIEW_MATRIX          COMMON_NAIN_CAM_DATA_CB.viewMatr
+#define COMMON_MAIN_CAM_PROJ_MATRIX          COMMON_NAIN_CAM_DATA_CB.projMatr
+#define COMMON_MAIN_CAM_VIEW_PROJ_MATRIX     COMMON_NAIN_CAM_DATA_CB.viewProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_MATRIX      COMMON_NAIN_CAM_DATA_CB.invViewMatr
+#define COMMON_MAIN_CAM_INV_PROJ_MATRIX      COMMON_NAIN_CAM_DATA_CB.invProjMatr
+#define COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX COMMON_NAIN_CAM_DATA_CB.invViewProjMatr
 
 #define COMMON_SUN_DATA                      COMMON_CB.sunData
 

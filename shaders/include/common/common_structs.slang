@@ -155,8 +155,6 @@ struct GPU_CommonCameraData
 
 struct GPU_CommonCBData
 {
-    GPU_CommonCameraData mainCam;
-
     GPU_SunData sunData;
 
     uint2 screenSize;

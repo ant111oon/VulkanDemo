@@ -367,8 +367,6 @@ struct GPU_CommonCameraData
 
 struct GPU_CommonCBData
 {
-    GPU_CommonCameraData mainCam;
-
     GPU_SunData sunData;
 
     uint2 screenSize;
@@ -609,8 +607,6 @@ struct GPU_PrefilteredEnvMapPushConst
 
 struct GPU_DbgPrimPushConst
 {
-    float4x4 viewProjMatr;
-
     uint linePass : 1;
     uint padding : 31;
 };
@@ -950,7 +946,7 @@ END_DESCRIPTOR_SET_DESC;
 
 static constexpr size_t COMMON_SAMPLERS_DESCRIPTOR_SLOT = 0;
 static constexpr size_t COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT = 1;
-// 2 - free
+static constexpr size_t COMMON_NAIN_CAM_DATA_CB_DESCRIPTOR_SLOT = 2;
 static constexpr size_t COMMON_CB_DESCRIPTOR_SLOT = 3;
 static constexpr size_t COMMON_DBG_CB_DESCRIPTOR_SLOT = 4;
 static constexpr size_t COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT = 5;
@@ -1455,6 +1451,7 @@ static std::array<vkn::PSO,       PASS_ID_COUNT> s_PSOs;
 static std::array<vkn::Buffer, COMMON_GEOM_STREAM_COUNT> s_geomStreamBuffers;
 static vkn::Buffer s_geomIndexBuffer;
 
+static vkn::Buffer s_commonMainCamDataConstBuffer;
 static vkn::Buffer s_commonConstBuffer;
 static vkn::Buffer s_commonDbgConstBuffer;
 
@@ -3150,6 +3147,7 @@ static void CreateCommonDescriptorSetLayout()
     std::array descriptors = {
         vkn::DescriptorInfo::Create(COMMON_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, SMP_ID_COUNT, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CMP_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, CMP_SMP_ID_COUNT, VK_SHADER_STAGE_ALL),
+        vkn::DescriptorInfo::Create(COMMON_NAIN_CAM_DATA_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DBG_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_GEOM_STREAMS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, COMMON_GEOM_STREAM_COUNT, VK_SHADER_STAGE_VERTEX_BIT),
@@ -4830,6 +4828,7 @@ static void WriteCommonDescriptorSet()
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_DBG_CB_DESCRIPTOR_SLOT, 0, s_commonDbgConstBuffer);
 #endif
 
+    s_descriptorBuffer.WriteDescriptor(setID, COMMON_NAIN_CAM_DATA_CB_DESCRIPTOR_SLOT, 0, s_commonMainCamDataConstBuffer);
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonConstBuffer);
     
     for (size_t i = 0; i < COMMON_GEOM_STREAM_COUNT; ++i) {
@@ -5600,6 +5599,12 @@ static void LoadScene(const fs::path& filepath)
 }
 
 
+static void CreateMainCamConstBuffer()
+{
+    s_commonMainCamDataConstBuffer.CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1).SetDebugName("COMMON_MAIN_CAM_DATA_CB");
+}
+
+
 static void CreateCommonConstBuffer()
 {
     s_commonConstBuffer.CreateConstBuffer<GPU_CommonCBData>(&s_vkDevice, 1).SetDebugName("COMMON_CB");
@@ -5620,13 +5625,11 @@ static void CreateDeferredLightingConstBuffer()
 }
 
 
-void UpdateGPUCommonConstBuffer()
+static void UpdateCommonConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "UpdateGPUCommonConstBuffer");
+    TM_MARKER_C(0x008b8b, "UpdateCommonConstBuffer");
 
     GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
-
-    FillCameraDataGPU(constBuff.mainCam, s_mainCamera);
 
     constBuff.sunData.direction = SUN_LIGHT_DIR;
     constBuff.sunData.colorU32 = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
@@ -5639,9 +5642,21 @@ void UpdateGPUCommonConstBuffer()
 }
 
 
-void UpdateGPUDeferredLightingConstBuffer()
+static void UpdateMainCamConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "UpdateGPUDeferredLightingConstBuffer");
+    TM_MARKER_C(0x008b8b, "UpdateMainCamConstBuffer");
+
+    GPU_CommonCameraData& constBuff = *reinterpret_cast<GPU_CommonCameraData*>(s_commonMainCamDataConstBuffer.Map());
+
+    FillCameraDataGPU(constBuff, s_mainCamera);
+
+    s_commonMainCamDataConstBuffer.Unmap();
+}
+
+
+static void UpdateDeferredLightingConstBuffer()
+{
+    TM_MARKER_C(0x008b8b, "UpdateDeferredLightingConstBuffer");
 
     GPU_LightingData& constBuff = *reinterpret_cast<GPU_LightingData*>(s_deferredLightingConstBuffer.Map());
 
@@ -5675,10 +5690,10 @@ void UpdateGPUDeferredLightingConstBuffer()
 }
 
 
-void UpdateGPUDbgConstBuffer()
+void UpdateDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    TM_MARKER_C(0x008b8b, "UpdateGPUDbgConstBuffer");
+    TM_MARKER_C(0x008b8b, "UpdateDbgConstBuffer");
 
     GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
@@ -7327,7 +7342,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    UpdateGPUDeferredLightingConstBuffer();
+    UpdateDeferredLightingConstBuffer();
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -7810,7 +7825,6 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
         }
 
         GPU_DbgPrimPushConst pushConsts = {};
-        pushConsts.viewProjMatr = s_mainCamera.GetViewProjMatrix();
 
         if (lineInstCount > 0) {
             TM_GPU_MARKER_C(cmdBuffer, 0xee0000, "Lines");
@@ -8460,8 +8474,10 @@ static void RenderScene()
     // submission is completely finished before reusing its resources.
     s_renderFinishedFence.WaitFor(10'000'000'000);
 
-    UpdateGPUCommonConstBuffer();
-    UpdateGPUDbgConstBuffer();
+    UpdateMainCamConstBuffer();
+
+    UpdateCommonConstBuffer();
+    UpdateDbgConstBuffer();
 
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &s_nextImageIdx);
     
@@ -8732,6 +8748,7 @@ int main(int argc, char* argv[])
 
     CreateCommonSamplers();
     CreateCommonSMSamplers();
+    CreateMainCamConstBuffer();
     CreateCommonConstBuffer();
     CreateCommonDbgConstBuffer();
     CreateGeomCullingAndInstancingResources();
