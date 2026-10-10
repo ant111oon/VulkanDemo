@@ -64,11 +64,17 @@ enum GPU_SdsmPass
 struct GPU_SdsmPushConst
 {
     GPU_SdsmPass pass;
+    float splitZExtension;
+    float splitXYExtensionCoef;
+    uint2 splitRTSize[CSM_SPLIT_COUNT];
 };
 
 [[vk::push_constant]] GPU_SdsmPushConst SDSM_CONST;
 
-#define SDSM_PASS SDSM_CONST.pass
+#define SDSM_PASS                     SDSM_CONST.pass
+#define SDSM_SPLIT_Z_EXTNESION        SDSM_CONST.splitZExtension
+#define SDSM_SPLIT_XY_EXTNESION_COEF  SDSM_CONST.splitXYExtensionCoef
+#define SDSM_SPLIT_RT_SIZE(SPLIT_IDX) SDSM_CONST.splitRTSize[SPLIT_IDX]
 
 
 [vk::binding(0, DESC_SET_PER_DRAW)] Texture2D SDSM_DEPTH;

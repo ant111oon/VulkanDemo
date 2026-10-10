@@ -62,39 +62,80 @@ float4x4 Inverse(in float4x4 m)
 
 float4x4 LookAtRH(in float3 eye, in float3 target, in float3 up)
 {
-    float3 f = normalize(target - eye);
-    float3 s = normalize(cross(f, up));
-    float3 u = cross(s, f);
+    const float3 f = normalize(target - eye);
+    const float3 s = normalize(cross(f, up));
+    const float3 u = cross(s, f);
 
     return float4x4(
-        s.x, u.x, -f.x, -dot(s, eye),
-        s.y, u.y, -f.y, -dot(u, eye),
-        s.z, u.z, -f.z,  dot(f, eye),
-        0.f, 0.f,  0.f,  1.f
+        s.x,  s.y,  s.z, -dot(s, eye),
+        u.x,  u.y,  u.z, -dot(u, eye),
+       -f.x, -f.y, -f.z,  dot(f, eye),
+        0.f,  0.f,  0.f,  1.f
     );
+
 }
 
 
 float4x4 OrthoRH_ZO(in float left, in float right, in float bottom, in float top, in float zNear, in float zFar)
 {
+#if defined(ENV_REVERSED_Z)
+    const float n = zFar;
+    const float f = zNear;
+#else
+    const float n = zNear;
+    const float f = zFar;
+#endif
+
+#ifdef ENV_API_VULKAN
+    static const float yFlip = -1.f;
+#else
+    static const float yFlip = 1.f;
+#endif
+
+    const float xScale = 2.f / (right - left);
+    const float yScale = 2.f / (top - bottom) * yFlip;
+    const float zScale = -rcp(f - n);
+
+    const float xOffset = -(right + left) / (right - left);
+    const float yOffset = -(top + bottom) / (top - bottom) * yFlip;
+    const float zOffset = -n / (f - n);
+
     return float4x4(
-        2.f / (right - left), 0.f, 0.f, -(right + left) / (right - left),
-        0.f, 2.f / (top - bottom), 0.f, -(top + bottom) / (top - bottom),
-        0.f, 0.f, -rcp(zFar - zNear), -zNear / (zFar - zNear),
+        xScale, 0.f, 0.f, xOffset,
+        0.f, yScale, 0.f, yOffset,
+        0.f, 0.f, zScale, zOffset,
         0.f, 0.f, 0.f, 1.f
     );
 }
 
 
-float4x4 PerspectiveRH_ZO(in float fovy, in float aspect, in float zNear, in float zFar)
+float4x4 PerspectiveRH_ZO(in float fovY, in float aspect, in float zNear, in float zFar)
 {
-    const float tanHalfFovy = tan(fovy * 0.5f);
+#if defined(ENV_REVERSED_Z)
+    const float n = zFar;
+    const float f = zNear;
+#else
+    const float n = zNear;
+    const float f = zFar;
+#endif
+
+#ifdef ENV_API_VULKAN
+    static const float yFlip = -1.f;
+#else
+    static const float yFlip = 1.f;
+#endif
+
+    const float tanHalfFovY = tan(fovY * 0.5f);
+
+    const float xScale = rcp(aspect * tanHalfFovY);
+    const float yScale = rcp(tanHalfFovY) * yFlip;
+    const float zScale = -f / (f - n);
 
     return float4x4(
-        rcp(aspect * tanHalfFovy), 0.f, 0.f, 0.f,
-        0.f, rcp(tanHalfFovy), 0.f, 0.f,
-        0.f, 0.f, zFar / (zNear - zFar), -1.f,
-        0.f, 0.f, -(zFar * zNear) / (zFar - zNear), 0.f
+        xScale, 0.f, 0.f, 0.f,
+        0.f, yScale, 0.f, 0.f,
+        0.f, 0.f, zScale, -(f * n) / (f - n),
+        0.f, 0.f,   -1.f, 0.f
     );
 }
 

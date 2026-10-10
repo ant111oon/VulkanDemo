@@ -193,23 +193,24 @@ float2 NDCToUV(in float2 ndc)
 }
 
 
-float4 NDCToView(in float3 NDC, in float4x4 invProjMatr)
+float3 ReconstructPosFromDepth(in float2 uv, in float depth, in float4x4 invMatr)
 {
-    float4 result = mul(invProjMatr, float4(NDC, 1.f));
-    return result /= result.w;
+    const float3 ndc = float3(UVToNDC(uv), depth);
+    const float4 result = mul(invMatr, float4(ndc, 1.f));
+
+    return result.xyz / result.w;
 }
 
 
 float3 ViewPosFromDepth(in float2 uv, in float depth, in float4x4 invProjMatr)
 {
-    return NDCToView(float3(UVToNDC(uv), depth), invProjMatr).xyz;
+    return ReconstructPosFromDepth(uv, depth, invProjMatr);
 }
 
 
-float3 WPosFromDepth(in float2 uv, in float depth, in float4x4 invViewMatr, in float4x4 invProjMatr)
+float3 WorldPosFromDepth(in float2 uv, in float depth, in float4x4 invViewProjMatr)
 {
-    const float3 viewPos = ViewPosFromDepth(uv, depth, invProjMatr);
-    return mul(invViewMatr, float4(viewPos, 1.f)).xyz;
+    return ReconstructPosFromDepth(uv, depth, invViewProjMatr);
 }
 
 

@@ -532,7 +532,7 @@ float3 CalcCsmShadowSplit(in uint split, in float3 wpos, in float bias)
         return ONEF3;
     }
 
-    const float4 ndc = mul(DEFERRED_LIGHTING_CSM_SPLIT_VIEW_PROJ_MATR(split), float4(wpos, 1.f));
+    const float3 ndc = WPosToNDC(wpos, DEFERRED_LIGHTING_CSM_SPLIT_VIEW_PROJ_MATR(split));
     const float2 uv = NDCToUV(ndc.xy);
 
     const float shadow = CalcCsmFilteredShadow(ndc.z, bias, float3(uv, split));
@@ -603,7 +603,7 @@ float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
         return ONEF3;
     }
 
-    const float vDist = abs(vpos.z);
+    const float vDist = -vpos.z;
     const uint splitIdx = GetCsmSplitIndex(vDist);
 
     if (splitIdx >= CSM_SPLIT_COUNT) {
@@ -632,8 +632,8 @@ float3 ComputeLighting(in int2 pixelCoord)
     GPU_GBuffer gbuffer = SampleGBuffer(texCoord);
 
     const float2 uv = PixelCoordToUV(pixelCoord, COMMON_SCREEN_SIZE);
-    const float3 wpos = WPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_VIEW_MATRIX, COMMON_MAIN_CAM_INV_PROJ_MATRIX);
-    const float3 vpos = mul(COMMON_MAIN_CAM_VIEW_MATRIX, float4(wpos, 1.f)).xyz;
+    const float3 vpos = ViewPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_PROJ_MATRIX);
+    const float3 wpos = mul(COMMON_MAIN_CAM_INV_VIEW_MATRIX, float4(vpos, 1.f)).xyz;
 
     const float3 V = normalize(COMMON_MAIN_CAM_WPOS - wpos);
     const float3 F0 = lerp(COMMON_DIELECTRIC_F0, gbuffer.albedo, gbuffer.metalness);

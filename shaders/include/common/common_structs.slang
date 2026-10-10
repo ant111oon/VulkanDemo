@@ -133,12 +133,20 @@ struct GPU_CommonCameraData
     GPU_Frustum frustum;
 
     float4x4 viewMatr;
+    float4x4 viewMatrPrev;
+
     float4x4 projMatr;
+    float4x4 projMatrPrev;
+
     float4x4 viewProjMatr;
     float4x4 viewProjMatrPrev;
 
     float4x4 invViewMatr;
+    float4x4 invViewMatrPrev;
+
     float4x4 invProjMatr;
+    float4x4 invProjMatrPrev;
+
     float4x4 invViewProjMatr;
     float4x4 invViewProjMatrPrev;
 

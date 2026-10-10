@@ -52,10 +52,8 @@ struct GPU_CsmSplitData
 };
 
 
-struct GPU_CsmData
+struct GPU_CsmCommonData
 {
-    GPU_CsmSplitData splits[CSM_SPLIT_COUNT];
-
     GPU_PcssData pcssData;
 
     float blendThresholdCoef;
@@ -66,12 +64,6 @@ struct GPU_CsmData
     float constantBiasTexels;
     float slopeBiasTexels;
     private uint2 padding;
-};
-
-
-struct GPU_LightingData
-{
-    GPU_CsmData csmData;
 };
 
 

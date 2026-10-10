@@ -35,10 +35,10 @@ void main(SV_GROUP_THREAD_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatchThrea
     }
 
     const float2 uv = PixelCoordToUV(pixCoord, COMMON_SCREEN_SIZE);
-    const float3 wpos = WPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_VIEW_MATRIX, COMMON_MAIN_CAM_INV_PROJ_MATRIX);
+    const float3 wpos = WorldPosFromDepth(uv, depth, COMMON_MAIN_CAM_INV_VIEW_PROJ_MATRIX);
 
     const float3 vpos = mul(COMMON_MAIN_CAM_VIEW_MATRIX, float4(wpos, 1.f)).xyz;
-    const float viewZ = abs(vpos.z);
+    const float viewZ = -vpos.z;
 
     const uint split = GetSdsmSplit(viewZ);
     
@@ -49,7 +49,7 @@ void main(SV_GROUP_THREAD_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatchThrea
     const float4x4 splitCamViewMatr = SDSM_SPLITS[split][0].camData.viewMatr;
 
     float3 lightSpaceVPos = mul(splitCamViewMatr, float4(wpos, 1.f)).xyz;
-    lightSpaceVPos.z = abs(lightSpaceVPos.z);
+    lightSpaceVPos.z = -lightSpaceVPos.z;
 
     SDSM_SPLIT_VIEW_BOUNDS[split][0].Update(lightSpaceVPos);
 }

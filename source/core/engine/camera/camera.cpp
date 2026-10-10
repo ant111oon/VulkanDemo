@@ -275,13 +275,15 @@ namespace eng
     #endif
 
         if (IsPerspProj()) {
-            m_currState.matProj = glm::perspective(m_currState.fovY, m_currState.aspectRatio, zNear, zFar);
+            m_currState.matProj = glm::perspectiveRH_ZO(m_currState.fovY, m_currState.aspectRatio, zNear, zFar);
         } else if (IsOrthoProj()) {
-            m_currState.matProj = glm::ortho(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top, zNear, zFar);
+            m_currState.matProj = glm::orthoRH_ZO(m_currState.left, m_currState.right, m_currState.bottom, m_currState.top, zNear, zFar);
         }
 
         #ifdef ENG_GFX_API_VULKAN
-            m_currState.matProj[1][1] *= -1.f;
+            for (size_t col = 0; col < glm::float4x4::col_type::length(); ++col) {
+                m_currState.matProj[col][1] *= -1.f;
+            }
         #endif
 
         m_currState.invMatProj = glm::inverse(m_currState.matProj);
