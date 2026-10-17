@@ -24,6 +24,9 @@
     #include <backends/imgui_impl_vulkan.h>
     #include <backends/imgui_impl_win32.h>
 
+    #include <implot/implot.h>
+    #include <ImGuizmo.h>
+
     #include <unordered_map>
     #include <bitset>
 #endif

@@ -172,10 +172,6 @@ namespace eng
             case WndKey::KEY_RIGHT_BRACKET:  return ']';
             case WndKey::KEY_GRAVE_ACCENT:   return '`';
 
-            case WndKey::KEY_TAB:            return '\t';
-            case WndKey::KEY_ENTER:          return '\r';
-            case WndKey::KEY_BACKSPACE:      return '\b';
-
             default: return 0;
         }
     }
@@ -215,6 +211,10 @@ namespace eng
         m_pContext = ImGui::CreateContext();
         CORE_ASSERT(m_pContext);
 
+        ImPlot::CreateContext();
+
+        ImGuizmo::SetImGuiContext(m_pContext);
+
         m_pIO = &ImGui::GetIO();
         m_pIO->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         m_pIO->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
@@ -235,6 +235,8 @@ namespace eng
         if (!ImGui_ImplWin32_Init(window.GetNativeHandle())) {
             CORE_ASSERT_FAIL("Failed to initialize ImGui Win32 part");
         }
+    #else
+        #error Unsupported OS type!
     #endif
 
         vkn::PhysicalDevice& physDevice = device.GetPhysDevice();
@@ -265,6 +267,35 @@ namespace eng
         imGuiInitInfo.CheckVkResultFn = [](VkResult error) { VK_CHECK(error); };
         imGuiInitInfo.MinAllocationSize = 1024 * 1024;
 
+    #ifdef ENG_OS_WINDOWS
+        ImGui::GetPlatformIO().Platform_CreateVkSurface = [](ImGuiViewport* viewport, ImU64 vkInstance, const void* pVkAllocator, ImU64* pOutSurface) -> int
+        {
+            HWND hwnd = static_cast<HWND>(viewport->PlatformHandleRaw);
+
+            VkWin32SurfaceCreateInfoKHR createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+            createInfo.hinstance = GetModuleHandle(nullptr);
+            createInfo.hwnd = hwnd;
+
+            VkSurfaceKHR surface = VK_NULL_HANDLE;
+
+            VkResult result = vkCreateWin32SurfaceKHR(
+                reinterpret_cast<VkInstance>(vkInstance),
+                &createInfo,
+                static_cast<const VkAllocationCallbacks*>(pVkAllocator),
+                &surface
+            );
+
+            if (result == VK_SUCCESS) {
+                *pOutSurface = reinterpret_cast<ImU64>(surface);
+            }
+
+            return static_cast<int>(result);
+        };
+    #else
+        #error Unsupported OS type!
+    #endif
+
         if (!ImGui_ImplVulkan_Init(&imGuiInitInfo)) {
             CORE_ASSERT_FAIL("Failed to initialize ImGui Vulkan part");
         }
@@ -287,8 +318,16 @@ namespace eng
             RemoveTexture(m_hashToTextureID.begin()->second);
         }
 
+        ImPlot::DestroyContext();
+
         ImGui_ImplVulkan_Shutdown();
+
+    #ifdef ENG_OS_WINDOWS
         ImGui_ImplWin32_Shutdown();
+    #else
+        #error Unsupported OS type!
+    #endif
+
         ImGui::DestroyContext(m_pContext);
 
         m_hashToTextureID = {};
@@ -325,15 +364,25 @@ namespace eng
         } else if (event.Is<WndKeyEvent>()) {
             const WndKeyEvent& e = event.Get<WndKeyEvent>();
 
-            if (ImGuiKey key = WndKeyToImGui(e.key); key != ImGuiKey_None) {
-                m_pIO->AddKeyEvent(key, true);
+            const bool isDown = e.IsPressed() || e.IsHold();
+
+            const ImGuiKey key = WndKeyToImGui(e.key);
+            if (key != ImGuiKey_None) {
+                m_pIO->AddKeyEvent(key, isDown);
             }
 
-            if (char ch = WndKeyToChar(e.key); ch != 0) {
-                m_pIO->AddInputCharacter(ch);
+            // Temporary ASCII-only solution
+            if (e.IsPressed()) {
+                const char ch = WndKeyToChar(e.key);
+
+                if (ch >= 32 && ch <= 126) {
+                    m_pIO->AddInputCharacter(
+                        static_cast<unsigned int>(ch)
+                    );
+                }
             }
 
-            UpdateKeyModifiers(m_pIO, e.key, e.IsPressed());
+            UpdateKeyModifiers(m_pIO, e.key, isDown);
         } else if (event.Is<WndActiveEvent>()) {
             const WndActiveEvent& e = event.Get<WndActiveEvent>();
 
@@ -360,6 +409,8 @@ namespace eng
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+
+        ImGuizmo::BeginFrame();
     #endif
 
         return *this;

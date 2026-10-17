@@ -38,6 +38,8 @@ namespace vkn
             VK_CHECK(vkCreateWin32SurfaceKHR(vkInst, &vkWin32SurfCreateInfo, nullptr, &surface));
             return surface != VK_NULL_HANDLE;
         });
+    #else
+        #error Unsupported OS type!
     #endif
 
         VK_ASSERT(IsCreated());

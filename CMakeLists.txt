@@ -97,27 +97,48 @@ endif()
 
 
 if (ENG_ENABLE_DBG_DRAW)
+    set(IMGUI_BUNDLE_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_WITH_HELLO_IMGUI OFF CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_WITH_IMMAPP OFF CACHE BOOL "" FORCE)
+    set(HELLOIMGUI_WITH_TEST_ENGINE OFF CACHE BOOL "" FORCE)
+
+    # Enable the extensions you want
+    set(IMGUI_BUNDLE_WITH_IMPLOT ON CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_WITH_IMPLOT3D ON CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_WITH_IMGUIZMO ON CACHE BOOL "" FORCE)
+    # set(IMGUI_BUNDLE_WITH_IMGUI_NODE_EDITOR ON CACHE BOOL "" FORCE)
+
+    # Avoid unnecessary graphics backend dependencies
+    set(IMGUI_BUNDLE_WITH_NANOVG OFF CACHE BOOL "" FORCE)
+    set(IMGUI_BUNDLE_WITH_IMMVISION OFF CACHE BOOL "" FORCE)
+
     FetchContent_Declare(
-        imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG        master
-        GIT_PROGRESS   TRUE
+        imgui_bundle
+        GIT_REPOSITORY https://github.com/pthom/imgui_bundle.git
+        GIT_TAG main
+        GIT_PROGRESS TRUE
+        GIT_SUBMODULES_RECURSE TRUE
     )
-    FetchContent_MakeAvailable(imgui)
+    FetchContent_MakeAvailable(imgui_bundle)
 
-    add_library(imgui STATIC
-        ${imgui_SOURCE_DIR}/imgui.h
-        ${imgui_SOURCE_DIR}/imgui.cpp
-        ${imgui_SOURCE_DIR}/imgui_draw.cpp
-        ${imgui_SOURCE_DIR}/imgui_tables.cpp
-        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
+    # Dear ImGui directory inside ImGui Bundle
+    set(ENG_IMGUI_DIR "${imgui_bundle_SOURCE_DIR}/external/imgui/imgui")
+
+    # Build backends separately
+    add_library(imgui_backends STATIC
+        "${ENG_IMGUI_DIR}/backends/imgui_impl_win32.cpp"
+        "${ENG_IMGUI_DIR}/backends/imgui_impl_vulkan.cpp"
     )
 
-    target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR})
-    target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+    target_include_directories(imgui_backends PUBLIC
+        "${ENG_IMGUI_DIR}/backends"
+    )
+
+    target_link_libraries(imgui_backends PUBLIC
+        imgui_bundle::imgui_bundle
+        Vulkan::Vulkan
+    )
 endif()
 
 
@@ -162,7 +183,7 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE fastgltf
     PRIVATE meshoptimizer
     
-    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui>
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui imgui_bundle::imgui_bundle imgui_backends>
 
     PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
 )

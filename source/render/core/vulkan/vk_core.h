@@ -28,6 +28,8 @@
 
 #ifdef ENG_OS_WINDOWS
     #include <vulkan/vulkan_win32.h>
+#else
+    #error Unsupported OS type!
 #endif
 
 
