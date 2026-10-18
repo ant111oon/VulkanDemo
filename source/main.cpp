@@ -6,8 +6,7 @@
     #error Unsupported OS type!
 #endif
 
-
-#ifdef ENG_BUILD_DEBUG
+#ifdef ENG_ENABLE_DBG_DRAW
     #define ENG_DEBUG_DRAW_ENABLED
 #endif
 
@@ -1672,7 +1671,7 @@ struct CsmPcssSettings
 
 static float s_mainCameraSpeed = 0.005f;
 
-#ifdef ENG_DEBUG_UI_ENABLED
+#ifdef ENG_DEBUG_DRAW_ENABLED
     static bool s_useMeshCulling = true;
     static bool s_useMeshFrustumCulling = true;
     static bool s_useMeshHZBCulling = true;
@@ -7952,7 +7951,7 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
 #endif
 
 
-#ifdef ENG_DEBUG_UI_ENABLED
+#ifdef ENG_DEBUG_DRAW_ENABLED
 namespace DbgUI
 {
     static void FillData()
@@ -8504,18 +8503,16 @@ static void DbgUIPass(vkn::CmdBuffer& cmdBuffer)
 
 static void DebugPass(vkn::CmdBuffer& cmdBuffer)
 {
+#ifdef ENG_DEBUG_DRAW_ENABLED
     static constexpr const char* passName = "DebugPass";
     static constexpr uint32_t passColor = 0xC85A5A;
 
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-#ifdef ENG_DEBUG_DRAW_ENABLED
     DbgRTViewPass(cmdBuffer);
     DbgDrawPass(cmdBuffer);
-#endif
-
-#ifdef ENG_DEBUG_UI_ENABLED
+    
     DbgUIPass(cmdBuffer);
 #endif
 }

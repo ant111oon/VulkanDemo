@@ -5,16 +5,6 @@
 #include <string_view>
 
 
-#if !defined(ENG_BUILD_RELEASE)
-    #define ENG_PROFILING_ENABLED
-#endif
-
-
-#if defined(ENG_PROFILING_ENABLED)
-    #define TRACY_ENABLED
-#endif
-
-
 #if defined(ENG_PROFILING_ENABLED)
 #include "render/core/vulkan/vk_cmd.h"
 
@@ -28,7 +18,8 @@ namespace eng
 {
     class GpuProfiler
     {
-        friend GpuProfiler& GetGpuProfiler();
+    public:
+        static GpuProfiler& Instance();
 
     public:
         ENG_DECL_CLASS_NO_COPIABLE(GpuProfiler);
@@ -74,20 +65,22 @@ namespace eng
     };
 
 
-    GpuProfiler& GetGpuProfiler(); 
-
     inline std::string_view BuildMarkerName(std::string_view name)
     {
-        static char buff[256] = {0};
-        sprintf_s(buff, name.data());
+        thread_local char buff[256];
 
-        return buff;
+        const size_t size = std::min(name.size(), sizeof(buff) - 1);
+
+        memcpy(buff, name.data(), size);
+        buff[size] = '\0';
+
+        return std::string_view(buff, size);
     }
 
     template <typename... Args>
     inline std::string_view BuildMarkerName(std::string_view fmt, Args&&... args)
     {
-        static char buff[256] = {0};
+        thread_local char buff[256] = {0};
         sprintf_s(buff, fmt.data(), std::forward<Args>(args)...);
 
         return buff;
@@ -101,7 +94,7 @@ namespace eng
 #define TM_CPU_MARKER_VAR    TracyConcat(_cpuMarker,TracyLine)
 #define TM_GPU_MARKER_VAR    TracyConcat(_gpuMarker,TracyLine)
 
-#define TM_GPU_PROFILER      eng::GetGpuProfiler()
+#define TM_GPU_PROFILER      eng::GpuProfiler::Instance()
 #define TM_GPU_TRACY_CTX     TM_GPU_PROFILER.GetTracyCtx()
 
 

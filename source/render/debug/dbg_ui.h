@@ -1,15 +1,10 @@
 #pragma once
 
-#ifndef ENG_BUILD_RELEASE
-    #define ENG_DEBUG_UI_ENABLED
-#endif
-
-
-#include "core/core.h" 
-
 #ifndef ENG_GFX_API_VULKAN
     #error Invalid graphics API
 #endif
+
+#include "core/core.h" 
 
 #include "render/core/vulkan/vk_device.h"
 #include "render/core/vulkan/vk_cmd.h"
@@ -19,7 +14,7 @@
 #include "core/platform/window/window.h"
 
 
-#ifdef ENG_DEBUG_UI_ENABLED
+#ifdef ENG_ENABLE_DBG_DRAW
     #include <imgui.h>
     #include <backends/imgui_impl_vulkan.h>
     #include <backends/imgui_impl_win32.h>
@@ -37,7 +32,7 @@ namespace eng
     class DbgUI
     {
     public:
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         using TexID = ImTextureID;
     #else
         using TexID = uint64_t;
@@ -60,8 +55,8 @@ namespace eng
     
         DbgUI& Render(vkn::CmdBuffer& cmdBuffer);
     
-        TexID AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler);
-        DbgUI& AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, TexID& outID);
+        TexID AddTexture(const vkn::TextureView& view);
+        DbgUI& AddTexture(const vkn::TextureView& view, TexID& outID);
 
         DbgUI& RemoveTexture(TexID ID);
 
@@ -69,7 +64,7 @@ namespace eng
     
         bool IsCreated() const;
     
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
     private:
         enum StateBits
         {

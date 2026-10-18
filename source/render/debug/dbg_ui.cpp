@@ -1,14 +1,14 @@
 #include "pch.h"
 #include "dbg_ui.h"
 
-#ifdef ENG_DEBUG_UI_ENABLED
+#ifdef ENG_ENABLE_DBG_DRAW
     #include "core/utils/hash.h"
 #endif
 
 
 namespace eng
 {
-#ifdef ENG_DEBUG_UI_ENABLED
+#ifdef ENG_ENABLE_DBG_DRAW
     static ImGuiMouseButton_ WndMouseButtonTypeToImGui(WndMouseButtonType type)
     {
         switch (type) {
@@ -199,7 +199,7 @@ namespace eng
 
     DbgUI& DbgUI::Create(Window& window, vkn::Device& device, VkFormat rtFormat)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         if (IsCreated()) {
             CORE_LOG_WARN("DbgUI is already created");
             return *this;
@@ -309,7 +309,7 @@ namespace eng
 
     DbgUI& DbgUI::Destroy()
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         if (!IsCreated()) {
             return *this;
         }
@@ -346,7 +346,7 @@ namespace eng
 
     DbgUI& DbgUI::ProcessEvent(const WndEvent& event)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
 
         if (event.Is<WndCursorEvent>()) {
@@ -400,7 +400,7 @@ namespace eng
 
     DbgUI& DbgUI::BeginFrame(float dt)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
 
         m_pIO->DisplaySize = ImVec2(static_cast<float>(m_pWindow->GetWidth()), static_cast<float>(m_pWindow->GetHeight()));
@@ -419,7 +419,7 @@ namespace eng
 
     DbgUI& DbgUI::EndFrame()
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
 
         ImGui::EndFrame();
@@ -431,7 +431,7 @@ namespace eng
 
     DbgUI& DbgUI::Render(vkn::CmdBuffer& cmdBuffer)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
 
         ImGui::Render();
@@ -442,11 +442,11 @@ namespace eng
     }
 
 
-    DbgUI::TexID DbgUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler)
+    DbgUI::TexID DbgUI::AddTexture(const vkn::TextureView& view)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         TexID ID;
-        AddTexture(view, sampler, ID);
+        AddTexture(view, ID);
 
         return ID;
     #else
@@ -455,23 +455,22 @@ namespace eng
     }
 
 
-    DbgUI& DbgUI::AddTexture(const vkn::TextureView& view, const vkn::Sampler& sampler, TexID& outID)
+    DbgUI& DbgUI::AddTexture(const vkn::TextureView& view, TexID& outID)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
  
         static constexpr VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         
         eng::HashBuilder builder;
         builder.AddValue((uintptr_t)view.Get());
-        builder.AddValue((uintptr_t)sampler.Get());
 
         const TextureHash hash = builder.Value();
 
         const auto it = m_hashToTextureID.find(hash);
 
         if (it == m_hashToTextureID.cend()) {
-            outID = (TexID)ImGui_ImplVulkan_AddTexture(sampler.Get(), view.Get(), layout);
+            outID = (TexID)ImGui_ImplVulkan_AddTexture(view.Get(), layout);
             
             m_hashToTextureID[hash] = outID;
             m_textureIDToHash[outID] = hash;
@@ -486,7 +485,7 @@ namespace eng
 
     DbgUI& DbgUI::RemoveTexture(TexID ID)
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
 
         const auto hashIt = m_textureIDToHash.find(ID);
@@ -509,7 +508,7 @@ namespace eng
 
     bool DbgUI::IsAnyWindowFocused() const
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         CORE_ASSERT(IsCreated());
         return ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
     #else
@@ -520,7 +519,7 @@ namespace eng
 
     bool DbgUI::IsCreated() const
     {
-    #ifdef ENG_DEBUG_UI_ENABLED
+    #ifdef ENG_ENABLE_DBG_DRAW
         return m_state.test(BIT_IS_CREATED);
     #else
         return false;

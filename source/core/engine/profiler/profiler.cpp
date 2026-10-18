@@ -11,6 +11,13 @@ namespace eng
     static PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabel = nullptr;
 
 
+    GpuProfiler& GpuProfiler::Instance()
+    {
+        static GpuProfiler profiler;
+        return profiler;
+    }
+
+
     GpuProfiler::~GpuProfiler()
     {
         Destroy();
@@ -120,7 +127,7 @@ namespace eng
     const GpuProfiler& GpuProfiler::CollectCmdStats(vkn::CmdBuffer& cmd) const
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to collect tracy GPU timings within not started/ended command buffer: %s", cmd.GetDebugName().data());
-        TracyVkCollect(GetGpuProfiler().GetTracyCtx(), cmd.Get());
+        TracyVkCollect(GpuProfiler::Instance().GetTracyCtx(), cmd.Get());
 
         return *this;
     }
@@ -143,20 +150,13 @@ namespace eng
         : m_cmdBuf(cmd)
     {
         VK_ASSERT_MSG(cmd.IsStarted(), "Attempt to begin GPU marker scope within not started command buffer: %s", cmd.GetDebugName().data());
-        GetGpuProfiler().BeginCmdGroup(m_cmdBuf, name, color);
+        GpuProfiler::Instance().BeginCmdGroup(m_cmdBuf, name, color);
     }
 
 
     GpuMarker::~GpuMarker()
     {
-        GetGpuProfiler().EndCmdGroup(m_cmdBuf);
-    }
-
-
-    GpuProfiler& GetGpuProfiler()
-    {
-        static GpuProfiler profiler;
-        return profiler;
+        GpuProfiler::Instance().EndCmdGroup(m_cmdBuf);
     }
 
     

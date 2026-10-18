@@ -29,20 +29,16 @@ get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 # Single-config: ON unless Release
 if(NOT IS_MULTI_CONFIG)
     if(CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(ENG_ENABLE_TRACY ON)
+        set(ENG_ENABLE_PROFILING ON)
         set(ENG_ENABLE_DBG_DRAW ON)
     else()
-        set(ENG_ENABLE_TRACY OFF)
+        set(ENG_ENABLE_PROFILING OFF)
         set(ENG_ENABLE_DBG_DRAW OFF)
     endif()
 else()
-    set(ENG_ENABLE_TRACY ON)
+    set(ENG_ENABLE_PROFILING ON)
     set(ENG_ENABLE_DBG_DRAW ON)
 endif()
-
-# Optional: put it in cache so it's visible in CMake GUI / ccmake
-set(ENG_ENABLE_TRACY ${ENG_ENABLE_TRACY} CACHE BOOL "Enable Tracy (non-Release only)" FORCE)
-set(ENG_ENABLE_DBG_DRAW ${ENG_ENABLE_DBG_DRAW} CACHE BOOL "Enable Debug Draw" FORCE)
 
 
 find_package(Vulkan REQUIRED)
@@ -84,7 +80,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(meshoptimizer)
 
 
-if (ENG_ENABLE_TRACY)
+if (ENG_ENABLE_PROFILING)
+    set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
+
     FetchContent_Declare(
         tracy
         GIT_REPOSITORY https://github.com/wolfpld/tracy.git
@@ -93,6 +91,8 @@ if (ENG_ENABLE_TRACY)
         GIT_PROGRESS   TRUE
     )
     FetchContent_MakeAvailable(tracy)
+else()
+    set(TRACY_ENABLE OFF CACHE BOOL "" FORCE)
 endif()
 
 
@@ -183,9 +183,13 @@ target_link_libraries(${ENGINE_PROJ_NAME}
     PRIVATE fastgltf
     PRIVATE meshoptimizer
     
-    PRIVATE $<$<NOT:$<CONFIG:Release>>:TracyClient imgui imgui_bundle::imgui_bundle imgui_backends>
+    $<$<NOT:$<CONFIG:Release>>:Tracy::TracyClient>
+    $<$<NOT:$<CONFIG:Release>>:imgui_bundle::imgui_bundle>
+    $<$<NOT:$<CONFIG:Release>>:imgui_backends>
 
-    PRIVATE $<$<PLATFORM_ID:Windows>:user32.lib gdi32.lib kernel32.lib>
+    $<$<PLATFORM_ID:Windows>:user32.lib>
+    $<$<PLATFORM_ID:Windows>:gdi32.lib>
+    $<$<PLATFORM_ID:Windows>:kernel32.lib>
 )
 
 target_include_directories(${ENGINE_PROJ_NAME} 
@@ -206,6 +210,9 @@ target_compile_definitions(${ENGINE_PROJ_NAME}
     PRIVATE $<$<CONFIG:Debug>:-DENG_BUILD_DEBUG>
     PRIVATE $<$<CONFIG:RelWithDebInfo>:-DENG_BUILD_PROFILE>
     PRIVATE $<$<CONFIG:Release>:-DENG_BUILD_RELEASE>
+
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:-DENG_PROFILING_ENABLED>
+    PRIVATE $<$<NOT:$<CONFIG:Release>>:-DENG_ENABLE_DBG_DRAW>    
 )
 
 if (WIN32)
