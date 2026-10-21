@@ -1,5 +1,5 @@
-#include "registers/common_registers.slang"
 #include "registers/deferred_lighting_registers.slang"
+#include "pass/deferred_lighting/vsout.slang"
 
 #include "common/system/sys_constants.slang"
 
@@ -10,8 +10,6 @@
 #include "common/math/common.slang"
 
 #include "common/common_funcs.slang"
-
-#include "pass/deferred_lighting/vsout.slang"
 
 
 struct GPU_GBuffer
@@ -296,7 +294,7 @@ float CalcCsmDiskPCF(
     in SamplerComparisonState smSmp,
     in float3 texCoord,
     in float zReceiverCmp,
-    in float diskRadius,
+    in float2 diskRadius,
     in uint sampleCount,
     in bool randRotEnabled,
     in IFunc<float2, uint> GetOffsetFunc
@@ -361,7 +359,7 @@ float2 VogelDiskSample(int i, int n)
 }
 
 
-float CalcCsmVogelPCF(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverCmp, in float diskRadius, in uint sampleCount, in bool randRotEnabled)
+float CalcCsmVogelPCF(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverCmp, in float2 diskRadius, in uint sampleCount, in bool randRotEnabled)
 {
     return CalcCsmDiskPCF(smSmp, texCoord, zReceiverCmp, diskRadius, sampleCount, randRotEnabled,
         (uint i) => { return VogelDiskSample(i, sampleCount); }
@@ -378,7 +376,7 @@ struct GPU_CsmPcssBlockerSearchResult
 };
 
 
-GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in float zReceiverViewSpace, in float radius, in bool randRotEnabled)
+GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in float zReceiverViewSpace, in float2 radius, in bool randRotEnabled)
 {
     const uint split = uint(texCoord.z);
 
@@ -426,13 +424,13 @@ GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in 
 }
 
 
-float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverRaw, in float zReceiverCmp)
+float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverCmp)
 {
     const uint split = uint(texCoord.z);
 
     const float zNear = DEFERRED_LIGHTING_CSM_SPLIT_VIEW_Z_NEAR(split);
     const float zFar = DEFERRED_LIGHTING_CSM_SPLIT_VIEW_Z_FAR(split);
-    const float zReceiverViewSpace = OrthoDepthToViewDepth(zReceiverRaw, zNear, zFar);
+    const float zReceiverViewSpace = OrthoDepthToViewDepth(zReceiverCmp, zNear, zFar);
 
     const float lightSlope = DEFERRED_LIGHTING_CSM_PCSS_DATA.lightAngularSlope;
 
@@ -442,8 +440,8 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
     const float zReceiverFromNear = max(zReceiverViewSpace - zNear, 0.f);
     const float searchRadiusWorld = lightSlope * zReceiverFromNear * DEFERRED_LIGHTING_CSM_PCSS_DATA.searchRadiusScale;
 
-    const float worldUnitsPerTexel = max(DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split), M3D_EPS);
-    const float searchRadiusTexels = min(searchRadiusWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxSearchRadiusTexels);
+    const float2 worldUnitsPerTexel = DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split);
+    const float2 searchRadiusTexels = min(searchRadiusWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxSearchRadiusTexels);
 
     const GPU_CsmPcssBlockerSearchResult blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
 
@@ -457,11 +455,11 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
         return 1.f;
     }
 
-    const float penumbraWorld = blockerReceiverDistance * lightSlope * DEFERRED_LIGHTING_CSM_PCSS_DATA.filterRadiusScale;
-    const float filterRadiusTexels = min(penumbraWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxFilterRadiusTexels);
+    const float2 penumbraWorld = FLOAT2(blockerReceiverDistance * lightSlope * DEFERRED_LIGHTING_CSM_PCSS_DATA.filterRadiusScale);
+    const float2 filterRadiusTexels = min(penumbraWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxFilterRadiusTexels);
 
     // Very small penumbras do not justify running a full sample filter.
-    if (filterRadiusTexels < DEFERRED_LIGHTING_CSM_PCSS_DATA.minFilterRadiusTexels) {
+    if (all(filterRadiusTexels < DEFERRED_LIGHTING_CSM_PCSS_DATA.minFilterRadiusTexels)) {
         return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, texCoord.xy, zReceiverCmp);
     }
 
@@ -488,7 +486,7 @@ float CalcCsmFilteredShadow(in float zReceiverRaw, in float bias, in float3 texC
     float shadow = 0.f;
 
     if (COMMON_DBG_IS_CSM_PCSS_ENABLED) {
-        shadow = CalcCSM_PCSS(cmpSmp, texCoord, zReceiverRaw, zReceiverCmp);
+        shadow = CalcCSM_PCSS(cmpSmp, texCoord, zReceiverCmp);
     } else {    
         switch (COMMON_DBG_CSM_PCF_PRESET) {
             case GPU_DbgCsmPCFPreset::NONE:
@@ -563,7 +561,7 @@ float CalcCsmBias(in float3 wnorm, in uint split)
     const float sinTheta = sqrt(max(1.f - NdotL * NdotL, 0.f));
     const float tanTheta = sinTheta / max(NdotL, M3D_EPS);
 
-    const float worldUnitsPerTexel = DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split);
+    const float worldUnitsPerTexel = Max(DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split));
 
     const float constantBiasTexels = DEFERRED_LIGHTING_CSM_DATA.constantBiasTexels;
     const float slopeBiasTexels = DEFERRED_LIGHTING_CSM_DATA.slopeBiasTexels;

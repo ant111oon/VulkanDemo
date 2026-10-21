@@ -82,8 +82,7 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadFlatID))
 
         splitData.camData.frustum.Construct(splitData.camData.viewProjMatr);
 
-        const float orthoSize = Max(splitBounds.deltaXY);
-        splitData.worldUnitsPerPixel = orthoSize / Max(splitData.rtSize);
+        splitData.worldUnitsPerPixel = float2(right - left, top - bottom) / splitData.rtSize;
     }
 
     SDSM_SPLITS[split][0] = splitData;

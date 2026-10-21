@@ -47,8 +47,8 @@ struct GPU_CsmSplitData
     float2 zBounds;
     uint2  rtSize;
 
-    private uint3 padding;
-    float         worldUnitsPerPixel;
+    float2 worldUnitsPerPixel;
+    private uint padding;
 };
 
 

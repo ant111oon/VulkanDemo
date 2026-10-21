@@ -426,8 +426,8 @@ struct GPU_CsmSplitData
     float2 zBounds;
     uint2  rtSize;
 
-    uint3 padding;
-    float worldUnitsPerPixel;
+    float2 worldUnitsPerPixel;
+    uint2  padding;
 };
 
 
@@ -1630,7 +1630,7 @@ static bool s_geomWireframeMode = false;
 
 static bool s_skipRender = false;
 
-static float   s_geomCoverageCullingThresholdPercentage = 0.1f;
+static float s_geomCoverageCullingThresholdPercentage = 0.1f;
 
 static glm::float3 s_sunColor = ONEF3;
 
@@ -1666,7 +1666,7 @@ struct CsmPcssSettings
     int32_t searchSamplesCount = 32u;
     int32_t filterSamplesCount = 64u;
 
-    bool randomRotationEnabled = false;
+    bool randomRotationEnabled = true;
 } s_csmPcssSettings;
 
 static float s_mainCameraSpeed = 0.005f;
@@ -1678,14 +1678,14 @@ static float s_mainCameraSpeed = 0.005f;
     static bool s_isGeomLODVisualizationEnabled = false;
     static bool s_isIBLEnabled = false;
     static bool s_drawInstAABBs = false;
-    static bool s_isCSMEnabled = true;
-    static bool s_useCSMMeshFrustumCulling = true;
-    static bool s_useCSMMeshHZBCulling = true;
-    static bool s_useCSMMeshCoverageCulling = true;
-    static bool s_isCSMVisualizationEnabled = false;
-    static bool s_isCSMSplitBlendEnabled = true;
-    static bool s_isCSMFilterRandomOffsetEnabled = false;
-    static bool s_isCSMPCSSEnabled = true;
+    static bool s_isCsmEnabled = true;
+    static bool s_useCsmMeshFrustumCulling = true;
+    static bool s_useCsmMeshHZBCulling = true;
+    static bool s_useCsmMeshCoverageCulling = true;
+    static bool s_isCsmVisualizationEnabled = false;
+    static bool s_isCsmSplitBlendEnabled = true;
+    static bool s_isCsmFilterRandomOffsetEnabled = false;
+    static bool s_isCsmPcssEnabled = true;
 
     static GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -1701,14 +1701,15 @@ static float s_mainCameraSpeed = 0.005f;
     static constexpr bool s_isGeomLODVisualizationEnabled = false;
     static constexpr bool s_isIBLEnabled = false;
     static constexpr bool s_drawInstAABBs = false;
-    static constexpr bool s_isCSMEnabled = true;
-    static constexpr bool s_useCSMMeshFrustumCulling = true;
-    static constexpr bool s_useCSMMeshHZBCulling = true;
-    static constexpr bool s_useCSMMeshCoverageCulling = true;
-    static constexpr bool s_isCSMVisualizationEnabled = false;
-    static constexpr bool s_isCSMSplitBlendEnabled = true;
-    static constexpr bool s_isCSMFilterRandomOffsetEnabled = false;
-    static constexpr bool s_isCSMPCSSEnabled = true;
+    static constexpr bool s_isCsmEnabled = true;
+    static constexpr bool s_useCsmMeshFrustumCulling = true;
+    static constexpr bool s_useCsmMeshHZBCulling = true;
+    static constexpr bool s_useCsmMeshCoverageCulling = true;
+    static constexpr bool s_isCsmVisualizationEnabled = false;
+    static constexpr bool s_isCsmSplitBlendEnabled = true;
+    static constexpr bool s_isCsmFilterRandomOffsetEnabled = false;
+    static constexpr bool s_isCsmPcssEnabled = true;
+    static constexpr bool s_isCsmSdsmEnabled = true;
 
     static constexpr GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
     static constexpr GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
@@ -5624,9 +5625,9 @@ static void CreateCSMCommonData()
 }
 
 
-static void UpdateCommonConstBuffer()
+static void PrepareCommonConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "UpdateCommonConstBuffer");
+    TM_MARKER_C(0x008b8b, "PrepareCommonConstBuffer");
 
     GPU_CommonCBData& constBuff = *reinterpret_cast<GPU_CommonCBData*>(s_commonConstBuffer.Map());
 
@@ -5641,9 +5642,9 @@ static void UpdateCommonConstBuffer()
 }
 
 
-static void UpdateMainCamConstBuffer()
+static void PrepareMainCamConstBuffer()
 {
-    TM_MARKER_C(0x008b8b, "UpdateMainCamConstBuffer");
+    TM_MARKER_C(0x008b8b, "PrepareMainCamConstBuffer");
 
     GPU_CommonCameraData& constBuff = *reinterpret_cast<GPU_CommonCameraData*>(s_mainCamResources.camDataBuffer.Map());
 
@@ -5653,9 +5654,9 @@ static void UpdateMainCamConstBuffer()
 }
 
 
-static void UpdateCSMCommonConstBuffer()
+static void PrepareCsmData()
 {
-    TM_MARKER_C(0x008b8b, "UpdateCSMCommonConstBuffer");
+    TM_MARKER_C(0x008b8b, "PrepareCsmData");
 
     GPU_CsmCommonData& constBuff = *reinterpret_cast<GPU_CsmCommonData*>(s_csmCommonConstBuffer.Map());
 
@@ -5689,10 +5690,10 @@ static void UpdateCSMCommonConstBuffer()
 }
 
 
-void UpdateDbgConstBuffer()
+void PrepareDbgConstBuffer()
 {
 #ifdef ENG_BUILD_DEBUG
-    TM_MARKER_C(0x008b8b, "UpdateDbgConstBuffer");
+    TM_MARKER_C(0x008b8b, "PrepareDbgConstBuffer");
 
     GPU_CommonDbgCBData& constBuff = *reinterpret_cast<GPU_CommonDbgCBData*>(s_commonDbgConstBuffer.Map());
 
@@ -5701,13 +5702,13 @@ void UpdateDbgConstBuffer()
     constBuff.tonemapPreset = s_tonemappingPreset;
     constBuff.csmPCFPreset = s_csmPCFPreset;
 
-    const bool csmPcssEnabled = s_isCSMEnabled && s_isCSMPCSSEnabled;
+    const bool csmPcssEnabled = s_isCsmEnabled && s_isCsmPcssEnabled;
 
     constBuff.enableIBL = s_isIBLEnabled;
-    constBuff.enableCSM = s_isCSMEnabled;
-    constBuff.enableCsmVisualization = s_isCSMEnabled && s_isCSMVisualizationEnabled;
-    constBuff.enableCsmSplitBlend = s_isCSMEnabled && s_isCSMSplitBlendEnabled;
-    constBuff.enableCsmFilterRandOffsets = s_isCSMEnabled && s_isCSMFilterRandomOffsetEnabled;
+    constBuff.enableCSM = s_isCsmEnabled;
+    constBuff.enableCsmVisualization = s_isCsmEnabled && s_isCsmVisualizationEnabled;
+    constBuff.enableCsmSplitBlend = s_isCsmEnabled && s_isCsmSplitBlendEnabled;
+    constBuff.enableCsmFilterRandOffsets = s_isCsmEnabled && s_isCsmFilterRandomOffsetEnabled;
     constBuff.enableCsmPCSS = csmPcssEnabled;
     constBuff.enableCsmPCSSRandRotation = csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled;
     constBuff.enableGeomLODVisualization = s_isGeomLODVisualizationEnabled;
@@ -7167,9 +7168,9 @@ static void PrepareCsmSplitsGeomPass(vkn::CmdBuffer& cmdBuffer)
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    const bool frustumCulling = s_useMeshCulling && s_useCSMMeshFrustumCulling;
-    const bool hzbCulling = s_useMeshCulling && s_useCSMMeshHZBCulling;
-    const bool coverageCulling = s_useMeshCulling && s_useCSMMeshCoverageCulling;
+    const bool frustumCulling = s_useMeshCulling && s_useCsmMeshFrustumCulling;
+    const bool hzbCulling = s_useMeshCulling && s_useCsmMeshHZBCulling;
+    const bool coverageCulling = s_useMeshCulling && s_useCsmMeshCoverageCulling;
 
     for (uint32_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
         TM_MARKER_C_FMT(0x959DA3, "Split_%u", i);
@@ -7231,7 +7232,7 @@ void CsmRenderPass(vkn::CmdBuffer& cmdBuffer)
 
 static void CsmPass(vkn::CmdBuffer& cmdBuffer)
 {
-    if (!s_isCSMEnabled) {
+    if (!s_isCsmEnabled) {
         return;
     }
 
@@ -7401,7 +7402,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    UpdateCSMCommonConstBuffer();
+    PrepareCsmData();
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -8102,11 +8103,11 @@ namespace DbgUI
 
                 if (ImGui::TreeNodeEx("Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
                     if (ImGui::TreeNodeEx("CSM", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Checkbox("##CSMEnabled", &s_isCSMEnabled);
+                        ImGui::Checkbox("##CSMEnabled", &s_isCsmEnabled);
                         ImGui::SameLine();
-                        ImGui::TextColored(s_isCSMEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                        ImGui::TextColored(s_isCsmEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
-                        ImGui::Checkbox("Visualize Splits", &s_isCSMVisualizationEnabled);
+                        ImGui::Checkbox("Visualize Splits", &s_isCsmVisualizationEnabled);
 
                         if (ImGui::TreeNodeEx("SDSM")) {
                             ImGui::DragFloat("XY Extension Coef", &s_sdsmSplitXYExtensionCoef, 0.1f, 0.f, 100.f, "%.1f %%");                            
@@ -8115,53 +8116,12 @@ namespace DbgUI
                             ImGui::TreePop();
                         }
 
-                        // if (ImGui::TreeNodeEx("Partition")) {
-                        //     for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
-                        //         const float distMin = split == 0 ? CAMERA_ZNEAR  : s_csmSplitDistances[split - 1];
-                        //         const float distMax = split == CSM_SPLIT_COUNT - 1 ? CAMERA_ZFAR : s_csmSplitDistances[split + 1];
-
-                        //         char label[64] = {};
-                        //         sprintf_s(label, "Split Distance %u##%u", split, split);
-
-                        //         ImGui::DragFloat(label, &s_csmSplitDistances[split], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
-                        //     }
-                            
-                        //     ImGui::TreePop();
-                        // }
-
-                        if (ImGui::TreeNodeEx("Bias")) {
-                            ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
-                            ImGui::DragFloat("Slope (Texels)", &s_csmSlopeBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
-                            
-                            ImGui::TreePop();
-                        }
-
-                        if (ImGui::TreeNodeEx("Geom Culling")) {
-                            ImGui::Checkbox("Frustum", &s_useCSMMeshFrustumCulling);
-                            ImGui::Checkbox("HZB", &s_useCSMMeshHZBCulling);
-                            ImGui::Checkbox("Coverage", &s_useCSMMeshCoverageCulling);
-
-                            if (s_useCSMMeshCoverageCulling && ImGui::TreeNodeEx("Coverage Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::DragFloat("RT coverage", &s_geomCoverageCullingThresholdPercentage, 0.01f, 0.01f, 100.f, "%.2f%%");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Percentage of max occupied space in one dimension by object");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::TreePop();
-                            }
-
-                            ImGui::TreePop();
-                        }
-
                         if (ImGui::TreeNodeEx("PCSS")) {
-                            ImGui::Checkbox("##CSMPCSSEnabled", &s_isCSMPCSSEnabled);
+                            ImGui::Checkbox("##CsmPcssEnabled", &s_isCsmPcssEnabled);
                             ImGui::SameLine();
-                            ImGui::TextColored(s_isCSMPCSSEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                            ImGui::TextColored(s_isCsmPcssEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                             
-                            if (s_isCSMPCSSEnabled) {
+                            if (s_isCsmPcssEnabled) {
                                 ImGui::DragFloat("Angular Radius", &s_csmPcssSettings.lightAngularRadiusDegrees, 0.001f, 0.001f, 180.f, "%.3f degrees");
                                 
                                 if (ImGui::IsItemHovered()) {
@@ -8239,12 +8199,53 @@ namespace DbgUI
                             ImGui::TreePop();
                         }
 
-                        if (ImGui::TreeNodeEx("Split Blend")) {
-                            ImGui::Checkbox("##CSMSplitBlendEnabled", &s_isCSMSplitBlendEnabled);
-                            ImGui::SameLine();
-                            ImGui::TextColored(s_isCSMSplitBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                        // if (ImGui::TreeNodeEx("Partition")) {
+                        //     for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+                        //         const float distMin = split == 0 ? CAMERA_ZNEAR  : s_csmSplitDistances[split - 1];
+                        //         const float distMax = split == CSM_SPLIT_COUNT - 1 ? CAMERA_ZFAR : s_csmSplitDistances[split + 1];
+
+                        //         char label[64] = {};
+                        //         sprintf_s(label, "Split Distance %u##%u", split, split);
+
+                        //         ImGui::DragFloat(label, &s_csmSplitDistances[split], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
+                        //     }
                             
-                            if (s_isCSMSplitBlendEnabled) {
+                        //     ImGui::TreePop();
+                        // }
+
+                        if (ImGui::TreeNodeEx("Bias")) {
+                            ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                            ImGui::DragFloat("Slope (Texels)", &s_csmSlopeBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                            
+                            ImGui::TreePop();
+                        }
+
+                        if (ImGui::TreeNodeEx("Geom Culling")) {
+                            ImGui::Checkbox("Frustum", &s_useCsmMeshFrustumCulling);
+                            ImGui::Checkbox("HZB", &s_useCsmMeshHZBCulling);
+                            ImGui::Checkbox("Coverage", &s_useCsmMeshCoverageCulling);
+
+                            if (s_useCsmMeshCoverageCulling && ImGui::TreeNodeEx("Coverage Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                ImGui::DragFloat("RT coverage", &s_geomCoverageCullingThresholdPercentage, 0.01f, 0.01f, 100.f, "%.2f%%");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Percentage of max occupied space in one dimension by object");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::TreePop();
+                            }
+
+                            ImGui::TreePop();
+                        }
+
+                        if (ImGui::TreeNodeEx("Split Blend")) {
+                            ImGui::Checkbox("##CSMSplitBlendEnabled", &s_isCsmSplitBlendEnabled);
+                            ImGui::SameLine();
+                            ImGui::TextColored(s_isCsmSplitBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                            
+                            if (s_isCsmSplitBlendEnabled) {
                                 ImGui::DragFloat("Blend Threshold Coef", &s_csmSplitBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
                                 
                                 if (ImGui::IsItemHovered()) {
@@ -8257,7 +8258,7 @@ namespace DbgUI
                             ImGui::TreePop();
                         }
 
-                        if (!s_isCSMPCSSEnabled && ImGui::TreeNodeEx("Filtering")) {
+                        if (!s_isCsmPcssEnabled && ImGui::TreeNodeEx("Filtering")) {
                             if (ImGui::BeginCombo("PCF Filter", DBG_CSM_PCF_NAMES[s_csmPCFPreset])) {
                                 for (size_t i = 0; i < _countof(DBG_CSM_PCF_NAMES); ++i) {
                                     const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFPreset]);
@@ -8289,7 +8290,7 @@ namespace DbgUI
                                     ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 64);
                                     ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
 
-                                    ImGui::Checkbox("Random Offsets", &s_isCSMFilterRandomOffsetEnabled);
+                                    ImGui::Checkbox("Random Offsets", &s_isCsmFilterRandomOffsetEnabled);
 
                                     ImGui::TreePop();
                                 }
@@ -8597,10 +8598,10 @@ static void RenderScene()
     // submission is completely finished before reusing its resources.
     s_renderFinishedFence.WaitFor(10'000'000'000);
 
-    UpdateMainCamConstBuffer();
+    PrepareMainCamConstBuffer();
 
-    UpdateCommonConstBuffer();
-    UpdateDbgConstBuffer();
+    PrepareCommonConstBuffer();
+    PrepareDbgConstBuffer();
 
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &s_nextImageIdx);
     
