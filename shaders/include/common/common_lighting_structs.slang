@@ -28,15 +28,14 @@ static const float3 DBG_CSM_SPLIT_COLORS[] = {
 
 struct GPU_PcssData
 {
-    float lightAngularSlope;
-    float maxSearchRadiusTexels;
-    float maxFilterRadiusTexels;
-    float minFilterRadiusTexels;
-
-    float searchRadiusScale;
-    float filterRadiusScale;
+    float penumbraGrowth;
+    float maxPenumbraRadius;
+    float maxSearchRadius;
+    float minPenumbraRadiusInTexels;
+    
     uint searchSamplesCount;
     uint filterSamplesCount;
+    uint2 padding;
 };
 
 

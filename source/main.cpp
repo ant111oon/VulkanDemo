@@ -407,15 +407,14 @@ static constexpr uint CSM_SPLIT_COUNT = 3;
 
 struct GPU_PcssData
 {
-    float lightAngularSlope;
-    float maxSearchRadiusTexels;
-    float maxFilterRadiusTexels;
-    float minFilterRadiusTexels;
-
-    float searchRadiusScale;
-    float filterRadiusScale;
+    float penumbraGrowth;
+    float maxPenumbraRadius;
+    float maxSearchRadius;
+    float minPenumbraRadiusInTexels;
+    
     uint searchSamplesCount;
     uint filterSamplesCount;
+    uint2 padding;
 };
 
 
@@ -1648,20 +1647,11 @@ static float   s_sdsmSplitXYExtensionCoef = 15.f;
 
 struct CsmPcssSettings
 {
-    // Physical/artistic light size.
-    // Real Sun angular radius ≈ 0.265 degrees.
-    float lightAngularRadiusDegrees = 0.265f;
-
-    // Safety and performance limits, in shadow-map texels.
-    float maxSearchRadiusTexels = 5.0f;
-    float maxFilterRadiusTexels = 6.0f;
-
-    // Below this radius, use one comparison sample instead of full PCF.
-    float minFilterRadiusTexels = 0.5f;
-
-    // Optional artistic multipliers.
-    float searchRadiusScale = 1.0f;
-    float filterRadiusScale = 1.0f;
+    // Artistic appearance
+    float penumbraGrowth = 0.065;
+    float maxPenumbraRadius = 1.f;
+    float maxSearchRadius = 2.f;
+    float minPenumbraRadiusInTexels = 1.f;
 
     int32_t searchSamplesCount = 32u;
     int32_t filterSamplesCount = 64u;
@@ -5676,13 +5666,10 @@ static void PrepareCsmData()
     constBuff.constantBiasTexels = s_csmConstantBiasTexels;
     constBuff.slopeBiasTexels = s_csmSlopeBiasTexels;
 
-    constBuff.pcssData.lightAngularSlope = glm::tan(glm::radians(s_csmPcssSettings.lightAngularRadiusDegrees));
-    constBuff.pcssData.maxSearchRadiusTexels = s_csmPcssSettings.maxSearchRadiusTexels;
-    constBuff.pcssData.maxFilterRadiusTexels = s_csmPcssSettings.maxFilterRadiusTexels;
-    constBuff.pcssData.minFilterRadiusTexels = s_csmPcssSettings.minFilterRadiusTexels;
-
-    constBuff.pcssData.searchRadiusScale  = s_csmPcssSettings.searchRadiusScale;
-    constBuff.pcssData.filterRadiusScale  = s_csmPcssSettings.filterRadiusScale;
+    constBuff.pcssData.penumbraGrowth  = s_csmPcssSettings.penumbraGrowth;
+    constBuff.pcssData.maxPenumbraRadius = s_csmPcssSettings.maxPenumbraRadius;
+    constBuff.pcssData.maxSearchRadius = s_csmPcssSettings.maxSearchRadius;
+    constBuff.pcssData.minPenumbraRadiusInTexels = s_csmPcssSettings.minPenumbraRadiusInTexels;
     constBuff.pcssData.searchSamplesCount = s_csmPcssSettings.searchSamplesCount;
     constBuff.pcssData.filterSamplesCount = s_csmPcssSettings.filterSamplesCount;
 
@@ -8122,70 +8109,28 @@ namespace DbgUI
                             ImGui::TextColored(s_isCsmPcssEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                             
                             if (s_isCsmPcssEnabled) {
-                                ImGui::DragFloat("Angular Radius", &s_csmPcssSettings.lightAngularRadiusDegrees, 0.001f, 0.001f, 180.f, "%.3f degrees");
+                                ImGui::DragFloat("Penumbra Growth", &s_csmPcssSettings.penumbraGrowth, 0.005f, 0.0f, 0.2f);
                                 
                                 if (ImGui::IsItemHovered()) {
                                     if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Angular Radius");
+                                        ImGui::Text("World-space penumbra radius per unit of blocker separation");
                                     } ImGui::EndTooltip();
                                 }
 
-                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadiusTexels, 0.1f, 0.1f, 64.f, "%.1f");
-                                
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Max Search Radius Texels in texels");
-                                    } ImGui::EndTooltip();
-                                }
+                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadius, 0.1f, 0.1f, 10.f, "%.1f units");
+                                ImGui::DragFloat("Max Penumbra Radius", &s_csmPcssSettings.maxPenumbraRadius, 0.1f, 0.1f, 10.f, "%.1f units");
 
-                                ImGui::DragFloat("Max Filter Radius", &s_csmPcssSettings.maxFilterRadiusTexels, 0.1f, 0.1f, 128.f, "%.1f");
-                                
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Max Filter Radius in texels");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::DragFloat("Min Filter Radius", &s_csmPcssSettings.minFilterRadiusTexels, 0.01f, 0.01f, 128.f, "%.2f");
+                                ImGui::DragFloat("Min Penumbra Radius", &s_csmPcssSettings.minPenumbraRadiusInTexels, 0.1f, 0.f, 64.f, "%.1f texels");
 
                                 if (ImGui::IsItemHovered()) {
                                     if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Min Filter Radius in texels");
+                                        ImGui::Text("Min Penumbra Radius In Texels");
                                         ImGui::BulletText("Use one comparison sample instead of full PCF if less");
                                     } ImGui::EndTooltip();
-                                }
+                                }                             
 
-                                ImGui::DragFloat("Search Radius Scale", &s_csmPcssSettings.searchRadiusScale, 0.01f, 0.01f, 32.f, "%.2f");
-                                
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Search Radius Scale");
-                                    } ImGui::EndTooltip();
-                                }
-                                
-                                ImGui::DragFloat("Filter Radius Scale", &s_csmPcssSettings.filterRadiusScale, 0.01f, 0.01f, 32.f, "%.2f");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Filter Radius Scale");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64);
-                                
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Search Samples Count");
-                                    } ImGui::EndTooltip();
-                                }
-                                
+                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64);                                
                                 ImGui::SliderInt("Filter Samples Count", &s_csmPcssSettings.filterSamplesCount, 1, 128);
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Filter Samples Count");
-                                    } ImGui::EndTooltip();
-                                }
 
                                 ImGui::Checkbox("Random Rotation", &s_csmPcssSettings.randomRotationEnabled);
 
@@ -8830,10 +8775,10 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    

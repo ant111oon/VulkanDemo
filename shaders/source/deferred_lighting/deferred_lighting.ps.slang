@@ -432,16 +432,14 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
     const float zFar = DEFERRED_LIGHTING_CSM_SPLIT_VIEW_Z_FAR(split);
     const float zReceiverViewSpace = OrthoDepthToViewDepth(zReceiverCmp, zNear, zFar);
 
-    const float lightSlope = DEFERRED_LIGHTING_CSM_PCSS_DATA.lightAngularSlope;
-
     // A conservative blocker-search radius.
     // A blocker can be located anywhere between the split near plane and the receiver.
     // The largest possible lateral displacement is therefore based on that maximum distance.
     const float zReceiverFromNear = max(zReceiverViewSpace - zNear, 0.f);
-    const float searchRadiusWorld = lightSlope * zReceiverFromNear * DEFERRED_LIGHTING_CSM_PCSS_DATA.searchRadiusScale;
+    const float searchRadiusWorld = min(zReceiverFromNear * DEFERRED_LIGHTING_CSM_PCSS_DATA.penumbraGrowth, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxSearchRadius);
 
     const float2 worldUnitsPerTexel = DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split);
-    const float2 searchRadiusTexels = min(searchRadiusWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxSearchRadiusTexels);
+    const float2 searchRadiusTexels = searchRadiusWorld / worldUnitsPerTexel;
 
     const GPU_CsmPcssBlockerSearchResult blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
 
@@ -455,11 +453,11 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
         return 1.f;
     }
 
-    const float2 penumbraWorld = FLOAT2(blockerReceiverDistance * lightSlope * DEFERRED_LIGHTING_CSM_PCSS_DATA.filterRadiusScale);
-    const float2 filterRadiusTexels = min(penumbraWorld / worldUnitsPerTexel, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxFilterRadiusTexels);
+    const float2 penumbraWorld = float2(min(blockerReceiverDistance * DEFERRED_LIGHTING_CSM_PCSS_DATA.penumbraGrowth, DEFERRED_LIGHTING_CSM_PCSS_DATA.maxPenumbraRadius));
+    const float2 filterRadiusTexels = penumbraWorld / worldUnitsPerTexel;
 
     // Very small penumbras do not justify running a full sample filter.
-    if (all(filterRadiusTexels < DEFERRED_LIGHTING_CSM_PCSS_DATA.minFilterRadiusTexels)) {
+    if (all(filterRadiusTexels < float2(DEFERRED_LIGHTING_CSM_PCSS_DATA.minPenumbraRadiusInTexels))) {
         return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, texCoord.xy, zReceiverCmp);
     }
 
