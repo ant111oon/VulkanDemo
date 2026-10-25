@@ -51,7 +51,7 @@ struct GPU_CsmSplitData
 };
 
 
-struct GPU_CsmCommonData
+struct GPU_CommonCsmData
 {
     GPU_PcssData pcssData;
 
@@ -63,6 +63,12 @@ struct GPU_CsmCommonData
     float constantBiasTexels;
     float slopeBiasTexels;
     private uint2 padding;
+};
+
+
+struct GPU_CommonLightingData
+{
+    GPU_CommonCsmData csm;
 };
 
 

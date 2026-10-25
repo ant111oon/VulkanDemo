@@ -430,7 +430,7 @@ struct GPU_CsmSplitData
 };
 
 
-struct GPU_CsmCommonData
+struct GPU_CommonCsmData
 {
     GPU_PcssData pcssData;
 
@@ -442,6 +442,12 @@ struct GPU_CsmCommonData
     float constantBiasTexels;
     float slopeBiasTexels;
     uint2 padding;
+};
+
+
+struct GPU_CommonLightingData
+{
+    GPU_CommonCsmData csm;
 };
 
 
@@ -986,7 +992,7 @@ static constexpr size_t GBUFFER_CAM_DATA_CB_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 2;
 
-static constexpr size_t DEFERRED_LIGHTING_CSM_COMMON_DATA_DESCRIPTOR_SLOT = 0;
+static constexpr size_t DEFERRED_LIGHTING_COMMON_CB_DESCRIPTOR_SLOT = 0;
 static constexpr size_t DEFERRED_LIGHTING_CSM_SPLITS_DATA_DESCRIPTOR_SLOT = 1;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 2;
 static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 3;
@@ -1451,7 +1457,7 @@ static vkn::Buffer s_geomIndexBuffer;
 static vkn::Buffer s_commonConstBuffer;
 static vkn::Buffer s_commonDbgConstBuffer;
 
-static vkn::Buffer s_csmCommonConstBuffer;
+static vkn::Buffer s_commonLightingConstBuffer;
 
 static vkn::Buffer s_commonMeshLODBuffer;
 static vkn::Buffer s_commonMeshBuffer;
@@ -1648,9 +1654,9 @@ static float   s_sdsmSplitXYExtensionCoef = 15.f;
 struct CsmPcssSettings
 {
     // Artistic appearance
-    float penumbraGrowth = 0.065;
-    float maxPenumbraRadius = 1.f;
-    float maxSearchRadius = 2.f;
+    float penumbraGrowth = 0.003f;
+    float maxPenumbraRadius = 0.15f;
+    float maxSearchRadius = 0.02f;
     float minPenumbraRadiusInTexels = 1.f;
 
     int32_t searchSamplesCount = 32u;
@@ -1659,7 +1665,7 @@ struct CsmPcssSettings
     bool randomRotationEnabled = true;
 } s_csmPcssSettings;
 
-static float s_mainCameraSpeed = 0.005f;
+static float s_mainCameraSpeed = 0.025f;
 
 #ifdef ENG_DEBUG_DRAW_ENABLED
     static bool s_useMeshCulling = true;
@@ -3321,7 +3327,7 @@ static void CreateDeferredLightingDescriptorSetLayout()
     createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
 
     std::array descriptors = {
-        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_CSM_COMMON_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_COMMON_CB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_CSM_SPLITS_DATA_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, CSM_SPLIT_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT),
@@ -5609,9 +5615,9 @@ static void CreateCommonConstBuffers()
 }
 
 
-static void CreateCSMCommonData()
+static void CreateLightingCommonData()
 {
-    s_csmCommonConstBuffer.CreateConstBuffer<GPU_CsmCommonData>(&s_vkDevice, 1).SetDebugName("CSM_COMMON_CB");
+    s_commonLightingConstBuffer.CreateConstBuffer<GPU_CommonLightingData>(&s_vkDevice, 1).SetDebugName("LIGHTING_COMMON_CB");
 }
 
 
@@ -5644,11 +5650,11 @@ static void PrepareMainCamConstBuffer()
 }
 
 
-static void PrepareCsmData()
+static void PrepareLightingData()
 {
-    TM_MARKER_C(0x008b8b, "PrepareCsmData");
+    TM_MARKER_C(0x008b8b, "PrepareLightingData");
 
-    GPU_CsmCommonData& constBuff = *reinterpret_cast<GPU_CsmCommonData*>(s_csmCommonConstBuffer.Map());
+    GPU_CommonLightingData& constBuff = *reinterpret_cast<GPU_CommonLightingData*>(s_commonLightingConstBuffer.Map());
 
     // for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
     //     FillCameraDataGPU(constBuff.csmData.splits[i].camData, s_csmCameras[i]);
@@ -5658,22 +5664,22 @@ static void PrepareCsmData()
     //     constBuff.csmData.splits[i].rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
     // }
 
-    constBuff.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
-    constBuff.filterDiskSampleCount = s_csmFilterDiskSampleCount;
-    constBuff.filterDiskRadius = s_csmFilterDiskRadius;
-    constBuff.filterGridHalfSize = s_csmFilterGridHalfSize;
+    constBuff.csm.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
+    constBuff.csm.filterDiskSampleCount = s_csmFilterDiskSampleCount;
+    constBuff.csm.filterDiskRadius = s_csmFilterDiskRadius;
+    constBuff.csm.filterGridHalfSize = s_csmFilterGridHalfSize;
 
-    constBuff.constantBiasTexels = s_csmConstantBiasTexels;
-    constBuff.slopeBiasTexels = s_csmSlopeBiasTexels;
+    constBuff.csm.constantBiasTexels = s_csmConstantBiasTexels;
+    constBuff.csm.slopeBiasTexels = s_csmSlopeBiasTexels;
 
-    constBuff.pcssData.penumbraGrowth  = s_csmPcssSettings.penumbraGrowth;
-    constBuff.pcssData.maxPenumbraRadius = s_csmPcssSettings.maxPenumbraRadius;
-    constBuff.pcssData.maxSearchRadius = s_csmPcssSettings.maxSearchRadius;
-    constBuff.pcssData.minPenumbraRadiusInTexels = s_csmPcssSettings.minPenumbraRadiusInTexels;
-    constBuff.pcssData.searchSamplesCount = s_csmPcssSettings.searchSamplesCount;
-    constBuff.pcssData.filterSamplesCount = s_csmPcssSettings.filterSamplesCount;
+    constBuff.csm.pcssData.penumbraGrowth  = s_csmPcssSettings.penumbraGrowth;
+    constBuff.csm.pcssData.maxPenumbraRadius = s_csmPcssSettings.maxPenumbraRadius;
+    constBuff.csm.pcssData.maxSearchRadius = s_csmPcssSettings.maxSearchRadius;
+    constBuff.csm.pcssData.minPenumbraRadiusInTexels = s_csmPcssSettings.minPenumbraRadiusInTexels;
+    constBuff.csm.pcssData.searchSamplesCount = s_csmPcssSettings.searchSamplesCount;
+    constBuff.csm.pcssData.filterSamplesCount = s_csmPcssSettings.filterSamplesCount;
 
-    s_csmCommonConstBuffer.Unmap();
+    s_commonLightingConstBuffer.Unmap();
 }
 
 
@@ -7389,7 +7395,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    PrepareCsmData();
+    PrepareLightingData();
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
 
@@ -7481,7 +7487,7 @@ void DeferredLightingPass(vkn::CmdBuffer& cmdBuffer)
             pushDescriptors.emplace_back(vkn::PushDescriptor::StorageBuffer(DEFERRED_LIGHTING_CSM_SPLITS_DATA_DESCRIPTOR_SLOT, split, s_csmCamsResources[split].splitDataBuffer));
         }
 
-        pushDescriptors.emplace_back(vkn::PushDescriptor::ConstantBuffer(DEFERRED_LIGHTING_CSM_COMMON_DATA_DESCRIPTOR_SLOT, 0, s_csmCommonConstBuffer));
+        pushDescriptors.emplace_back(vkn::PushDescriptor::ConstantBuffer(DEFERRED_LIGHTING_COMMON_CB_DESCRIPTOR_SLOT, 0, s_commonLightingConstBuffer));
         pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
         pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
         pushDescriptors.emplace_back(vkn::PushDescriptor::SampledTexture(DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT, 0, s_gbufferRTViews[2], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
@@ -8109,7 +8115,7 @@ namespace DbgUI
                             ImGui::TextColored(s_isCsmPcssEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                             
                             if (s_isCsmPcssEnabled) {
-                                ImGui::DragFloat("Penumbra Growth", &s_csmPcssSettings.penumbraGrowth, 0.005f, 0.0f, 0.2f);
+                                ImGui::DragFloat("Penumbra Growth", &s_csmPcssSettings.penumbraGrowth, 0.001f, 0.0f, 0.2f);
                                 
                                 if (ImGui::IsItemHovered()) {
                                     if (ImGui::BeginTooltip()) {
@@ -8117,8 +8123,21 @@ namespace DbgUI
                                     } ImGui::EndTooltip();
                                 }
 
-                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadius, 0.1f, 0.1f, 10.f, "%.1f units");
-                                ImGui::DragFloat("Max Penumbra Radius", &s_csmPcssSettings.maxPenumbraRadius, 0.1f, 0.1f, 10.f, "%.1f units");
+                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadius, 0.01f, 0.01f, 10.f, "%.2f units");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Max World-Space Search Radius");
+                                    } ImGui::EndTooltip();
+                                }
+
+                                ImGui::DragFloat("Max Penumbra Radius", &s_csmPcssSettings.maxPenumbraRadius, 0.01f, 0.01f, 10.f, "%.2f units");
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Max World-Space Penumbra Radius");
+                                    } ImGui::EndTooltip();
+                                }
 
                                 ImGui::DragFloat("Min Penumbra Radius", &s_csmPcssSettings.minPenumbraRadiusInTexels, 0.1f, 0.f, 64.f, "%.1f texels");
 
@@ -8129,8 +8148,21 @@ namespace DbgUI
                                     } ImGui::EndTooltip();
                                 }                             
 
-                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64);                                
+                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64); 
+                                
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Search Samples Count");
+                                    } ImGui::EndTooltip();
+                                }
+                                
                                 ImGui::SliderInt("Filter Samples Count", &s_csmPcssSettings.filterSamplesCount, 1, 128);
+
+                                if (ImGui::IsItemHovered()) {
+                                    if (ImGui::BeginTooltip()) {
+                                        ImGui::Text("Filter Samples Count");
+                                    } ImGui::EndTooltip();
+                                }
 
                                 ImGui::Checkbox("Random Rotation", &s_csmPcssSettings.randomRotationEnabled);
 
@@ -8804,7 +8836,7 @@ int main(int argc, char* argv[])
     CreateCommonSMSamplers();
     CreateCommonConstBuffers();
     CreateCamerasData();
-    CreateCSMCommonData();
+    CreateLightingCommonData();
     CreateDbgDrawResources();
     CreateDescriptors();
     CreatePipelines();
