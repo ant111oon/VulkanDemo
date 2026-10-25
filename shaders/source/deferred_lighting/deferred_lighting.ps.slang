@@ -424,7 +424,7 @@ GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in 
 }
 
 
-float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverCmp)
+float CalcCsmPcss(in SamplerComparisonState smSmp, in float3 texCoord, in float zReceiverCmp)
 {
     const uint split = uint(texCoord.z);
 
@@ -486,7 +486,7 @@ float CalcCsmFilteredShadow(in float zReceiverRaw, in float bias, in float3 texC
     float shadow = 0.f;
 
     if (DEFERRED_LIGHTING_CSM_PCSS_DATA.isEnabled) {
-        shadow = CalcCSM_PCSS(cmpSmp, texCoord, zReceiverCmp);
+        shadow = CalcCsmPcss(cmpSmp, texCoord, zReceiverCmp);
     } else {
         switch (DEFERRED_LIGHTING_CSM_FILTER_DATA.pcfType) {
             case GPU_PCFType::NONE:
@@ -577,7 +577,7 @@ float CalcCsmBias(in float3 wnorm, in uint split)
 }
 
 
-float3 ApplyCSMSplitBlend(inout float3 shadow, in float3 wpos, in float vDist, in float bias, in uint currSplitIndex)
+float3 ApplyCsmSplitBlend(inout float3 shadow, in float3 wpos, in float vDist, in float bias, in uint currSplitIndex)
 {
     GPU_CsmSplitBlendData blendData;
 
@@ -611,7 +611,7 @@ float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
     const float bias = CalcCsmBias(wnorm, splitIdx);
     float3 shadow = CalcCsmShadowSplit(splitIdx, wpos, bias);
 
-    const float3 splitDbgColor = ApplyCSMSplitBlend(shadow, wpos, vDist, bias, splitIdx);
+    const float3 splitDbgColor = ApplyCsmSplitBlend(shadow, wpos, vDist, bias, splitIdx);
 
     return shadow * splitDbgColor;
 }

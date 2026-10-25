@@ -38,7 +38,7 @@
 #define COMMON_INST_COUNT COMMON_INST_BUFFER.getCount()
 
 #define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmVisualizatioEnabled, false)
-#define COMMON_DBG_IS_GEOM_LOD_VISUALIZATION_ENABLED  DBG_VALUE(COMMON_DBG_CB.isGeomLODVisualizationEnabled, false)
+#define COMMON_DBG_IS_GEOM_LOD_VISUALIZATION_ENABLED  DBG_VALUE(COMMON_DBG_CB.isGeomLodVisualizationEnabled, false)
 
 #define COMMON_DBG_FORCED_GEOM_LOD                    DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
 #define COMMON_DBG_RT_VIEW_TYPE                       DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)

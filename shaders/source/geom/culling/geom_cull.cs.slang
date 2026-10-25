@@ -39,7 +39,7 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
 
     uint lodID;
 
-    if (COMMON_DBG_FORCED_GEOM_LOD >= 0) {
+    if (COMMON_DBG_CB.isGeomLodForced) {
         lodID = COMMON_DBG_FORCED_GEOM_LOD;
     } else {
         const float coverage = Max(sbox.deltaXY);

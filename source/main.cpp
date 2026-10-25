@@ -376,8 +376,8 @@ struct GPU_CommonDbgCBData
     GPU_DbgRTViewType rtViewType;
     int forcedGeomLOD;
     
-    uint enableCsmVisualization : 1;
-    uint enableGeomLODVisualization : 1;
+    uint csmVisualizationEnabled : 1;
+    uint geomLodVisualizationEnabled : 1;
     uint bitPadding : 30;
 
     uint padding;
@@ -5730,8 +5730,8 @@ void PrepareDbgConstBuffer()
     constBuff.forcedGeomLOD = s_forcedGeomLOD;
     constBuff.rtViewType = s_dbgOutputRTType;
 
-    constBuff.enableCsmVisualization = s_isCsmEnabled && s_isCsmVisualizationEnabled;
-    constBuff.enableGeomLODVisualization = s_isGeomLODVisualizationEnabled;
+    constBuff.csmVisualizationEnabled = s_isCsmEnabled && s_isCsmVisualizationEnabled;
+    constBuff.geomLodVisualizationEnabled = s_isGeomLODVisualizationEnabled;
 
     s_commonDbgConstBuffer.Unmap();
 #endif

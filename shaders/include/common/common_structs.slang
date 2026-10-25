@@ -164,15 +164,15 @@ struct GPU_CommonDbgCBData
 {
     property bool isCsmVisualizatioEnabled
     {
-        get { return (bool)enableCsmVisualization; }
+        get { return (bool)csmVisualizationEnabled; }
     }
 
-    property bool isGeomLODVisualizationEnabled
+    property bool isGeomLodVisualizationEnabled
     {
-        get { return (bool)enableGeomLODVisualization; }
+        get { return (bool)geomLodVisualizationEnabled; }
     }
 
-    property bool hasForcedGeomLodOverride
+    property bool isGeomLodForced
     {
         get { return forcedGeomLOD >= 0; }
     }
@@ -180,8 +180,8 @@ struct GPU_CommonDbgCBData
     GPU_DbgRTViewType rtViewType;
     int forcedGeomLOD;
     
-    private uint enableCsmVisualization : 1;
-    private uint enableGeomLODVisualization : 1;
+    private uint csmVisualizationEnabled : 1;
+    private uint geomLodVisualizationEnabled : 1;
     private uint bitPadding : 30;
 
     private uint padding;
