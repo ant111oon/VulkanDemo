@@ -8,12 +8,12 @@
 
 float3 Tonemap(in float3 color)
 {
-    switch (COMMON_DBG_TONEMAP_PRESET) {
-        case GPU_DbgTonemapPreset::ACES:                return ACES_Tonemap(color);
-        case GPU_DbgTonemapPreset::REINHARD:            return Reinhard_Tonemap(color);
-        case GPU_DbgTonemapPreset::PARTIAL_UNCHARTED_2: return PartialUncharted2_Tonemap(color);
-        case GPU_DbgTonemapPreset::UNCHARTED_2:         return Uncharted2_Tonemap(color);
-        default:                                        return float3(1.f, 0.f, 0.f);
+    switch (COMMON_CB.tonemapPreset) {
+        case GPU_TonemapPreset::ACES:                return ACES_Tonemap(color);
+        case GPU_TonemapPreset::REINHARD:            return Reinhard_Tonemap(color);
+        case GPU_TonemapPreset::PARTIAL_UNCHARTED_2: return PartialUncharted2_Tonemap(color);
+        case GPU_TonemapPreset::UNCHARTED_2:         return Uncharted2_Tonemap(color);
+        default:                                     return float3(1.f, 0.f, 0.f);
     }
 }
 

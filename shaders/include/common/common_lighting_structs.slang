@@ -26,19 +26,6 @@ static const float3 DBG_CSM_SPLIT_COLORS[] = {
 };
 
 
-struct GPU_PcssData
-{
-    float penumbraGrowth;
-    float maxPenumbraRadius;
-    float maxSearchRadius;
-    float minPenumbraRadiusInTexels;
-    
-    uint searchSamplesCount;
-    uint filterSamplesCount;
-    uint2 padding;
-};
-
-
 struct GPU_CsmSplitData
 {
     GPU_CommonCameraData camData;
@@ -51,24 +38,92 @@ struct GPU_CsmSplitData
 };
 
 
+enum GPU_PCFType
+{
+    NONE,
+    GRID,
+    POISSON_DISK,
+    VOGEL_DISK,
+
+    COUNT
+};
+
+
+struct GPU_ShadowFilterData
+{
+    property bool isRandRotationEnabled
+    {
+        get { return (bool)randRotationEnabled; }
+    }
+
+    GPU_PCFType pcfType;
+    float radius;       // grid half size if pcfType - GRID
+                        // disk radius if pcfType - POISSON_DISK or VOGEL_DISK
+    uint samplesCount;
+    
+    private uint randRotationEnabled : 1;
+    private uint bitPadding : 31;
+};
+
+
+struct GPU_PcssData
+{
+    property bool isEnabled
+    {
+        get { return (bool)enabled; }
+    }
+
+    float penumbraGrowth;
+    float maxPenumbraRadius;
+    float maxSearchRadius;
+    float minPenumbraRadiusInTexels;
+
+    private uint2 padding;
+    uint searchSamplesCount;
+
+    private uint enabled : 1;
+    private uint bitPadding : 31;
+};
+
+
 struct GPU_CommonCsmData
 {
+    property bool isEnabled
+    {
+        get { return (bool)enabled; }
+    }
+
+    property bool isSplitBlendEnabled
+    {
+        get { return (bool)splitBlendEnabled; }
+    }
+
     GPU_PcssData pcssData;
+    GPU_ShadowFilterData filterData;
 
     float blendThresholdCoef;
-    uint  filterDiskSampleCount;
-    float filterDiskRadius;
-    uint  filterGridHalfSize;
-
     float constantBiasTexels;
     float slopeBiasTexels;
-    private uint2 padding;
+
+    private uint enabled : 1;
+    private uint splitBlendEnabled : 1;
+    private uint bitPadding : 30;
 };
 
 
 struct GPU_CommonLightingData
 {
+    property bool isIBLEnabled
+    {
+        get { return (bool)IBLEnabled; }
+    }
+
     GPU_CommonCsmData csm;
+
+    private uint3 padding;
+
+    private uint IBLEnabled : 1;
+    private uint bitPadding : 31;
 };
 
 

@@ -37,28 +37,6 @@ enum GPU_DbgRTViewType
 };
 
 
-enum GPU_DbgTonemapPreset
-{
-    ACES,
-    REINHARD,
-    PARTIAL_UNCHARTED_2,
-    UNCHARTED_2,
-
-    COUNT
-};
-
-
-enum GPU_DbgCsmPCFPreset
-{
-    NONE,
-    GRID,
-    POISSON_DISK,
-    VOGEL_DISK,
-
-    COUNT
-};
-
-
 enum GPU_SamplerID
 {
     NEAREST_REPEAT,
@@ -161,51 +139,32 @@ struct GPU_CommonCameraData
 };
 
 
+enum GPU_TonemapPreset
+{
+    ACES,
+    REINHARD,
+    PARTIAL_UNCHARTED_2,
+    UNCHARTED_2,
+
+    COUNT
+};
+
+
 struct GPU_CommonCBData
 {
     GPU_SunData sunData;
 
     uint2 screenSize;
-    uint flags;
+    GPU_TonemapPreset tonemapPreset;
     private uint padding;
 };
 
 
 struct GPU_CommonDbgCBData
 {
-    property bool isIBLEnabled
-    {
-        get { return (bool)enableIBL; }
-    }
-
-    property bool isCsmEnabled
-    {
-        get { return (bool)enableCSM; }
-    }
-
     property bool isCsmVisualizatioEnabled
     {
         get { return (bool)enableCsmVisualization; }
-    }
-
-    property bool isCsmSplitBlendEnabled
-    {
-        get { return (bool)enableCsmSplitBlend; }
-    }
-
-    property bool isCsmFilterRandOffsetsEnabled
-    {
-        get { return (bool)enableCsmFilterRandOffsets; }
-    }
-
-    property bool isCsmPCSSEnabled
-    {
-        get { return (bool)enableCsmPCSS; }
-    }
-
-    property bool isCsmPCSSRandRotationEnabled
-    {
-        get { return (bool)enableCsmPCSSRandRotation; }
     }
 
     property bool isGeomLODVisualizationEnabled
@@ -213,21 +172,19 @@ struct GPU_CommonDbgCBData
         get { return (bool)enableGeomLODVisualization; }
     }
 
+    property bool hasForcedGeomLodOverride
+    {
+        get { return forcedGeomLOD >= 0; }
+    }
+
     GPU_DbgRTViewType rtViewType;
-    GPU_DbgTonemapPreset tonemapPreset;
-    GPU_DbgCsmPCFPreset csmPCFPreset;
     int forcedGeomLOD;
     
-    private uint3 padding;
-    private uint enableIBL : 1;
-    private uint enableCSM : 1;
     private uint enableCsmVisualization : 1;
-    private uint enableCsmSplitBlend : 1;
-    private uint enableCsmFilterRandOffsets : 1;
-    private uint enableCsmPCSS : 1;
-    private uint enableCsmPCSSRandRotation : 1;
     private uint enableGeomLODVisualization : 1;
-    private uint padding_1 : 24;
+    private uint bitPadding : 30;
+
+    private uint padding;
 };
 
 #endif

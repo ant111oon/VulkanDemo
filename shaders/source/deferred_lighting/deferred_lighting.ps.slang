@@ -133,7 +133,7 @@ float2 GetIndirectBRDFScaleBias(in float NdotV, in float roughness)
 
 float3 ProcessIBL(in GPU_GBuffer gbuffer, in float3 V, in float3 F0)
 {
-    if (!COMMON_DBG_IS_IBL_ENABLED) {
+    if (!DEFERRED_LIGHTING_COMMON_CB.isIBLEnabled) {
         return gbuffer.albedo * gbuffer.ao * 0.015f;
     }
 
@@ -441,7 +441,9 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
     const float2 worldUnitsPerTexel = DEFERRED_LIGHTING_CSM_SPLIT_WORLD_UNITS_PER_PIXEL(split);
     const float2 searchRadiusTexels = searchRadiusWorld / worldUnitsPerTexel;
 
-    const GPU_CsmPcssBlockerSearchResult blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
+    const bool isRandRotationEnabled = DEFERRED_LIGHTING_CSM_FILTER_DATA.isRandRotationEnabled;
+
+    const GPU_CsmPcssBlockerSearchResult blockers = FindCsmPCSSAverageBlocker(texCoord, zReceiverViewSpace, searchRadiusTexels, isRandRotationEnabled);
 
     if (!blockers.HasBlocker()) {
         return 1.f;
@@ -466,8 +468,8 @@ float CalcCSM_PCSS(in SamplerComparisonState smSmp, in float3 texCoord, in float
         texCoord,
         zReceiverCmp,
         filterRadiusTexels,
-        DEFERRED_LIGHTING_CSM_PCSS_DATA.filterSamplesCount,
-        COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED);
+        DEFERRED_LIGHTING_CSM_FILTER_DATA.samplesCount,
+        isRandRotationEnabled);
 }
 
 
@@ -483,34 +485,34 @@ float CalcCsmFilteredShadow(in float zReceiverRaw, in float bias, in float3 texC
 
     float shadow = 0.f;
 
-    if (COMMON_DBG_IS_CSM_PCSS_ENABLED) {
+    if (DEFERRED_LIGHTING_CSM_PCSS_DATA.isEnabled) {
         shadow = CalcCSM_PCSS(cmpSmp, texCoord, zReceiverCmp);
-    } else {    
-        switch (COMMON_DBG_CSM_PCF_PRESET) {
-            case GPU_DbgCsmPCFPreset::NONE:
+    } else {
+        switch (DEFERRED_LIGHTING_CSM_FILTER_DATA.pcfType) {
+            case GPU_PCFType::NONE:
                 shadow = CalcCsmUnfilteredPCF(texCoord, zReceiverCmp);
                 break;
-            case GPU_DbgCsmPCFPreset::GRID:
-                shadow += CalcCsmGridPCF(cmpSmp, texCoord, zReceiverCmp, DEFERRED_LIGHTING_CSM_DATA.filterGridHalfSize);
+            case GPU_PCFType::GRID:
+                shadow += CalcCsmGridPCF(cmpSmp, texCoord, zReceiverCmp, (uint)DEFERRED_LIGHTING_CSM_FILTER_DATA.radius);
                 break;
-            case GPU_DbgCsmPCFPreset::POISSON_DISK:
+            case GPU_PCFType::POISSON_DISK:
                 shadow = CalcCsmPoissonPCF(
                     cmpSmp,
                     texCoord,
                     zReceiverCmp,
-                    DEFERRED_LIGHTING_CSM_DATA.filterDiskRadius,
-                    DEFERRED_LIGHTING_CSM_DATA.filterDiskSampleCount, 
-                    COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.radius,
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.samplesCount,
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.isRandRotationEnabled
                 );
                 break;
-            case GPU_DbgCsmPCFPreset::VOGEL_DISK:
+            case GPU_PCFType::VOGEL_DISK:
                 shadow = CalcCsmVogelPCF(
                     cmpSmp,
                     texCoord,
                     zReceiverCmp,
-                    DEFERRED_LIGHTING_CSM_DATA.filterDiskRadius, 
-                    DEFERRED_LIGHTING_CSM_DATA.filterDiskSampleCount, 
-                    COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED);
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.radius,
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.samplesCount,
+                    DEFERRED_LIGHTING_CSM_FILTER_DATA.isRandRotationEnabled);
                 break;
             default:
                 shadow = 1.f;
@@ -579,7 +581,7 @@ float3 ApplyCSMSplitBlend(inout float3 shadow, in float3 wpos, in float vDist, i
 {
     GPU_CsmSplitBlendData blendData;
 
-    if (COMMON_DBG_IS_CSM_SPLIT_BLEND_ENABLED) {
+    if (DEFERRED_LIGHTING_CSM_DATA.isSplitBlendEnabled) {
         blendData = GetCsmSplitBlendData(vDist, currSplitIndex);
 
         if (blendData.NeedBlend()) {
@@ -595,7 +597,7 @@ float3 ApplyCSMSplitBlend(inout float3 shadow, in float3 wpos, in float vDist, i
 
 float3 CalcCsmShadow(in float3 wpos, in float3 vpos, in float3 wnorm)
 {
-    if (!COMMON_DBG_IS_CSM_ENABLED) {
+    if (!DEFERRED_LIGHTING_CSM_DATA.isEnabled) {
         return ONEF3;
     }
 

@@ -37,19 +37,11 @@
 
 #define COMMON_INST_COUNT COMMON_INST_BUFFER.getCount()
 
-#define COMMON_DBG_IS_IBL_ENABLED                     DBG_VALUE(COMMON_DBG_CB.isIBLEnabled, false)
-#define COMMON_DBG_IS_CSM_ENABLED                     DBG_VALUE(COMMON_DBG_CB.isCsmEnabled, true)
 #define COMMON_DBG_IS_CSM_VISUALIZATION_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmVisualizatioEnabled, false)
-#define COMMON_DBG_IS_CSM_SPLIT_BLEND_ENABLED         DBG_VALUE(COMMON_DBG_CB.isCsmSplitBlendEnabled, true)
-#define COMMON_DBG_IS_CSM_FILTER_RAND_OFFSETS_ENABLED DBG_VALUE(COMMON_DBG_CB.isCsmFilterRandOffsetsEnabled, false)
-#define COMMON_DBG_IS_CSM_PCSS_ENABLED                DBG_VALUE(COMMON_DBG_CB.isCsmPCSSEnabled, true)
-#define COMMON_DBG_IS_CSM_PCSS_RAND_ROT_ENABLED       DBG_VALUE(COMMON_DBG_CB.isCsmPCSSRandRotationEnabled, false)
 #define COMMON_DBG_IS_GEOM_LOD_VISUALIZATION_ENABLED  DBG_VALUE(COMMON_DBG_CB.isGeomLODVisualizationEnabled, false)
 
 #define COMMON_DBG_FORCED_GEOM_LOD                    DBG_VALUE(COMMON_DBG_CB.forcedGeomLOD, -1)
 #define COMMON_DBG_RT_VIEW_TYPE                       DBG_VALUE(COMMON_DBG_CB.rtViewType, GPU_DbgRTViewType::NONE)
-#define COMMON_DBG_TONEMAP_PRESET                     DBG_VALUE(COMMON_DBG_CB.tonemapPreset, GPU_DbgTonemapPreset::ACES)
-#define COMMON_DBG_CSM_PCF_PRESET                     DBG_VALUE(COMMON_DBG_CB.csmPCFPreset, GPU_DbgCsmPCFPreset::VOGEL_DISK)
 
 
 #define COMMON_MAIN_CAM_WPOS                    COMMON_NAIN_CAM_DATA_CB.wPos

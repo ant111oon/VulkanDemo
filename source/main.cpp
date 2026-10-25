@@ -307,7 +307,7 @@ enum GPU_DbgRTViewType : uint32_t
 };
 
 
-enum GPU_DbgTonemapPreset : uint32_t
+enum GPU_TonemapPreset : uint32_t
 {
     DBG_TONEMAP_PRESET_ACES,
     DBG_TONEMAP_PRESET_REINHARD,
@@ -315,17 +315,6 @@ enum GPU_DbgTonemapPreset : uint32_t
     DBG_TONEMAP_PRESET_UNCHARTED_2,
 
     DBG_TONEMAP_PRESET_COUNT
-};
-
-
-enum GPU_DbgCsmPCFPreset : uint32_t
-{
-    DBG_CSM_PCF_PRESET_NONE,
-    DBG_CSM_PCF_PRESET_GRID,
-    DBG_CSM_PCF_PRESET_POISSON_DISK,
-    DBG_CSM_PCF_PRESET_VOGEL_DISK,
-
-    DBG_CSM_PCF_PRESET_COUNT
 };
 
 
@@ -377,7 +366,7 @@ struct GPU_CommonCBData
     GPU_SunData sunData;
 
     uint2 screenSize;
-    uint flags;
+    GPU_TonemapPreset tonemapPreset;
     uint padding;
 };
 
@@ -385,37 +374,17 @@ struct GPU_CommonCBData
 struct GPU_CommonDbgCBData
 {
     GPU_DbgRTViewType rtViewType;
-    GPU_DbgTonemapPreset tonemapPreset;
-    GPU_DbgCsmPCFPreset csmPCFPreset;
     int forcedGeomLOD;
     
-    uint3 padding;
-    uint enableIBL : 1;
-    uint enableCSM : 1;
     uint enableCsmVisualization : 1;
-    uint enableCsmSplitBlend : 1;
-    uint enableCsmFilterRandOffsets : 1;
-    uint enableCsmPCSS : 1;
-    uint enableCsmPCSSRandRotation : 1;
     uint enableGeomLODVisualization : 1;
-    uint padding_1 : 24;
+    uint bitPadding : 30;
+
+    uint padding;
 };
 
 
 static constexpr uint CSM_SPLIT_COUNT = 3;
-
-
-struct GPU_PcssData
-{
-    float penumbraGrowth;
-    float maxPenumbraRadius;
-    float maxSearchRadius;
-    float minPenumbraRadiusInTexels;
-    
-    uint searchSamplesCount;
-    uint filterSamplesCount;
-    uint2 padding;
-};
 
 
 struct GPU_CsmSplitData
@@ -430,24 +399,67 @@ struct GPU_CsmSplitData
 };
 
 
+enum GPU_PCFType : uint32_t
+{
+    PCF_TYPE_NONE,
+    PCF_TYPE_GRID,
+    PCF_TYPE_POISSON_DISK,
+    PCF_TYPE_VOGEL_DISK,
+
+    PCF_TYPE_COUNT
+};
+
+
+struct GPU_ShadowFilterData
+{
+    GPU_PCFType pcfType;
+    float radius;         // grid half size if pcfType - GRID
+                        // disk radius if pcfType - POISSON_DISK or VOGEL_DISK
+    uint samplesCount;
+
+    uint randRotationEnabled : 1;
+    uint bitPadding : 31;
+};
+
+
+struct GPU_PcssData
+{
+    float penumbraGrowth;
+    float maxPenumbraRadius;
+    float maxSearchRadius;
+    float minPenumbraRadiusInTexels;
+
+    uint2 padding;
+    uint searchSamplesCount;
+
+    uint enabled : 1;
+    uint bitPadding : 31;
+};
+
+
 struct GPU_CommonCsmData
 {
     GPU_PcssData pcssData;
+    GPU_ShadowFilterData filterData;
 
     float blendThresholdCoef;
-    uint  filterDiskSampleCount;
-    float filterDiskRadius;
-    uint  filterGridHalfSize;
-
     float constantBiasTexels;
     float slopeBiasTexels;
-    uint2 padding;
+
+    uint enabled : 1;
+    uint splitBlendEnabled : 1;
+    uint bitPadding : 30;
 };
 
 
 struct GPU_CommonLightingData
 {
     GPU_CommonCsmData csm;
+
+    uint3 padding;
+
+    uint IBLEnabled : 1;
+    uint bitPadding : 31;
 };
 
 
@@ -659,7 +671,7 @@ static constexpr const char* DBG_CSM_PCF_NAMES[] = {
     "VOGEL DISK",
 };
 
-static_assert(DBG_CSM_PCF_PRESET_COUNT == _countof(DBG_CSM_PCF_NAMES));
+static_assert(PCF_TYPE_COUNT == _countof(DBG_CSM_PCF_NAMES));
 
 
 static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
@@ -993,15 +1005,15 @@ static constexpr size_t GBUFFER_INST_ID_QUEUE_DESCRIPTOR_SLOT = 1;
 static constexpr size_t GBUFFER_DBG_CULL_INST_DATA_DESCRIPTOR_SLOT = 2;
 
 static constexpr size_t DEFERRED_LIGHTING_COMMON_CB_DESCRIPTOR_SLOT = 0;
-static constexpr size_t DEFERRED_LIGHTING_CSM_SPLITS_DATA_DESCRIPTOR_SLOT = 1;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 2;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 3;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 4;
-static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 5;
-static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 6;
-static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 7;
-static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 8;
-static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 9;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_0_DESCRIPTOR_SLOT = 1;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_1_DESCRIPTOR_SLOT = 2;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_2_DESCRIPTOR_SLOT = 3;
+static constexpr size_t DEFERRED_LIGHTING_GBUFFER_3_DESCRIPTOR_SLOT = 4;
+static constexpr size_t DEFERRED_LIGHTING_DEPTH_DESCRIPTOR_SLOT = 5;
+static constexpr size_t DEFERRED_LIGHTING_IRRADIANCE_MAP_DESCRIPTOR_SLOT = 6;
+static constexpr size_t DEFERRED_LIGHTING_PREFILTERED_ENV_MAP_DESCRIPTOR_SLOT = 7;
+static constexpr size_t DEFERRED_LIGHTING_BRDF_LUT_DESCRIPTOR_SLOT = 8;
+static constexpr size_t DEFERRED_LIGHTING_CSM_SPLITS_DATA_DESCRIPTOR_SLOT = 9;
 static constexpr size_t DEFERRED_LIGHTING_CSM_DESCRIPTOR_SLOT = 10;
 
 static constexpr size_t POST_PROCESSING_INPUT_COLOR_DESCRIPTOR_SLOT = 0;
@@ -1642,11 +1654,12 @@ static glm::float3 s_sunColor = ONEF3;
 static std::array<float, CSM_SPLIT_COUNT> s_csmSplitDistances = { 15.f, 55.f, 200.f };
 
 static float   s_csmSplitBlendThresholdCoef = 5.f;
+static float   s_csmConstantBiasTexels = 0.35f;
+static float   s_csmSlopeBiasTexels = 1.0f;
+
 static int32_t s_csmFilterDiskSampleCount = 32;
 static int32_t s_csmFilterGridHalfSize = 3;
 static float   s_csmFilterDiskRadius = 1.5f;
-static float   s_csmConstantBiasTexels = 0.35f;
-static float   s_csmSlopeBiasTexels = 1.0f;
 
 static float   s_sdsmSplitZExtension = 100.f;
 static float   s_sdsmSplitXYExtensionCoef = 15.f;
@@ -1683,8 +1696,8 @@ static float s_mainCameraSpeed = 0.025f;
     static bool s_isCsmFilterRandomOffsetEnabled = false;
     static bool s_isCsmPcssEnabled = true;
 
-    static GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
+    static GPU_TonemapPreset s_tonemapPreset = DBG_TONEMAP_PRESET_ACES;
+    static GPU_PCFType s_csmPCFType = PCF_TYPE_POISSON_DISK;
 
     // Uses for debug purposes during CPU frustum culling
     static size_t s_dbgDrawnOpaqueMeshCount = 0;
@@ -1707,8 +1720,8 @@ static float s_mainCameraSpeed = 0.025f;
     static constexpr bool s_isCsmPcssEnabled = true;
     static constexpr bool s_isCsmSdsmEnabled = true;
 
-    static constexpr GPU_DbgTonemapPreset s_tonemappingPreset = DBG_TONEMAP_PRESET_ACES;
-    static constexpr GPU_DbgCsmPCFPreset s_csmPCFPreset = DBG_CSM_PCF_PRESET_POISSON_DISK;
+    static constexpr GPU_TonemapPreset s_tonemapPreset = DBG_TONEMAP_PRESET_ACES;
+    static constexpr GPU_PCFType s_csmPCFType = PCF_TYPE_POISSON_DISK;
 #endif
 
 
@@ -5634,6 +5647,8 @@ static void PrepareCommonConstBuffer()
     constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
     constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
 
+    constBuff.tonemapPreset = s_tonemapPreset;
+
     s_commonConstBuffer.Unmap();
 }
 
@@ -5664,11 +5679,27 @@ static void PrepareLightingData()
     //     constBuff.csmData.splits[i].rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
     // }
 
-    constBuff.csm.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
-    constBuff.csm.filterDiskSampleCount = s_csmFilterDiskSampleCount;
-    constBuff.csm.filterDiskRadius = s_csmFilterDiskRadius;
-    constBuff.csm.filterGridHalfSize = s_csmFilterGridHalfSize;
+    constBuff.csm.filterData.pcfType = s_csmPCFType;
 
+    if (s_csmPCFType == PCF_TYPE_GRID) {
+        constBuff.csm.filterData.radius = s_csmFilterGridHalfSize;
+    } else {
+        constBuff.csm.filterData.radius = s_csmFilterDiskRadius;
+    }
+
+    if (s_isCsmPcssEnabled) {
+        constBuff.csm.filterData.samplesCount = s_csmPcssSettings.filterSamplesCount;
+    } else {
+        constBuff.csm.filterData.samplesCount = s_csmFilterDiskSampleCount;
+    }
+
+    if (s_isCsmPcssEnabled) {
+        constBuff.csm.filterData.randRotationEnabled &= s_csmPcssSettings.randomRotationEnabled;
+    } else {
+        constBuff.csm.filterData.randRotationEnabled &= s_isCsmFilterRandomOffsetEnabled;
+    }
+    
+    constBuff.csm.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
     constBuff.csm.constantBiasTexels = s_csmConstantBiasTexels;
     constBuff.csm.slopeBiasTexels = s_csmSlopeBiasTexels;
 
@@ -5677,7 +5708,13 @@ static void PrepareLightingData()
     constBuff.csm.pcssData.maxSearchRadius = s_csmPcssSettings.maxSearchRadius;
     constBuff.csm.pcssData.minPenumbraRadiusInTexels = s_csmPcssSettings.minPenumbraRadiusInTexels;
     constBuff.csm.pcssData.searchSamplesCount = s_csmPcssSettings.searchSamplesCount;
-    constBuff.csm.pcssData.filterSamplesCount = s_csmPcssSettings.filterSamplesCount;
+
+    constBuff.IBLEnabled = s_isIBLEnabled;
+    constBuff.csm.enabled = s_isCsmEnabled;
+    constBuff.csm.splitBlendEnabled = s_isCsmEnabled && s_isCsmSplitBlendEnabled;
+    constBuff.csm.filterData.randRotationEnabled = s_isCsmEnabled;
+
+    constBuff.csm.pcssData.enabled = s_isCsmEnabled && s_isCsmPcssEnabled;
 
     s_commonLightingConstBuffer.Unmap();
 }
@@ -5692,18 +5729,8 @@ void PrepareDbgConstBuffer()
 
     constBuff.forcedGeomLOD = s_forcedGeomLOD;
     constBuff.rtViewType = s_dbgOutputRTType;
-    constBuff.tonemapPreset = s_tonemappingPreset;
-    constBuff.csmPCFPreset = s_csmPCFPreset;
 
-    const bool csmPcssEnabled = s_isCsmEnabled && s_isCsmPcssEnabled;
-
-    constBuff.enableIBL = s_isIBLEnabled;
-    constBuff.enableCSM = s_isCsmEnabled;
     constBuff.enableCsmVisualization = s_isCsmEnabled && s_isCsmVisualizationEnabled;
-    constBuff.enableCsmSplitBlend = s_isCsmEnabled && s_isCsmSplitBlendEnabled;
-    constBuff.enableCsmFilterRandOffsets = s_isCsmEnabled && s_isCsmFilterRandomOffsetEnabled;
-    constBuff.enableCsmPCSS = csmPcssEnabled;
-    constBuff.enableCsmPCSSRandRotation = csmPcssEnabled && s_csmPcssSettings.randomRotationEnabled;
     constBuff.enableGeomLODVisualization = s_isGeomLODVisualizationEnabled;
 
     s_commonDbgConstBuffer.Unmap();
@@ -8100,186 +8127,189 @@ namespace DbgUI
                         ImGui::SameLine();
                         ImGui::TextColored(s_isCsmEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
 
-                        ImGui::Checkbox("Visualize Splits", &s_isCsmVisualizationEnabled);
-
-                        if (ImGui::TreeNodeEx("SDSM")) {
-                            ImGui::DragFloat("XY Extension Coef", &s_sdsmSplitXYExtensionCoef, 0.1f, 0.f, 100.f, "%.1f %%");                            
-                            ImGui::DragFloat("Z Extension", &s_sdsmSplitZExtension, 0.1f, 0.f, 500.f, "%.1f"); 
+                        if (s_isCsmEnabled) {
                             
-                            ImGui::TreePop();
-                        }
-
-                        if (ImGui::TreeNodeEx("PCSS")) {
-                            ImGui::Checkbox("##CsmPcssEnabled", &s_isCsmPcssEnabled);
-                            ImGui::SameLine();
-                            ImGui::TextColored(s_isCsmPcssEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-                            
-                            if (s_isCsmPcssEnabled) {
-                                ImGui::DragFloat("Penumbra Growth", &s_csmPcssSettings.penumbraGrowth, 0.001f, 0.0f, 0.2f);
+                            ImGui::Checkbox("Visualize Splits", &s_isCsmVisualizationEnabled);
+    
+                            if (ImGui::TreeNodeEx("SDSM")) {
+                                ImGui::DragFloat("XY Extension Coef", &s_sdsmSplitXYExtensionCoef, 0.1f, 0.f, 100.f, "%.1f %%");                            
+                                ImGui::DragFloat("Z Extension", &s_sdsmSplitZExtension, 0.1f, 0.f, 500.f, "%.1f"); 
                                 
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("World-space penumbra radius per unit of blocker separation");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadius, 0.01f, 0.01f, 10.f, "%.2f units");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Max World-Space Search Radius");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::DragFloat("Max Penumbra Radius", &s_csmPcssSettings.maxPenumbraRadius, 0.01f, 0.01f, 10.f, "%.2f units");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Max World-Space Penumbra Radius");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::DragFloat("Min Penumbra Radius", &s_csmPcssSettings.minPenumbraRadiusInTexels, 0.1f, 0.f, 64.f, "%.1f texels");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Min Penumbra Radius In Texels");
-                                        ImGui::BulletText("Use one comparison sample instead of full PCF if less");
-                                    } ImGui::EndTooltip();
-                                }                             
-
-                                ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64); 
-                                
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Search Samples Count");
-                                    } ImGui::EndTooltip();
-                                }
-                                
-                                ImGui::SliderInt("Filter Samples Count", &s_csmPcssSettings.filterSamplesCount, 1, 128);
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Filter Samples Count");
-                                    } ImGui::EndTooltip();
-                                }
-
-                                ImGui::Checkbox("Random Rotation", &s_csmPcssSettings.randomRotationEnabled);
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Random Rotation");
-                                    } ImGui::EndTooltip();
-                                }
-                            }
-
-                            ImGui::TreePop();
-                        }
-
-                        // if (ImGui::TreeNodeEx("Partition")) {
-                        //     for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
-                        //         const float distMin = split == 0 ? CAMERA_ZNEAR  : s_csmSplitDistances[split - 1];
-                        //         const float distMax = split == CSM_SPLIT_COUNT - 1 ? CAMERA_ZFAR : s_csmSplitDistances[split + 1];
-
-                        //         char label[64] = {};
-                        //         sprintf_s(label, "Split Distance %u##%u", split, split);
-
-                        //         ImGui::DragFloat(label, &s_csmSplitDistances[split], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
-                        //     }
-                            
-                        //     ImGui::TreePop();
-                        // }
-
-                        if (ImGui::TreeNodeEx("Bias")) {
-                            ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
-                            ImGui::DragFloat("Slope (Texels)", &s_csmSlopeBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
-                            
-                            ImGui::TreePop();
-                        }
-
-                        if (ImGui::TreeNodeEx("Geom Culling")) {
-                            ImGui::Checkbox("Frustum", &s_useCsmMeshFrustumCulling);
-                            ImGui::Checkbox("HZB", &s_useCsmMeshHZBCulling);
-                            ImGui::Checkbox("Coverage", &s_useCsmMeshCoverageCulling);
-
-                            if (s_useCsmMeshCoverageCulling && ImGui::TreeNodeEx("Coverage Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                ImGui::DragFloat("RT coverage", &s_geomCoverageCullingThresholdPercentage, 0.01f, 0.01f, 100.f, "%.2f%%");
-
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Percentage of max occupied space in one dimension by object");
-                                    } ImGui::EndTooltip();
-                                }
-
                                 ImGui::TreePop();
                             }
-
-                            ImGui::TreePop();
-                        }
-
-                        if (ImGui::TreeNodeEx("Split Blend")) {
-                            ImGui::Checkbox("##CSMSplitBlendEnabled", &s_isCsmSplitBlendEnabled);
-                            ImGui::SameLine();
-                            ImGui::TextColored(s_isCsmSplitBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
-                            
-                            if (s_isCsmSplitBlendEnabled) {
-                                ImGui::DragFloat("Blend Threshold Coef", &s_csmSplitBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
+    
+                            if (ImGui::TreeNodeEx("PCSS")) {
+                                ImGui::Checkbox("##CsmPcssEnabled", &s_isCsmPcssEnabled);
+                                ImGui::SameLine();
+                                ImGui::TextColored(s_isCsmPcssEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
                                 
-                                if (ImGui::IsItemHovered()) {
-                                    if (ImGui::BeginTooltip()) {
-                                        ImGui::Text("Percentage size of split blending area");
-                                    } ImGui::EndTooltip();
-                                }
-                            }
-
-                            ImGui::TreePop();
-                        }
-
-                        if (!s_isCsmPcssEnabled && ImGui::TreeNodeEx("Filtering")) {
-                            if (ImGui::BeginCombo("PCF Filter", DBG_CSM_PCF_NAMES[s_csmPCFPreset])) {
-                                for (size_t i = 0; i < _countof(DBG_CSM_PCF_NAMES); ++i) {
-                                    const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFPreset]);
+                                if (s_isCsmPcssEnabled) {
+                                    ImGui::DragFloat("Penumbra Growth", &s_csmPcssSettings.penumbraGrowth, 0.001f, 0.0f, 0.2f);
                                     
-                                    if (ImGui::Selectable(DBG_CSM_PCF_NAMES[i], isSelected)) {
-                                        s_csmPCFPreset = GPU_DbgCsmPCFPreset(i);
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("World-space penumbra radius per unit of blocker separation");
+                                        } ImGui::EndTooltip();
+                                    }
+    
+                                    ImGui::DragFloat("Max Search Radius", &s_csmPcssSettings.maxSearchRadius, 0.01f, 0.01f, 10.f, "%.2f units");
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Max World-Space Search Radius");
+                                        } ImGui::EndTooltip();
+                                    }
+    
+                                    ImGui::DragFloat("Max Penumbra Radius", &s_csmPcssSettings.maxPenumbraRadius, 0.01f, 0.01f, 10.f, "%.2f units");
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Max World-Space Penumbra Radius");
+                                        } ImGui::EndTooltip();
+                                    }
+    
+                                    ImGui::DragFloat("Min Penumbra Radius", &s_csmPcssSettings.minPenumbraRadiusInTexels, 0.1f, 0.f, 64.f, "%.1f texels");
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Min Penumbra Radius In Texels");
+                                            ImGui::BulletText("Use one comparison sample instead of full PCF if less");
+                                        } ImGui::EndTooltip();
+                                    }                             
+    
+                                    ImGui::SliderInt("Search Samples Count", &s_csmPcssSettings.searchSamplesCount, 1, 64); 
+                                    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Search Samples Count");
+                                        } ImGui::EndTooltip();
                                     }
                                     
-                                    if (isSelected) {
-                                        ImGui::SetItemDefaultFocus();
+                                    ImGui::SliderInt("Filter Samples Count", &s_csmPcssSettings.filterSamplesCount, 1, 128);
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Filter Samples Count");
+                                        } ImGui::EndTooltip();
+                                    }
+    
+                                    ImGui::Checkbox("Random Rotation", &s_csmPcssSettings.randomRotationEnabled);
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Random Rotation");
+                                        } ImGui::EndTooltip();
                                     }
                                 }
-                                ImGui::EndCombo();
+    
+                                ImGui::TreePop();
                             }
-
-                            const char* pPCFDiskParamsLabel = nullptr;
-
-                            switch (s_csmPCFPreset) {
-                                case DBG_CSM_PCF_PRESET_POISSON_DISK:
-                                    pPCFDiskParamsLabel = "Poisson Disk Params";
-                                    break;
-                                case DBG_CSM_PCF_PRESET_VOGEL_DISK:
-                                    pPCFDiskParamsLabel = "Vogel Disk Params";
-                                    break;
+    
+                            if (!s_isCsmPcssEnabled && ImGui::TreeNodeEx("Filtering")) {
+                                if (ImGui::BeginCombo("PCF Filter", DBG_CSM_PCF_NAMES[s_csmPCFType])) {
+                                    for (size_t i = 0; i < _countof(DBG_CSM_PCF_NAMES); ++i) {
+                                        const bool isSelected = (DBG_CSM_PCF_NAMES[i] == DBG_CSM_PCF_NAMES[s_csmPCFType]);
+                                        
+                                        if (ImGui::Selectable(DBG_CSM_PCF_NAMES[i], isSelected)) {
+                                            s_csmPCFType = GPU_PCFType(i);
+                                        }
+                                        
+                                        if (isSelected) {
+                                            ImGui::SetItemDefaultFocus();
+                                        }
+                                    }
+                                    ImGui::EndCombo();
+                                }
+    
+                                const char* pPCFDiskParamsLabel = nullptr;
+    
+                                switch (s_csmPCFType) {
+                                    case PCF_TYPE_POISSON_DISK:
+                                        pPCFDiskParamsLabel = "Poisson Disk Params";
+                                        break;
+                                    case PCF_TYPE_VOGEL_DISK:
+                                        pPCFDiskParamsLabel = "Vogel Disk Params";
+                                        break;
+                                }
+    
+                                if (pPCFDiskParamsLabel) {
+                                    if (ImGui::TreeNodeEx(pPCFDiskParamsLabel, ImGuiTreeNodeFlags_DefaultOpen)) {
+                                        ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 64);
+                                        ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
+    
+                                        ImGui::Checkbox("Random Offsets", &s_isCsmFilterRandomOffsetEnabled);
+    
+                                        ImGui::TreePop();
+                                    }
+                                } else if (s_csmPCFType == PCF_TYPE_GRID) {
+                                    if (ImGui::TreeNodeEx("Grid Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                        ImGui::SliderInt("Half Size", &s_csmFilterGridHalfSize, 0, 15);
+    
+                                        ImGui::TreePop();
+                                    }
+                                }
+    
+                                ImGui::TreePop();
                             }
-
-                            if (pPCFDiskParamsLabel) {
-                                if (ImGui::TreeNodeEx(pPCFDiskParamsLabel, ImGuiTreeNodeFlags_DefaultOpen)) {
-                                    ImGui::SliderInt("Samples Count", &s_csmFilterDiskSampleCount, 1, 64);
-                                    ImGui::DragFloat("Radius", &s_csmFilterDiskRadius, 0.01f, 0.01f, 5.f, "%.2f");
-
-                                    ImGui::Checkbox("Random Offsets", &s_isCsmFilterRandomOffsetEnabled);
-
+    
+                            // if (ImGui::TreeNodeEx("Partition")) {
+                            //     for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+                            //         const float distMin = split == 0 ? CAMERA_ZNEAR  : s_csmSplitDistances[split - 1];
+                            //         const float distMax = split == CSM_SPLIT_COUNT - 1 ? CAMERA_ZFAR : s_csmSplitDistances[split + 1];
+    
+                            //         char label[64] = {};
+                            //         sprintf_s(label, "Split Distance %u##%u", split, split);
+    
+                            //         ImGui::DragFloat(label, &s_csmSplitDistances[split], 0.1f, distMin + 0.001f, distMax - 0.001f, "%.1f");                                
+                            //     }
+                                
+                            //     ImGui::TreePop();
+                            // }
+    
+                            if (ImGui::TreeNodeEx("Bias")) {
+                                ImGui::DragFloat("Constant (Texels)", &s_csmConstantBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                                ImGui::DragFloat("Slope (Texels)", &s_csmSlopeBiasTexels, 0.01f, 0.01f, 5.f, "%.2f");
+                                
+                                ImGui::TreePop();
+                            }
+    
+                            if (ImGui::TreeNodeEx("Geom Culling")) {
+                                ImGui::Checkbox("Frustum", &s_useCsmMeshFrustumCulling);
+                                ImGui::Checkbox("HZB", &s_useCsmMeshHZBCulling);
+                                ImGui::Checkbox("Coverage", &s_useCsmMeshCoverageCulling);
+    
+                                if (s_useCsmMeshCoverageCulling && ImGui::TreeNodeEx("Coverage Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                    ImGui::DragFloat("RT coverage", &s_geomCoverageCullingThresholdPercentage, 0.01f, 0.01f, 100.f, "%.2f%%");
+    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Percentage of max occupied space in one dimension by object");
+                                        } ImGui::EndTooltip();
+                                    }
+    
                                     ImGui::TreePop();
                                 }
-                            } else if (s_csmPCFPreset == DBG_CSM_PCF_PRESET_GRID) {
-                                if (ImGui::TreeNodeEx("Grid Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-                                    ImGui::SliderInt("Half Size", &s_csmFilterGridHalfSize, 0, 15);
-
-                                    ImGui::TreePop();
-                                }
+    
+                                ImGui::TreePop();
                             }
-
-                            ImGui::TreePop();
+    
+                            if (ImGui::TreeNodeEx("Split Blend")) {
+                                ImGui::Checkbox("##CSMSplitBlendEnabled", &s_isCsmSplitBlendEnabled);
+                                ImGui::SameLine();
+                                ImGui::TextColored(s_isCsmSplitBlendEnabled ? IMGUI_GREEN_COLOR : IMGUI_RED_COLOR, "Enabled");
+                                
+                                if (s_isCsmSplitBlendEnabled) {
+                                    ImGui::DragFloat("Blend Threshold Coef", &s_csmSplitBlendThresholdCoef, 0.1f, 0.1f, 100.f, "%.1f %%");
+                                    
+                                    if (ImGui::IsItemHovered()) {
+                                        if (ImGui::BeginTooltip()) {
+                                            ImGui::Text("Percentage size of split blending area");
+                                        } ImGui::EndTooltip();
+                                    }
+                                }
+    
+                                ImGui::TreePop();
+                            }
                         }
 
                         ImGui::TreePop();
@@ -8298,12 +8328,12 @@ namespace DbgUI
             }
 
             if (ImGui::CollapsingHeader("Tonemapping")) {
-                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemappingPreset])) {
+                if (ImGui::BeginCombo("Preset", DBG_TONEMAPPING_NAMES[s_tonemapPreset])) {
                     for (size_t i = 0; i < _countof(DBG_TONEMAPPING_NAMES); ++i) {
-                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemappingPreset]);
+                        const bool isSelected = (DBG_TONEMAPPING_NAMES[i] == DBG_TONEMAPPING_NAMES[s_tonemapPreset]);
                         
                         if (ImGui::Selectable(DBG_TONEMAPPING_NAMES[i], isSelected)) {
-                            s_tonemappingPreset = GPU_DbgTonemapPreset(i);
+                            s_tonemapPreset = GPU_TonemapPreset(i);
                         }
                         
                         if (isSelected) {
