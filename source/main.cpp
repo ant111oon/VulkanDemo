@@ -2743,14 +2743,30 @@ static void ResizeDynamicRenderTargets()
 }
 
 
-static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, const TextureLoadData& loadData, uint32_t layerIdx = 0)
+static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& texture, uint32_t layerIdx = 0, VkFilter filter = VK_FILTER_LINEAR)
 {
+    const uint32_t mipCount = texture.GetMipCount();
+
+    if (mipCount <= 1) {
+        return;
+    }
+
+    static constexpr uint32_t passColor = 0x0;
+
+    const std::string_view texName = texture.GetDebugName();
+
+    TM_MARKER_C_FMT(passColor, "\'%s\' Mip Gen (Layer: %u)", texName.data(), layerIdx);
+    TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "\'%s\' Mip Gen (Layer: %u)", texName.data(), layerIdx);
+
     CORE_ASSERT(layerIdx < texture.GetLayerCount());
 
     int32_t mipWidth  = texture.GetSizeX();
     int32_t mipHeight = texture.GetSizeY();
 
-    for (uint32_t mip = 1; mip < loadData.GetMipsCount(); ++mip) {
+    for (uint32_t mip = 1; mip < mipCount; ++mip) {
+        TM_MARKER_C_FMT(passColor, "Mip_%u", mip);
+        TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Mip_%u", mip);
+
         cmdBuffer.BeginBarrierList()
             .AddTextureBarrier(
                 texture, 
@@ -2787,7 +2803,7 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
         blit.dstSubresource.layerCount = 1;
         blit.dstOffsets[1] = { mipWidth  > 1 ? mipWidth  / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
 
-        cmdBuffer.CmdBlitTexture(texture, texture, blit, VK_FILTER_LINEAR);
+        cmdBuffer.CmdBlitTexture(texture, texture, blit, filter);
 
         if (mipWidth > 1) {
             mipWidth /= 2;
@@ -2807,7 +2823,7 @@ static void GenerateTextureMipmaps(vkn::CmdBuffer& cmdBuffer, vkn::Texture& text
                 VK_PIPELINE_STAGE_2_TRANSFER_BIT, 
                 VK_ACCESS_2_TRANSFER_READ_BIT, 
                 VK_IMAGE_ASPECT_COLOR_BIT, 
-                loadData.GetMipsCount() - 1, 
+                mipCount - 1, 
                 1, 
                 layerIdx, 
                 1)
@@ -2909,7 +2925,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
     ImmediateSubmitQueue(s_vkDevice.GetQueue(), [&](vkn::CmdBuffer& cmdBuffer) {
         for (uint32_t layerIdx = 0; layerIdx < s_skyboxTexture.GetLayerCount(); ++layerIdx) {
-            GenerateTextureMipmaps(cmdBuffer, s_skyboxTexture, faceLoadDatas[layerIdx], layerIdx);
+            GenerateTextureMipmaps(cmdBuffer, s_skyboxTexture, layerIdx);
         }
 
         cmdBuffer
@@ -5483,9 +5499,7 @@ static void UploadGPUTextureData()
 
             cmdBuffer.CmdCopyBuffer(s_commonStagingBuffer, texture, copyInfo);
 
-            const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
-
-            GenerateTextureMipmaps(cmdBuffer, texture, texData);
+            GenerateTextureMipmaps(cmdBuffer, texture);
 
             cmdBuffer
                 .BeginBarrierList()
