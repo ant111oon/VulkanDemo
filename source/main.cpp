@@ -71,6 +71,60 @@ using float3x3 = glm::float3x3;
 using float2x2 = glm::float2x2;
 
 
+enum GPU_SamplerID : uint32_t
+{
+    SMP_ID_LINEAR_CLAMP_TO_EDGE,
+    SMP_ID_LINEAR_CLAMP_TO_BORDER,
+    SMP_ID_LINEAR_REPEAT,
+    SMP_ID_LINEAR_MIRROR_REPEAT,
+    SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_NEAREST_CLAMP_TO_EDGE,
+    SMP_ID_NEAREST_CLAMP_TO_BORDER,
+    SMP_ID_NEAREST_REPEAT,
+    SMP_ID_NEAREST_MIRROR_REPEAT,
+    SMP_ID_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_EDGE,
+    SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_BORDER,
+    SMP_ID_ANISO_4X_LINEAR_REPEAT,
+    SMP_ID_ANISO_4X_LINEAR_MIRROR_REPEAT,
+    SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_EDGE,
+    SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_BORDER,
+    SMP_ID_ANISO_4X_NEAREST_REPEAT,
+    SMP_ID_ANISO_4X_NEAREST_MIRROR_REPEAT,
+    SMP_ID_ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_EDGE,
+    SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_BORDER,
+    SMP_ID_ANISO_8X_LINEAR_REPEAT,
+    SMP_ID_ANISO_8X_LINEAR_MIRROR_REPEAT,
+    SMP_ID_ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_EDGE,
+    SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_BORDER,
+    SMP_ID_ANISO_8X_NEAREST_REPEAT,
+    SMP_ID_ANISO_8X_NEAREST_MIRROR_REPEAT,
+    SMP_ID_ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE,
+
+    SMP_ID_COUNT
+};
+
+
+enum GPU_CmpSamplerID : uint32_t
+{
+    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_LESS,
+    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
+
+    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_GREATER,
+    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL,
+
+    CMP_SMP_ID_COUNT
+};
+
+
 struct GPU_Plane
 {
     float3 normal;
@@ -99,6 +153,27 @@ enum GPU_GeomMatType : uint
 };
 
 
+#define GPU_GEOM_MAT_BITS_PER_TEX_ID 26u
+#define GPU_GEOM_MAT_BITS_PER_SAMPLER 6u
+
+struct GPU_GeomMatTex
+{
+    GPU_GeomMatTex()
+    {
+        ID = INVALID_TEX_ID;
+        samplerID = DEFAULT_SMP_ID;
+    }
+
+    static constexpr uint INVALID_TEX_ID = (1u << GPU_GEOM_MAT_BITS_PER_TEX_ID) - 1u;
+    static constexpr uint MAX_SMP_COUNT  = (1u << GPU_GEOM_MAT_BITS_PER_SAMPLER);
+    static constexpr uint DEFAULT_SMP_ID = MAX_SMP_COUNT - 1;
+
+    uint ID        : GPU_GEOM_MAT_BITS_PER_TEX_ID;
+    uint samplerID : GPU_GEOM_MAT_BITS_PER_SAMPLER;
+};
+static_assert(sizeof(GPU_GeomMatTex) == sizeof(uint32_t));
+
+
 struct GPU_GeomMaterial
 {
     float4 albedoMult;
@@ -111,19 +186,18 @@ struct GPU_GeomMaterial
     float roughnessScale;
     float aoCoef;
 
-    int albedoTexID = -1;
-    int normalTexID = -1;
-    int metalRoughTexID = -1;
-    int aoTexID = -1;
-
-    int emissiveTexID = -1;
+    GPU_GeomMatTex albedoTex;
+    GPU_GeomMatTex normalTex;
+    GPU_GeomMatTex metalRoughTex;
+    GPU_GeomMatTex aoTex;
+    GPU_GeomMatTex emissiveTex;
     
     GPU_GeomMatType type;
 
     uint doubleSided : 1;
+    uint bitPadding : 31;
     
-    uint padding_0 : 31;
-    uint padding_1;
+    uint padding;
 };
 
 
@@ -219,60 +293,6 @@ static_assert(sizeof(GPU_CmdDispatchIndirect) == sizeof(VkDispatchIndirectComman
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeX) == offsetof(VkDispatchIndirectCommand, x));
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeY) == offsetof(VkDispatchIndirectCommand, y));
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeZ) == offsetof(VkDispatchIndirectCommand, z));
-
-
-enum GPU_SamplerID : uint32_t
-{
-    SMP_ID_NEAREST_REPEAT,
-    SMP_ID_NEAREST_MIRRORED_REPEAT,
-    SMP_ID_NEAREST_CLAMP_TO_EDGE,
-    SMP_ID_NEAREST_CLAMP_TO_BORDER,
-    SMP_ID_NEAREST_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_LINEAR_REPEAT,
-    SMP_ID_LINEAR_MIRRORED_REPEAT,
-    SMP_ID_LINEAR_CLAMP_TO_EDGE,
-    SMP_ID_LINEAR_CLAMP_TO_BORDER,
-    SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_ANISO_2X_NEAREST_REPEAT,
-    SMP_ID_ANISO_2X_NEAREST_MIRRORED_REPEAT,
-    SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_EDGE,
-    SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_BORDER,
-    SMP_ID_ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_ANISO_2X_LINEAR_REPEAT,
-    SMP_ID_ANISO_2X_LINEAR_MIRRORED_REPEAT,
-    SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_EDGE,
-    SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_BORDER,
-    SMP_ID_ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_ANISO_4X_NEAREST_REPEAT,
-    SMP_ID_ANISO_4X_NEAREST_MIRRORED_REPEAT,
-    SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_EDGE,
-    SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_BORDER,
-    SMP_ID_ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_ANISO_4X_LINEAR_REPEAT,
-    SMP_ID_ANISO_4X_LINEAR_MIRRORED_REPEAT,
-    SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_EDGE,
-    SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_BORDER,
-    SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE,
-
-    SMP_ID_COUNT
-};
-
-
-enum GPU_CmpSamplerID : uint32_t
-{
-    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_LESS,
-    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_LESS_OR_EQUAL,
-
-    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_GREATER,
-    CMP_SMP_ID_LINEAR_CLAMP_TO_BORDER_GREATER_OR_EQUAL,
-
-    CMP_SMP_ID_COUNT
-};
 
 
 enum GPU_GeomStreamID
@@ -693,41 +713,41 @@ static_assert(GEOM_MAT_TYPE_COUNT == _countof(GEOM_MAT_TYPE_DBG_NAMES));
 
 
 static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
-    "NEAREST_REPEAT",
-    "NEAREST_MIRRORED_REPEAT",
-    "NEAREST_CLAMP_TO_EDGE",
-    "NEAREST_CLAMP_TO_BORDER",
-    "NEAREST_MIRROR_CLAMP_TO_EDGE",
-
-    "LINEAR_REPEAT",
-    "LINEAR_MIRRORED_REPEAT",
     "LINEAR_CLAMP_TO_EDGE",
     "LINEAR_CLAMP_TO_BORDER",
+    "LINEAR_REPEAT",
+    "LINEAR_MIRROR_REPEAT",
     "LINEAR_MIRROR_CLAMP_TO_EDGE",
 
-    "ANISO_2X_NEAREST_REPEAT",
-    "ANISO_2X_NEAREST_MIRRORED_REPEAT",
-    "ANISO_2X_NEAREST_CLAMP_TO_EDGE",
-    "ANISO_2X_NEAREST_CLAMP_TO_BORDER",
-    "ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+    "NEAREST_CLAMP_TO_EDGE",
+    "NEAREST_CLAMP_TO_BORDER",
+    "NEAREST_REPEAT",
+    "NEAREST_MIRROR_REPEAT",
+    "NEAREST_MIRROR_CLAMP_TO_EDGE",
 
-    "ANISO_2X_LINEAR_REPEAT",
-    "ANISO_2X_LINEAR_MIRRORED_REPEAT",
-    "ANISO_2X_LINEAR_CLAMP_TO_EDGE",
-    "ANISO_2X_LINEAR_CLAMP_TO_BORDER",
-    "ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_4X_NEAREST_REPEAT",
-    "ANISO_4X_NEAREST_MIRRORED_REPEAT",
-    "ANISO_4X_NEAREST_CLAMP_TO_EDGE",
-    "ANISO_4X_NEAREST_CLAMP_TO_BORDER",
-    "ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE",
-
-    "ANISO_4X_LINEAR_REPEAT",
-    "ANISO_4X_LINEAR_MIRRORED_REPEAT",
     "ANISO_4X_LINEAR_CLAMP_TO_EDGE",
     "ANISO_4X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_4X_LINEAR_REPEAT",
+    "ANISO_4X_LINEAR_MIRROR_REPEAT",
     "ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_4X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_4X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_4X_NEAREST_REPEAT",
+    "ANISO_4X_NEAREST_MIRROR_REPEAT",
+    "ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_8X_LINEAR_CLAMP_TO_EDGE",
+    "ANISO_8X_LINEAR_CLAMP_TO_BORDER",
+    "ANISO_8X_LINEAR_REPEAT",
+    "ANISO_8X_LINEAR_MIRROR_REPEAT",
+    "ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE",
+
+    "ANISO_8X_NEAREST_CLAMP_TO_EDGE",
+    "ANISO_8X_NEAREST_CLAMP_TO_BORDER",
+    "ANISO_8X_NEAREST_REPEAT",
+    "ANISO_8X_NEAREST_MIRROR_REPEAT",
+    "ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE",
 };
 
 static_assert(SMP_ID_COUNT == _countof(COMMON_SAMPLERS_DBG_NAMES));
@@ -965,9 +985,10 @@ static constexpr size_t COMMON_MESH_LOD_BUFFER_DESCRIPTOR_SLOT = 6;
 static constexpr size_t COMMON_MESH_BUFFER_DESCRIPTOR_SLOT = 7;
 static constexpr size_t COMMON_MATERIALS_DESCRIPTOR_SLOT = 8;
 static constexpr size_t COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT = 9;
-static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 10;
-static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 11;
-static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 12;
+static constexpr size_t COMMON_MTL_SAMPLERS_DESCRIPTOR_SLOT = 10;
+static constexpr size_t COMMON_INST_BUFFER_DESCRIPTOR_SLOT = 11;
+static constexpr size_t COMMON_DEPTH_DESCRIPTOR_SLOT = 12;
+static constexpr size_t COMMON_HZB_DESCRIPTOR_SLOT = 13;
 
 static constexpr size_t GEOM_CULL_CAM_DATA_CB_DESCRIPTOR_SLOT = 0;
 static constexpr size_t GEOM_CULL_HZB_DESCRIPTOR_SLOT = 1;
@@ -1163,9 +1184,9 @@ public:
 public:
     TextureLoadData() = default;
     
-    TextureLoadData(const fs::path& filepath)
+    TextureLoadData(const fs::path& filepath, bool sRGB)
     {
-        Load(filepath);
+        Load(filepath, sRGB);
     }
 
     ~TextureLoadData()
@@ -1183,32 +1204,29 @@ public:
 
     TextureLoadData& operator=(TextureLoadData&& other)
     {
+        if (this == &other) {
+            return *this;
+        }
+
+        Unload();
+
     #ifdef ENG_VK_OBJ_DEBUG_NAME_ENABLED
         m_name = std::move(other.m_name);
     #endif
 
-        m_pData = other.m_pData;
-        other.m_pData = nullptr;
+        m_pData = std::exchange(other.m_pData, nullptr);
+        m_format = std::exchange(other.m_format, VK_FORMAT_UNDEFINED);
 
-        m_format = other.m_format;
-        other.m_format = VK_FORMAT_UNDEFINED;
-
-        m_width = other.m_width;
-        m_height = other.m_height;
-        m_channels = other.m_channels;
-        m_mipsCount = other.m_mipsCount;
-        m_type = other.m_type;
-
-        other.m_width = 0;
-        other.m_height = 0;
-        other.m_channels = 0;
-        other.m_mipsCount = 1;
-        other.m_type = ComponentType::UINT8;
+        m_width = std::exchange(other.m_width, 0u);
+        m_height = std::exchange(other.m_height, 0u);
+        m_channels = std::exchange(other.m_channels, 0u);
+        m_mipsCount = std::exchange(other.m_mipsCount, uint16_t{1});
+        m_type = std::exchange(other.m_type, ComponentType::UINT8);
 
         return *this;
     }
 
-    bool Load(const fs::path& filepath)
+    bool Load(const fs::path& filepath, bool sRGB)
     {
         if (IsLoaded()) {
             Unload();
@@ -1247,12 +1265,12 @@ public:
         m_channels = channels;
         m_mipsCount = CalcMipsCount(m_width, m_height);
 
-        m_format = EvaluateFormat(m_channels, m_type);
+        m_format = EvaluateFormat(m_channels, m_type, sRGB);
 
         return true;
     }
 
-    bool Load(const void* pMemory, size_t size)
+    bool Load(const void* pMemory, size_t size, bool sRGB)
     {
         if (IsLoaded()) {
             Unload();
@@ -1265,14 +1283,19 @@ public:
         int height = 0;
         int channels = 0;
 
+        const int result = stbi_info_from_memory((const stbi_uc *)pMemory, size, &width, &height, &channels);
+        CORE_ASSERT_MSG(result == 1, "Failed to load texture from memory");
+
+        const bool isRGB = channels == 3;
+
         if (stbi_is_16_bit_from_memory((const stbi_uc*)pMemory, size)) {
-            m_pData = stbi_load_16_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_pData = stbi_load_16_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, isRGB ? 4 : 0);
             m_type = ComponentType::UINT16;
         } else if (stbi_is_hdr_from_memory((const stbi_uc*)pMemory, size)) {
-            m_pData = stbi_loadf_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_pData = stbi_loadf_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, isRGB ? 4 : 0);
             m_type = ComponentType::FLOAT;
         } else {
-            m_pData = stbi_load_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, 0);
+            m_pData = stbi_load_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, isRGB ? 4 : 0);
             m_type = ComponentType::UINT8;
         }
 
@@ -1280,12 +1303,14 @@ public:
             return false;
         }
 
+        channels = isRGB ? 4 : channels;
+
         m_width = width;
         m_height = height;
         m_channels = channels;
         m_mipsCount = CalcMipsCount(m_width, m_height);
 
-        m_format = EvaluateFormat(m_channels, m_type);
+        m_format = EvaluateFormat(m_channels, m_type, sRGB);
 
         return true;
     }
@@ -1343,12 +1368,12 @@ public:
     bool IsLoaded() const { return m_pData != nullptr; }
 
 private:
-    static VkFormat EvaluateFormat(uint32_t channels, ComponentType type)
+    static VkFormat EvaluateFormat(uint32_t channels, ComponentType type, bool sRGB)
     {
         switch (channels) {
             case 1:
                 switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8_UNORM;
+                    case ComponentType::UINT8:  return sRGB ? VK_FORMAT_R8_SRGB : VK_FORMAT_R8_UNORM;
                     case ComponentType::UINT16: return VK_FORMAT_R16_UNORM;
                     case ComponentType::FLOAT:  return VK_FORMAT_R32_SFLOAT;
                     default:
@@ -1358,7 +1383,7 @@ private:
                 break;
             case 2:
                 switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8_UNORM;
+                    case ComponentType::UINT8:  return sRGB ? VK_FORMAT_R8G8_SRGB : VK_FORMAT_R8G8_UNORM;
                     case ComponentType::UINT16: return VK_FORMAT_R16G16_UNORM;
                     case ComponentType::FLOAT:  return VK_FORMAT_R32G32_SFLOAT;
                     default:
@@ -1368,7 +1393,7 @@ private:
                 break;
             case 3:
                 switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8_UNORM;
+                    case ComponentType::UINT8:  return sRGB ? VK_FORMAT_R8G8B8_SRGB : VK_FORMAT_R8G8B8_UNORM;
                     case ComponentType::UINT16: return VK_FORMAT_R16G16B16_UNORM;
                     case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32_SFLOAT;
                     default:
@@ -1378,7 +1403,7 @@ private:
                 break;
             case 4:
                 switch (type) {
-                    case ComponentType::UINT8:  return VK_FORMAT_R8G8B8A8_UNORM;
+                    case ComponentType::UINT8:  return sRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
                     case ComponentType::UINT16: return VK_FORMAT_R16G16B16A16_UNORM;
                     case ComponentType::FLOAT:  return VK_FORMAT_R32G32B32A32_SFLOAT;
                     default:
@@ -1419,33 +1444,6 @@ private:
 };
 
 
-static std::unique_ptr<eng::Window> s_pWnd = nullptr;
-
-static vkn::Instance& s_vkInstance = vkn::Instance::Inst();
-static vkn::Surface& s_vkSurface = vkn::Surface::Inst();
-
-static vkn::PhysicalDevice& s_vkPhysDevice = vkn::PhysicalDevice::Inst();
-static vkn::Device& s_vkDevice = vkn::Device::Inst();
-
-static vkn::Allocator& s_vkAllocator = vkn::Allocator::Inst();
-
-static vkn::Swapchain& s_vkSwapchain = vkn::Swapchain::Inst();
-
-static vkn::CmdPool s_commonCmdPool;
-
-static vkn::CmdBuffer* s_pImmediateSubmitCmdBuffer;
-static vkn::Fence      s_immediateSubmitFinishedFence;
-
-static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
-static vkn::Semaphore  s_presentFinishedSemaphore;
-static vkn::Fence      s_renderFinishedFence;
-static vkn::CmdBuffer* s_pRenderCmdBuffer;
-
-static vkn::Buffer s_commonStagingBuffer;
-
-
-static std::array<vkn::DescriptorSetLayout, DESC_SET_LAYOUT_ID_COUNT> s_passDescSetLayouts;
-
 using DescriptorSetHash = uint64_t;
 
 struct DescriptorSetStorageItem
@@ -1453,28 +1451,6 @@ struct DescriptorSetStorageItem
     uint32_t index;
     DescSetLayoutID layoutID;
 };
-
-static std::unordered_map<DescriptorSetHash, DescriptorSetStorageItem> s_descSetHashToInfoMap;
-static uint32_t s_descSetCount = 0;
-
-static vkn::DescriptorBuffer s_descriptorBuffer;
-
-
-static std::array<vkn::PSOLayout, PASS_ID_COUNT> s_PSOLayouts;
-static std::array<vkn::PSO,       PASS_ID_COUNT> s_PSOs;
-
-static std::array<vkn::Buffer, COMMON_GEOM_STREAM_COUNT> s_geomStreamBuffers;
-static vkn::Buffer s_geomIndexBuffer;
-
-static vkn::Buffer s_commonConstBuffer;
-static vkn::Buffer s_commonDbgConstBuffer;
-
-static vkn::Buffer s_commonLightingConstBuffer;
-
-static vkn::Buffer s_commonMeshLODBuffer;
-static vkn::Buffer s_commonMeshBuffer;
-static vkn::Buffer s_commonMaterialBuffer;
-static vkn::Buffer s_commonInstBuffer;
 
 
 #pragma region GEOM CULLING SYSTEM DATA
@@ -1542,6 +1518,72 @@ struct CSMCamResources
 };
 
 
+struct GeomMatSamplerDesc
+{
+    VkFilter magFilter = VK_FILTER_LINEAR;
+    VkFilter minFilter = VK_FILTER_LINEAR;
+
+    VkSamplerMipmapMode mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    VkSamplerAddressMode wrapU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode wrapV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    bool useMipmaps = true;
+
+    uint32_t index = GPU_GeomMatTex::DEFAULT_SMP_ID;
+};
+
+
+static std::unique_ptr<eng::Window> s_pWnd = nullptr;
+
+static vkn::Instance& s_vkInstance = vkn::Instance::Inst();
+static vkn::Surface& s_vkSurface = vkn::Surface::Inst();
+
+static vkn::PhysicalDevice& s_vkPhysDevice = vkn::PhysicalDevice::Inst();
+static vkn::Device& s_vkDevice = vkn::Device::Inst();
+
+static vkn::Allocator& s_vkAllocator = vkn::Allocator::Inst();
+
+static vkn::Swapchain& s_vkSwapchain = vkn::Swapchain::Inst();
+
+static vkn::CmdPool s_commonCmdPool;
+
+static vkn::CmdBuffer* s_pImmediateSubmitCmdBuffer;
+static vkn::Fence      s_immediateSubmitFinishedFence;
+
+static std::vector<vkn::Semaphore> s_renderFinishedSemaphores;
+static vkn::Semaphore  s_presentFinishedSemaphore;
+static vkn::Fence      s_renderFinishedFence;
+static vkn::CmdBuffer* s_pRenderCmdBuffer;
+
+static vkn::Buffer s_commonStagingBuffer;
+
+
+static std::array<vkn::DescriptorSetLayout, DESC_SET_LAYOUT_ID_COUNT> s_passDescSetLayouts;
+
+static std::unordered_map<DescriptorSetHash, DescriptorSetStorageItem> s_descSetHashToInfoMap;
+static uint32_t s_descSetCount = 0;
+
+static vkn::DescriptorBuffer s_descriptorBuffer;
+
+
+static std::array<vkn::PSOLayout, PASS_ID_COUNT> s_PSOLayouts;
+static std::array<vkn::PSO,       PASS_ID_COUNT> s_PSOs;
+
+static std::array<vkn::Buffer, COMMON_GEOM_STREAM_COUNT> s_geomStreamBuffers;
+static vkn::Buffer s_geomIndexBuffer;
+
+static vkn::Buffer s_commonConstBuffer;
+static vkn::Buffer s_commonDbgConstBuffer;
+
+static vkn::Buffer s_commonLightingConstBuffer;
+
+static vkn::Buffer s_commonMeshLODBuffer;
+static vkn::Buffer s_commonMeshBuffer;
+static vkn::Buffer s_commonMaterialBuffer;
+static vkn::Buffer s_commonInstBuffer;
+
+
 static MainCamResources                             s_mainCamResources;
 static std::array<CSMCamResources, CSM_SPLIT_COUNT> s_csmCamsResources;
 
@@ -1549,6 +1591,7 @@ static std::array<vkn::Buffer, 2> s_depthReductionBuffers;
 
 static std::vector<vkn::Texture>     s_commonMaterialTextures;
 static std::vector<vkn::TextureView> s_commonMaterialTextureViews;
+static std::vector<vkn::Sampler>     s_commonMaterialSamplers;
 
 static std::vector<vkn::Sampler> s_commonSamplers;
 static std::vector<vkn::Sampler> s_commonCmpSamplers;
@@ -1556,7 +1599,10 @@ static std::vector<vkn::Sampler> s_commonCmpSamplers;
 static std::array<std::vector<uint32_t>, COMMON_GEOM_STREAM_COUNT> s_cpuGeomStreamBuffers;
 static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
-static std::vector<TextureLoadData> s_cpuTexturesData;
+
+std::vector<bool>                      s_cpuMatTexSrgbFlags;
+static std::vector<TextureLoadData>    s_cpuMatTexLoadData;
+static std::vector<GeomMatSamplerDesc> s_cpuGeomMatSamplerDescs;
 
 static std::vector<GPU_MeshLOD>      s_cpuMeshLODData;
 static std::vector<GPU_Mesh>         s_cpuMeshData;
@@ -2839,7 +2885,7 @@ static void CreateSkybox(std::span<fs::path> faceDataPaths)
 
     std::array<TextureLoadData, CUBEMAP_FACE_COUNT> faceLoadDatas = {};
     for (size_t i = 0; i < faceDataPaths.size(); ++i) {
-        faceLoadDatas[i].Load(faceDataPaths[i]);
+        faceLoadDatas[i].Load(faceDataPaths[i], false);
         CORE_ASSERT_MSG(faceLoadDatas[i].IsLoaded(), "Skybox face \'%s\' data is not loaded", faceLoadDatas[i].GetName());
     }
 
@@ -3194,6 +3240,7 @@ static void CreateCommonDescriptorSetLayout()
         vkn::DescriptorInfo::Create(COMMON_MESH_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MATERIALS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, COMMON_MATERIAL_TEXTURES_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkn::DescriptorInfo::Create(COMMON_MTL_SAMPLERS_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLER, GPU_GeomMatTex::MAX_SMP_COUNT, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkn::DescriptorInfo::Create(COMMON_INST_BUFFER_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_DEPTH_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
         vkn::DescriptorInfo::Create(COMMON_HZB_DESCRIPTOR_SLOT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_ALL),
@@ -4674,10 +4721,10 @@ static void CreateCommonSamplers()
     samplerCreateInfo[SMP_ID_NEAREST_REPEAT].maxLod = VK_LOD_CLAMP_NONE;
     samplerCreateInfo[SMP_ID_NEAREST_REPEAT].unnormalizedCoordinates = VK_FALSE;
 
-    samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
-    samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
+    samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
     samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
     samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -4700,10 +4747,10 @@ static void CreateCommonSamplers()
     samplerCreateInfo[SMP_ID_LINEAR_REPEAT].minFilter = VK_FILTER_LINEAR;
     samplerCreateInfo[SMP_ID_LINEAR_REPEAT].mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-    samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
-    samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
+    samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
     samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
     samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -4720,56 +4767,15 @@ static void CreateCommonSamplers()
     samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
     samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
     samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE].addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-
-
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_REPEAT].maxAnisotropy = 2.f;
     
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-    
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_EDGE];
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_BORDER];
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-    
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-    
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_REPEAT].maxAnisotropy = 2.f;
-
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 2.f;
-
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_EDGE];
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_BORDER];
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 2.f;
-
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE];
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_2X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 2.f;
-
 
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_REPEAT].maxAnisotropy = 4.f;
-
-    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_MIRRORED_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRRORED_REPEAT].maxAnisotropy = 4.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_REPEAT].maxAnisotropy = 4.f;
     
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_EDGE];
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
@@ -4782,26 +4788,67 @@ static void CreateCommonSamplers()
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_MIRROR_CLAMP_TO_EDGE];
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-
+    
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_REPEAT].maxAnisotropy = 4.f;
-    
-    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRRORED_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_MIRRORED_REPEAT];
-    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRRORED_REPEAT].anisotropyEnable = VK_TRUE;
-    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRRORED_REPEAT].maxAnisotropy = 4.f;
-    
+
+    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_REPEAT].maxAnisotropy = 4.f;
+
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_EDGE];
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
-    
+
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_BORDER];
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 4.f;
-    
+
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE];
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
     samplerCreateInfo[SMP_ID_ANISO_4X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 4.f;
+
+
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_REPEAT].maxAnisotropy = 8.f;
+
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_NEAREST_MIRROR_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_EDGE];
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_BORDER] = samplerCreateInfo[SMP_ID_NEAREST_CLAMP_TO_BORDER];
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_NEAREST_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_NEAREST_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_REPEAT] = samplerCreateInfo[SMP_ID_LINEAR_MIRROR_REPEAT];
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_REPEAT].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_REPEAT].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_EDGE];
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_BORDER] = samplerCreateInfo[SMP_ID_LINEAR_CLAMP_TO_BORDER];
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_BORDER].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_CLAMP_TO_BORDER].maxAnisotropy = 8.f;
+    
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE] = samplerCreateInfo[SMP_ID_LINEAR_MIRROR_CLAMP_TO_EDGE];
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].anisotropyEnable = VK_TRUE;
+    samplerCreateInfo[SMP_ID_ANISO_8X_LINEAR_MIRROR_CLAMP_TO_EDGE].maxAnisotropy = 8.f;
 
     for (size_t i = 0; i < samplerCreateInfo.size(); ++i) {
         s_commonSamplers[i].Create(samplerCreateInfo[i]).SetDebugName(COMMON_SAMPLERS_DBG_NAMES[i]);
@@ -4876,6 +4923,14 @@ static void WriteCommonDescriptorSet()
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
         s_descriptorBuffer.WriteDescriptor(setID, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+
+    for (size_t i = 0; i < s_commonMaterialSamplers.size(); ++i) {
+        vkn::Sampler& sampler = s_commonMaterialSamplers[i];
+
+        if (sampler.IsCreated()) {
+            s_descriptorBuffer.WriteDescriptor(setID, COMMON_MTL_SAMPLERS_DESCRIPTOR_SLOT, i, sampler);
+        }
     }
 
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_INST_BUFFER_DESCRIPTOR_SLOT, 0, s_commonInstBuffer);
@@ -5096,49 +5151,115 @@ static void LoadSceneMeshData(const gltf::Asset& asset)
 }
 
 
-static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
+static VkFilter ConvertGltfFilter(gltf::Filter filter)
 {
-    TM_MARKER_C(0x8b008b, "LoadSceneTexturesData");
+    switch (filter) {
+        case gltf::Filter::Nearest: return VK_FILTER_NEAREST;
+        case gltf::Filter::Linear:  return VK_FILTER_LINEAR;
+        case gltf::Filter::NearestMipMapNearest: return VK_FILTER_NEAREST;
+        case gltf::Filter::LinearMipMapNearest:  return VK_FILTER_LINEAR;
+        case gltf::Filter::NearestMipMapLinear:  return VK_FILTER_NEAREST;
+        case gltf::Filter::LinearMipMapLinear:   return VK_FILTER_LINEAR;
+        default:
+            CORE_ASSERT_FAIL("Unsupported glTF filter");
+            return {};
+    }
+}
 
+
+static VkSamplerMipmapMode GetGltfFilterSamplerMipmapMode(gltf::Filter filter)
+{
+    switch (filter) {
+        case gltf::Filter::Nearest: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        case gltf::Filter::Linear:  return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        case gltf::Filter::NearestMipMapNearest: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        case gltf::Filter::LinearMipMapNearest:  return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        case gltf::Filter::NearestMipMapLinear:  return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        case gltf::Filter::LinearMipMapLinear:   return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        default:
+            CORE_ASSERT_FAIL("Unsupported glTF filter");
+            return {};
+    }
+}
+
+
+static bool IsGltfFilterMipmapped(gltf::Filter filter)
+{
+    switch (filter) {
+        case gltf::Filter::Nearest:
+        case gltf::Filter::Linear:
+            return false;
+        case gltf::Filter::NearestMipMapNearest:
+        case gltf::Filter::LinearMipMapNearest: 
+        case gltf::Filter::NearestMipMapLinear: 
+        case gltf::Filter::LinearMipMapLinear:
+            return true;
+        default:
+            CORE_ASSERT_FAIL("Unsupported glTF filter");
+            return {};
+    }
+}
+
+
+static VkSamplerAddressMode ConvertGltfWrap(gltf::Wrap wrap)
+{
+    switch (wrap) {
+        case gltf::Wrap::ClampToEdge:    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case gltf::Wrap::MirroredRepeat: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        case gltf::Wrap::Repeat:         return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        default:
+            CORE_ASSERT_FAIL("Unsupported glTF wrap");
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
+}
+
+
+static void LoadSceneSamplersData(const gltf::Asset& asset)
+{
+    TM_MARKER_C(0x8b008b, "LoadSceneSamplersData");
+    
     eng::Timer timer;
 
-    s_cpuTexturesData.reserve(asset.images.size());
-    s_cpuTexturesData.clear();
+    static constexpr uint32_t defaultSmpCount = 1u;
+    static constexpr uint32_t maxSmpCount = GPU_GeomMatTex::MAX_SMP_COUNT;
 
-    for (const gltf::Image& image : asset.images) {
-        TextureLoadData texData = {};
+    const uint32_t smpCount = defaultSmpCount + asset.samplers.size();
 
-        std::visit(
-            gltf::visitor {
-                [](const auto& arg){},
-                [&](const gltf::sources::URI& filePath) {   
-                    const fs::path path = filePath.uri.isLocalPath() ? fs::absolute(dirPath / filePath.uri.fspath()) : filePath.uri.fspath();
-                    texData.Load(path);
-                },
-                [&](const gltf::sources::Vector& vector) {
-                    texData.Load(vector.bytes.data(), vector.bytes.size());
-                },
-                [&](const gltf::sources::BufferView& view) {
-                    const gltf::BufferView& bufferView = asset.bufferViews[view.bufferViewIndex];
-                    const gltf::Buffer& buffer = asset.buffers[bufferView.bufferIndex];
-    
-                    std::visit(gltf::visitor {
-                        [](const auto& arg){},
-                        [&](const gltf::sources::Vector& vector) {
-                            texData.Load(vector.bytes.data(), vector.bytes.size());                            
-                        }
-                    },
-                    buffer.data);
-                },
-            },
-        image.data);
+    CORE_ASSERT_MSG(asset.samplers.size() <= GPU_GeomMatTex::MAX_SMP_COUNT - defaultSmpCount,
+        "Scene has more samplers (%zu) than maximum allowed (%u)", asset.samplers.size(), GPU_GeomMatTex::MAX_SMP_COUNT - defaultSmpCount);
 
-        texData.SetName(image.name);
+    s_cpuGeomMatSamplerDescs.clear();
+    s_cpuGeomMatSamplerDescs.reserve(smpCount);
 
-        s_cpuTexturesData.emplace_back(std::move(texData));
+    GeomMatSamplerDesc defaultSmpDesc = {};
+    defaultSmpDesc.index = GPU_GeomMatTex::DEFAULT_SMP_ID;
+
+    s_cpuGeomMatSamplerDescs.emplace_back(defaultSmpDesc);
+
+    for (uint32_t i = 0; i < asset.samplers.size(); ++i) {
+        const gltf::Sampler& sampler = asset.samplers[i];
+
+        GeomMatSamplerDesc desc = {};
+
+        if (sampler.minFilter.has_value()) {
+            desc.minFilter  = ConvertGltfFilter(sampler.minFilter.value());
+            desc.mipmapMode = GetGltfFilterSamplerMipmapMode(sampler.minFilter.value());
+            desc.useMipmaps = IsGltfFilterMipmapped(sampler.minFilter.value());
+        }
+
+        if (sampler.magFilter.has_value()) {
+            desc.magFilter = ConvertGltfFilter(sampler.magFilter.value());
+        }
+
+        desc.wrapU = ConvertGltfWrap(sampler.wrapS);
+        desc.wrapV = ConvertGltfWrap(sampler.wrapT);
+
+        desc.index = i;
+        
+        s_cpuGeomMatSamplerDescs.emplace_back(desc);
     }
 
-    CORE_LOG_INFO("FastGLTF: Textures data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+    CORE_LOG_INFO("FastGLTF: Material samplers data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5150,6 +5271,8 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 
     s_cpuMaterialData.reserve(asset.materials.size());
     s_cpuMaterialData.clear();
+
+    s_cpuMatTexSrgbFlags.assign(asset.images.size(), false);
 
     for (const gltf::Material& material : asset.materials) {
         GPU_GeomMaterial mtl = {};
@@ -5165,8 +5288,17 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 
         const auto& albedoTexOpt = pbrData.baseColorTexture;
         if (albedoTexOpt.has_value()) {
-            const gltf::Texture& tex = asset.textures[albedoTexOpt.value().textureIndex];
-            mtl.albedoTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            const size_t textureIndex = albedoTexOpt.value().textureIndex;
+            const gltf::Texture& tex = asset.textures[textureIndex];
+            
+            if (tex.imageIndex.has_value()) {
+                const size_t imageIndex = tex.imageIndex.value();
+
+                mtl.albedoTex.ID = imageIndex;
+                s_cpuMatTexSrgbFlags[imageIndex] = true;
+
+                mtl.albedoTex.samplerID = tex.samplerIndex.value_or(GPU_GeomMatTex::DEFAULT_SMP_ID);
+            }
         }
 
         mtl.normalScale = 1.f;
@@ -5174,7 +5306,9 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
         const auto& normalTexOpt = material.normalTexture;
         if (normalTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[normalTexOpt.value().textureIndex];
-            mtl.normalTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+
+            mtl.normalTex.ID = tex.imageIndex.value_or(GPU_GeomMatTex::INVALID_TEX_ID);
+            mtl.normalTex.samplerID = tex.samplerIndex.value_or(GPU_GeomMatTex::DEFAULT_SMP_ID);;
         
             mtl.normalScale = normalTexOpt.value().scale;
         }
@@ -5182,7 +5316,9 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
         const auto& mrTexOpt = material.pbrData.metallicRoughnessTexture;
         if (mrTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[mrTexOpt.value().textureIndex];
-            mtl.metalRoughTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+
+            mtl.metalRoughTex.ID = tex.imageIndex.value_or(GPU_GeomMatTex::INVALID_TEX_ID);
+            mtl.metalRoughTex.samplerID = tex.samplerIndex.value_or(GPU_GeomMatTex::DEFAULT_SMP_ID);;
         }
 
         mtl.aoCoef = 1.f;
@@ -5190,15 +5326,26 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
         const auto& aoTexOpt = material.occlusionTexture;
         if (aoTexOpt.has_value()) {
             const gltf::Texture& tex = asset.textures[aoTexOpt.value().textureIndex];
-            mtl.aoTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+
+            mtl.aoTex.ID = tex.imageIndex.value_or(GPU_GeomMatTex::INVALID_TEX_ID);
+            mtl.aoTex.samplerID = tex.samplerIndex.value_or(GPU_GeomMatTex::DEFAULT_SMP_ID);;
         
             mtl.aoCoef = aoTexOpt.value().strength;
         }
 
         const auto& emissiveTexOpt = material.emissiveTexture;
         if (emissiveTexOpt.has_value()) {
-            const gltf::Texture& tex = asset.textures[emissiveTexOpt.value().textureIndex];
-            mtl.emissiveTexID = tex.imageIndex.has_value() ? tex.imageIndex.value() : -1;
+            const size_t textureIndex = emissiveTexOpt.value().textureIndex;
+            const gltf::Texture& tex = asset.textures[textureIndex];
+
+            if (tex.imageIndex.has_value()) {
+                const size_t imageIndex = tex.imageIndex.value();
+
+                mtl.emissiveTex.ID = imageIndex;
+                s_cpuMatTexSrgbFlags[imageIndex] = true;
+
+                mtl.emissiveTex.samplerID = tex.samplerIndex.value_or(GPU_GeomMatTex::DEFAULT_SMP_ID);;
+            }
         }
 
         mtl.emissiveMult.x = material.emissiveFactor.x();
@@ -5226,6 +5373,60 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
     }
 
     CORE_LOG_INFO("FastGLTF: Materials data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
+{
+    TM_MARKER_C(0x8b008b, "LoadSceneTexturesData");
+
+    eng::Timer timer;
+
+    s_cpuMatTexLoadData.reserve(asset.images.size());
+    s_cpuMatTexLoadData.clear();
+
+    for (size_t i = 0; i < asset.images.size(); ++i) {
+        const gltf::Image& image = asset.images[i];
+
+        TextureLoadData texData = {};
+
+        std::visit(
+            gltf::visitor {
+                [](const auto& arg){},
+                [&](const gltf::sources::URI& filePath) {   
+                    const fs::path path = filePath.uri.isLocalPath() ? fs::absolute(dirPath / filePath.uri.fspath()) : filePath.uri.fspath();
+                    texData.Load(path, s_cpuMatTexSrgbFlags[i]);
+                },
+                [&](const gltf::sources::Vector& vector) {
+                    texData.Load(vector.bytes.data(), vector.bytes.size(), s_cpuMatTexSrgbFlags[i]);
+                },
+                [&](const gltf::sources::BufferView& view) {
+                    const gltf::BufferView& bufferView = asset.bufferViews[view.bufferViewIndex];
+                    const gltf::Buffer& buffer = asset.buffers[bufferView.bufferIndex];
+    
+                    const size_t offset = bufferView.byteOffset;
+                    const size_t length = bufferView.byteLength;
+
+                    std::visit(gltf::visitor {
+                        [](const auto& arg){},
+                        [&](const gltf::sources::Vector& vector) {
+                            CORE_ASSERT(offset <= vector.bytes.size());
+                            CORE_ASSERT(length <= vector.bytes.size() - offset);
+                            
+                            texData.Load(vector.bytes.data() + offset, length, s_cpuMatTexSrgbFlags[i]);                            
+                        }
+                    },
+                    buffer.data);
+                },
+            },
+        image.data);
+
+        texData.SetName(image.name);
+
+        s_cpuMatTexLoadData.emplace_back(std::move(texData));
+    }
+
+    CORE_LOG_INFO("FastGLTF: Textures data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5333,7 +5534,12 @@ static void LoadSceneInstData(const gltf::Asset& asset)
 static void UploadGPUGeomStream(GPU_GeomStreamID ID)
 {
     const size_t gpuStreamSize = s_cpuGeomStreamBuffers[ID].size() * sizeof(uint32_t);
-    CORE_ASSERT(gpuStreamSize <= s_commonStagingBuffer.GetMemorySize());
+    CORE_ASSERT_MSG(gpuStreamSize <= s_commonStagingBuffer.GetMemorySize(), 
+        "Geom stream %s size %.2f MB is greater than staging buffer size %.2f MB",
+        COMMON_GEOM_STREAM_DBG_NAMES[ID],
+        float(gpuStreamSize) / 1024.f / 1024.f,
+        float(s_commonStagingBuffer.GetMemorySize()) / 1024.f / 1024.f
+    );
 
     void* pDataGPU = s_commonStagingBuffer.Map();
     memcpy(pDataGPU, s_cpuGeomStreamBuffers[ID].data(), gpuStreamSize);
@@ -5418,19 +5624,60 @@ static void UploadGPUMeshData()
 }
 
 
-static void UploadGPUTextureData()
+static void UploadGPUGeomMatSamplerData()
 {
-    TM_MARKER_C(0x8b008b, "UploadGPUTextureData");
+    TM_MARKER_C(0x8b008b, "UploadGPUGeomMatSamplerData");
 
     eng::Timer timer;
 
-    s_commonMaterialTextures.resize(s_cpuTexturesData.size());
-    s_commonMaterialTextureViews.resize(s_cpuTexturesData.size());
+    s_commonMaterialSamplers.resize(GPU_GeomMatTex::MAX_SMP_COUNT);
 
-    for (size_t i = 0; i < s_cpuTexturesData.size(); ++i) {
+    for (const GeomMatSamplerDesc& desc : s_cpuGeomMatSamplerDescs) {
+        vkn::SamplerCreateInfo info = {};
+
+        info.pDevice = &s_vkDevice;
+        info.magFilter = desc.magFilter;
+        info.minFilter = desc.minFilter;
+        info.mipmapMode = desc.mipmapMode;
+        info.addressModeU = desc.wrapU;
+        info.addressModeV = desc.wrapV;
+        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.mipLodBias = 0.f;
+        info.minLod = 0.f;
+        info.maxLod = desc.useMipmaps ? VK_LOD_CLAMP_NONE : 0.f;
+        info.anisotropyEnable = VK_FALSE;
+        info.maxAnisotropy = 1.f;
+        info.compareEnable = VK_FALSE;
+        info.unnormalizedCoordinates = VK_FALSE;
+
+        const uint32_t index = desc.index;
+
+        s_commonMaterialSamplers[index].Create(info);
+
+        if (index == GPU_GeomMatTex::DEFAULT_SMP_ID) {
+            s_commonMaterialSamplers[index].SetDebugName("MTL_SMP_DEFAULT");
+        } else {
+            s_commonMaterialSamplers[index].SetDebugName("MTL_SMP_%u", index);
+        }
+    }
+
+    CORE_LOG_INFO("FastGLTF: Material samplers GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
+}
+
+
+static void UploadGPUGeomMatTexData()
+{
+    TM_MARKER_C(0x8b008b, "UploadGPUGeomMatTexData");
+
+    eng::Timer timer;
+
+    s_commonMaterialTextures.resize(s_cpuMatTexLoadData.size());
+    s_commonMaterialTextureViews.resize(s_cpuMatTexLoadData.size());
+
+    for (size_t i = 0; i < s_cpuMatTexLoadData.size(); ++i) {
         const size_t textureIdx = i;
 
-        const TextureLoadData& texData = s_cpuTexturesData[textureIdx];
+        const TextureLoadData& texData = s_cpuMatTexLoadData[textureIdx];
         const size_t texSizeInBytes = texData.GetMemorySize();
 
         CORE_ASSERT(texSizeInBytes <= s_commonStagingBuffer.GetMemorySize());
@@ -5512,6 +5759,8 @@ static void UploadGPUTextureData()
                 .Push();
         });
     }
+
+    CORE_LOG_INFO("FastGLTF: Material textures GPU upload finished: %f ms", timer.End().GetDuration<float, std::milli>());
 }
 
 
@@ -5569,7 +5818,8 @@ static void UploadGPUResources()
 {
     UploadGPUMeshData();
     UploadGPUInstData();
-    UploadGPUTextureData();
+    UploadGPUGeomMatSamplerData();
+    UploadGPUGeomMatTexData();
     UploadGPUMaterialData();
 }
 
@@ -5616,8 +5866,9 @@ static void LoadScene(const fs::path& filepath)
     }
 
     LoadSceneMeshData(asset.get());
-    LoadSceneTexturesData(asset.get(), filepath.parent_path());
     LoadSceneMaterialData(asset.get());
+    LoadSceneSamplersData(asset.get());
+    LoadSceneTexturesData(asset.get(), filepath.parent_path());
     LoadSceneInstData(asset.get());
 
     if (!s_mainCameraLoaded) {
@@ -8915,7 +9166,7 @@ int main(int argc, char* argv[])
         PrecomputeIBLBRDFIntergrationLUT(cmdBuffer);
     });
 
-    s_cpuTexturesData.clear();
+    s_cpuMatTexLoadData.clear();
 
     s_pWnd->SetVisible(true);
 

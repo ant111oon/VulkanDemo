@@ -50,6 +50,37 @@ enum GPU_GeomMatType : uint
 };
 
 
+#define GPU_GEOM_MAT_BITS_PER_TEX_ID 26u
+#define GPU_GEOM_MAT_BITS_PER_SAMPLER 6u
+
+struct GPU_GeomMatTex
+{
+    __init()
+    {
+        static_assert(sizeof(GPU_GeomMatTex) == sizeof(uint), "Invalid struct size");
+        static_assert(GPU_GEOM_MAT_BITS_PER_TEX_ID + GPU_GEOM_MAT_BITS_PER_SAMPLER == 32u, "Geom mat bit overflow");
+        
+        ID = INVALID_TEX_ID;
+        samplerID = 0;
+    }
+
+    bool IsValid() { return ID != INVALID_TEX_ID; }
+
+    private static const uint INVALID_TEX_ID = (1u << GPU_GEOM_MAT_BITS_PER_TEX_ID) - 1u;
+    private static const uint MAX_SMP_COUNT = (1u << GPU_GEOM_MAT_BITS_PER_SAMPLER);
+
+    private static const uint DEFAULT_SMP_ID = MAX_SMP_COUNT - 1u;
+
+    uint ID        : GPU_GEOM_MAT_BITS_PER_TEX_ID;
+    uint samplerID : GPU_GEOM_MAT_BITS_PER_SAMPLER;
+};
+
+bool operator==(in GPU_GeomMatTex left, in GPU_GeomMatTex right)
+{
+    return left.ID == right.ID && left.samplerID == right.samplerID;
+}
+
+
 struct GPU_GeomMaterial
 {
     property bool isOpaque
@@ -77,19 +108,18 @@ struct GPU_GeomMaterial
     float roughnessScale;
     float aoCoef;
 
-    int albedoTexID;
-    int normalTexID;
-    int metalRoughTexID;
-    int aoTexID;
-
-    int emissiveTexID;
+    GPU_GeomMatTex albedoTex;
+    GPU_GeomMatTex normalTex;
+    GPU_GeomMatTex metalRoughTex;
+    GPU_GeomMatTex aoTex;
+    GPU_GeomMatTex emissiveTex;
 
     GPU_GeomMatType type;
 
     private uint doubleSided : 1;
+    private uint bitPadding : 31;
     
-    private uint padding_0 : 31;
-    private uint padding_1;
+    private uint padding;
 };
 
 

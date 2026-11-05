@@ -19,13 +19,11 @@ struct GPU_SampledGeomMaterial
 
 float4 SampleGeomMaterialAlbedo(in GPU_GeomMaterial mtl, in float2 uv)
 {
-    if (mtl.albedoTexID < 0) {
+    if (!mtl.albedoTex.IsValid()) {
         return ONEF4;
     }
 
-    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.albedoTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv);
-    albedo.rgb = SRGBToLinear(albedo.rgb);
-
+    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.albedoTex.ID, GET_COMMON_MTL_SMP(mtl.albedoTex.samplerID), uv);
     albedo *= mtl.albedoMult;
 
     return albedo;
@@ -34,13 +32,11 @@ float4 SampleGeomMaterialAlbedo(in GPU_GeomMaterial mtl, in float2 uv)
 
 float3 SampleGeomMaterialEmissive(in GPU_GeomMaterial mtl, in float2 uv)
 {
-    if (mtl.emissiveTexID < 0) {
+    if (!mtl.emissiveTex.IsValid()) {
         return ZEROF3;
     }
 
-    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.emissiveTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv).rgb;
-    emissive = SRGBToLinear(emissive);
-
+    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.emissiveTex.ID, GET_COMMON_MTL_SMP(mtl.emissiveTex.samplerID), uv).rgb;
     emissive *= mtl.emissiveMult;
 
     return emissive;
@@ -49,11 +45,11 @@ float3 SampleGeomMaterialEmissive(in GPU_GeomMaterial mtl, in float2 uv)
 
 float3 SampleGeomMaterialNormal(in GPU_GeomMaterial mtl, in float2 uv, in float3x3 TBN)
 {
-    if (mtl.normalTexID < 0) {
+    if (!mtl.normalTex.IsValid()) {
         return TBN[2];
     }
 
-    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.normalTexID, GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT), uv).xyz - 1.f;
+    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.normalTex.ID, GET_COMMON_MTL_SMP(mtl.normalTex.samplerID), uv).xyz - 1.f;
     lnorm = normalize(lnorm * float3(FLOAT2(mtl.normalScale), 1.f));
 
     return normalize(mul(lnorm, TBN));
@@ -64,19 +60,17 @@ float3 SampleGeomMaterialMetRoughAO(in GPU_GeomMaterial mtl, in float2 uv)
 {
     float3 aoMetRough = ONEF3;
 
-    SamplerState smp = GET_COMMON_SMP(GPU_SamplerID::ANISO_2X_LINEAR_REPEAT);
-
-    if (mtl.metalRoughTexID == mtl.aoTexID) {
-        if (mtl.metalRoughTexID >= 0) {
-            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTexID, smp, uv).rgb;
+    if (mtl.metalRoughTex == mtl.aoTex) {
+        if (mtl.metalRoughTex.IsValid()) {
+            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTex.ID, GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).rgb;
         }
     } else {
-        if (mtl.aoTexID >= 0) {
-            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.aoTexID, smp, uv).r;
+        if (mtl.aoTex.IsValid()) {
+            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.aoTex.ID, GET_COMMON_MTL_SMP(mtl.aoTex.samplerID), uv).r;
         }
 
-        if (mtl.metalRoughTexID >= 0) {
-            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTexID, smp, uv).bg;
+        if (mtl.metalRoughTex.IsValid()) {
+            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTex.ID, GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).bg;
         }
     }
 
