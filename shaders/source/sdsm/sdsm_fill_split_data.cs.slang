@@ -23,7 +23,7 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadFlatID))
 {
     const uint split = groupThreadFlatID;
 
-    GPU_CsmSplitData splitData = SDSM_SPLITS[split][0];
+    GPU_CsmSplitData splitData = SDSM_SPLIT(split);
 
     // TODO: Add stabilization
     if (SDSM_PASS == GPU_SdsmPass::PREPARE_SPLITS) {
@@ -57,9 +57,9 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadFlatID))
         splitData.rtSize = SDSM_SPLIT_RT_SIZE(split);
 
         // Reset bounds for the subsequent tightening pass.
-        SDSM_SPLIT_VIEW_BOUNDS[split][0] = GPU_SdsmSplitViewBounds();
+        SDSM_SPLIT_BOUNDS(split) = GPU_SdsmSplitViewBounds();
     } else if (SDSM_PASS == GPU_SdsmPass::FILL_SPLITS_PROJ_DATA) {
-        const GPU_SBox splitBounds = SDSM_SPLIT_VIEW_BOUNDS[split][0].ToSBox();
+        const GPU_SBox splitBounds = SDSM_SPLIT_BOUNDS(split).ToSBox();
 
         const float zNear = max(splitBounds.minZ - SDSM_SPLIT_Z_EXTNESION, M3D_EPS);
         const float zFar = splitBounds.maxZ + SDSM_SPLIT_Z_EXTNESION;
@@ -85,5 +85,5 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadFlatID))
         splitData.worldUnitsPerPixel = float2(right - left, top - bottom) / splitData.rtSize;
     }
 
-    SDSM_SPLITS[split][0] = splitData;
+    SDSM_SPLIT(split) = splitData;
 }

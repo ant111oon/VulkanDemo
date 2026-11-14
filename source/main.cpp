@@ -1239,7 +1239,10 @@ public:
         int channels = 0;
 
         const int result = stbi_info(strPath.c_str(), &width, &height, &channels);
-        CORE_ASSERT_MSG(result == 1, "Failed to load texture: %s", strPath.c_str());
+        if (result != 1) {
+            CORE_LOG_WARN("Failed to read texture info: %s (%s)", strPath.c_str(), stbi_failure_reason());
+            return false;
+        }
 
         const bool isRGB = channels == 3;
 
@@ -1284,7 +1287,10 @@ public:
         int channels = 0;
 
         const int result = stbi_info_from_memory((const stbi_uc *)pMemory, size, &width, &height, &channels);
-        CORE_ASSERT_MSG(result == 1, "Failed to load texture from memory");
+        if (result != 1) {
+            CORE_LOG_WARN("Failed to read texture info from memory (%s)", stbi_failure_reason());
+            return false;
+        }
 
         const bool isRGB = channels == 3;
 
@@ -2408,6 +2414,9 @@ static void CreateVkPhysAndLogicalDevices()
     features12.descriptorIndexing = VK_TRUE;
     features12.descriptorBindingPartiallyBound = VK_TRUE;
     features12.runtimeDescriptorArray = VK_TRUE;
+    // Required by NonUniformResourceIndex in shaders: material textures/samplers, CSM maps, CSM/SDSM split buffers
+    features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    features12.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
 
     VkPhysicalDeviceVulkan11Features features11 = {};
     features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -4922,7 +4931,11 @@ static void WriteCommonDescriptorSet()
     s_descriptorBuffer.WriteDescriptor(setID, COMMON_MATERIALS_DESCRIPTOR_SLOT, 0, s_commonMaterialBuffer);
 
     for (size_t i = 0; i < s_commonMaterialTextureViews.size(); ++i) {
-        s_descriptorBuffer.WriteDescriptor(setID, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, s_commonMaterialTextureViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        const vkn::TextureView& view = s_commonMaterialTextureViews[i];
+
+        if (view.IsCreated()) {
+            s_descriptorBuffer.WriteDescriptor(setID, COMMON_MTL_TEXTURES_DESCRIPTOR_SLOT, i, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
     }
 
     for (size_t i = 0; i < s_commonMaterialSamplers.size(); ++i) {
@@ -5376,6 +5389,13 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
 }
 
 
+template <typename Source>
+static std::span<const std::byte> GetGltfSourceBytes(const Source& source)
+{
+    return std::span<const std::byte>(source.bytes.data(), source.bytes.size());
+}
+
+
 static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirPath)
 {
     TM_MARKER_C(0x8b008b, "LoadSceneTexturesData");
@@ -5389,41 +5409,73 @@ static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirP
         const gltf::Image& image = asset.images[i];
 
         TextureLoadData texData = {};
+        const bool sRGB = s_cpuMatTexSrgbFlags[i];
+
+        auto LoadFromBytes = [&](std::span<const std::byte> bytes) {
+            if (!bytes.empty()) {
+                texData.Load(bytes.data(), bytes.size(), sRGB);
+            }
+        };
 
         std::visit(
             gltf::visitor {
                 [](const auto& arg){},
-                [&](const gltf::sources::URI& filePath) {   
+                [&](const gltf::sources::URI& filePath) {
                     const fs::path path = filePath.uri.isLocalPath() ? fs::absolute(dirPath / filePath.uri.fspath()) : filePath.uri.fspath();
-                    texData.Load(path, s_cpuMatTexSrgbFlags[i]);
+                    texData.Load(path, sRGB);
+                },
+                [&](const gltf::sources::Array& array) {
+                    LoadFromBytes(GetGltfSourceBytes(array));
                 },
                 [&](const gltf::sources::Vector& vector) {
-                    texData.Load(vector.bytes.data(), vector.bytes.size(), s_cpuMatTexSrgbFlags[i]);
+                    LoadFromBytes(GetGltfSourceBytes(vector));
+                },
+                [&](const gltf::sources::ByteView& view) {
+                    LoadFromBytes(GetGltfSourceBytes(view));
                 },
                 [&](const gltf::sources::BufferView& view) {
                     const gltf::BufferView& bufferView = asset.bufferViews[view.bufferViewIndex];
                     const gltf::Buffer& buffer = asset.buffers[bufferView.bufferIndex];
-    
+
                     const size_t offset = bufferView.byteOffset;
                     const size_t length = bufferView.byteLength;
 
-                    std::visit(gltf::visitor {
-                        [](const auto& arg){},
-                        [&](const gltf::sources::Vector& vector) {
-                            CORE_ASSERT(offset <= vector.bytes.size());
-                            CORE_ASSERT(length <= vector.bytes.size() - offset);
-                            
-                            texData.Load(vector.bytes.data() + offset, length, s_cpuMatTexSrgbFlags[i]);                            
-                        }
+                    const std::span<const std::byte> bufferBytes = std::visit(gltf::visitor {
+                        [](const auto& arg) { return std::span<const std::byte>{}; },
+                        [](const gltf::sources::Array& array) { return GetGltfSourceBytes(array); },
+                        [](const gltf::sources::Vector& vector) { return GetGltfSourceBytes(vector); },
+                        [](const gltf::sources::ByteView& view) { return GetGltfSourceBytes(view); },
                     },
                     buffer.data);
+
+                    if (offset <= bufferBytes.size() && length <= bufferBytes.size() - offset) {
+                        LoadFromBytes(bufferBytes.subspan(offset, length));
+                    }
                 },
             },
         image.data);
 
+        if (!texData.IsLoaded()) {
+            CORE_LOG_WARN("Failed to load image: %s", image.name.c_str());
+        }
+
         texData.SetName(image.name);
 
         s_cpuMatTexLoadData.emplace_back(std::move(texData));
+    }
+
+    auto InvalidateIfNotLoaded = [](GPU_GeomMatTex& tex) {
+        if (tex.ID != GPU_GeomMatTex::INVALID_TEX_ID && !s_cpuMatTexLoadData[tex.ID].IsLoaded()) {
+            tex.ID = GPU_GeomMatTex::INVALID_TEX_ID;
+        }
+    };
+
+    for (GPU_GeomMaterial& material : s_cpuMaterialData) {
+        InvalidateIfNotLoaded(material.albedoTex);
+        InvalidateIfNotLoaded(material.normalTex);
+        InvalidateIfNotLoaded(material.metalRoughTex);
+        InvalidateIfNotLoaded(material.aoTex);
+        InvalidateIfNotLoaded(material.emissiveTex);
     }
 
     CORE_LOG_INFO("FastGLTF: Textures data loading finished: %f ms", timer.End().GetDuration<float, std::milli>());
@@ -5678,6 +5730,11 @@ static void UploadGPUGeomMatTexData()
         const size_t textureIdx = i;
 
         const TextureLoadData& texData = s_cpuMatTexLoadData[textureIdx];
+
+        if (!texData.IsLoaded()) {
+            continue;
+        }
+
         const size_t texSizeInBytes = texData.GetMemorySize();
 
         CORE_ASSERT(texSizeInBytes <= s_commonStagingBuffer.GetMemorySize());
@@ -5934,15 +5991,7 @@ static void PrepareLightingData()
 {
     TM_MARKER_C(0x008b8b, "PrepareLightingData");
 
-    GPU_CommonLightingData& constBuff = *reinterpret_cast<GPU_CommonLightingData*>(s_commonLightingConstBuffer.Map());
-
-    // for (size_t i = 0; i < CSM_SPLIT_COUNT; ++i) {
-    //     FillCameraDataGPU(constBuff.csmData.splits[i].camData, s_csmCameras[i]);
-
-    //     constBuff.csmData.splits[i].zBounds = glm::float2(i == 0 ? CAMERA_ZNEAR : s_csmSplitDistances[i - 1], s_csmSplitDistances[i]);
-    //     constBuff.csmData.splits[i].worldUnitsPerPixel = s_csmSplitWorldUnitsPerTexel[i];
-    //     constBuff.csmData.splits[i].rtSize = glm::uvec2(CSM_SPLIT_RT_SIZE);
-    // }
+    GPU_CommonLightingData constBuff = {};
 
     constBuff.csm.filterData.pcfType = s_csmPCFType;
 
@@ -5958,12 +6007,9 @@ static void PrepareLightingData()
         constBuff.csm.filterData.samplesCount = s_csmFilterDiskSampleCount;
     }
 
-    if (s_isCsmPcssEnabled) {
-        constBuff.csm.filterData.randRotationEnabled &= s_csmPcssSettings.randomRotationEnabled;
-    } else {
-        constBuff.csm.filterData.randRotationEnabled &= s_isCsmFilterRandomOffsetEnabled;
-    }
-    
+    const bool randRotationEnabled = s_isCsmPcssEnabled ? s_csmPcssSettings.randomRotationEnabled : s_isCsmFilterRandomOffsetEnabled;
+    constBuff.csm.filterData.randRotationEnabled = s_isCsmEnabled && randRotationEnabled;
+
     constBuff.csm.blendThresholdCoef = s_csmSplitBlendThresholdCoef * 0.01f;
     constBuff.csm.constantBiasTexels = s_csmConstantBiasTexels;
     constBuff.csm.slopeBiasTexels = s_csmSlopeBiasTexels;
@@ -5977,10 +6023,10 @@ static void PrepareLightingData()
     constBuff.IBLEnabled = s_isIBLEnabled;
     constBuff.csm.enabled = s_isCsmEnabled;
     constBuff.csm.splitBlendEnabled = s_isCsmEnabled && s_isCsmSplitBlendEnabled;
-    constBuff.csm.filterData.randRotationEnabled = s_isCsmEnabled;
 
     constBuff.csm.pcssData.enabled = s_isCsmEnabled && s_isCsmPcssEnabled;
 
+    memcpy(s_commonLightingConstBuffer.Map(), &constBuff, sizeof(constBuff));
     s_commonLightingConstBuffer.Unmap();
 }
 
@@ -7064,8 +7110,8 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, Camera
             .AddTextureBarrier(
                 depthRT,
                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT,
                 0,
                 1,
@@ -7553,7 +7599,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
     barrierList.AddTextureBarrier(
         s_depthRT,
         VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, 
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);
 
@@ -7840,7 +7886,7 @@ void SkyboxPass(vkn::CmdBuffer& cmdBuffer)
             .AddTextureBarrier(
                 s_depthRT,
                 VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT)
         .Push();
@@ -8137,8 +8183,8 @@ static void DbgDrawPass(vkn::CmdBuffer& cmdBuffer)
     barriers.AddTextureBarrier(
         s_depthRT,
         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, 
-        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT);  
 
     if (lineInstCount > 0) {
@@ -8877,11 +8923,18 @@ static void RenderScene()
 
     const VkResult acquireResult = vkAcquireNextImageKHR(s_vkDevice.Get(), s_vkSwapchain.Get(), 10'000'000'000, s_presentFinishedSemaphore.Get(), VK_NULL_HANDLE, &s_nextImageIdx);
     
-    if (acquireResult != VK_SUBOPTIMAL_KHR && acquireResult != VK_ERROR_OUT_OF_DATE_KHR) {
-        VK_CHECK(acquireResult);
-    } else {
+    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR) {
+        // No image was acquired and the semaphore won't be signaled, so it's safe to skip the frame.
         s_swapchainRecreateRequired = !s_pWnd->IsMinimized() && s_pWnd->GetWidth() != 0 &&  s_pWnd->GetHeight() != 0;
         return;
+    }
+
+    if (acquireResult == VK_SUBOPTIMAL_KHR) {
+        // The image IS acquired and the semaphore WILL be signaled: render and present this frame,
+        // and recreate the swapchain on the next one.
+        s_swapchainRecreateRequired = !s_pWnd->IsMinimized() && s_pWnd->GetWidth() != 0 &&  s_pWnd->GetHeight() != 0;
+    } else {
+        VK_CHECK(acquireResult);
     }
 
     vkn::Semaphore& renderingFinishedSemaphore = s_renderFinishedSemaphores[s_nextImageIdx];

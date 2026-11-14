@@ -7,7 +7,7 @@
 uint GetSdsmSplit(in float viewZ)
 {
     for (uint split = 0; split < CSM_SPLIT_COUNT; ++split) {
-        const float2 zBounds = SDSM_SPLITS[split][0].zBounds;
+        const float2 zBounds = SDSM_SPLIT(split).zBounds;
 
         if (viewZ >= zBounds.x && viewZ < zBounds.y) {
             return split;
@@ -46,10 +46,10 @@ void main(SV_GROUP_THREAD_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatchThrea
         return;
     }
 
-    const float4x4 splitCamViewMatr = SDSM_SPLITS[split][0].camData.viewMatr;
+    const float4x4 splitCamViewMatr = SDSM_SPLIT(split).camData.viewMatr;
 
     float3 lightSpaceVPos = mul(splitCamViewMatr, float4(wpos, 1.f)).xyz;
     lightSpaceVPos.z = -lightSpaceVPos.z;
 
-    SDSM_SPLIT_VIEW_BOUNDS[split][0].Update(lightSpaceVPos);
+    SDSM_SPLIT_BOUNDS(split).Update(lightSpaceVPos);
 }

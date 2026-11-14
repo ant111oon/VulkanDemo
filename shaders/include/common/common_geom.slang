@@ -23,7 +23,7 @@ float4 SampleGeomMaterialAlbedo(in GPU_GeomMaterial mtl, in float2 uv)
         return ONEF4;
     }
 
-    float4 albedo = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.albedoTex.ID, GET_COMMON_MTL_SMP(mtl.albedoTex.samplerID), uv);
+    float4 albedo = SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.albedoTex.ID), GET_COMMON_MTL_SMP(mtl.albedoTex.samplerID), uv);
     albedo *= mtl.albedoMult;
 
     return albedo;
@@ -36,7 +36,7 @@ float3 SampleGeomMaterialEmissive(in GPU_GeomMaterial mtl, in float2 uv)
         return ZEROF3;
     }
 
-    float3 emissive = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.emissiveTex.ID, GET_COMMON_MTL_SMP(mtl.emissiveTex.samplerID), uv).rgb;
+    float3 emissive = SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.emissiveTex.ID), GET_COMMON_MTL_SMP(mtl.emissiveTex.samplerID), uv).rgb;
     emissive *= mtl.emissiveMult;
 
     return emissive;
@@ -49,7 +49,7 @@ float3 SampleGeomMaterialNormal(in GPU_GeomMaterial mtl, in float2 uv, in float3
         return TBN[2];
     }
 
-    float3 lnorm = 2.f * SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.normalTex.ID, GET_COMMON_MTL_SMP(mtl.normalTex.samplerID), uv).xyz - 1.f;
+    float3 lnorm = 2.f * SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.normalTex.ID), GET_COMMON_MTL_SMP(mtl.normalTex.samplerID), uv).xyz - 1.f;
     lnorm = normalize(lnorm * float3(FLOAT2(mtl.normalScale), 1.f));
 
     return normalize(mul(lnorm, TBN));
@@ -62,15 +62,15 @@ float3 SampleGeomMaterialMetRoughAO(in GPU_GeomMaterial mtl, in float2 uv)
 
     if (mtl.metalRoughTex == mtl.aoTex) {
         if (mtl.metalRoughTex.IsValid()) {
-            aoMetRough = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTex.ID, GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).rgb;
+            aoMetRough = SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.metalRoughTex.ID), GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).rbg;
         }
     } else {
         if (mtl.aoTex.IsValid()) {
-            aoMetRough.r = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.aoTex.ID, GET_COMMON_MTL_SMP(mtl.aoTex.samplerID), uv).r;
+            aoMetRough.r = SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.aoTex.ID), GET_COMMON_MTL_SMP(mtl.aoTex.samplerID), uv).r;
         }
 
         if (mtl.metalRoughTex.IsValid()) {
-            aoMetRough.gb = SAMPLE_ARR_TEX(COMMON_MTL_TEXTURES, mtl.metalRoughTex.ID, GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).bg;
+            aoMetRough.gb = SAMPLE_TEX(GET_COMMON_MTL_TEX(mtl.metalRoughTex.ID), GET_COMMON_MTL_SMP(mtl.metalRoughTex.samplerID), uv).bg;
         }
     }
 

@@ -84,4 +84,8 @@ struct GPU_SdsmPushConst
 
 [vk::binding(3, DESC_SET_PER_DRAW)] RWStructuredBuffer<GPU_CsmSplitData> SDSM_SPLITS[CSM_SPLIT_COUNT];
 
+// The split index comes from per-pixel depth (or per-thread split ID), so it can differ within a wave.
+#define SDSM_SPLIT(SPLIT_IDX)        SDSM_SPLITS[NonUniformResourceIndex((uint)(SPLIT_IDX))][0]
+#define SDSM_SPLIT_BOUNDS(SPLIT_IDX) SDSM_SPLIT_VIEW_BOUNDS[NonUniformResourceIndex((uint)(SPLIT_IDX))][0]
+
 #endif

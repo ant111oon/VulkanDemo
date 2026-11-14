@@ -228,7 +228,7 @@ GPU_CsmSplitBlendData GetCsmSplitBlendData(in float viewZ, in uint split)
 float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiverCmp)
 {
     const uint split = (uint)texCoord.z;
-    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM[split], GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord.xy, 0).r;
+    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM_TEX(split), GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord.xy, 0).r;
 
 #ifdef ENV_REVERSED_Z
     return zBlocker < zReceiverCmp ? 1.f : 0.f;
@@ -244,7 +244,7 @@ float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in fl
 
     [branch]
     if (halfGridSize == 0) {
-        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], cmpSmp, texCoord.xy, zReceiverCmp);
+        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM_TEX(split), cmpSmp, texCoord.xy, zReceiverCmp);
     }
 
     const int radius = halfGridSize;
@@ -260,7 +260,7 @@ float CalcCsmGridPCF(in SamplerComparisonState cmpSmp, in float3 texCoord, in fl
         for (int x = -radius; x <= radius; ++x) {
             const float2 uv = texCoord.xy + float2(x, y) * texelSize;
 
-            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], cmpSmp, uv, zReceiverCmp);
+            shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM_TEX(split), cmpSmp, uv, zReceiverCmp);
         }
     }
 
@@ -322,7 +322,7 @@ float CalcCsmDiskPCF(
             continue;
         }
 
-        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, uv, zReceiverCmp);
+        shadow += SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM_TEX(split), smSmp, uv, zReceiverCmp);
         ++validSamplesCount;
     }
 
@@ -406,7 +406,7 @@ GPU_CsmPcssBlockerSearchResult FindCsmPCSSAverageBlocker(in float3 texCoord, in 
             continue;
         }
 
-        const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM[split], smp, uv, 0).r;
+        const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM_TEX(split), smp, uv, 0).r;
         const float zBlockerViewSpace = OrthoDepthToViewDepth(zBlocker, zNear, zFar);
 
         if (zBlockerViewSpace < zReceiverViewSpace) {
@@ -460,7 +460,7 @@ float CalcCsmPcss(in SamplerComparisonState smSmp, in float3 texCoord, in float 
 
     // Very small penumbras do not justify running a full sample filter.
     if (all(filterRadiusTexels < float2(DEFERRED_LIGHTING_CSM_PCSS_DATA.minPenumbraRadiusInTexels))) {
-        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM[split], smSmp, texCoord.xy, zReceiverCmp);
+        return SAMPLE_TEX_CMP_ZERO(DEFERRED_LIGHTING_CSM_TEX(split), smSmp, texCoord.xy, zReceiverCmp);
     }
 
     return CalcCsmVogelPCF(
