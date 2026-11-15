@@ -25,17 +25,21 @@ struct GPU_GBufferPsOutput
 
 
 [shader("fragment")]
-GPU_GBufferPsOutput main(GPU_GBufferVsOutput input)
+GPU_GBufferPsOutput main(GPU_GBufferVsOutput input, bool isFrontFace : SV_IsFrontFace)
 {
     GPU_GBufferPsOutput result = (GPU_GBufferPsOutput)0;
 
-    input.data.lnorm = normalize(input.data.lnorm);
+    input.data.lnorm       = normalize(input.data.lnorm);
     input.data.tangent.xyz = normalize(input.data.tangent.xyz);
 
     const GPU_GeomInst inst = COMMON_INST_BUFFER[input.flatData.instID];
 
     const float3x3 TBN = CalcTBN(input.data.tangent, input.data.lnorm);
     GPU_SampledGeomMaterial mtl = SampleGeomMaterial(COMMON_MATERIALS[inst.materialID], TBN, input.data.uv);
+
+    if (GBUFFER_IS_DS_GEOM_PASS && !isFrontFace) {
+        mtl.lnorm = -mtl.lnorm;
+    }
 
     const float3 wnorm = normalize(mul(inst.matrWCS, float4(mtl.lnorm, 0.f)).xyz);
 

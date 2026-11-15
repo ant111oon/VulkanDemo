@@ -5,3 +5,5 @@ build
 assets/*
 !assets/**/LightSponza/
 !assets/**/SkyboxTextures/
+
+FIXES.md

@@ -674,6 +674,16 @@ namespace vkn
         return *this;
     }
 
+    
+    CmdBuffer& CmdBuffer::CmdSetCullMode(VkCullModeFlags mode)
+    {
+        VK_CHECK_CMD_BUFFER_STARTED(this);
+
+        vkCmdSetCullMode(Get(), mode);
+        
+        return *this;
+    }
+
 
     CmdBuffer& CmdBuffer::CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const TextureBlitInfo> regions, VkFilter filter)
     {

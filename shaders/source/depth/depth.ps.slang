@@ -15,7 +15,7 @@ GPU_DepthPsOutput main(GPU_DepthVsOutput input)
 {
     GPU_DepthPsOutput result = (GPU_DepthPsOutput)0;
 
-    if (DEPTH_IS_AKILL_PASS) {
+    if (DEPTH_IS_AKILL_GEOM_PASS) {
         const GPU_GeomMaterial material = COMMON_MATERIALS[COMMON_INST_BUFFER[input.flatData.instID].materialID];
         const float alpha = SampleGeomMaterialAlbedo(material, input.data.uv).a;
 

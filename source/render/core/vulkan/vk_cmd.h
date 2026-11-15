@@ -313,6 +313,7 @@ namespace vkn
 
         CmdBuffer& CmdSetPrimitiveTopology(VkPrimitiveTopology topology);
         CmdBuffer& CmdSetPolygonMode(VkPolygonMode mode);
+        CmdBuffer& CmdSetCullMode(VkCullModeFlags mode);
 
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, std::span<const TextureBlitInfo> regions, VkFilter filter);
         CmdBuffer& CmdBlitTexture(const Texture& srcTexture, Texture& dstTexture, const TextureBlitInfo& region, VkFilter filter);

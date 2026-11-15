@@ -7,7 +7,7 @@
 [shader("vertex")]
 GPU_DepthVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
 {
-    GPU_DepthInput inputData = PrepareDepthVSInputData(vertID, DEPTH_IS_AKILL_PASS);
+    GPU_DepthInput inputData = PrepareDepthVSInputData(vertID, DEPTH_IS_AKILL_GEOM_PASS);
 
     const uint instID = DEPTH_INST_ID_QUEUE[instIndex];
     const GPU_GeomInst inst = COMMON_INST_BUFFER[instID];

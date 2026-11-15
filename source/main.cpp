@@ -148,7 +148,9 @@ struct GPU_SBox
 enum GPU_GeomMatType : uint
 {
     GEOM_MAT_TYPE_OPAQUE,
+    GEOM_MAT_TYPE_OPAQUE_DS,
     GEOM_MAT_TYPE_AKILL,
+    GEOM_MAT_TYPE_AKILL_DS,
     GEOM_MAT_TYPE_COUNT
 };
 
@@ -194,11 +196,9 @@ struct GPU_GeomMaterial
     
     GPU_GeomMatType type;
 
-    uint doubleSided : 1;
-    uint bitPadding : 31;
-    
-    uint padding;
+    uint2 padding;
 };
+static_assert(sizeof(GPU_GeomMaterial) == 80);
 
 
 struct GPU_MeshLOD
@@ -569,8 +569,7 @@ struct GPU_GeomBatchPushConst
 
 struct GPU_DepthPushConst
 {
-    uint akillPass : 1;
-    uint padding : 31;
+    GPU_GeomMatType pass;
 };
 
 
@@ -612,8 +611,7 @@ struct GPU_SdsmPushConst
 
 struct GPU_GBufferPushConst
 {
-    uint akillPass : 1;
-    uint padding : 31;
+    GPU_GeomMatType pass;
 };
 
 
@@ -674,6 +672,17 @@ static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
 static_assert(DBG_RT_VIEW_TYPE_COUNT == _countof(DBG_RT_OUTPUT_NAMES));
 
 
+static constexpr const char* DBG_GEOM_MAT_TYPE_NAMES[] =
+{
+    "OPAQUE",
+    "OPAQUE(2_SIDED)",
+    "AKILL",
+    "AKILL(2_SIDED)",
+};
+
+static_assert(GEOM_MAT_TYPE_COUNT == _countof(DBG_GEOM_MAT_TYPE_NAMES));
+
+
 static constexpr const char* DBG_TONEMAPPING_NAMES[] = {
     "ACES",
     "REINHARD",
@@ -706,7 +715,9 @@ static_assert(COMMON_GEOM_STREAM_COUNT == _countof(COMMON_GEOM_STREAM_DBG_NAMES)
 
 static constexpr const char* GEOM_MAT_TYPE_DBG_NAMES[] = {
     "OPAQUE",
+    "OPAQUE_DOUBLE_SIDED",
     "AKILL",
+    "AKILL_DOUBLE_SIDED",
 };
 
 static_assert(GEOM_MAT_TYPE_COUNT == _countof(GEOM_MAT_TYPE_DBG_NAMES));
@@ -1606,7 +1617,7 @@ static std::array<std::vector<uint32_t>, COMMON_GEOM_STREAM_COUNT> s_cpuGeomStre
 static std::vector<IndexType> s_cpuGeomIndexBuffer;
 
 
-std::vector<bool>                      s_cpuMatTexSrgbFlags;
+static std::vector<bool>               s_cpuMatTexSrgbFlags;
 static std::vector<TextureLoadData>    s_cpuMatTexLoadData;
 static std::vector<GeomMatSamplerDesc> s_cpuGeomMatSamplerDescs;
 
@@ -2065,15 +2076,27 @@ static void RenderDebugFrustumFilled(const glm::float4x4& invViewProj, const glm
 }
 
 
-static bool IsAKillMaterial(const GPU_GeomMaterial& material)
+static bool IsAlphaKillMatType(GPU_GeomMatType matType)
 {
-    return material.type == GEOM_MAT_TYPE_AKILL;
+    return matType == GEOM_MAT_TYPE_AKILL || matType == GEOM_MAT_TYPE_AKILL_DS;
 }
 
 
-static bool IsOpaqueMaterial(const GPU_GeomMaterial& material)
+static bool IsDoubleSidedMatType(GPU_GeomMatType matType)
 {
-    return material.type == GEOM_MAT_TYPE_OPAQUE;
+    return matType == GEOM_MAT_TYPE_OPAQUE_DS || matType == GEOM_MAT_TYPE_AKILL_DS;
+}
+
+
+static bool IsFirstDrawnMatType(GPU_GeomMatType matType)
+{
+    for (uint32_t type = 0; type < GEOM_MAT_TYPE_COUNT; ++type) {
+        if (s_geomPerMatTypeCounts[type] > 0) {
+            return type == matType;
+        }
+    }
+
+    return false;
 }
 
 
@@ -4209,6 +4232,7 @@ static void CreateDepthPSO(const fs::path& vsPath, const fs::path& psPath)
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT, 
             VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_CULL_MODE,
         #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT
         #endif
@@ -4243,6 +4267,7 @@ static void CreateGBufferRenderPSO(const fs::path& vsPath, const fs::path& psPat
         .AddDynamicState(std::array{
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_CULL_MODE,
         #ifdef ENG_BUILD_DEBUG
             VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
         #endif
@@ -5364,19 +5389,17 @@ static void LoadSceneMaterialData(const gltf::Asset& asset)
         mtl.emissiveMult.x = material.emissiveFactor.x();
         mtl.emissiveMult.y = material.emissiveFactor.y();
         mtl.emissiveMult.z = material.emissiveFactor.z();
-
-        mtl.doubleSided = material.doubleSided;
         
         switch(material.alphaMode) {
             case gltf::AlphaMode::Opaque:
-                mtl.type = GEOM_MAT_TYPE_OPAQUE;
+                mtl.type = material.doubleSided ? GEOM_MAT_TYPE_OPAQUE_DS : GEOM_MAT_TYPE_OPAQUE;
                 break;
             case gltf::AlphaMode::Mask:
-                mtl.type = GEOM_MAT_TYPE_AKILL;
+                mtl.type = material.doubleSided ? GEOM_MAT_TYPE_AKILL_DS : GEOM_MAT_TYPE_AKILL;
                 break;
             case gltf::AlphaMode::Blend:
                 CORE_LOG_WARN("Materials %s is transparent which is not supported yet", material.name.c_str());
-                mtl.type = GEOM_MAT_TYPE_OPAQUE;
+                mtl.type = material.doubleSided ? GEOM_MAT_TYPE_OPAQUE_DS : GEOM_MAT_TYPE_OPAQUE;
                 break;
         }
 
@@ -7088,12 +7111,12 @@ static void PrepareMainCamGeomPass(vkn::CmdBuffer& cmdBuffer)
 #pragma endregion GEOM
 
 
-void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, CameraGeomCullResources& resources, vkn::Buffer& camDataBuffer, uint32_t camDataOffset, vkn::Texture& depthRT, vkn::TextureView& depthRTView)
+static void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, CameraGeomCullResources& resources, vkn::Buffer& camDataBuffer, uint32_t camDataOffset, vkn::Texture& depthRT, vkn::TextureView& depthRTView)
 {
     CORE_ASSERT(matType < GEOM_MAT_TYPE_COUNT);
     
-    const bool isAKillPass = matType == GEOM_MAT_TYPE_AKILL;
-    const bool needClearDepth = matType == GEOM_MAT_TYPE_OPAQUE;
+    const bool isDoubleSided = IsDoubleSidedMatType(matType);
+    const bool needClearDepth = IsFirstDrawnMatType(matType);
 
     vkn::Buffer& drawCmdBuffer = resources.drawCmdBuffer;
     vkn::Buffer& drawCmdCountBuffer = resources.drawCmdCountsBuffer;
@@ -7167,8 +7190,10 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, Camera
             vkn::PushDescriptor::StorageBuffer(DEPTH_INST_ID_QUEUE_DESCRIPTOR_SLOT, 0, visIDBuffer)
         });
 
+        cmdBuffer.CmdSetCullMode(isDoubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT);
+
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_DepthPushConst {
-            .akillPass = isAKillPass,
+            .pass = matType,
         });
 
         cmdBuffer.CmdDrawIndexedIndirect(
@@ -7183,6 +7208,21 @@ void RenderPass_Depth(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matType, Camera
 }
 
 
+template <GPU_GeomMatType type>
+static void MainViewTypedDepthPass(vkn::CmdBuffer& cmdBuffer)
+{
+    if (s_geomPerMatTypeCounts[type] > 0) {
+        constexpr uint32_t passColor = 0x959DA3;
+        constexpr const char* passName = DBG_GEOM_MAT_TYPE_NAMES[type];
+
+        TM_MARKER_C(passColor, passName);
+        TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+        RenderPass_Depth(cmdBuffer, type, s_mainCamResources.cullResources, s_mainCamResources.camDataBuffer, 0, s_depthRT, s_depthRTView);
+    }
+};
+
+
 void MainViewGeomDepthPass(vkn::CmdBuffer& cmdBuffer)
 {
     static constexpr const char* passName = "GeomDepth";
@@ -7195,25 +7235,10 @@ void MainViewGeomDepthPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_OPAQUE] > 0) {
-        static constexpr const char* subPassName = "Opaque";
-        static constexpr uint32_t subPassColor = 0x959DA3;
-
-        TM_MARKER_C(subPassColor, subPassName);
-        TM_GPU_MARKER_C(cmdBuffer, subPassColor, subPassName);
-
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, s_mainCamResources.cullResources, s_mainCamResources.camDataBuffer, 0, s_depthRT, s_depthRTView);
-    }
-
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_AKILL] > 0) {
-        static constexpr const char* subPassName = "AKill";
-        static constexpr uint32_t subPassColor = 0x959DA3;
-
-        TM_MARKER_C(subPassColor, subPassName);
-        TM_GPU_MARKER_C(cmdBuffer, subPassColor, subPassName);
-
-        RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, s_mainCamResources.cullResources, s_mainCamResources.camDataBuffer, 0, s_depthRT, s_depthRTView);
-    }
+    MainViewTypedDepthPass<GEOM_MAT_TYPE_OPAQUE>(cmdBuffer);
+    MainViewTypedDepthPass<GEOM_MAT_TYPE_OPAQUE_DS>(cmdBuffer);
+    MainViewTypedDepthPass<GEOM_MAT_TYPE_AKILL>(cmdBuffer);
+    MainViewTypedDepthPass<GEOM_MAT_TYPE_AKILL_DS>(cmdBuffer);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
@@ -7513,6 +7538,29 @@ static void PrepareCsmSplitsGeomPass(vkn::CmdBuffer& cmdBuffer)
 }
 
 
+template <GPU_GeomMatType type>
+static void CsmTypedPass(vkn::CmdBuffer& cmdBuffer)
+{
+    if (s_geomPerMatTypeCounts[type] > 0) {
+        constexpr uint32_t passColor = 0x959DA3;
+        constexpr const char* passName = DBG_GEOM_MAT_TYPE_NAMES[type];
+
+        TM_MARKER_C(passColor, passName);
+        TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
+            TM_MARKER_C_FMT(passColor, "Split_%u", split);
+            TM_GPU_MARKER_C_FMT(cmdBuffer, passColor, "Split_%u", split);
+
+            CSMCamResources& res = s_csmCamsResources[split];
+
+            RenderPass_Depth(cmdBuffer, type, res.cullResources,
+                res.splitDataBuffer, offsetof(GPU_CsmSplitData, camData), res.rt, res.rtView);
+        }
+    }
+};
+
+
 void CsmRenderPass(vkn::CmdBuffer& cmdBuffer)
 {
     static constexpr const char* passName = "Render";
@@ -7525,35 +7573,10 @@ void CsmRenderPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_OPAQUE] > 0) {
-        TM_MARKER_C(0x959DA3, "Opaque");
-        TM_GPU_MARKER_C(cmdBuffer, 0x959DA3, "Opaque");
-
-        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
-            TM_MARKER_C_FMT(0x959DA3, "Split_%u", split);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0x959DA3, "Split_%u", split);
-
-            CSMCamResources& res = s_csmCamsResources[split];
-
-            RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_OPAQUE, res.cullResources,
-                res.splitDataBuffer, offsetof(GPU_CsmSplitData, camData), res.rt, res.rtView);
-        }
-    }
-
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_AKILL] > 0) {
-        TM_MARKER_C(0x959DA3, "AKill");
-        TM_GPU_MARKER_C(cmdBuffer, 0x959DA3, "AKill");
-
-        for (uint32_t split = 0; split < CSM_SPLIT_COUNT; ++split) {
-            TM_MARKER_C_FMT(0x959DA3, "Split_%u", split);
-            TM_GPU_MARKER_C_FMT(cmdBuffer, 0x959DA3, "Split_%u", split);
-    
-            CSMCamResources& res = s_csmCamsResources[split];
-
-            RenderPass_Depth(cmdBuffer, GEOM_MAT_TYPE_AKILL, res.cullResources,
-                res.splitDataBuffer, offsetof(GPU_CsmSplitData, camData), res.rt, res.rtView);
-        }
-    }
+    CsmTypedPass<GEOM_MAT_TYPE_OPAQUE>(cmdBuffer);
+    CsmTypedPass<GEOM_MAT_TYPE_OPAQUE_DS>(cmdBuffer);
+    CsmTypedPass<GEOM_MAT_TYPE_AKILL>(cmdBuffer);
+    CsmTypedPass<GEOM_MAT_TYPE_AKILL_DS>(cmdBuffer);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
@@ -7583,7 +7606,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
 {
     CORE_ASSERT(matType < GEOM_MAT_TYPE_COUNT);
 
-    const bool isAKillPass = matType == GEOM_MAT_TYPE_AKILL;
+    const bool isDoubleSided = IsDoubleSidedMatType(matType);
 
     vkn::BarrierList& barrierList = cmdBuffer.BeginBarrierList();
  
@@ -7642,7 +7665,7 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
 
     std::array<vkn::RenderAttachmentInfo, GBUFFER_RT_COUNT> colorAttachments = {};
 
-    const bool needClearColorAttachments = matType == GEOM_MAT_TYPE_OPAQUE;
+    const bool needClearColorAttachments = IsFirstDrawnMatType(matType);
 
     for (size_t i = 0; i < colorAttachments.size(); ++i) {
         vkn::RenderAttachmentInfo& attachment = colorAttachments[i];
@@ -7678,8 +7701,10 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
         cmdBuffer.CmdBindIndexBuffer(s_geomIndexBuffer, 0, GetVkIndexType());
 
         cmdBuffer.CmdPushConstants(pso, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, GPU_GBufferPushConst {
-            .akillPass = isAKillPass
+            .pass = matType
         });
+
+        cmdBuffer.CmdSetCullMode(isDoubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT);
 
         cmdBuffer.CmdDrawIndexedIndirect(
             drawCmdBuffer, 
@@ -7691,6 +7716,21 @@ static void RenderPass_GBuffer(vkn::CmdBuffer& cmdBuffer, GPU_GeomMatType matTyp
         );
     cmdBuffer.CmdEndRendering();
 }
+
+
+template <GPU_GeomMatType type>
+static void GBufferTypedPass(vkn::CmdBuffer& cmdBuffer)
+{
+    if (s_geomPerMatTypeCounts[type] > 0) {
+        constexpr uint32_t passColor = 0x6DB981;
+        constexpr const char* passName = DBG_GEOM_MAT_TYPE_NAMES[type];
+
+        TM_MARKER_C(passColor, passName);
+        TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
+
+        RenderPass_GBuffer(cmdBuffer, type);
+    }
+};
 
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
@@ -7705,19 +7745,10 @@ void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
     SetWireframeMode(cmdBuffer, s_geomWireframeMode);
 #endif
 
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_OPAQUE] > 0) {
-        TM_MARKER_C(0x6DB981, "Opaque");
-        TM_GPU_MARKER_C(cmdBuffer, 0x6DB981, "Opaque");
-
-        RenderPass_GBuffer(cmdBuffer, GEOM_MAT_TYPE_OPAQUE);
-    }
-
-    if (s_geomPerMatTypeCounts[GEOM_MAT_TYPE_AKILL] > 0) {
-        TM_MARKER_C(0x6DB981, "AKill");
-        TM_GPU_MARKER_C(cmdBuffer, 0x6DB981, "AKill");
-
-        RenderPass_GBuffer(cmdBuffer, GEOM_MAT_TYPE_AKILL);
-    }
+    GBufferTypedPass<GEOM_MAT_TYPE_OPAQUE>(cmdBuffer);
+    GBufferTypedPass<GEOM_MAT_TYPE_OPAQUE_DS>(cmdBuffer);
+    GBufferTypedPass<GEOM_MAT_TYPE_AKILL>(cmdBuffer);
+    GBufferTypedPass<GEOM_MAT_TYPE_AKILL_DS>(cmdBuffer);
 
 #ifdef ENG_BUILD_DEBUG
     SetWireframeMode(cmdBuffer, false);
@@ -9155,10 +9186,10 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    // LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
-    LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
+    // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
 
     CreateVkInstance();    
     CreateVkSurface();    

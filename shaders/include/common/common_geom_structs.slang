@@ -45,7 +45,9 @@ enum GPU_GeomStreamID : uint
 enum GPU_GeomMatType : uint
 {
     OPAQUE,
+    OPAQUE_DS, // Double sided opaque
     AKILL,
+    AKILL_DS, // Double sided akill
     COUNT
 };
 
@@ -85,17 +87,17 @@ struct GPU_GeomMaterial
 {
     property bool isOpaque
     {
-        get { return type == GPU_GeomMatType::OPAQUE; }
+        get { return type == GPU_GeomMatType::OPAQUE || type == GPU_GeomMatType::OPAQUE_DS; }
     }
 
     property bool isAlphaKill
     {
-        get { return type == GPU_GeomMatType::AKILL; }
+        get { return type == GPU_GeomMatType::AKILL || type == GPU_GeomMatType::AKILL_DS; }
     }
 
     property bool isDoubleSided
     {
-        get { return (bool)doubleSided; }
+        get { return type == GPU_GeomMatType::OPAQUE_DS || type == GPU_GeomMatType::AKILL_DS; }
     }
 
     float4 albedoMult;
@@ -115,11 +117,8 @@ struct GPU_GeomMaterial
     GPU_GeomMatTex emissiveTex;
 
     GPU_GeomMatType type;
-
-    private uint doubleSided : 1;
-    private uint bitPadding : 31;
     
-    private uint padding;
+    private uint2 padding;
 };
 
 
@@ -198,22 +197,22 @@ struct GPU_GeomSortKey
         key = ZEROU2;
     }
 
-    __init(in GPU_GeomMatType matType, in uint matID, in uint meshID, in uint lodID, in float depth)
+    __init(in uint matID, in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
     {
-        Construct(matType, matID, meshID, lodID, depth);
+        Construct(matID, matType, meshID, lodID, depth);
     }
 
     [mutating]
-    void Construct(in GPU_GeomMatType matType, in uint materialID, in uint meshID, in uint lodID, in float depth)
+    void Construct(in uint matID, in GPU_GeomMatType matType, in uint meshID, in uint lodID, in float depth)
     {
-        static_assert(GPU_GeomMatType::COUNT < (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
+        static_assert(GPU_GeomMatType::COUNT <= (1 << GEOM_SORT_MAT_TYPE_BITS), "GPU_GeomMatType is out of bit bounds");
 
         key = ZEROU2;
 
         this.depth = depth;
         this.lodID = lodID;
         this.meshID = meshID;
-        this.materialID = materialID;
+        this.materialID = matID;
         this.matType = matType;
     }
 

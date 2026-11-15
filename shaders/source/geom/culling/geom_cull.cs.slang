@@ -50,7 +50,7 @@ GPU_GeomSortKey GetGeomSortKey(in GPU_GeomInst inst, in GPU_SBox sbox)
 
     const GPU_GeomMaterial material = COMMON_MATERIALS[inst.materialID];
 
-    return GPU_GeomSortKey(material.type, inst.materialID, inst.meshID, lodID, depth);
+    return GPU_GeomSortKey(inst.materialID, material.type, inst.meshID, lodID, depth);
 }
 
 
