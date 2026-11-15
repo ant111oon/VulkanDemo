@@ -1088,7 +1088,7 @@ static constexpr size_t DBG_RT_VIEW_CSM_HZB_DESCRIPTOR_SLOT = 11;
 static constexpr uint32_t CSM_SPLIT_RT_SIZE = 2048;
 static constexpr uint32_t CSM_SPLIT_HZB_SIZE = 1024;
 
-static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 128;
+static constexpr uint32_t COMMON_MATERIAL_TEXTURES_COUNT = 1024;
 
 static constexpr uint32_t MAX_DBG_LINE_COUNT = 16384;
 static constexpr uint32_t MAX_DBG_TRIANGLE_COUNT = 2048;
@@ -1668,7 +1668,7 @@ static std::vector<uint8_t> s_shaderCodeBuffer;
 static eng::DbgUI s_dbgUI;
 
 static eng::Camera s_mainCamera;
-static glm::float3 s_mainCameraVel = ZEROF3;
+static glm::float3 s_mainCamMovingDir = ZEROF3;
 static bool s_mainCameraLoaded = false;
 
 // static std::array<eng::Camera, CSM_SPLIT_COUNT> s_csmCameras;
@@ -2197,7 +2197,7 @@ static void InitWindow()
 #ifdef ENG_VK_DEBUG_UTILS_ENABLED
 static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
-    VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+    VkDebugUtilsMessageTypeFlagsEXT messageTypeFlags,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     void* pUserData
 ) {
@@ -2205,38 +2205,36 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
         return VK_FALSE;
     }
 
-    const char* pType = "UNKNOWN TYPE";
+    std::string type = messageTypeFlags == 0 ? "UNKNOWN TYPE" : "";
 
-    switch(messageTypes) {
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-            pType = "GENERAL";
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-            pType = "VALIDATION";
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-            pType = "PERFORMANCE";
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT:
-            pType = "DEVICE ADDR BINDING";
-            break;
-        default:
-            VK_ASSERT_FAIL("Invalid message type");
-            break;
+    if (messageTypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
+        type += "GENERAL";
+    }
+
+    if (messageTypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+        type += (type.empty() ? std::string("") : std::string("|")) + "VALIDATION";
+    }
+
+    if (messageTypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
+        type += (type.empty() ? std::string("") : std::string("|")) + "PERFORMANCE";
+    }
+
+    if (messageTypeFlags & VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT) {
+        type += (type.empty() ? std::string("") : std::string("|")) + "DEVICE ADDR BINDING";
     }
 
     switch(messageSeverity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            ENG_LOG_TRACE("VULKAN", "[%s]: %s", pType, pCallbackData->pMessage);
+            ENG_LOG_TRACE("VULKAN", "[%s]: %s", type.c_str(), pCallbackData->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            ENG_LOG_INFO("VULKAN", "[%s]: %s", pType, pCallbackData->pMessage);
+            ENG_LOG_INFO("VULKAN", "[%s]: %s", type.c_str(), pCallbackData->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            ENG_LOG_WARN("VULKAN", "[%s]: %s", pType, pCallbackData->pMessage);
+            ENG_LOG_WARN("VULKAN", "[%s]: %s", type.c_str(), pCallbackData->pMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            VK_ASSERT_MSG(false, "[%s]: %s", pType, pCallbackData->pMessage);
+            VK_ASSERT_MSG(false, "[%s]: %s", type.c_str(), pCallbackData->pMessage);
             break;
         default:
             VK_ASSERT_FAIL("Invalid message severity");
@@ -2323,7 +2321,7 @@ static void CreateVkSwapchain()
     swapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     swapchainCreateInfo.transform        = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     swapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+    swapchainCreateInfo.presentMode      = VSYNC_ENABLED ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 
     bool succeded;
     s_vkSwapchain.Create(swapchainCreateInfo, succeded).SetDebugName("COMMON_SWAPCHAIN");
@@ -2400,23 +2398,16 @@ static void CreateVkPhysAndLogicalDevices()
     descBuffFeatures.descriptorBuffer = VK_TRUE;
     descBuffFeatures.descriptorBufferPushDescriptors = VK_TRUE;
 
-#ifndef ENG_BUILD_RETAIL
+#ifndef ENG_BUILD_RELEASE
     descBuffFeatures.descriptorBufferCaptureReplay = VK_TRUE;
 #endif
-
-    // Is used since ImGui hardcoded blend state count to 1 in it's pipeline, so validation layers complain
-    // that ImGui pipeline has one blend state but VkRenderingInfo has more than one color attachments
-    // TODO: Disable this feature/ Render ImGui in the end with separate pass with one color attachement
-    VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynRendUnusedAttachmentsFeature = {};
-    dynRendUnusedAttachmentsFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-    dynRendUnusedAttachmentsFeature.pNext = &descBuffFeatures;
 
     VkPhysicalDeviceVulkan13Features features13 = {};
     features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features13.dynamicRendering = VK_TRUE;
     features13.synchronization2 = VK_TRUE;
 
-    features13.pNext = &dynRendUnusedAttachmentsFeature;
+    features13.pNext = &descBuffFeatures;
 
     VkPhysicalDeviceVulkan12Features features12 = {};
     features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -2426,7 +2417,7 @@ static void CreateVkPhysAndLogicalDevices()
     features12.scalarBlockLayout = VK_TRUE;
     
     features12.bufferDeviceAddress = VK_TRUE;
-#ifndef ENG_BUILD_RETAIL
+#ifndef ENG_BUILD_RELEASE
     features12.bufferDeviceAddressCaptureReplay = VK_TRUE;
 #endif
 
@@ -2452,6 +2443,7 @@ static void CreateVkPhysAndLogicalDevices()
     features2.features.wideLines = VK_TRUE;
     features2.features.fillModeNonSolid = VK_TRUE;
     features2.features.shaderInt64 = VK_TRUE;
+    features2.features.depthBounds = VK_TRUE;
 
     vkn::DeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.pPhysDevice = &s_vkPhysDevice;
@@ -5439,10 +5431,15 @@ static void LoadSceneTexturesData(const gltf::Asset& asset, const fs::path& dirP
 
     eng::Timer timer;
 
-    s_cpuMatTexLoadData.reserve(asset.images.size());
+    CORE_ASSERT_MSG(asset.images.size() <= COMMON_MATERIAL_TEXTURES_COUNT,
+        "Scene texture buffer count overflow: %zu (max: %u)", asset.images.size(), COMMON_MATERIAL_TEXTURES_COUNT);
+
+    const uint32_t texCount = glm::min((uint32_t)asset.images.size(), COMMON_MATERIAL_TEXTURES_COUNT);
+
+    s_cpuMatTexLoadData.reserve(texCount);
     s_cpuMatTexLoadData.clear();
 
-    for (size_t i = 0; i < asset.images.size(); ++i) {
+    for (size_t i = 0; i < texCount; ++i) {
         const gltf::Image& image = asset.images[i];
 
         TextureLoadData texData = {};
@@ -6003,8 +6000,8 @@ static void PrepareCommonConstBuffer()
     constBuff.sunData.colorU32 = glm::packUnorm4x8(glm::float4(s_sunColor, 1.f));
     constBuff.sunData.distance = SUN_DISTANCE;
 
-    constBuff.screenSize.x = static_cast<float>(s_pWnd->GetWidth());
-    constBuff.screenSize.y = static_cast<float>(s_pWnd->GetHeight());
+    constBuff.screenSize.x = s_pWnd->GetWidth();
+    constBuff.screenSize.y = s_pWnd->GetHeight();
 
     constBuff.tonemapPreset = s_tonemapPreset;
 
@@ -6105,10 +6102,14 @@ static void ResizeVkSwapchain(eng::Window& window)
 
 static void UpdateMainCamera()
 {
-    const float moveDist = glm::length(s_mainCameraVel);
+    if (!math::IsZero(s_mainCamMovingDir)) {
+        s_mainCamMovingDir = glm::normalize(s_mainCamMovingDir);
+    }
+
+    const float moveDist = glm::length(s_mainCamMovingDir * s_mainCameraSpeed * s_frameTime);
 
     if (!math::IsZero(moveDist)) {
-        const glm::float3 moveDir = glm::normalize(s_mainCamera.GetRotation() * (s_mainCameraVel / moveDist));
+        const glm::float3 moveDir = glm::normalize(s_mainCamera.GetRotation() * s_mainCamMovingDir);
         s_mainCamera.MoveAlongDir(moveDir, moveDist);
     }
 
@@ -9057,25 +9058,23 @@ static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& even
         const eng::WndKeyEvent& keyEvent = event.Get<eng::WndKeyEvent>();
 
         if (keyEvent.IsPressed()) {
-            const float finalSpeed = s_mainCameraSpeed * s_frameTime;
-
             if (keyEvent.key == eng::WndKey::KEY_W) { 
-                s_mainCameraVel.z = -finalSpeed;
+                s_mainCamMovingDir.z = -1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_S) {
-                s_mainCameraVel.z = finalSpeed;
+                s_mainCamMovingDir.z = 1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_A) {
-                s_mainCameraVel.x = -finalSpeed;
+                s_mainCamMovingDir.x = -1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_D) {
-                s_mainCameraVel.x = finalSpeed;
+                s_mainCamMovingDir.x = 1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_E) {
-                s_mainCameraVel.y = finalSpeed;
+                s_mainCamMovingDir.y = 1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_Q) {
-                s_mainCameraVel.y = -finalSpeed;
+                s_mainCamMovingDir.y = -1.f;
             }
             if (keyEvent.key == eng::WndKey::KEY_F5) {
                 firstEvent = true;
@@ -9084,22 +9083,22 @@ static void CameraProcessWndEvent(eng::Camera& camera, const eng::WndEvent& even
 
         if (keyEvent.IsReleased()) {
             if (keyEvent.key == eng::WndKey::KEY_W) {
-                s_mainCameraVel.z = 0;
+                s_mainCamMovingDir.z = 0;
             }
             if (keyEvent.key == eng::WndKey::KEY_S) {
-                s_mainCameraVel.z = 0;
+                s_mainCamMovingDir.z = 0;
             }
             if (keyEvent.key == eng::WndKey::KEY_A) {
-                s_mainCameraVel.x = 0;
+                s_mainCamMovingDir.x = 0;
             }
             if (keyEvent.key == eng::WndKey::KEY_D) {
-                s_mainCameraVel.x = 0;
+                s_mainCamMovingDir.x = 0;
             }
             if (keyEvent.key == eng::WndKey::KEY_E) {
-                s_mainCameraVel.y = 0;
+                s_mainCamMovingDir.y = 0;
             }
             if (keyEvent.key == eng::WndKey::KEY_Q) {
-                s_mainCameraVel.y = 0;
+                s_mainCamMovingDir.y = 0;
             }
         }
     } else if (event.Is<eng::WndCursorEvent>()) {
@@ -9230,7 +9229,7 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-     LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");

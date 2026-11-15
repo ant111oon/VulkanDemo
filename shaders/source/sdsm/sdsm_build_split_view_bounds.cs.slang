@@ -51,5 +51,5 @@ void main(SV_GROUP_THREAD_ID(groupThreadID), SV_DISPATCH_THREAD_ID(dispatchThrea
     float3 lightSpaceVPos = mul(splitCamViewMatr, float4(wpos, 1.f)).xyz;
     lightSpaceVPos.z = -lightSpaceVPos.z;
 
-    SDSM_SPLIT_BOUNDS(split).Update(lightSpaceVPos);
+    SDSM_SPLIT_BOUNDS(split).Update<true>(lightSpaceVPos);
 }

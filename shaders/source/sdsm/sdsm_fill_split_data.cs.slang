@@ -3,9 +3,17 @@
 #include "common/math/common_matr.slang"
 
 
+// Minimal size (world units) of a split's light-space bounds on each axis, so its projection never becomes singular
+static const float SDSM_MIN_SPLIT_EXTENT = 0.01f;
+
+
 float GetSdsmSplitZBound(in uint split)
 {
-    const float2 zRange = SDSM_VIEW_Z_RANGE[0];
+    float2 zRange = SDSM_VIEW_Z_RANGE[0];
+
+    if (zRange.x > zRange.y) {
+        zRange = float2(COMMON_MAIN_CAM_Z_NEAR, COMMON_MAIN_CAM_Z_FAR);
+    }
 
     return zRange.x * pow(zRange.y / max(zRange.x, M3D_EPS), (float)split / CSM_SPLIT_COUNT);
 }
@@ -59,20 +67,27 @@ void main(SV_GROUP_THREAD_FLAT_ID(groupThreadFlatID))
         // Reset bounds for the subsequent tightening pass.
         SDSM_SPLIT_BOUNDS(split) = GPU_SdsmSplitViewBounds();
     } else if (SDSM_PASS == GPU_SdsmPass::FILL_SPLITS_PROJ_DATA) {
-        const GPU_SBox splitBounds = SDSM_SPLIT_BOUNDS(split).ToSBox();
+        const GPU_SdsmSplitViewBounds splitBounds = SDSM_SPLIT_BOUNDS(split);
 
-        const float zNear = max(splitBounds.minZ - SDSM_SPLIT_Z_EXTNESION, M3D_EPS);
-        const float zFar = splitBounds.maxZ + SDSM_SPLIT_Z_EXTNESION;
+        float3 boundsMin = splitBounds.isValid ? splitBounds.minXYZ : -ONEF3;
+        float3 boundsMax = splitBounds.isValid ? splitBounds.maxXYZ : ONEF3;
+
+        const float3 padding = max(FLOAT3(SDSM_MIN_SPLIT_EXTENT) - (boundsMax - boundsMin), ZEROF3) * 0.5f;
+        boundsMin -= padding;
+        boundsMax += padding;
+
+        const float zNear = max(boundsMin.z - SDSM_SPLIT_Z_EXTNESION, M3D_EPS);
+        const float zFar  = max(boundsMax.z + SDSM_SPLIT_Z_EXTNESION, zNear + SDSM_MIN_SPLIT_EXTENT);
 
         splitData.camData.zNear = zNear;
         splitData.camData.zFar = zFar;
 
-        const float2 ext = splitBounds.deltaXY * SDSM_SPLIT_XY_EXTNESION_COEF;
+        const float2 ext = (boundsMax.xy - boundsMin.xy) * SDSM_SPLIT_XY_EXTNESION_COEF;
 
-        const float left   = splitBounds.minX - ext.x;
-        const float right  = splitBounds.maxX + ext.x;
-        const float bottom = splitBounds.minY - ext.y;
-        const float top    = splitBounds.maxY + ext.y;
+        const float left   = boundsMin.x - ext.x;
+        const float right  = boundsMax.x + ext.x;
+        const float bottom = boundsMin.y - ext.y;
+        const float top    = boundsMax.y + ext.y;
 
         splitData.camData.projMatr = OrthoRH_ZO(left, right, bottom, top, zNear, zFar);
         splitData.camData.invProjMatr = Inverse(splitData.camData.projMatr);

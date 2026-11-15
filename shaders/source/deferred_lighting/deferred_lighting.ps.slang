@@ -228,7 +228,7 @@ GPU_CsmSplitBlendData GetCsmSplitBlendData(in float viewZ, in uint split)
 float CalcCsmUnfilteredPCF(in float3 texCoord, in float zReceiverCmp)
 {
     const uint split = (uint)texCoord.z;
-    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM_TEX(split), GET_COMMON_SMP(GPU_SamplerID::LINEAR_CLAMP_TO_BORDER), texCoord.xy, 0).r;
+    const float zBlocker = SAMPLE_TEX_LEVEL(DEFERRED_LIGHTING_CSM_TEX(split), GET_COMMON_SMP(GPU_SamplerID::NEAREST_CLAMP_TO_BORDER), texCoord.xy, 0).r;
 
 #ifdef ENV_REVERSED_Z
     return zBlocker < zReceiverCmp ? 1.f : 0.f;

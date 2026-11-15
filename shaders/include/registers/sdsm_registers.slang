@@ -13,25 +13,39 @@ struct GPU_SdsmSplitViewBounds
 {
     __init()
     {
-        static const uint minInit = FloatToSortableUint(M3D_FLT_MAX);
-        static const uint maxInit = FloatToSortableUint(M3D_FLT_LOWEST);
-
-        minXYZUint = UINT3(minInit);
-        maxXYZUint = UINT3(maxInit);
+        minXYZUint = UINT3(MIN_INIT);
+        maxXYZUint = UINT3(MAX_INIT);
     }
 
     [mutating]
-    void Update(in float3 xyz)
+    void Update<bool isAtomic>(in float3 xyz)
     {
         const uint3 xyzUint = FloatToSortableUint(xyz);
 
-        InterlockedMin(minXYZUint.x, xyzUint.x);
-        InterlockedMin(minXYZUint.y, xyzUint.y);
-        InterlockedMin(minXYZUint.z, xyzUint.z);
+        if (isAtomic) {
+            InterlockedMin(minXYZUint.x, xyzUint.x);
+            InterlockedMin(minXYZUint.y, xyzUint.y);
+            InterlockedMin(minXYZUint.z, xyzUint.z);
+    
+            InterlockedMax(maxXYZUint.x, xyzUint.x);
+            InterlockedMax(maxXYZUint.y, xyzUint.y);
+            InterlockedMax(maxXYZUint.z, xyzUint.z);
+        } else {
+            minXYZUint.x = min(minXYZUint.x, xyzUint.x);
+            minXYZUint.y = min(minXYZUint.y, xyzUint.y);
+            minXYZUint.z = min(minXYZUint.z, xyzUint.z);
 
-        InterlockedMax(maxXYZUint.x, xyzUint.x);
-        InterlockedMax(maxXYZUint.y, xyzUint.y);
-        InterlockedMax(maxXYZUint.z, xyzUint.z);
+            maxXYZUint.x = max(maxXYZUint.x, xyzUint.x);
+            maxXYZUint.y = max(maxXYZUint.y, xyzUint.y);
+            maxXYZUint.z = max(maxXYZUint.z, xyzUint.z);
+        }
+    }
+
+    [mutating]
+    void Update<bool isAtomic>(in float3 minXYZ, in float3 maxXYZ)
+    {
+        Update<isAtomic>(minXYZ);
+        Update<isAtomic>(maxXYZ);
     }
 
     GPU_SBox ToSBox()
@@ -48,6 +62,14 @@ struct GPU_SdsmSplitViewBounds
     {
         get { return SortableUintToFloat(maxXYZUint); }
     }
+
+    property bool isValid
+    {
+        get { return all(minXYZ <= maxXYZ); }
+    }
+
+    private static const uint MIN_INIT = FloatToSortableUint(M3D_FLT_MAX);
+    private static const uint MAX_INIT = FloatToSortableUint(M3D_FLT_LOWEST);
 
     private uint3 minXYZUint;
     private uint3 maxXYZUint;
