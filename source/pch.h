@@ -20,6 +20,7 @@
 #include <filesystem>
 
 #include <algorithm>
+#include <bit>
 
 #include <cstdarg>
 

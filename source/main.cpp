@@ -713,16 +713,6 @@ static constexpr const char* COMMON_GEOM_STREAM_DBG_NAMES[] = {
 static_assert(COMMON_GEOM_STREAM_COUNT == _countof(COMMON_GEOM_STREAM_DBG_NAMES));
 
 
-static constexpr const char* GEOM_MAT_TYPE_DBG_NAMES[] = {
-    "OPAQUE",
-    "OPAQUE_DOUBLE_SIDED",
-    "AKILL",
-    "AKILL_DOUBLE_SIDED",
-};
-
-static_assert(GEOM_MAT_TYPE_COUNT == _countof(GEOM_MAT_TYPE_DBG_NAMES));
-
-
 static constexpr const char* COMMON_SAMPLERS_DBG_NAMES[] = {
     "LINEAR_CLAMP_TO_EDGE",
     "LINEAR_CLAMP_TO_BORDER",
@@ -1521,6 +1511,10 @@ struct MainCamResources
     CameraGeomCullResources cullResources;
 
     vkn::Buffer camDataBuffer;
+
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    vkn::Buffer dbgCullCamDataBuffer;
+#endif
 };
 
 struct CSMCamResources
@@ -1680,8 +1674,6 @@ static bool s_mainCameraLoaded = false;
 // static std::array<eng::Camera, CSM_SPLIT_COUNT> s_csmCameras;
 // static std::array<float, CSM_SPLIT_COUNT> s_csmSplitWorldUnitsPerTexel;
 
-static eng::Camera s_fixedCullCamera;
-
 // static std::array<glm::float4x4, CSM_SPLIT_COUNT> s_fixedCamCsmInvViewProjMatr;
 
 static std::array<uint32_t, GEOM_MAT_TYPE_COUNT> s_geomPerMatTypeCounts;
@@ -1704,7 +1696,6 @@ static size_t s_frameNumber = 0;
 static float s_frameTime = M3D_EPS;
 static bool s_swapchainRecreateRequired = false;
 static bool s_flyCameraMode = false;
-static bool s_cullingTestMode = false;
 // static bool s_csmTestMode = false;
 static bool s_geomWireframeMode = false;
 
@@ -1726,6 +1717,8 @@ static float   s_csmFilterDiskRadius = 1.5f;
 
 static float   s_sdsmSplitZExtension = 100.f;
 static float   s_sdsmSplitXYExtensionCoef = 15.f;
+
+static eng::Camera s_fixedCullCamera;
 
 struct CsmPcssSettings
 {
@@ -1759,6 +1752,9 @@ static float s_mainCameraSpeed = 0.025f;
     static bool s_isCsmFilterRandomOffsetEnabled = false;
     static bool s_isCsmPcssEnabled = true;
 
+    static bool s_cullingTestMode = false;
+    static bool s_cullingTestHzbFrozen = false;
+
     static GPU_TonemapPreset s_tonemapPreset = DBG_TONEMAP_PRESET_ACES;
     static GPU_PCFType s_csmPCFType = PCF_TYPE_POISSON_DISK;
 
@@ -1782,6 +1778,8 @@ static float s_mainCameraSpeed = 0.025f;
     static constexpr bool s_isCsmFilterRandomOffsetEnabled = false;
     static constexpr bool s_isCsmPcssEnabled = true;
     static constexpr bool s_isCsmSdsmEnabled = true;
+
+    static constexpr bool s_cullingTestMode = false;
 
     static constexpr GPU_TonemapPreset s_tonemapPreset = DBG_TONEMAP_PRESET_ACES;
     static constexpr GPU_PCFType s_csmPCFType = PCF_TYPE_POISSON_DISK;
@@ -2714,7 +2712,7 @@ static void CreateHZB(
     rtCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     rtCreateInfo.pAllocInfo = &rtAllocInfo;
 
-    rtCreateInfo.format = VK_FORMAT_R16_SFLOAT;
+    rtCreateInfo.format = VK_FORMAT_R32_SFLOAT;
     rtCreateInfo.usage = 
         VK_IMAGE_USAGE_SAMPLED_BIT | 
         VK_IMAGE_USAGE_STORAGE_BIT |
@@ -2773,9 +2771,9 @@ static void CreateDynamicRenderTargets()
     CreateDepthRT();
 
     CreateHZB(
-        s_pWnd->GetWidth(),
-        s_pWnd->GetHeight(),
-        "COMMON_HZB", 
+        std::bit_floor(s_pWnd->GetWidth()),
+        std::bit_floor(s_pWnd->GetHeight()),
+        "COMMON_HZB",
         s_mainCamResources.cullResources.hzb, 
         s_mainCamResources.cullResources.hzbView, 
         s_mainCamResources.cullResources.hzbMipViews
@@ -4669,6 +4667,22 @@ static void CreateMainCameraData()
     s_mainCamResources.camDataBuffer
         .CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1)
         .SetDebugName("MAIN_CAM_DATA_CB");
+
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    s_mainCamResources.dbgCullCamDataBuffer
+        .CreateConstBuffer<GPU_CommonCameraData>(&s_vkDevice, 1)
+        .SetDebugName("MAIN_CAM_DBG_CULL_DATA_CB");
+#endif
+}
+
+
+static vkn::Buffer& GetMainCamCullDataBuffer()
+{
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    return s_mainCamResources.dbgCullCamDataBuffer;
+#else
+    return s_mainCamResources.camDataBuffer;
+#endif
 }
 
 
@@ -6007,6 +6021,14 @@ static void PrepareMainCamConstBuffer()
     FillCameraDataGPU(constBuff, s_mainCamera);
 
     s_mainCamResources.camDataBuffer.Unmap();
+
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    GPU_CommonCameraData& cullConstBuff = *reinterpret_cast<GPU_CommonCameraData*>(s_mainCamResources.dbgCullCamDataBuffer.Map());
+    
+    FillCameraDataGPU(cullConstBuff, s_cullingTestMode ? s_fixedCullCamera : s_mainCamera);
+    
+    s_mainCamResources.dbgCullCamDataBuffer.Unmap();
+#endif
 }
 
 
@@ -6169,7 +6191,12 @@ static void UpdateScene()
         } else {
             ResizeDynamicRenderTargets();
             WriteDescriptorSets();
-        }    
+
+        #ifdef ENG_DEBUG_DRAW_ENABLED
+            // The recreated HZB no longer holds the fixed camera's depth, so culling test mode can't continue
+            s_cullingTestMode = false;
+        #endif
+        }
     }
 
     UpdateMainCamera();
@@ -6484,7 +6511,15 @@ static void PrevFrameHzbPass(vkn::CmdBuffer& cmdBuffer)
     TM_MARKER_C(passColor, passName);
     TM_GPU_MARKER_C(cmdBuffer, passColor, passName);
 
-    if (!s_cullingTestMode) {
+#ifdef ENG_DEBUG_DRAW_ENABLED
+    // In culling test mode the HZB is built once more on the frame the mode is turned on (from the depth
+    // rendered by the camera that was just frozen) and then kept, so it keeps matching the fixed cull camera.
+    const bool needMainHzb = !s_cullingTestMode || !s_cullingTestHzbFrozen;
+#else
+    constexpr bool needMainHzb = true;
+#endif
+
+    if (needMainHzb) {
         static constexpr const char* subPassName = "MainCam";
         static constexpr uint32_t subPassColor = 0xFF6A33;
 
@@ -6492,6 +6527,10 @@ static void PrevFrameHzbPass(vkn::CmdBuffer& cmdBuffer)
         TM_GPU_MARKER_C(cmdBuffer, subPassColor, subPassName);
 
         GenerateHzbPass(cmdBuffer, s_depthRT, s_depthRTView, s_mainCamResources.cullResources.hzb, s_mainCamResources.cullResources.hzbMipViews);
+
+    #ifdef ENG_DEBUG_DRAW_ENABLED
+        s_cullingTestHzbFrozen = s_cullingTestMode;
+    #endif
     }
 
     {
@@ -7106,7 +7145,7 @@ static void PrepareMainCamGeomPass(vkn::CmdBuffer& cmdBuffer)
     const bool hzbCulling = s_useMeshCulling && s_useMeshHZBCulling;
     const bool coverageCulling = false;
 
-    GeomPreparingPass(cmdBuffer, s_mainCamResources.cullResources, s_mainCamResources.camDataBuffer, 0, coverageCulling, frustumCulling, hzbCulling);
+    GeomPreparingPass(cmdBuffer, s_mainCamResources.cullResources, GetMainCamCullDataBuffer(), 0, coverageCulling, frustumCulling, hzbCulling);
 }
 #pragma endregion GEOM
 
@@ -7220,7 +7259,7 @@ static void MainViewTypedDepthPass(vkn::CmdBuffer& cmdBuffer)
 
         RenderPass_Depth(cmdBuffer, type, s_mainCamResources.cullResources, s_mainCamResources.camDataBuffer, 0, s_depthRT, s_depthRTView);
     }
-};
+}
 
 
 void MainViewGeomDepthPass(vkn::CmdBuffer& cmdBuffer)
@@ -7558,7 +7597,7 @@ static void CsmTypedPass(vkn::CmdBuffer& cmdBuffer)
                 res.splitDataBuffer, offsetof(GPU_CsmSplitData, camData), res.rt, res.rtView);
         }
     }
-};
+}
 
 
 void CsmRenderPass(vkn::CmdBuffer& cmdBuffer)
@@ -7730,7 +7769,7 @@ static void GBufferTypedPass(vkn::CmdBuffer& cmdBuffer)
 
         RenderPass_GBuffer(cmdBuffer, type);
     }
-};
+}
 
 
 void GBufferRenderPass(vkn::CmdBuffer& cmdBuffer)
@@ -9115,11 +9154,16 @@ void AppProcessWndEvent(const eng::WndEvent& event)
             s_flyCameraMode = !s_flyCameraMode;
             s_pWnd->SetCursorRelativeMode(s_flyCameraMode);
         } else if (keyEvent.key == eng::WndKey::KEY_F6 && keyEvent.IsPressed()) {
+        #ifdef ENG_DEBUG_DRAW_ENABLED
             s_cullingTestMode = !s_cullingTestMode;
 
             if (s_cullingTestMode) {
                 s_fixedCullCamera = s_mainCamera;
+                s_fixedCullCamera.PushPrevState();
+
+                s_cullingTestHzbFrozen = false;
             }
+        #endif
         } else if (keyEvent.key == eng::WndKey::KEY_F7 && keyEvent.IsPressed()) {
             // s_csmTestMode = !s_csmTestMode;
 
@@ -9186,7 +9230,7 @@ int main(int argc, char* argv[])
 {
     InitWindow();
 
-    LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
+     LoadScene(argc > 1 ? argv[1] : "../assets/LightSponza/Sponza.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/Dragon/Dragon.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/GPUOcclusionTest/Occlusion.gltf");
     // LoadScene(argc > 1 ? argv[1] : "../assets/ShadowTest/ShadowTest.gltf");
