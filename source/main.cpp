@@ -1247,7 +1247,8 @@ public:
 
         const bool isRGB = channels == 3;
 
-        if (stbi_is_16_bit(strPath.c_str())) {
+        // There are no 16-bit sRGB formats, so sRGB images are always loaded as 8-bit (stb converts 16 -> 8 bits)
+        if (!sRGB && stbi_is_16_bit(strPath.c_str())) {
             m_pData = stbi_load_16(strPath.c_str(), &width, &height, &channels, isRGB ? 4 : 0);
             m_type = ComponentType::UINT16;
         } else if (stbi_is_hdr(strPath.c_str())) {
@@ -1295,7 +1296,8 @@ public:
 
         const bool isRGB = channels == 3;
 
-        if (stbi_is_16_bit_from_memory((const stbi_uc*)pMemory, size)) {
+        // There are no 16-bit sRGB formats, so sRGB images are always loaded as 8-bit (stb converts 16 -> 8 bits)
+        if (!sRGB && stbi_is_16_bit_from_memory((const stbi_uc*)pMemory, size)) {
             m_pData = stbi_load_16_from_memory((const stbi_uc*)pMemory, size, &width, &height, &channels, isRGB ? 4 : 0);
             m_type = ComponentType::UINT16;
         } else if (stbi_is_hdr_from_memory((const stbi_uc*)pMemory, size)) {
@@ -1377,6 +1379,8 @@ public:
 private:
     static VkFormat EvaluateFormat(uint32_t channels, ComponentType type, bool sRGB)
     {
+        CORE_ASSERT_MSG(!(sRGB && type == ComponentType::UINT16), "16-bit sRGB textures must be loaded as 8-bit (no 16-bit sRGB formats)");
+
         switch (channels) {
             case 1:
                 switch (type) {
@@ -4990,6 +4994,76 @@ static void WriteDescriptorSets()
 }
 
 
+static glm::float3 CalcAnyTangent(const glm::float3& normal)
+{
+    const glm::float3 axis = glm::abs(normal.x) < 0.9f ? M3D_AXIS_X : M3D_AXIS_Y;
+    return glm::normalize(axis - normal * glm::dot(normal, axis));
+}
+
+
+static std::vector<glm::float4> CalcMeshTangents(
+    std::span<const IndexType> indices,
+    std::span<const glm::float3> positions,
+    std::span<const glm::float3> normals,
+    std::span<const glm::float2> uvs
+) {
+    std::vector<glm::float3> uTangents(positions.size(), ZEROF3);
+    std::vector<glm::float3> vTangents(positions.size(), ZEROF3);
+
+    for (size_t tri = 0; tri + 2 < indices.size(); tri += 3) {
+        const IndexType i0 = indices[tri + 0];
+        const IndexType i1 = indices[tri + 1];
+        const IndexType i2 = indices[tri + 2];
+
+        const glm::float3 e1 = positions[i1] - positions[i0];
+        const glm::float3 e2 = positions[i2] - positions[i0];
+
+        const glm::float2 duv1 = uvs[i1] - uvs[i0];
+        const glm::float2 duv2 = uvs[i2] - uvs[i0];
+
+        const float det = duv1.x * duv2.y - duv2.x * duv1.y;
+
+        if (glm::abs(det) < M3D_EPS) {
+            // Degenerate UV mapping: this triangle has no meaningful tangent direction
+            continue;
+        }
+
+        const float invDet = 1.f / det;
+
+        const glm::float3 uDir = (e1 * duv2.y - e2 * duv1.y) * invDet;
+        const glm::float3 vDir = (e2 * duv1.x - e1 * duv2.x) * invDet;
+
+        for (const IndexType idx : { i0, i1, i2 }) {
+            uTangents[idx] += uDir;
+            vTangents[idx] += vDir;
+        }
+    }
+
+    std::vector<glm::float4> tangents(positions.size());
+
+    for (size_t i = 0; i < tangents.size(); ++i) {
+        const float normalLength = glm::length(normals[i]);
+        const glm::float3 normal = normalLength > M3D_EPS ? normals[i] / normalLength : M3D_AXIS_Z;
+
+        glm::float3 tangent = uTangents[i] - normal * glm::dot(normal, uTangents[i]);
+        const float tangentLength = glm::length(tangent);
+
+        if (tangentLength > M3D_EPS) {
+            tangent /= tangentLength;
+        } else {
+            tangent = CalcAnyTangent(normal);
+        }
+
+        // glTF V grows downwards while the normal map's +Y points up, so the expected bitangent is -dP/dv
+        const float handedness = glm::dot(glm::cross(normal, tangent), -vTangents[i]) < 0.f ? -1.f : 1.f;
+
+        tangents[i] = glm::float4(tangent, handedness);
+    }
+
+    return tangents;
+}
+
+
 static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& mesh, size_t primIdx)
 {
     TM_MARKER_C_FMT(0x8b008b, "Mesh_%s_InstDataLoading", mesh.name.c_str());
@@ -5040,13 +5114,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     } else {
         CORE_LOG_WARN("Failed to find TANGENT vertex attribute accessor for %zu primitive of %s mesh. Using runtime computed tangents", primIdx, mesh.name.c_str());
 
-        tangents.resize(normals.size());
-
-        for (size_t i = 0; i < tangents.size(); ++i) {
-            const glm::float3& lnorm = normals[i];
-            const glm::float3 binorm = math::IsZero(glm::dot(lnorm, -M3D_AXIS_Z)) ? -M3D_AXIS_Z : -M3D_AXIS_Y;
-            tangents[i] = glm::float4(glm::normalize(glm::cross(lnorm, binorm)), 1.f);
-        }
+        tangents = CalcMeshTangents(indices, positions, normals, uvs);
     }
 
     CORE_ASSERT(pPosAccessor->min.has_value());
@@ -5133,7 +5201,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     
             CORE_ASSERT_MSG(nextLodIndexCount <= currLodIndices.size(), "Mesh %s: LOD %zu has more indices %zu than previous %zu", mesh.name.c_str(), i, nextLodIndexCount, currLodIndices.size());
     
-            if (nextLodIndexCount == currLodIndices.size()) {
+            if (nextLodIndexCount == 0 || nextLodIndexCount == currLodIndices.size()) {
                 break;
             }
     
