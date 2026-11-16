@@ -8389,7 +8389,7 @@ namespace DbgUI
                 ImGui::NewLine();
 
                 const glm::float3 position = s_mainCamera.GetPosition();
-                ImGui::Text("Position: [%.3f, %.3f, %.3f]", position.x, position.y, position.z);
+                ImGui::Text("Position: [%.2f, %.2f, %.2f]", position.x, position.y, position.z);
 
                 ImGui::DragFloat("Speed", &s_mainCameraSpeed, 0.001f, 0.f, 2.f);
                 ImGui::NewLine();

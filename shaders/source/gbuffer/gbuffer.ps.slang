@@ -2,6 +2,7 @@
 #include "pass/gbuffer/vsout.slang"
 
 #include "common/common_geom.slang"
+#include "common/math/common_matr.slang"
 
 
 void GBufferDebugVis(in uint instID, inout float4 albedo)
@@ -41,7 +42,7 @@ GPU_GBufferPsOutput main(GPU_GBufferVsOutput input, bool isFrontFace : SV_IsFron
         mtl.lnorm = -mtl.lnorm;
     }
 
-    const float3 wnorm = normalize(mul(inst.matrWCS, float4(mtl.lnorm, 0.f)).xyz);
+    const float3 wnorm = normalize(mul(NormalMatrix(inst.matrWCS), mtl.lnorm));
 
     GBufferDebugVis(input.flatData.instID, mtl.albedo);
 

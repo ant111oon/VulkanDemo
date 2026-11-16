@@ -60,6 +60,22 @@ float4x4 Inverse(in float4x4 m)
 }
 
 
+float3x3 NormalMatrix(in float3x4 matrWCS)
+{
+    const float3 r0 = matrWCS[0].xyz;
+    const float3 r1 = matrWCS[1].xyz;
+    const float3 r2 = matrWCS[2].xyz;
+
+    const float3 c0 = cross(r1, r2);
+    const float3 c1 = cross(r2, r0);
+    const float3 c2 = cross(r0, r1);
+
+    const float detSign = dot(r0, c0) < 0.f ? -1.f : 1.f;
+
+    return float3x3(c0, c1, c2) * detSign;
+}
+
+
 float4x4 LookAtRH(in float3 eye, in float3 target, in float3 up)
 {
     const float3 f = normalize(target - eye);
