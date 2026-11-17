@@ -1180,10 +1180,12 @@ namespace vkn
 
             Texture* pTexture = data.pTexture;
             
-            TextureAccessTracker& accessTracker = pTexture->GetAccessTracker();
-            accessTracker.CheckLayoutConsistency(data.baseLayer, data.layerCount, data.baseMip, data.mipCount);
+            // One barrier covers the whole range: it needs a single old layout, and must wait for the
+            // stages/accesses of every subresource in it, not just the base one
+            pTexture->CheckLayoutConsistency(data.baseLayer, data.layerCount, data.baseMip, data.mipCount);
 
-            const TextureAccessTracker::State& currState = accessTracker.GetState(data.baseLayer, data.baseMip);
+            TextureAccessTracker& accessTracker = pTexture->GetAccessTracker();
+            const TextureAccessTracker::State currState = accessTracker.GetMergedState(data.baseLayer, data.layerCount, data.baseMip, data.mipCount);
 
             VkImageMemoryBarrier2 barrier = CreateImageMemoryBarrier2Data(
                 pTexture->Get(),

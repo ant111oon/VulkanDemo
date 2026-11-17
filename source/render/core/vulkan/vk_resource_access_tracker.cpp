@@ -151,6 +151,23 @@ namespace vkn
     }
 
 
+    TextureAccessTracker::State TextureAccessTracker::GetMergedState(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const
+    {
+        State mergedState = GetState(baseLayer, baseMip);
+
+        for (uint32_t layer = baseLayer; layer < baseLayer + layerCount; ++layer) {
+            for (uint32_t mip = baseMip; mip < baseMip + mipCount; ++mip) {
+                const State& state = GetState(layer, mip);
+
+                mergedState.stageMask |= state.stageMask;
+                mergedState.accessMask |= state.accessMask;
+            }
+        }
+
+        return mergedState;
+    }
+
+
     const TextureAccessTracker::State& TextureAccessTracker::GetState(uint32_t layer, uint32_t mip) const
     {
         VK_ASSERT(mip < m_mipCount);

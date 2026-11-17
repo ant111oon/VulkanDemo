@@ -61,6 +61,10 @@ namespace vkn
 
         const State& GetState(uint32_t layer, uint32_t mip) const;
 
+        // State to use as the source of one barrier over the whole range: the base subresource's layout (the range
+        // must have a single layout) and the union of all stage/access masks, so the barrier waits for every subresource.
+        State GetMergedState(uint32_t baseLayer, uint32_t layerCount, uint32_t baseMip, uint32_t mipCount) const;
+
     private:
         using StateArray = std::vector<State>;
 
