@@ -162,31 +162,24 @@ struct GPU_GeomInst
     __init()
     {
         matrWCS = M3D_IDENTITY_3X4;
-        aabbMinMaxWCS = ZEROU3;
+        aabbMinWCS = ZEROF3;
+        aabbMaxWCS = ZEROF3;
         meshID = 0u;
         materialID = 0u;
     }
 
-    property float3 minPosWCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.x), unpackHalf2x16ToFloat(aabbMinMaxWCS.y).x); }
-    }
-
-    property float3 maxPosWCS
-    {
-        get { return float3(unpackHalf2x16ToFloat(aabbMinMaxWCS.y).y, unpackHalf2x16ToFloat(aabbMinMaxWCS.z)); }
-    }
-
     property GPU_AABB aabbWCS
     {
-        get { return GPU_AABB(minPosWCS, maxPosWCS); }
+        get { return GPU_AABB(aabbMinWCS, aabbMaxWCS); }
     }
 
     row_major float3x4 matrWCS;
 
-    private uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint meshID : 16;
-    uint materialID : 16;
+    private float3 aabbMinWCS;
+    uint meshID;
+
+    private float3 aabbMaxWCS;
+    uint materialID;
 };
 
 

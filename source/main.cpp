@@ -130,12 +130,17 @@ struct GPU_Plane
     float3 normal;
     float distance;
 };
+static_assert(offsetof(GPU_Plane, normal)   == 0);
+static_assert(offsetof(GPU_Plane, distance) == 12);
+static_assert(sizeof(GPU_Plane) == 16);
 
 
 struct GPU_Frustum
 {
     GPU_Plane planes[6];
 };
+static_assert(offsetof(GPU_Frustum, planes) == 0);
+static_assert(sizeof(GPU_Frustum) == 96);
 
 
 struct GPU_SBox
@@ -198,6 +203,20 @@ struct GPU_GeomMaterial
 
     uint2 padding;
 };
+static_assert(offsetof(GPU_GeomMaterial, albedoMult)     == 0);
+static_assert(offsetof(GPU_GeomMaterial, emissiveMult)   == 16);
+static_assert(offsetof(GPU_GeomMaterial, alphaRef)       == 28);
+static_assert(offsetof(GPU_GeomMaterial, normalScale)    == 32);
+static_assert(offsetof(GPU_GeomMaterial, metalnessScale) == 36);
+static_assert(offsetof(GPU_GeomMaterial, roughnessScale) == 40);
+static_assert(offsetof(GPU_GeomMaterial, aoCoef)         == 44);
+static_assert(offsetof(GPU_GeomMaterial, albedoTex)      == 48);
+static_assert(offsetof(GPU_GeomMaterial, normalTex)      == 52);
+static_assert(offsetof(GPU_GeomMaterial, metalRoughTex)  == 56);
+static_assert(offsetof(GPU_GeomMaterial, aoTex)          == 60);
+static_assert(offsetof(GPU_GeomMaterial, emissiveTex)    == 64);
+static_assert(offsetof(GPU_GeomMaterial, type)           == 68);
+static_assert(offsetof(GPU_GeomMaterial, padding)        == 72);
 static_assert(sizeof(GPU_GeomMaterial) == 80);
 
 
@@ -206,6 +225,9 @@ struct GPU_MeshLOD
     uint firstIndex;
     uint indexCount;
 };
+static_assert(offsetof(GPU_MeshLOD, firstIndex) == 0);
+static_assert(offsetof(GPU_MeshLOD, indexCount) == 4);
+static_assert(sizeof(GPU_MeshLOD) == 8);
 
 
 struct GPU_Mesh
@@ -234,33 +256,39 @@ struct GPU_Mesh
     uint3 aabbMinMaxLCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
     uint  padding;
 };
+static_assert(offsetof(GPU_Mesh, firstVertex)   == 0);
+static_assert(offsetof(GPU_Mesh, vertexCount)   == 4);
+static_assert(offsetof(GPU_Mesh, firstLOD)      == 8);
+static_assert(offsetof(GPU_Mesh, lodCount)      == 12);
+static_assert(offsetof(GPU_Mesh, aabbMinMaxLCS) == 16);
+static_assert(offsetof(GPU_Mesh, padding)       == 28);
+static_assert(sizeof(GPU_Mesh) == 32);
 
 
 struct GPU_GeomInst
 {
-    void PackAABB_WCS(const math::AABB& aabb)
+    math::AABB GetAABB_WCS() const { return math::AABB(aabbMinWCS, aabbMaxWCS); }
+    
+    void SetAABB_WCS(const math::AABB& aabb)
     {
-        aabbMinMaxWCS.x = glm::packHalf2x16(float2(aabb.min.x, aabb.min.y));
-        aabbMinMaxWCS.y = glm::packHalf2x16(float2(aabb.min.z, aabb.max.x));
-        aabbMinMaxWCS.z = glm::packHalf2x16(float2(aabb.max.y, aabb.max.z));
-    }
-
-    math::AABB GetAABB_WCS() const
-    {
-        const float3 minn = float3(glm::unpackHalf2x16(aabbMinMaxWCS.x), glm::unpackHalf2x16(aabbMinMaxWCS.y).x);
-        const float3 maxx = float3(glm::unpackHalf2x16(aabbMinMaxWCS.y).y, glm::unpackHalf2x16(aabbMinMaxWCS.z));
-
-        return math::AABB(minn, maxx);
+        aabbMinWCS = aabb.min;
+        aabbMaxWCS = aabb.max;
     }
 
     float3x4 matrWCS;
 
-    uint3 aabbMinMaxWCS; // x - MIN.xy, y - MIN.z and MAX.x, z - MAX.yz
-    uint meshID : 16;
-    uint materialID : 16;
-};
+    float3 aabbMinWCS;
+    uint meshID;
 
-static_assert(sizeof(GPU_GeomInst) == 4 * sizeof(uint4));
+    float3 aabbMaxWCS;
+    uint materialID;
+};
+static_assert(offsetof(GPU_GeomInst, matrWCS)    == 0);
+static_assert(offsetof(GPU_GeomInst, aabbMinWCS) == 48);
+static_assert(offsetof(GPU_GeomInst, meshID)     == 60);
+static_assert(offsetof(GPU_GeomInst, aabbMaxWCS) == 64);
+static_assert(offsetof(GPU_GeomInst, materialID) == 76);
+static_assert(sizeof(GPU_GeomInst) == 80);
 
 
 struct GPU_CmdDrawIndexedIndirect
@@ -272,13 +300,12 @@ struct GPU_CmdDrawIndexedIndirect
     int  vertexOffset;
     uint firstInstance;
 };
-
-static_assert(sizeof(GPU_CmdDrawIndexedIndirect) == sizeof(VkDrawIndexedIndirectCommand));
 static_assert(offsetof(GPU_CmdDrawIndexedIndirect, indexCount)    == offsetof(VkDrawIndexedIndirectCommand, indexCount));
 static_assert(offsetof(GPU_CmdDrawIndexedIndirect, instanceCount) == offsetof(VkDrawIndexedIndirectCommand, instanceCount));
 static_assert(offsetof(GPU_CmdDrawIndexedIndirect, firstIndex)    == offsetof(VkDrawIndexedIndirectCommand, firstIndex));
 static_assert(offsetof(GPU_CmdDrawIndexedIndirect, vertexOffset)  == offsetof(VkDrawIndexedIndirectCommand, vertexOffset));
 static_assert(offsetof(GPU_CmdDrawIndexedIndirect, firstInstance) == offsetof(VkDrawIndexedIndirectCommand, firstInstance));
+static_assert(sizeof(GPU_CmdDrawIndexedIndirect) == sizeof(VkDrawIndexedIndirectCommand));
 
 
 struct GPU_CmdDispatchIndirect
@@ -288,11 +315,10 @@ struct GPU_CmdDispatchIndirect
     uint groupSizeY;
     uint groupSizeZ;
 };
-
-static_assert(sizeof(GPU_CmdDispatchIndirect) == sizeof(VkDispatchIndirectCommand));
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeX) == offsetof(VkDispatchIndirectCommand, x));
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeY) == offsetof(VkDispatchIndirectCommand, y));
 static_assert(offsetof(GPU_CmdDispatchIndirect, groupSizeZ) == offsetof(VkDispatchIndirectCommand, z));
+static_assert(sizeof(GPU_CmdDispatchIndirect) == sizeof(VkDispatchIndirectCommand));
 
 
 enum GPU_GeomStreamID
@@ -346,6 +372,11 @@ struct GPU_SunData
     uint3 padding;
     float distance;
 };
+static_assert(offsetof(GPU_SunData, direction) == 0);
+static_assert(offsetof(GPU_SunData, colorU32)  == 12);
+static_assert(offsetof(GPU_SunData, padding)   == 16);
+static_assert(offsetof(GPU_SunData, distance)  == 28);
+static_assert(sizeof(GPU_SunData) == 32);
 
 
 struct GPU_CommonCameraData
@@ -379,6 +410,26 @@ struct GPU_CommonCameraData
     float3 upDir;
     uint padding;
 };
+static_assert(offsetof(GPU_CommonCameraData, frustum)             == 0);
+static_assert(offsetof(GPU_CommonCameraData, viewMatr)            == 96);
+static_assert(offsetof(GPU_CommonCameraData, viewMatrPrev)        == 160);
+static_assert(offsetof(GPU_CommonCameraData, projMatr)            == 224);
+static_assert(offsetof(GPU_CommonCameraData, projMatrPrev)        == 288);
+static_assert(offsetof(GPU_CommonCameraData, viewProjMatr)        == 352);
+static_assert(offsetof(GPU_CommonCameraData, viewProjMatrPrev)    == 416);
+static_assert(offsetof(GPU_CommonCameraData, invViewMatr)         == 480);
+static_assert(offsetof(GPU_CommonCameraData, invViewMatrPrev)     == 544);
+static_assert(offsetof(GPU_CommonCameraData, invProjMatr)         == 608);
+static_assert(offsetof(GPU_CommonCameraData, invProjMatrPrev)     == 672);
+static_assert(offsetof(GPU_CommonCameraData, invViewProjMatr)     == 736);
+static_assert(offsetof(GPU_CommonCameraData, invViewProjMatrPrev) == 800);
+static_assert(offsetof(GPU_CommonCameraData, wPos)                == 864);
+static_assert(offsetof(GPU_CommonCameraData, zNear)               == 876);
+static_assert(offsetof(GPU_CommonCameraData, viewDir)             == 880);
+static_assert(offsetof(GPU_CommonCameraData, zFar)                == 892);
+static_assert(offsetof(GPU_CommonCameraData, upDir)               == 896);
+static_assert(offsetof(GPU_CommonCameraData, padding)             == 908);
+static_assert(sizeof(GPU_CommonCameraData) == 912);
 
 
 struct GPU_CommonCBData
@@ -389,6 +440,11 @@ struct GPU_CommonCBData
     GPU_TonemapPreset tonemapPreset;
     uint padding;
 };
+static_assert(offsetof(GPU_CommonCBData, sunData)       == 0);
+static_assert(offsetof(GPU_CommonCBData, screenSize)    == 32);
+static_assert(offsetof(GPU_CommonCBData, tonemapPreset) == 40);
+static_assert(offsetof(GPU_CommonCBData, padding)       == 44);
+static_assert(sizeof(GPU_CommonCBData) == 48);
 
 
 struct GPU_CommonDbgCBData
@@ -402,6 +458,10 @@ struct GPU_CommonDbgCBData
 
     uint padding;
 };
+static_assert(offsetof(GPU_CommonDbgCBData, rtViewType)    == 0);
+static_assert(offsetof(GPU_CommonDbgCBData, forcedGeomLOD) == 4);
+static_assert(offsetof(GPU_CommonDbgCBData, padding)       == 12);
+static_assert(sizeof(GPU_CommonDbgCBData) == 16);
 
 
 static constexpr uint CSM_SPLIT_COUNT = 3;
@@ -417,6 +477,12 @@ struct GPU_CsmSplitData
     float2 worldUnitsPerPixel;
     uint2  padding;
 };
+static_assert(offsetof(GPU_CsmSplitData, camData)            == 0);
+static_assert(offsetof(GPU_CsmSplitData, zBounds)            == 912);
+static_assert(offsetof(GPU_CsmSplitData, rtSize)             == 920);
+static_assert(offsetof(GPU_CsmSplitData, worldUnitsPerPixel) == 928);
+static_assert(offsetof(GPU_CsmSplitData, padding)            == 936);
+static_assert(sizeof(GPU_CsmSplitData) == 944);
 
 
 enum GPU_PCFType : uint32_t
@@ -440,6 +506,10 @@ struct GPU_ShadowFilterData
     uint randRotationEnabled : 1;
     uint bitPadding : 31;
 };
+static_assert(offsetof(GPU_ShadowFilterData, pcfType)      == 0);
+static_assert(offsetof(GPU_ShadowFilterData, radius)       == 4);
+static_assert(offsetof(GPU_ShadowFilterData, samplesCount) == 8);
+static_assert(sizeof(GPU_ShadowFilterData) == 16);
 
 
 struct GPU_PcssData
@@ -455,6 +525,13 @@ struct GPU_PcssData
     uint enabled : 1;
     uint bitPadding : 31;
 };
+static_assert(offsetof(GPU_PcssData, penumbraGrowth)            == 0);
+static_assert(offsetof(GPU_PcssData, maxPenumbraRadius)         == 4);
+static_assert(offsetof(GPU_PcssData, maxSearchRadius)           == 8);
+static_assert(offsetof(GPU_PcssData, minPenumbraRadiusInTexels) == 12);
+static_assert(offsetof(GPU_PcssData, padding)                   == 16);
+static_assert(offsetof(GPU_PcssData, searchSamplesCount)        == 24);
+static_assert(sizeof(GPU_PcssData) == 32);
 
 
 struct GPU_CommonCsmData
@@ -470,6 +547,12 @@ struct GPU_CommonCsmData
     uint splitBlendEnabled : 1;
     uint bitPadding : 30;
 };
+static_assert(offsetof(GPU_CommonCsmData, pcssData)           == 0);
+static_assert(offsetof(GPU_CommonCsmData, filterData)         == 32);
+static_assert(offsetof(GPU_CommonCsmData, blendThresholdCoef) == 48);
+static_assert(offsetof(GPU_CommonCsmData, constantBiasTexels) == 52);
+static_assert(offsetof(GPU_CommonCsmData, slopeBiasTexels)    == 56);
+static_assert(sizeof(GPU_CommonCsmData) == 64);
 
 
 struct GPU_CommonLightingData
@@ -481,12 +564,17 @@ struct GPU_CommonLightingData
     uint IBLEnabled : 1;
     uint bitPadding : 31;
 };
+static_assert(offsetof(GPU_CommonLightingData, csm)     == 0);
+static_assert(offsetof(GPU_CommonLightingData, padding) == 64);
+static_assert(sizeof(GPU_CommonLightingData) == 80);
 
 
 struct GPU_DbgLineData
 {
     uint color;
 };
+static_assert(offsetof(GPU_DbgLineData, color) == 0);
+static_assert(sizeof(GPU_DbgLineData) == 4);
 
 
 struct GPU_SdsmSplitViewBounds
@@ -494,12 +582,17 @@ struct GPU_SdsmSplitViewBounds
     uint3 minXYZUint;
     uint3 maxXYZUint;
 };
+static_assert(offsetof(GPU_SdsmSplitViewBounds, minXYZUint) == 0);
+static_assert(offsetof(GPU_SdsmSplitViewBounds, maxXYZUint) == 12);
+static_assert(sizeof(GPU_SdsmSplitViewBounds) == 24);
 
 
 struct GPU_DbgTriangleData
 {
     uint color;
 };
+static_assert(offsetof(GPU_DbgTriangleData, color) == 0);
+static_assert(sizeof(GPU_DbgTriangleData) == 4);
 
 
 struct GPU_GeomSortKey
@@ -520,6 +613,8 @@ struct GPU_GeomSortKey
 
     uint2 key;
 };
+static_assert(offsetof(GPU_GeomSortKey, key) == 0);
+static_assert(sizeof(GPU_GeomSortKey) == 8);
 
 
 struct GPU_DbgCullInstData
@@ -550,8 +645,9 @@ struct GPU_GeomCullPushConst
 
     uint padding : 1;
 };
-
+static_assert(offsetof(GPU_GeomCullPushConst, coverageThreshold) == 0);
 static_assert(sizeof(GPU_GeomCullPushConst) <= 256);
+static_assert(sizeof(GPU_GeomCullPushConst) == 8);
 
 
 struct GPU_GeomSortPushConst
@@ -559,18 +655,25 @@ struct GPU_GeomSortPushConst
     uint bitOffset;
     uint groupCount;
 };
+static_assert(offsetof(GPU_GeomSortPushConst, bitOffset)  == 0);
+static_assert(offsetof(GPU_GeomSortPushConst, groupCount) == 4);
+static_assert(sizeof(GPU_GeomSortPushConst) == 8);
 
 
 struct GPU_GeomBatchPushConst
 {
     uint cmdWriteOffsets[GEOM_MAT_TYPE_COUNT];
 };
+static_assert(offsetof(GPU_GeomBatchPushConst, cmdWriteOffsets) == 0);
+static_assert(sizeof(GPU_GeomBatchPushConst) == 4 * GEOM_MAT_TYPE_COUNT);
 
 
 struct GPU_DepthPushConst
 {
     GPU_GeomMatType pass;
 };
+static_assert(offsetof(GPU_DepthPushConst, pass) == 0);
+static_assert(sizeof(GPU_DepthPushConst) == 4);
 
 
 struct GPU_HzbGenPushConst
@@ -578,6 +681,9 @@ struct GPU_HzbGenPushConst
     uint2 srcMipResolution;
     uint2 dstMipResolution;
 };
+static_assert(offsetof(GPU_HzbGenPushConst, srcMipResolution) == 0);
+static_assert(offsetof(GPU_HzbGenPushConst, dstMipResolution) == 8);
+static_assert(sizeof(GPU_HzbGenPushConst) == 16);
 
 
 struct GPU_DepthReductionPushConst
@@ -591,6 +697,11 @@ struct GPU_DepthReductionPushConst
     uint useTexSrc : 1;
     uint padding : 31;
 };
+static_assert(offsetof(GPU_DepthReductionPushConst, srcTexSize) == 0);
+static_assert(offsetof(GPU_DepthReductionPushConst, srcBufSize) == 8);
+static_assert(offsetof(GPU_DepthReductionPushConst, zNear)      == 12);
+static_assert(offsetof(GPU_DepthReductionPushConst, zFar)       == 16);
+static_assert(sizeof(GPU_DepthReductionPushConst) == 24);
 
 
 enum GPU_SdsmPass
@@ -607,24 +718,35 @@ struct GPU_SdsmPushConst
     float splitXYExtensionCoef; // 0.15
     alignas(8) uint2 splitRTSize[CSM_SPLIT_COUNT];
 };
+static_assert(offsetof(GPU_SdsmPushConst, pass)                 == 0);
+static_assert(offsetof(GPU_SdsmPushConst, splitZExtension)      == 4);
+static_assert(offsetof(GPU_SdsmPushConst, splitXYExtensionCoef) == 8);
+static_assert(offsetof(GPU_SdsmPushConst, splitRTSize)          == 16);
+static_assert(sizeof(GPU_SdsmPushConst) == 40);
 
 
 struct GPU_GBufferPushConst
 {
     GPU_GeomMatType pass;
 };
+static_assert(offsetof(GPU_GBufferPushConst, pass) == 0);
+static_assert(sizeof(GPU_GBufferPushConst) == 4);
 
 
 struct GPU_PrefixSumPushConst
 {
     uint maxElemCount;
 };
+static_assert(offsetof(GPU_PrefixSumPushConst, maxElemCount) == 0);
+static_assert(sizeof(GPU_PrefixSumPushConst) == 4);
 
 
 struct GPU_IrradianceMapPushConst
 {
     uint2 envMapFaceSize;
 };
+static_assert(offsetof(GPU_IrradianceMapPushConst, envMapFaceSize) == 0);
+static_assert(sizeof(GPU_IrradianceMapPushConst) == 8);
 
 
 struct GPU_PrefilteredEnvMapPushConst
@@ -632,6 +754,9 @@ struct GPU_PrefilteredEnvMapPushConst
     uint2 envMapFaceSize;
     uint  mip;
 };
+static_assert(offsetof(GPU_PrefilteredEnvMapPushConst, envMapFaceSize) == 0);
+static_assert(offsetof(GPU_PrefilteredEnvMapPushConst, mip)            == 8);
+static_assert(sizeof(GPU_PrefilteredEnvMapPushConst) == 12);
 
 
 struct GPU_DbgPrimPushConst
@@ -639,6 +764,7 @@ struct GPU_DbgPrimPushConst
     uint linePass : 1;
     uint padding : 31;
 };
+static_assert(sizeof(GPU_DbgPrimPushConst) == 4);
 
 
 struct GPU_DbgRTViewPushConst
@@ -649,6 +775,12 @@ struct GPU_DbgRTViewPushConst
     float depthZNear;
     float depthZFar;
 };
+static_assert(offsetof(GPU_DbgRTViewPushConst, mip)         == 0);
+static_assert(offsetof(GPU_DbgRTViewPushConst, face)        == 4);
+static_assert(offsetof(GPU_DbgRTViewPushConst, csmSplitIdx) == 8);
+static_assert(offsetof(GPU_DbgRTViewPushConst, depthZNear)  == 12);
+static_assert(offsetof(GPU_DbgRTViewPushConst, depthZFar)   == 16);
+static_assert(sizeof(GPU_DbgRTViewPushConst) == 20);
 
 
 static constexpr const char* DBG_RT_OUTPUT_NAMES[] = {
@@ -5650,7 +5782,7 @@ static void LoadSceneInstData(const gltf::Asset& asset)
                     CORE_ASSERT_MSG(inst.materialID <= MAX_MATERIAL_ID, "For now GPU sort key supports only material IDs less or equal to %u", MAX_MATERIAL_ID);
 
                     inst.matrWCS = glm::transpose(transform);
-                    inst.PackAABB_WCS(GetInstAABB(inst.meshID, transform));
+                    inst.SetAABB_WCS(GetInstAABB(inst.meshID, transform));
 
                     s_cpuInstData.emplace_back(inst);
                 }
