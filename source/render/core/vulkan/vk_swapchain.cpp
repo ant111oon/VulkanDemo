@@ -149,6 +149,11 @@ namespace vkn
 
         m_accessTracker.Create(VK_IMAGE_LAYOUT_UNDEFINED, 1, 1);
 
+        // The image belongs to the presentation engine until the acquire semaphore signals, and that wait is done at
+        // COLOR_ATTACHMENT_OUTPUT. Starting from that stage (not NONE) makes the first barrier's layout transition
+        // wait for the semaphore. Later barriers start from the end-of-frame PRESENT_SRC state, which already does.
+        m_accessTracker.Transit(0, 1, 0, 1, VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE);
+
         return *this;
     }
 
