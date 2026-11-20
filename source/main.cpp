@@ -2330,7 +2330,7 @@ static void InitWindow()
 }
 
 
-#ifdef ENG_VK_DEBUG_UTILS_ENABLED
+#ifdef ENG_VK_VALIDATION_LAYERS_ENABLED
 static VkBool32 VKAPI_PTR DbgVkMessageCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
     VkDebugUtilsMessageTypeFlagsEXT messageTypeFlags,
@@ -2384,7 +2384,7 @@ static VkBool32 VKAPI_PTR DbgVkMessageCallback(
 
 static void CreateVkInstance()
 {
-#ifdef ENG_VK_DEBUG_UTILS_ENABLED
+#ifdef ENG_VK_VALIDATION_LAYERS_ENABLED
     vkn::InstanceDebugMessengerCreateInfo dbgMessengerCreateInfo = {};
     dbgMessengerCreateInfo.messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
@@ -2420,7 +2420,7 @@ static void CreateVkInstance()
     instCreateInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     instCreateInfo.apiVersion = VK_API_VERSION_1_4;
     instCreateInfo.extensions = instExtensions;
-#ifdef ENG_VK_DEBUG_UTILS_ENABLED
+#ifdef ENG_VK_VALIDATION_LAYERS_ENABLED
     instCreateInfo.layers = instLayers;
     instCreateInfo.pDbgMessengerCreateInfo = &dbgMessengerCreateInfo;
 #endif

@@ -8,8 +8,18 @@
 #endif
 
 
+#if defined(ENG_BUILD_DEBUG)
+    #define ENG_VK_VALIDATION_LAYERS_ENABLED
+#endif
+
+
 #if defined(ENG_BUILD_DEBUG) || defined(ENG_BUILD_PROFILE)
     #define ENG_VK_DEBUG_UTILS_ENABLED
+#endif
+
+
+#if defined(ENG_VK_VALIDATION_LAYERS_ENABLED) && !defined(ENG_VK_DEBUG_UTILS_ENABLED)
+    #error Validation layers require ENG_VK_DEBUG_UTILS_ENABLED (the debug messenger uses VK_EXT_debug_utils)
 #endif
 
 
