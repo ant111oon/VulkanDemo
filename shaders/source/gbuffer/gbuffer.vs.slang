@@ -5,7 +5,7 @@
 
 
 [shader("vertex")]
-GPU_GBufferVsOutput main(uint vertID : SV_VertexID, uint instIndex : SV_VulkanInstanceID, uint drawID : SV_DrawIndex)
+GPU_GBufferVsOutput main(SV_VERTEX_ID(vertID), SV_INSTANCE_ID(instIndex), uint drawID : SV_DrawIndex)
 {
     GPU_GBufferInput inputData = PrepareGBufferVSInputData(vertID);
 

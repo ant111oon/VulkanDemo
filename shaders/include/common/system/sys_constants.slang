@@ -18,6 +18,11 @@ static const uint DESC_SET_TOTAL_COUNT = 2;
 // GROUP_THREAD_INDEX: [0, numthreadsX * numthreadsY * numThreadsZ – 1]
 #define SV_GROUP_THREAD_FLAT_ID(NAME) uint NAME : SV_GroupIndex
 
+// SV_VulkanVertexID is gl_VertexIndex: the mesh-local index plus the draw's vertexOffset (the mesh's firstVertex)
+#define SV_VERTEX_ID(NAME) uint NAME : SV_VulkanVertexID
+
+#define SV_INSTANCE_ID(NAME) uint NAME : SV_VulkanInstanceID
+
 
 #define SAMPLE_TEX(TEXTURE, SAMPLER, TEXCOORDS)                                          TEXTURE.Sample(SAMPLER, TEXCOORDS)
 #define SAMPLE_TEX_LEVEL(TEXTURE, SAMPLER, TEXCOORDS, LEVEL)                             TEXTURE.SampleLevel(SAMPLER, TEXCOORDS, LEVEL)

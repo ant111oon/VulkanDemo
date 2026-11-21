@@ -5296,11 +5296,7 @@ static void LoadSceneMeshInstData(const gltf::Asset& asset, const gltf::Mesh& me
     
             ++cpuMesh.lodCount;
             
-            s_cpuGeomIndexBuffer.reserve(s_cpuGeomIndexBuffer.size() + currLodIndices.size());
-    
-            for (IndexType index : currLodIndices) {
-                s_cpuGeomIndexBuffer.emplace_back(cpuMesh.firstVertex + index);
-            }
+            s_cpuGeomIndexBuffer.insert(s_cpuGeomIndexBuffer.end(), currLodIndices.begin(), currLodIndices.end());
     
             const size_t nextLodIndexCountTarget = (size_t)(((float)currLodIndices.size() * LOD_SIMPLIFICATION_COEF) + 2) / 3 * 3;
 
